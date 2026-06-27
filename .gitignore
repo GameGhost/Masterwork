@@ -55,3 +55,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Extracted scenario output (CC BY-NC-SA derived; not committed)
+_extracted/
