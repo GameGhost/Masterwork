@@ -80,7 +80,9 @@ class Program
         foreach (var passage in passages)
         {
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
-            var outPath = Path.Combine(opts.OutputDir, $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml");
+            var fileName = $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml";
+            report.PassageFiles[passage.PassageId] = fileName;
+            var outPath = Path.Combine(opts.OutputDir, fileName);
             var dict = passage.ToDict();
             var yaml = "---\n" + serializer.Serialize(dict);
             yaml = InjectSourceComments(yaml, passage);

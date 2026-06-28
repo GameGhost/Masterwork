@@ -25,6 +25,9 @@ public class ExtractionReport
     public string? SourceFilePath { get; set; }
     public string? OutputDirPath { get; set; }
 
+    // passage name → output filename (just the filename, report is in the same dir)
+    public Dictionary<string, string> PassageFiles { get; } = new(StringComparer.Ordinal);
+
     // Unknown node — the code is the primary content; no separate message.
     public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
         _flags.Add(new(passageName, "unknown_node",
@@ -86,7 +89,10 @@ public class ExtractionReport
         {
             sb.AppendLine("---");
             sb.AppendLine();
-            sb.AppendLine($"### {group.Key}");
+            var heading = PassageFiles.TryGetValue(group.Key, out var yamlFile)
+                ? $"[{group.Key}]({yamlFile})"
+                : group.Key;
+            sb.AppendLine($"### {heading}");
             sb.AppendLine();
 
             foreach (var flag in group)
