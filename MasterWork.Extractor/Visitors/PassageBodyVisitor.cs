@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using MasterWork.ModuleFormat;
 using Microsoft.CodeAnalysis;
@@ -89,7 +90,18 @@ public class PassageBodyVisitor
             // if / else if / else
             if (stmt is IfStatementSyntax ifs)
             {
-                // Special case: ViewPopupPanel input prompt pattern
+                // Two-statement input prompt: if (ispopup) { OnGenerationBtn } + if (PassageValueNumber() >= 0) { store }
+                if (i + 1 < list.Count && list[i + 1] is IfStatementSyntax nextIfs &&
+                    TryDetectInputPrompt(ifs, nextIfs, out var twoIfInput))
+                {
+                    result.AddRange(FlushText());
+                    twoIfInput!.SourceLine = _currentStatementLine;
+                    result.Add(twoIfInput);
+                    i++; // consume the store-if too
+                    continue;
+                }
+
+                // If-else input prompt (legacy pattern)
                 if (IsInputPromptIf(ifs, out var inputNode))
                 {
                     result.AddRange(FlushText());
@@ -285,8 +297,8 @@ public class PassageBodyVisitor
             if (macroName == "random")
             {
                 var macArgs = macroInv2.ArgumentList.Arguments;
-                var min = macArgs.Count > 0 ? TryParseDouble(macArgs[0].Expression) : null;
-                var max = macArgs.Count > 1 ? TryParseDouble(macArgs[1].Expression) : null;
+                var min = macArgs.Count > 0 ? TryParseInt(macArgs[0].Expression) : null;
+                var max = macArgs.Count > 1 ? TryParseInt(macArgs[1].Expression) : null;
                 var tempVar2 = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
                 var flushNodes2 = FlushText();
                 flushNodes2.Add(new EffectNode
@@ -406,8 +418,9 @@ public class PassageBodyVisitor
         // this.Vars.X = value
         if (expr is AssignmentExpressionSyntax assign)
         {
-            var effect = ProcessAssignment(assign);
-            if (effect is not null) return [effect];
+            var effect = ProcessAssignment(assign, out var preamble);
+            if (effect is not null)
+                return preamble is not null ? [..preamble, effect] : [effect];
         }
 
         // ViewItemObtain.SetupPassagename = "X"
@@ -473,8 +486,9 @@ public class PassageBodyVisitor
 
     // ── Variable assignment → EffectNode ─────────────────────────────────
 
-    private MwsNode? ProcessAssignment(AssignmentExpressionSyntax assign)
+    private MwsNode? ProcessAssignment(AssignmentExpressionSyntax assign, out List<MwsNode>? preamble)
     {
+        preamble = null;
         // Must be this.Vars.X = ...
         if (!IsVarAccess(assign.Left, out var varName)) return null;
         // Unwrap outer parentheses so patterns like ((cond) ? a : b) are handled correctly
@@ -510,10 +524,11 @@ public class PassageBodyVisitor
             return new EffectNode { VarSets = new() { [varName!] = $"{{{srcArray}[{indexStr}]}}" } };
         }
 
-        // ViewPopupPanel.instance.PassageValueString() — string input (stored variant)
+        // ViewPopupPanel.instance.PassageValueString() — string input fallback
+        // (normally caught by IsInputPromptIf; this fires only for bare assignments outside an if-else)
         if (right is InvocationExpressionSyntax pvs && GetSimpleMethodName(pvs) == "PassageValueString")
         {
-            _report.AddInfo(_passageName, $"String input stored in {varName}", GetLine(pvs));
+            _report.AddInputPrompt(_passageName, varName!, "string", "", GetLine(pvs));
             return new EffectNode { VarSets = new() { [varName!] = "{input:string}" } };
         }
 
@@ -521,6 +536,19 @@ public class PassageBodyVisitor
         if (IsVarAccess(right, out var srcVar))
         {
             return new EffectNode { VarSets = new() { [varName!] = $"{{{srcVar}}}" } };
+        }
+
+        // String concatenation → template string: "The " + townname + " " + either([...])
+        // or title + " " + nameA.  Gate: all nodes are recognisable AND at least one is a
+        // string literal or either() call (to avoid consuming arithmetic binary expressions).
+        if (right is BinaryExpressionSyntax concatBin && concatBin.OperatorToken.Text == "+"
+            && IsTemplateConcatExpr(right) && ContainsStringOrEither(right))
+        {
+            var concatLets = new List<LetNode>();
+            var concatTmpl = new StringBuilder();
+            TryExtractTemplateConcat(right, concatLets, concatTmpl);
+            preamble = concatLets.Count > 0 ? concatLets.Cast<MwsNode>().ToList() : null;
+            return new EffectNode { VarSets = new() { [varName!] = concatTmpl.ToString() } };
         }
 
         // int.Parse(this.Vars.X) + N  →  var_math "+N"
@@ -539,6 +567,37 @@ public class PassageBodyVisitor
                 var removeValues = ExtractMacroArgs(removeInv);
                 if (removeValues.Count == 1 && removeValues[0] is string removeValue)
                     return new EffectNode { VarRemove = new() { [varName!] = removeValue } };
+            }
+
+            // random(min, max) + var  or  var + random(min, max)  →  let _rnd = range, varName = {addend} + {_rnd}
+            if (bin.OperatorToken.Text == "+")
+            {
+                InvocationExpressionSyntax? randInv = null;
+                ExpressionSyntax? addend = null;
+                if (bin.Left is InvocationExpressionSyntax lInv && GetSimpleMethodName(lInv) == "random")
+                    { randInv = lInv; addend = bin.Right; }
+                else if (bin.Right is InvocationExpressionSyntax rInv && GetSimpleMethodName(rInv) == "random")
+                    { randInv = rInv; addend = bin.Left; }
+
+                if (randInv is not null && addend is not null)
+                {
+                    var rArgs = randInv.ArgumentList.Arguments;
+                    var rMin = rArgs.Count > 0 ? TryParseInt(rArgs[0].Expression) : null;
+                    var rMax = rArgs.Count > 1 ? TryParseInt(rArgs[1].Expression) : null;
+                    var rndName = $"_rnd_{_passageName}_{_varRandomSeq++}";
+                    preamble = [new LetNode
+                    {
+                        Var = rndName,
+                        Random = new VarRandom { RandomType = "range", Min = rMin, Max = rMax },
+                    }];
+                    string addendStr = IsVarAccess(addend, out var addVar) ? $"{{{addVar}}}"
+                        : addend is LiteralExpressionSyntax addLit ? addLit.Token.ValueText
+                        : addend.ToString();
+                    return new EffectNode
+                    {
+                        VarSets = new() { [varName!] = $"{addendStr} + {{{rndName}}}" }
+                    };
+                }
             }
         }
 
@@ -563,8 +622,8 @@ public class PassageBodyVisitor
                 case "random":
                 {
                     var args2 = macroInv.ArgumentList.Arguments;
-                    var min = args2.Count > 0 ? TryParseDouble(args2[0].Expression) : null;
-                    var max = args2.Count > 1 ? TryParseDouble(args2[1].Expression) : null;
+                    var min = args2.Count > 0 ? TryParseInt(args2[0].Expression) : null;
+                    var max = args2.Count > 1 ? TryParseInt(args2[1].Expression) : null;
                     return new EffectNode
                     {
                         VarRandom = new() { [varName!] = new VarRandom
@@ -613,33 +672,37 @@ public class PassageBodyVisitor
             }
         }
 
-        // Ternary (cond) ? a : b
+        // Ternary (cond) ? a : b  — including chained (cond1) ? a : (cond2) ? b : c
         if (right is ConditionalExpressionSyntax ternary)
         {
             var condStr = SimplifyCondition(UnwrapParens(ternary.Condition).ToString());
             var whenTrue = UnwrapParens(ternary.WhenTrue);
             var whenFalse = UnwrapParens(ternary.WhenFalse);
-            // If either branch is a macro call (either/random), decompose into a ConditionalNode
-            // so each branch can assign the target variable with the appropriate effect type.
+
+            // Chained ternary: whenFalse is itself a ternary — flatten and emit SwitchNode or multi-branch ConditionalNode
+            if (whenFalse is ConditionalExpressionSyntax)
+            {
+                var branches = FlattenTernaryChain(condStr, whenTrue, whenFalse);
+                return BuildChainedTernaryNode(varName!, branches, GetLine(ternary));
+            }
+
+            // Simple ternary: if either branch is a macro call, decompose into a ConditionalNode
             if (IsMacroCall(whenTrue) || IsMacroCall(whenFalse))
             {
                 return new ConditionalNode
                 {
                     Branches =
                     [
-                        new ConditionalBranch
-                        {
-                            Condition = condStr,
-                            Nodes = [BuildBranchEffect(varName!, whenTrue)],
-                        },
-                        new ConditionalBranch
-                        {
-                            Else = true,
-                            Nodes = [BuildBranchEffect(varName!, whenFalse)],
-                        },
+                        new ConditionalBranch { Condition = condStr, Nodes = [BuildBranchEffect(varName!, whenTrue)] },
+                        new ConditionalBranch { Else = true, Nodes = [BuildBranchEffect(varName!, whenFalse)] },
                     ],
                 };
             }
+
+            // Simple string ternary — warn if either branch can't be cleanly expressed
+            if (!IsSimpleValue(whenTrue) || !IsSimpleValue(whenFalse))
+                _report.AddWarning(_passageName, $"Unresolved ternary branch for {varName}",
+                    ternary.ToString(), GetLine(ternary));
             return new EffectNode
             {
                 VarSets = new() { [varName!] = $"({condStr}) ? {GetStringOrLiteral(whenTrue)} : {GetStringOrLiteral(whenFalse)}" }
@@ -661,6 +724,10 @@ public class PassageBodyVisitor
 
         while (current is IfStatementSyntax currentIf)
         {
+            if (HasUnresolvableApiCall(currentIf.Condition))
+                _report.AddWarning(_passageName, "Unresolved API call in condition",
+                    currentIf.Condition.ToString(), GetLine(currentIf));
+
             var condStr = SimplifyCondition(currentIf.Condition.ToString());
             var bodyNodes = currentIf.Statement is BlockSyntax blk
                 ? VisitStatements(blk.Statements)
@@ -682,47 +749,211 @@ public class PassageBodyVisitor
     }
 
     // ── Input prompt detection ─────────────────────────────────────────────
-    // Pattern: if (ViewPopupPanel.instance.PassageValueNumber() >= 0) { ... }
-    //          else { ViewPopupPanel.instance.OnGenerationBtn(id, text, type, _); }
+    // Two patterns handled:
+    //   A) if (PassageValueNumber() >= 0) { store } else { OnGenerationBtn(...) }
+    //   B) if (this.ispopup [&&...]) { OnGenerationBtn(...) } else { store = PassageValue*() }
 
     private bool IsInputPromptIf(IfStatementSyntax ifs, out InputPromptNode? node)
     {
         node = null;
         var condStr = ifs.Condition.ToString();
-        if (!condStr.Contains("PassageValueNumber")) return false;
-
-        // Extract from else branch: OnGenerationBtn(promptId, text, inputType, _)
         var elseStmt = ifs.Else?.Statement;
         if (elseStmt is null) return false;
 
-        var statements = elseStmt is BlockSyntax b ? b.Statements.AsEnumerable() : [elseStmt];
-        foreach (var s in statements)
+        // Pattern A: main condition contains PassageValueNumber → else has OnGenerationBtn
+        if (condStr.Contains("PassageValueNumber"))
         {
-            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv })
+            var elseStmts = elseStmt is BlockSyntax ba ? ba.Statements.AsEnumerable() : [elseStmt];
+            foreach (var s in elseStmts)
             {
-                var method = GetSimpleMethodName(inv);
-                if (method != "OnGenerationBtn") continue;
-
-                var args = inv.ArgumentList.Arguments;
-                var promptId = args.Count > 0 ? GetStringValue(args[0].Expression) ?? "" : "";
-                var text = args.Count > 1 ? GetStringValue(args[1].Expression) ?? "" : "";
-                var inputType = args.Count > 2 ? GetStringValue(args[2].Expression) ?? "string" : "string";
-
-                // StoreIn: read from if-branch assignment (this.Vars.X = PassageValueNumber())
-                var storeIn = ExtractStoreIn(ifs.Statement);
-
-                node = new InputPromptNode
+                if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
+                    && GetSimpleMethodName(inv) == "OnGenerationBtn")
                 {
-                    PromptId = promptId,
-                    Text = text,
-                    InputType = inputType == "number" ? "number" : "string",
-                    StoreIn = storeIn ?? promptId.ToLowerInvariant(),
-                    ResumePassage = _passageName,
-                };
-                return true;
+                    var args = inv.ArgumentList.Arguments;
+                    var promptId = args.Count > 0 ? GetStringValue(args[0].Expression) ?? "" : "";
+                    var text = args.Count > 1 ? ExtractTemplateString(args[1].Expression) : "";
+                    var inputType = args.Count > 2 ? GetStringValue(args[2].Expression) ?? "string" : "string";
+                    var storeIn = ExtractStoreIn(ifs.Statement);
+                    var resolvedType = inputType == "number" ? "number" : "string";
+
+                    node = new InputPromptNode
+                    {
+                        PromptId = promptId,
+                        Text = text,
+                        InputType = resolvedType,
+                        StoreIn = storeIn ?? promptId.ToLowerInvariant(),
+                        ResumePassage = _passageName,
+                    };
+                    _report.AddInputPrompt(_passageName, node.StoreIn, resolvedType, text);
+                    return true;
+                }
             }
         }
+
+        // Pattern B: main condition contains ispopup → if-body has OnGenerationBtn, else stores value
+        if (condStr.Contains("this.ispopup"))
+        {
+            var ifStmts = ifs.Statement is BlockSyntax bb ? bb.Statements.AsEnumerable() : [ifs.Statement];
+            InvocationExpressionSyntax? genBtn = null;
+            foreach (var s in ifStmts)
+            {
+                if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
+                    && GetSimpleMethodName(inv) == "OnGenerationBtn")
+                { genBtn = inv; break; }
+            }
+            if (genBtn is not null)
+            {
+                var storeIn = ExtractStoreIn(elseStmt);
+                if (storeIn is not null)
+                {
+                    var args = genBtn.ArgumentList.Arguments;
+                    var promptId = args.Count > 0 ? GetStringValue(args[0].Expression) ?? _passageName : _passageName;
+                    var text = args.Count > 1 ? ExtractTemplateString(args[1].Expression) : "";
+                    var inputType = args.Count > 2 ? GetStringValue(args[2].Expression) ?? "string" : "string";
+                    var resolvedType = inputType == "number" ? "number" : "string";
+
+                    node = new InputPromptNode
+                    {
+                        PromptId = promptId,
+                        Text = text,
+                        InputType = resolvedType,
+                        StoreIn = storeIn,
+                        ResumePassage = _passageName,
+                    };
+                    _report.AddInputPrompt(_passageName, storeIn, resolvedType, text);
+                    return true;
+                }
+            }
+        }
+
         return false;
+    }
+
+    // Two-statement input prompt:
+    //   if (this.ispopup [&& this.iscreation*]) { ... OnGenerationBtn(...) }
+    //   if (PassageValueNumber() >= 0 | PassageValueString() != null) { this.Vars.X = ...; }
+    private bool TryDetectInputPrompt(IfStatementSyntax setupIf, IfStatementSyntax storeIf, out InputPromptNode? node)
+    {
+        node = null;
+
+        // Setup if must contain this.ispopup in the condition and have no else branch
+        var setupCond = setupIf.Condition.ToString();
+        if (!setupCond.Contains("this.ispopup")) return false;
+        if (setupIf.Else is not null) return false;
+
+        var setupBody = setupIf.Statement is BlockSyntax sb ? sb.Statements.AsEnumerable() : [setupIf.Statement];
+        InvocationExpressionSyntax? genBtn = null;
+        foreach (var s in setupBody)
+        {
+            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
+                && GetSimpleMethodName(inv) == "OnGenerationBtn")
+            {
+                genBtn = inv; break;
+            }
+        }
+        if (genBtn is null) return false;
+
+        // Store if must contain a PassageValue* call in its condition
+        var storeCond = storeIf.Condition.ToString();
+        if (!storeCond.Contains("PassageValueNumber") && !storeCond.Contains("PassageValueString")) return false;
+        var storeIn = ExtractStoreIn(storeIf.Statement);
+        if (storeIn is null) return false;
+
+        var args = genBtn.ArgumentList.Arguments;
+        var promptId = args.Count > 0 ? GetStringValue(args[0].Expression) ?? _passageName : _passageName;
+        var text = args.Count > 1 ? ExtractTemplateString(args[1].Expression) : "";
+        var inputType = args.Count > 2 ? GetStringValue(args[2].Expression) ?? "string" : "string";
+
+        var resolvedType = inputType == "number" ? "number" : "string";
+        node = new InputPromptNode
+        {
+            PromptId = promptId,
+            Text = text,
+            InputType = resolvedType,
+            StoreIn = storeIn,
+            ResumePassage = _passageName,
+        };
+        _report.AddInputPrompt(_passageName, storeIn, resolvedType, text);
+        return true;
+    }
+
+    private string ExtractTemplateString(ExpressionSyntax expr)
+    {
+        expr = UnwrapParens(expr);
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            return lit.Token.ValueText;
+        if (IsVarAccess(expr, out var v))
+            return $"{{{v}}}";
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+            return ExtractTemplateString(bin.Left) + ExtractTemplateString(bin.Right);
+        return $"?({Truncate(expr.ToString())})";
+    }
+
+    // Returns true when every leaf of the + chain is a recognisable template part:
+    // string literal, int literal, var access, or either() invocation.
+    private bool IsTemplateConcatExpr(ExpressionSyntax expr)
+    {
+        expr = UnwrapParens(expr);
+        if (expr is LiteralExpressionSyntax) return true;
+        if (IsVarAccess(expr, out _)) return true;
+        if (expr is InvocationExpressionSyntax inv && GetSimpleMethodName(inv) == "either") return true;
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+            return IsTemplateConcatExpr(bin.Left) && IsTemplateConcatExpr(bin.Right);
+        return false;
+    }
+
+    // Returns true when the + chain contains at least one string literal or either() call,
+    // distinguishing it from a purely numeric arithmetic expression.
+    private static bool ContainsStringOrEither(ExpressionSyntax expr)
+    {
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            return true;
+        if (expr is InvocationExpressionSyntax inv)
+        {
+            var name = (inv.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text
+                ?? (inv.Expression as IdentifierNameSyntax)?.Identifier.Text;
+            if (name == "either") return true;
+        }
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+            return ContainsStringOrEither(bin.Left) || ContainsStringOrEither(bin.Right);
+        return false;
+    }
+
+    // Walks a binary + chain and appends to template. either() calls produce a let node.
+    // Pre-condition: IsTemplateConcatExpr(expr) == true (all leaves are known types).
+    private void TryExtractTemplateConcat(ExpressionSyntax expr, List<LetNode> lets, StringBuilder template)
+    {
+        expr = UnwrapParens(expr);
+
+        if (expr is LiteralExpressionSyntax lit)
+        {
+            template.Append(lit.IsKind(SyntaxKind.StringLiteralExpression)
+                ? lit.Token.ValueText
+                : lit.Token.ValueText);
+            return;
+        }
+        if (IsVarAccess(expr, out var varName))
+        {
+            template.Append($"{{{varName}}}");
+            return;
+        }
+        if (expr is InvocationExpressionSyntax inv && GetSimpleMethodName(inv) == "either")
+        {
+            var values = ExtractMacroArgs(inv);
+            var rndName = $"_rnd_{_passageName}_{_varRandomSeq++}";
+            lets.Add(new LetNode
+            {
+                Var = rndName,
+                Random = new VarRandom { RandomType = "choose-one", Values = values },
+            });
+            template.Append($"{{{rndName}}}");
+            return;
+        }
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
+            TryExtractTemplateConcat(bin.Left, lets, template);
+            TryExtractTemplateConcat(bin.Right, lets, template);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -827,17 +1058,21 @@ public class PassageBodyVisitor
     private static object LiteralValue(LiteralExpressionSyntax lit)
     {
         if (lit.IsKind(SyntaxKind.StringLiteralExpression)) return lit.Token.ValueText;
-        if (lit.IsKind(SyntaxKind.NumericLiteralExpression)) return lit.Token.Value ?? 0;
+        if (lit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
+            var val = lit.Token.Value;
+            return val is double d ? (int)d : val ?? 0;
+        }
         if (lit.IsKind(SyntaxKind.TrueLiteralExpression)) return true;
         if (lit.IsKind(SyntaxKind.FalseLiteralExpression)) return false;
         return lit.Token.ValueText;
     }
 
-    private static double? TryParseDouble(ExpressionSyntax expr)
+    private static int? TryParseInt(ExpressionSyntax expr)
     {
         if (expr is LiteralExpressionSyntax lit &&
             double.TryParse(lit.Token.ValueText, out var d))
-            return d;
+            return (int)d;
         return null;
     }
 
@@ -850,6 +1085,72 @@ public class PassageBodyVisitor
     private static bool IsMacroCall(ExpressionSyntax expr) =>
         expr is InvocationExpressionSyntax inv &&
         GetSimpleMethodName(inv) is "either" or "random" or "a" or "shuffled";
+
+    private static bool IsSimpleValue(ExpressionSyntax expr) =>
+        expr is LiteralExpressionSyntax || IsVarAccess(expr, out _);
+
+    // True when a condition expression contains Unity singleton API calls that can't be expressed in MWS.
+    private static bool HasUnresolvableApiCall(ExpressionSyntax condition) =>
+        condition.DescendantNodesAndSelf()
+            .OfType<MemberAccessExpressionSyntax>()
+            .Any(m => m.Expression.ToString().Contains(".instance"));
+
+    private static readonly Regex EqCondRegex = new(@"^(\w+)\s*==\s*(.+)$", RegexOptions.Compiled);
+
+    private List<(string Cond, ExpressionSyntax Expr)> FlattenTernaryChain(
+        string firstCond, ExpressionSyntax firstTrue, ExpressionSyntax firstFalse)
+    {
+        var result = new List<(string, ExpressionSyntax)>();
+        result.Add((firstCond, firstTrue));
+        var current = firstFalse;
+        while (current is ConditionalExpressionSyntax nested)
+        {
+            var nestedCond = SimplifyCondition(UnwrapParens(nested.Condition).ToString());
+            var nestedTrue = UnwrapParens(nested.WhenTrue);
+            result.Add((nestedCond, nestedTrue));
+            current = UnwrapParens(nested.WhenFalse);
+        }
+        result.Add(("else", current));
+        return result;
+    }
+
+    private MwsNode BuildChainedTernaryNode(string varName,
+        List<(string Cond, ExpressionSyntax Expr)> branches, int? sourceLine)
+    {
+        // All non-else conditions must be "var == value" equality on the same variable → SwitchNode
+        var condBranches = branches.Where(b => b.Cond != "else").ToList();
+        var matches = condBranches.Select(b => EqCondRegex.Match(b.Cond)).ToList();
+        if (matches.All(m => m.Success) &&
+            matches.Select(m => m.Groups[1].Value).Distinct().Count() == 1)
+        {
+            var switchVar = matches[0].Groups[1].Value;
+            var cases = new List<SwitchCase>();
+            foreach (var (cond, expr) in branches)
+            {
+                if (cond == "else")
+                {
+                    cases.Add(new SwitchCase { Default = true, Nodes = [BuildBranchEffect(varName, expr)] });
+                }
+                else
+                {
+                    var rawVal = EqCondRegex.Match(cond).Groups[2].Value.Trim();
+                    object matchVal = int.TryParse(rawVal, out var n) ? (object)n : rawVal;
+                    cases.Add(new SwitchCase { Match = matchVal, Nodes = [BuildBranchEffect(varName, expr)] });
+                }
+            }
+            return new SwitchNode { On = switchVar, Cases = cases, SourceLine = sourceLine };
+        }
+
+        // Fallback: multi-branch ConditionalNode
+        return new ConditionalNode
+        {
+            Branches = branches.Select(b => b.Cond == "else"
+                ? new ConditionalBranch { Else = true, Nodes = [BuildBranchEffect(varName, b.Expr)] }
+                : new ConditionalBranch { Condition = b.Cond, Nodes = [BuildBranchEffect(varName, b.Expr)] })
+                .ToList(),
+            SourceLine = sourceLine,
+        };
+    }
 
     private EffectNode BuildBranchEffect(string varName, ExpressionSyntax expr)
     {
@@ -868,8 +1169,8 @@ public class PassageBodyVisitor
             if (macroName == "random")
             {
                 var rArgs = inv.ArgumentList.Arguments;
-                var min = rArgs.Count > 0 ? TryParseDouble(rArgs[0].Expression) : null;
-                var max = rArgs.Count > 1 ? TryParseDouble(rArgs[1].Expression) : null;
+                var min = rArgs.Count > 0 ? TryParseInt(rArgs[0].Expression) : null;
+                var max = rArgs.Count > 1 ? TryParseInt(rArgs[1].Expression) : null;
                 return new EffectNode { VarRandom = new() { [varName] = new VarRandom { RandomType = "range", Min = min, Max = max } } };
             }
         }
