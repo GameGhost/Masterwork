@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using MasterWork.ModuleFormat;
 
 namespace MasterWork.Extractor;
 
@@ -15,7 +16,16 @@ public class ExtractionReport
         string? Code = null,
         int? SourceLine = null);
 
+    private readonly record struct InputPromptRecord(
+        string PassageName,
+        string StoreIn,
+        string InputType,
+        string Text,
+        int? SourceLine);
+
     private readonly List<Flag> _flags = [];
+    private readonly List<InputPromptRecord> _inputPrompts = [];
+    private Dictionary<string, VarDef>? _variables;
 
     public int PassagesExtracted { get; set; }
     public int VariablesDiscovered { get; set; }
@@ -25,6 +35,8 @@ public class ExtractionReport
     // Set before Write() so the report can generate relative-path links.
     public string? SourceFilePath { get; set; }
     public string? OutputDirPath { get; set; }
+    // Human-readable module name shown in the report header.
+    public string? ModuleTitle { get; set; }
 
     // passage name → output filename (just the filename, report is in the same dir)
     public Dictionary<string, string> PassageFiles { get; } = new(StringComparer.Ordinal);
@@ -32,9 +44,12 @@ public class ExtractionReport
     private List<string>? _isolatedPassages;
     public void AddIsolatedPassages(List<string> names) => _isolatedPassages = names;
 
-    private readonly List<(string PassageId, string FileName)> _overrides = [];
-    public void AddOverrideApplied(string passageId, string fileName) =>
-        _overrides.Add((passageId, fileName));
+    private readonly List<(string PassageId, string FileName, int GeneratedUnknownCount)> _overrides = [];
+    public void AddOverrideApplied(string passageId, string fileName)
+    {
+        var unknownCount = _flags.Count(f => f.Kind == "unknown_node" && f.PassageName == passageId);
+        _overrides.Add((passageId, fileName, unknownCount));
+    }
 
     // Unknown node — the code is the primary content; no separate message.
     public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
@@ -51,10 +66,29 @@ public class ExtractionReport
     public void AddInfo(string passageName, string message, int? sourceLine = null) =>
         _flags.Add(new(passageName, "info", message, null, sourceLine));
 
+    public void AddInputPrompt(string passageName, string storeIn, string inputType,
+        string text, int? sourceLine = null) =>
+        _inputPrompts.Add(new(passageName, storeIn, inputType, text, sourceLine));
+
+    public void SetVariables(Dictionary<string, VarDef> vars)
+    {
+        _variables = vars;
+        foreach (var p in _inputPrompts)
+        {
+            if (!_variables.TryGetValue(p.StoreIn, out var def)) continue;
+            var expectedType = p.InputType == "number" ? "int" : "string";
+            if (def.VarType != expectedType)
+                AddWarning(p.PassageName,
+                    $"Input type mismatch: `{p.StoreIn}` is declared `{def.VarType}` but input_type is `{p.InputType}`",
+                    null, p.SourceLine);
+        }
+    }
+
     public void Write(string outputPath)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# Extraction Report");
+        var title = ModuleTitle is { Length: > 0 } t ? $"Extraction Report — {t}" : "Extraction Report";
+        sb.AppendLine($"# {title}");
         sb.AppendLine();
 
         // Flags for overridden passages reflect the discarded generated file — suppress them.
@@ -64,6 +98,7 @@ public class ExtractionReport
         var unknownCount = activeFlags.Count(f => f.Kind == "unknown_node");
         var warnCount = activeFlags.Count(f => f.Kind == "warning");
         var infoCount = activeFlags.Count(f => f.Kind == "info");
+        var promptCount = _inputPrompts.Count;
         var isolatedCount = _isolatedPassages?.Count ?? 0;
         var overrideCount = _overrides.Count;
 
@@ -73,7 +108,10 @@ public class ExtractionReport
         sb.AppendLine($"| Variables discovered | **{VariablesDiscovered}** |");
         sb.AppendLine($"| Unknown nodes | **{unknownCount}** |");
         sb.AppendLine($"| Warnings | **{warnCount}** |");
-        sb.AppendLine($"| Info | **{infoCount}** |");
+        if (promptCount > 0)
+            sb.AppendLine($"| Input prompts | **{promptCount}** |");
+        if (infoCount > 0)
+            sb.AppendLine($"| Info | **{infoCount}** |");
         if (isolatedCount > 0)
             sb.AppendLine($"| Isolated passages | **{isolatedCount}** |");
         if (overrideCount > 0)
@@ -85,13 +123,57 @@ public class ExtractionReport
             "Unrecognized statements — emitted as `type: unknown` in the passage YAML. Each requires manual review.");
         WriteSection(sb, activeFlags, "warning", "Warnings",
             "Recognized patterns that required a fallback or approximation.");
-        WriteSection(sb, activeFlags, "info", "Info",
-            "Informational notes — no action required.");
+        WriteInputPromptsSection(sb);
+        if (infoCount > 0)
+            WriteSection(sb, activeFlags, "info", "Info",
+                "Informational notes — no action required.");
         WriteIsolatedSection(sb);
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"Report written to: {outputPath}");
     }
+
+    private void WriteInputPromptsSection(StringBuilder sb)
+    {
+        if (_inputPrompts.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine($"## Input Prompts ({_inputPrompts.Count})");
+        sb.AppendLine();
+        sb.AppendLine("Player input collected by popup panels.");
+        sb.AppendLine();
+        sb.AppendLine("| Passage | Variable | Input Type | Prompt |");
+        sb.AppendLine("|---|---|---|---|");
+
+        foreach (var p in _inputPrompts.OrderBy(p => p.PassageName))
+        {
+            var varType = _variables is not null && _variables.TryGetValue(p.StoreIn, out var def)
+                ? def.VarType : "?";
+            var typeMismatch = (p.InputType == "number" && varType != "int") ||
+                               (p.InputType == "string" && varType != "string");
+            var varCell = typeMismatch
+                ? $"`{p.StoreIn}` [{varType}] ⚠"
+                : $"`{p.StoreIn}` [{varType}]";
+
+            string passageCell;
+            if (PassageFiles.TryGetValue(p.PassageName, out var file))
+            {
+                var anchor = p.SourceLine.HasValue ? $"#L{p.SourceLine.Value}" : "";
+                passageCell = $"[{p.PassageName}]({file}{anchor})";
+            }
+            else
+            {
+                passageCell = p.PassageName;
+            }
+
+            sb.AppendLine($"| {passageCell} | {varCell} | {p.InputType} | {EscapeTableCell(p.Text)} |");
+        }
+
+        sb.AppendLine();
+    }
+
+    private static string EscapeTableCell(string s) => s.Replace("|", "\\|");
 
     private void WriteOverridesSection(StringBuilder sb)
     {
@@ -105,9 +187,12 @@ public class ExtractionReport
             "The generated file has been discarded; the override is the authoritative source.");
         sb.AppendLine();
 
-        foreach (var (passageId, fileName) in _overrides.OrderBy(o => o.FileName))
+        foreach (var (passageId, fileName, unknownCount) in _overrides.OrderBy(o => o.FileName))
         {
             sb.AppendLine($"- [{fileName}]({fileName}) (`{passageId}`)");
+            if (unknownCount == 0)
+                sb.AppendLine($"  > ⚠ Possibly stale: the extractor generates 0 unknown nodes for `{passageId}`. " +
+                    "Verify the generated output matches the hand-authored version before removing the override.");
         }
         sb.AppendLine();
     }

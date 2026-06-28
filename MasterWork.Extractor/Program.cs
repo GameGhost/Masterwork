@@ -52,10 +52,20 @@ partial class Program
             ? SpriteMapper.FromJsonFile(opts.SpriteMapPath)
             : SpriteMapper.Empty();
 
+        // Derive a human-readable module title: prefer explicit --module-title, fall back to source filename.
+        var moduleTitle = opts.ModuleTitle;
+        if (string.IsNullOrEmpty(moduleTitle) && sourceFiles.Count == 1)
+        {
+            var stem = Path.GetFileNameWithoutExtension(sourceFiles[0]);
+            // "ATimeOfWar" → "A Time Of War", "FearOfTheUnknown" → "Fear Of The Unknown"
+            moduleTitle = string.Concat(stem.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + c : c.ToString()));
+        }
+
         var report = new ExtractionReport
         {
             SourceFilePath = sourceFiles.Count == 1 ? sourceFiles[0] : null,
             OutputDirPath = Path.GetFullPath(opts.OutputDir),
+            ModuleTitle = moduleTitle,
         };
         var extractor = new CradleExtractor(opts, spriteMapper, report);
 
@@ -74,10 +84,9 @@ partial class Program
         if (isolated.Count > 0)
             report.AddIsolatedPassages(isolated);
 
-        report.PrintSummary();
-
         if (opts.DryRun)
         {
+            report.PrintSummary();
             Console.WriteLine("[dry-run] No files written.");
             return 0;
         }
@@ -104,12 +113,16 @@ partial class Program
         // Apply hand-authored overrides before writing the report so override info is included
         ApplyOverrides(opts, report);
 
+        // Print summary after overrides so unknown-node count excludes suppressed passages
+        report.PrintSummary();
+
         // Write variables manifest
         var vars = extractor.GetDiscoveredVariables();
         WriteVarsManifest(vars, opts.OutputDir, serializer);
 
         // Write extraction report
         var reportPath = Path.Combine(opts.OutputDir, "_extraction-report.md");
+        report.SetVariables(vars);
         report.Write(reportPath);
 
         Console.WriteLine($"Done. {passages.Count} passages written to: {opts.OutputDir}");
