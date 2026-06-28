@@ -693,6 +693,21 @@ public class PassageBodyVisitor
                     if (removeValues.Count == 1)
                         return new EffectNode { VarRemove = new() { [varName!] = removeValues[0].ToString()! } };
                 }
+
+                // var - either([vals]) / var - int.Parse(either([vals]))
+                // → let _rnd = choose-one; var_math "-{_rnd}"
+                if (rightExpr is InvocationExpressionSyntax eitherSub &&
+                    GetSimpleMethodName(eitherSub) == "either")
+                {
+                    var eitherVals = ExtractMacroArgs(eitherSub);
+                    var rndSub = $"_rnd_{_passageName}_{_varRandomSeq++}";
+                    preamble = [new LetNode
+                    {
+                        Var = rndSub,
+                        Random = new VarRandom { RandomType = "choose-one", Values = eitherVals },
+                    }];
+                    return new EffectNode { VarMath = new() { [varName!] = $"-{{{rndSub}}}" } };
+                }
             }
 
             // random(min, max) + var  or  var + random(min, max)  →  let _rnd = range, varName = {addend} + {_rnd}
@@ -1347,7 +1362,7 @@ public class PassageBodyVisitor
 
     private static string? ExtractVarMath(BinaryExpressionSyntax bin, string varName)
     {
-        // int.Parse(this.Vars.X) + N
+        // int.Parse(this.Vars.X) OP N
         if (bin.Right is LiteralExpressionSyntax rLit && rLit.IsKind(SyntaxKind.NumericLiteralExpression))
         {
             var op = bin.OperatorToken.Text;
@@ -1358,6 +1373,15 @@ public class PassageBodyVisitor
         if (bin.Left is LiteralExpressionSyntax lLit && lLit.IsKind(SyntaxKind.NumericLiteralExpression))
         {
             if (bin.OperatorToken.Text == "+") return $"+{lLit.Token.ValueText}";
+        }
+        // int.Parse(Vars.X) OP int.Parse(Vars.Y)  →  "+{Y}" / "-{Y}"
+        // Both sides must unwrap to var accesses; this guards against consuming random()+var.
+        var lhsUnwrapped2 = UnwrapIntParse(bin.Left);
+        var rhsUnwrapped2 = UnwrapIntParse(bin.Right);
+        if (IsVarAccess(lhsUnwrapped2, out _) && IsVarAccess(rhsUnwrapped2, out var rhsVar))
+        {
+            var op2 = bin.OperatorToken.Text;
+            if (op2 == "+" || op2 == "-") return $"{op2}{{{rhsVar}}}";
         }
         return null;
     }
