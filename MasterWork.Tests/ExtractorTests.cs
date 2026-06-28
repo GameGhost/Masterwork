@@ -429,4 +429,66 @@ public class ExtractorTests
 
         Assert.Single(passages[0].Nodes.OfType<BreakNode>());
     }
+
+    [Fact]
+    public void DoubleBreak_EmitsParagraphBreak()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("first");
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.text("second");
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        Assert.Contains(nodes, n => n is ParagraphBreakNode);
+        Assert.DoesNotContain(nodes, n => n is BreakNode);
+        Assert.Equal(2, nodes.OfType<TextNode>().Count());
+    }
+
+    [Fact]
+    public void TripleBreak_StillEmitsSingleParagraphBreak()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield break;
+            }
+            """);
+
+        Assert.Single(passages[0].Nodes.OfType<ParagraphBreakNode>());
+        Assert.Empty(passages[0].Nodes.OfType<BreakNode>());
+    }
+
+    [Fact]
+    public void PassageIndex_IsSetFromFunctionNumber()
+    {
+        var passages = Extract("""
+            private void passage42_Init()
+            {
+                base.Passages["P42"] = new StoryPassage("P42", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage42_Main));
+            }
+            private IEnumerable<StoryOutput> passage42_Main()
+            {
+                yield break;
+            }
+            """);
+
+        Assert.Equal(42, passages[0].PassageIndex);
+    }
 }

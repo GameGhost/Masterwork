@@ -79,7 +79,8 @@ class Program
 
         foreach (var passage in passages)
         {
-            var outPath = Path.Combine(opts.OutputDir, $"{SanitizeFileName(passage.PassageId)}.mws.yaml");
+            var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
+            var outPath = Path.Combine(opts.OutputDir, $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml");
             var dict = passage.ToDict();
             var yaml = "---\n" + serializer.Serialize(dict);
             yaml = InjectSourceComments(yaml, passage);

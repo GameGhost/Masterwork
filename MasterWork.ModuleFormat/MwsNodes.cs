@@ -16,6 +16,7 @@ public class MwsPassage
     public bool Debug { get; set; }
 
     // Extraction metadata — not serialized to YAML content, used for comment injection.
+    public int? PassageIndex { get; set; }
     public int? MainMethodSourceLine { get; set; }
     public string? SourceFile { get; set; }
 
@@ -99,6 +100,12 @@ public class TextNode : MwsNode
 public class BreakNode : MwsNode
 {
     public override string Type => "break";
+    public override Dictionary<string, object?> ToDict() => new() { ["type"] = Type };
+}
+
+public class ParagraphBreakNode : MwsNode
+{
+    public override string Type => "paragraph_break";
     public override Dictionary<string, object?> ToDict() => new() { ["type"] = Type };
 }
 

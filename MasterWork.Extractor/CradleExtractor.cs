@@ -282,6 +282,7 @@ public class CradleExtractor
 
             passages.Add(new MwsPassage
             {
+                PassageIndex = idx,
                 PassageId = name,
                 Title = name,
                 Tags = tags,
@@ -376,47 +377,58 @@ public class CradleExtractor
     }
 
     // ── Text consolidation post-pass ─────────────────────────────────────────
-    // Merges consecutive pure-text TextNodes into a single template string.
-    // Promotes _rnd_* EffectNodes (inline random text) to LetNodes, emitting
-    // them before the merged TextNode that consumes them.
+    // Merges consecutive text/icon TextNodes into a single template string.
+    // _rnd_* EffectNodes become LetNodes emitted before the merged TextNode.
+    // Promotable ConditionalNodes (all-effect branches) become preamble nodes.
+    // Runs a second ConsolidateBreaks pass: [break, break+] → paragraph_break.
     // Recurses into all container node types.
 
     private static List<MwsNode> ConsolidateTextNodes(List<MwsNode> nodes)
     {
         var result = new List<MwsNode>();
-        var group = new List<MwsNode>(); // TextNodes + promotable EffectNodes
+        var group = new List<MwsNode>();
 
         void FlushGroup()
         {
             if (group.Count == 0) return;
 
-            var textNodes = group.OfType<TextNode>().ToList();
-            var allRuns = new List<TextRun>();
+            var preambleNodes = new List<MwsNode>();
             var letNodes = new List<LetNode>();
             var letVarNames = new List<string>();
+            var allRuns = new List<TextRun>();
+            int? firstLine = null;
 
             foreach (var n in group)
             {
                 if (n is TextNode t)
-                    allRuns.AddRange(t.Runs);
-                else if (n is EffectNode e && e.VarRandom is not null)
                 {
-                    foreach (var kv in e.VarRandom)
+                    firstLine ??= t.SourceLine;
+                    if (t.Template is not null)
+                        allRuns.Add(new TextRun { Text = t.Template, Style = t.Style });
+                    else
+                        allRuns.AddRange(t.Runs);
+                }
+                else if (IsRndOnlyEffect(n))
+                {
+                    var e = (EffectNode)n;
+                    firstLine ??= e.SourceLine;
+                    foreach (var kv in e.VarRandom!)
                         letNodes.Add(new LetNode { Var = kv.Key, Random = kv.Value, SourceLine = e.SourceLine });
                     letVarNames.AddRange(e.VarRandom.Keys);
                 }
+                else
+                {
+                    // Promotable conditional — emitted before the merged TextNode
+                    preambleNodes.Add(n);
+                }
             }
 
-            var firstLine = textNodes.FirstOrDefault()?.SourceLine;
+            result.AddRange(preambleNodes);
+            result.AddRange(letNodes);
 
-            if (letNodes.Count == 0 && textNodes.Count == 1)
-            {
-                result.Add(TemplatizeNode(textNodes[0]));
-            }
-            else if (allRuns.All(r => r.AssetRef is null))
+            if (allRuns.Count > 0)
             {
                 var dominantStyle = ComputeDominantStyle(allRuns);
-                result.AddRange(letNodes);
                 result.Add(new TextNode
                 {
                     Template = BuildTemplate(allRuns, dominantStyle),
@@ -425,27 +437,14 @@ public class CradleExtractor
                     SourceLine = firstLine,
                 });
             }
-            else
-            {
-                // Mixed asset+text group — promote lets but preserve each TextNode's runs
-                result.AddRange(letNodes);
-                foreach (var n in group)
-                    if (n is TextNode t2) result.Add(t2);
-            }
 
             group.Clear();
         }
 
         foreach (var node in nodes)
         {
-            if (IsGroupableTextNode(node))
-            {
+            if (CanJoinGroup(node, group))
                 group.Add(node);
-            }
-            else if (IsPromotableEffect(node) && group.Any(n => n is TextNode))
-            {
-                group.Add(node);
-            }
             else
             {
                 FlushGroup();
@@ -453,23 +452,37 @@ public class CradleExtractor
             }
         }
         FlushGroup();
-        return result;
+        return ConsolidateBreaks(result);
     }
 
-    private static bool IsGroupableTextNode(MwsNode node)
+    // Pure-text TextNodes always start or extend a group.
+    // Icon-only TextNodes only extend an existing group (never start one).
+    // _rnd_*-only EffectNodes and promotable ConditionalNodes only extend an existing group.
+    private static bool CanJoinGroup(MwsNode node, List<MwsNode> group)
     {
-        if (node is not TextNode t) return false;
-        if (t.Template is not null) return true;
-        return t.Runs.All(r => r.AssetRef is null);
+        if (node is TextNode t)
+        {
+            if (t.Template is not null) return true;
+            if (t.Runs.All(r => r.AssetRef is null)) return true;
+            return group.Count > 0; // icon-only: only extends existing group
+        }
+        if (group.Count == 0) return false;
+        return IsRndOnlyEffect(node) || IsPromotableConditional(node);
     }
 
-    private static bool IsPromotableEffect(MwsNode node)
+    private static bool IsRndOnlyEffect(MwsNode node)
     {
         if (node is not EffectNode e) return false;
         if (e.VarSets is { Count: > 0 }) return false;
         if (e.VarMath is { Count: > 0 }) return false;
         if (e.VarRandom is null || e.VarRandom.Count == 0) return false;
         return e.VarRandom.Keys.All(k => k.StartsWith("_rnd_"));
+    }
+
+    private static bool IsPromotableConditional(MwsNode node)
+    {
+        if (node is not ConditionalNode cond) return false;
+        return cond.Branches.All(b => b.Nodes.All(n => n is EffectNode or LetNode));
     }
 
     private static MwsNode RecurseContainers(MwsNode node)
@@ -493,19 +506,24 @@ public class CradleExtractor
         return node;
     }
 
-    private static MwsNode TemplatizeNode(TextNode node)
+    private static List<MwsNode> ConsolidateBreaks(List<MwsNode> nodes)
     {
-        if (node.Template is not null) return node;
-        if (node.Runs.Count == 0) return node;
-        if (node.Runs.Any(r => r.AssetRef is not null)) return node;
-
-        var dominantStyle = ComputeDominantStyle(node.Runs);
-        return new TextNode
+        var result = new List<MwsNode>();
+        int i = 0;
+        while (i < nodes.Count)
         {
-            Template = BuildTemplate(node.Runs, dominantStyle),
-            Style = dominantStyle,
-            SourceLine = node.SourceLine,
-        };
+            if (nodes[i] is BreakNode)
+            {
+                int count = 0;
+                while (i < nodes.Count && nodes[i] is BreakNode) { count++; i++; }
+                result.Add(count >= 2 ? new ParagraphBreakNode() : new BreakNode());
+            }
+            else
+            {
+                result.Add(nodes[i++]);
+            }
+        }
+        return result;
     }
 
     private static string? ComputeDominantStyle(List<TextRun> runs)
