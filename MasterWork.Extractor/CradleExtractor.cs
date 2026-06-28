@@ -486,6 +486,8 @@ public partial class CradleExtractor
     private static bool IsPromotableConditional(MwsNode node)
     {
         if (node is not ConditionalNode cond) return false;
+        // Vacuously-empty branches are not promotable (they have no effect to move)
+        if (cond.Branches.All(b => b.Nodes.Count == 0)) return false;
         return cond.Branches.All(b => b.Nodes.All(n => n is EffectNode or LetNode));
     }
 

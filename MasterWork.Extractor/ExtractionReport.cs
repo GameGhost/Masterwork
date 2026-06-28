@@ -28,6 +28,9 @@ public class ExtractionReport
     // passage name → output filename (just the filename, report is in the same dir)
     public Dictionary<string, string> PassageFiles { get; } = new(StringComparer.Ordinal);
 
+    private List<string>? _isolatedPassages;
+    public void AddIsolatedPassages(List<string> names) => _isolatedPassages = names;
+
     // Unknown node — the code is the primary content; no separate message.
     public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
         _flags.Add(new(passageName, "unknown_node",
@@ -52,6 +55,7 @@ public class ExtractionReport
         var unknownCount = _flags.Count(f => f.Kind == "unknown_node");
         var warnCount = _flags.Count(f => f.Kind == "warning");
         var infoCount = _flags.Count(f => f.Kind == "info");
+        var isolatedCount = _isolatedPassages?.Count ?? 0;
 
         sb.AppendLine("| | |");
         sb.AppendLine("|---|---|");
@@ -60,6 +64,8 @@ public class ExtractionReport
         sb.AppendLine($"| Unknown nodes | **{unknownCount}** |");
         sb.AppendLine($"| Warnings | **{warnCount}** |");
         sb.AppendLine($"| Info | **{infoCount}** |");
+        if (isolatedCount > 0)
+            sb.AppendLine($"| Isolated passages | **{isolatedCount}** |");
         sb.AppendLine();
 
         WriteSection(sb, "unknown_node", "Unknown Nodes",
@@ -68,9 +74,35 @@ public class ExtractionReport
             "Recognized patterns that required a fallback or approximation.");
         WriteSection(sb, "info", "Info",
             "Informational notes — no action required.");
+        WriteIsolatedSection(sb);
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"Report written to: {outputPath}");
+    }
+
+    private void WriteIsolatedSection(StringBuilder sb)
+    {
+        if (_isolatedPassages is not { Count: > 0 }) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine($"## Isolated Passages ({_isolatedPassages.Count})");
+        sb.AppendLine();
+        sb.AppendLine("No other passage links to these passages. They may be intentional entry points, " +
+            "test/debug passages, or unreachable dead code.");
+        sb.AppendLine();
+        sb.AppendLine("> **Editor note:** Identify and warn about passages (or trees) that are " +
+            "disconnected from the main passage graph.");
+        sb.AppendLine();
+
+        foreach (var name in _isolatedPassages)
+        {
+            if (PassageFiles.TryGetValue(name, out var file))
+                sb.AppendLine($"- [{name}]({file})");
+            else
+                sb.AppendLine($"- {name}");
+        }
+        sb.AppendLine();
     }
 
     private void WriteSection(StringBuilder sb, string kind, string title, string description)
@@ -89,11 +121,13 @@ public class ExtractionReport
         {
             sb.AppendLine("---");
             sb.AppendLine();
-            var heading = PassageFiles.TryGetValue(group.Key, out var yamlFile)
-                ? $"[{group.Key}]({yamlFile})"
-                : group.Key;
-            sb.AppendLine($"### {heading}");
+            sb.AppendLine($"### {group.Key}");
             sb.AppendLine();
+            if (PassageFiles.TryGetValue(group.Key, out var yamlFile))
+            {
+                sb.AppendLine($"[{yamlFile}]({yamlFile})");
+                sb.AppendLine();
+            }
 
             foreach (var flag in group)
             {

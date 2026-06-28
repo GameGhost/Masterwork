@@ -62,6 +62,17 @@ class Program
         var passages = extractor.Extract(sourceFiles);
 
         Console.WriteLine($"Extracted {passages.Count} passages.");
+
+        // Flag passages with no inbound references
+        var referencedIds = CollectReferencedPassageIds(passages);
+        var isolated = passages
+            .Where(p => !referencedIds.Contains(p.PassageId))
+            .OrderBy(p => p.PassageIndex ?? int.MaxValue)
+            .Select(p => p.PassageId)
+            .ToList();
+        if (isolated.Count > 0)
+            report.AddIsolatedPassages(isolated);
+
         report.PrintSummary();
 
         if (opts.DryRun)
@@ -212,6 +223,40 @@ class Program
         }
 
         return string.Join('\n', result);
+    }
+
+    private static HashSet<string> CollectReferencedPassageIds(List<MwsPassage> passages)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var p in passages)
+            CollectFromNodes(p.Nodes, ids);
+        return ids;
+    }
+
+    private static void CollectFromNodes(List<MwsNode> nodes, HashSet<string> ids)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case LinkNode lk: ids.Add(lk.Target); break;
+                case GotoNode go: ids.Add(go.Target); break;
+                case IncludePassageNode inc: ids.Add(inc.Target); break;
+                case SetupNotificationNode sn when sn.NextPassage is not null:
+                    ids.Add(sn.NextPassage); break;
+                case CheckProgressNode cp:
+                    ids.Add(cp.CurrentPassage); ids.Add(cp.TargetPassage); break;
+                case ConditionalNode cond:
+                    foreach (var b in cond.Branches) CollectFromNodes(b.Nodes, ids);
+                    break;
+                case SwitchNode sw:
+                    foreach (var c in sw.Cases) CollectFromNodes(c.Nodes, ids);
+                    break;
+                case SectionBodyNode sec: CollectFromNodes(sec.Nodes, ids); break;
+                case SetupBlockNode sb2: CollectFromNodes(sb2.Nodes, ids); break;
+                case ExpandLinkNode exp: CollectFromNodes(exp.ExpandNodes, ids); break;
+            }
+        }
     }
 
     private static string SanitizeFileName(string name) =>

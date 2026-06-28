@@ -409,11 +409,35 @@ public class PassageBodyVisitor
         if (expr is InvocationExpressionSyntax utilInv && IsIgnorableCall(utilInv))
             return [];
 
+        // Noop comparison: "this.Vars.X op value;" with no assignment.
+        // Cradle emits these for conditional blocks that existed in the original
+        // Harlowe script but contained no yield statements.
+        // Emit as an empty conditional so the structure is preserved for the editor.
+        if (expr is BinaryExpressionSyntax cmpExpr &&
+            IsComparisonExpression(cmpExpr) &&
+            IsVarAccess(cmpExpr.Left, out _))
+        {
+            var condStr = SimplifyCondition(cmpExpr.ToString());
+            return [new ConditionalNode
+            {
+                Branches = [new ConditionalBranch { Condition = condStr, Nodes = [] }]
+            }];
+        }
+
         // Unknown expression statement
         var code = es.ToString().Trim();
         _report.AddUnhandled(_passageName, code, GetLine(es));
         return [new UnknownNode { OriginalCode = Truncate(code) }];
     }
+
+    private static bool IsComparisonExpression(BinaryExpressionSyntax expr) =>
+        expr.OperatorToken.Kind() is
+            SyntaxKind.EqualsEqualsToken or
+            SyntaxKind.ExclamationEqualsToken or
+            SyntaxKind.LessThanToken or
+            SyntaxKind.GreaterThanToken or
+            SyntaxKind.LessThanEqualsToken or
+            SyntaxKind.GreaterThanEqualsToken;
 
     // ── Variable assignment → EffectNode ─────────────────────────────────
 
