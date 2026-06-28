@@ -473,11 +473,13 @@ public class PassageBodyVisitor
 
     // ── Variable assignment → EffectNode ─────────────────────────────────
 
-    private EffectNode? ProcessAssignment(AssignmentExpressionSyntax assign)
+    private MwsNode? ProcessAssignment(AssignmentExpressionSyntax assign)
     {
         // Must be this.Vars.X = ...
         if (!IsVarAccess(assign.Left, out var varName)) return null;
-        var right = assign.Right;
+        // Unwrap outer parentheses so patterns like ((cond) ? a : b) are handled correctly
+        ExpressionSyntax right = assign.Right;
+        while (right is ParenthesizedExpressionSyntax outerParen) right = outerParen.Expression;
 
         // Direct literal assignment
         if (right is LiteralExpressionSyntax lit2)
@@ -614,12 +616,33 @@ public class PassageBodyVisitor
         // Ternary (cond) ? a : b
         if (right is ConditionalExpressionSyntax ternary)
         {
-            var condStr = SimplifyCondition(ternary.Condition.ToString());
-            var trueVal = GetStringOrLiteral(ternary.WhenTrue);
-            var falseVal = GetStringOrLiteral(ternary.WhenFalse);
+            var condStr = SimplifyCondition(UnwrapParens(ternary.Condition).ToString());
+            var whenTrue = UnwrapParens(ternary.WhenTrue);
+            var whenFalse = UnwrapParens(ternary.WhenFalse);
+            // If either branch is a macro call (either/random), decompose into a ConditionalNode
+            // so each branch can assign the target variable with the appropriate effect type.
+            if (IsMacroCall(whenTrue) || IsMacroCall(whenFalse))
+            {
+                return new ConditionalNode
+                {
+                    Branches =
+                    [
+                        new ConditionalBranch
+                        {
+                            Condition = condStr,
+                            Nodes = [BuildBranchEffect(varName!, whenTrue)],
+                        },
+                        new ConditionalBranch
+                        {
+                            Else = true,
+                            Nodes = [BuildBranchEffect(varName!, whenFalse)],
+                        },
+                    ],
+                };
+            }
             return new EffectNode
             {
-                VarSets = new() { [varName!] = $"({condStr}) ? {trueVal} : {falseVal}" }
+                VarSets = new() { [varName!] = $"({condStr}) ? {GetStringOrLiteral(whenTrue)} : {GetStringOrLiteral(whenFalse)}" }
             };
         }
 
@@ -816,6 +839,42 @@ public class PassageBodyVisitor
             double.TryParse(lit.Token.ValueText, out var d))
             return d;
         return null;
+    }
+
+    private static ExpressionSyntax UnwrapParens(ExpressionSyntax expr)
+    {
+        while (expr is ParenthesizedExpressionSyntax p) expr = p.Expression;
+        return expr;
+    }
+
+    private static bool IsMacroCall(ExpressionSyntax expr) =>
+        expr is InvocationExpressionSyntax inv &&
+        GetSimpleMethodName(inv) is "either" or "random" or "a" or "shuffled";
+
+    private EffectNode BuildBranchEffect(string varName, ExpressionSyntax expr)
+    {
+        if (IsVarAccess(expr, out var v))
+            return new EffectNode { VarSets = new() { [varName] = $"{{{v}}}" } };
+        if (expr is LiteralExpressionSyntax lit)
+            return new EffectNode { VarSets = new() { [varName] = lit.Token.ValueText } };
+        if (expr is InvocationExpressionSyntax inv)
+        {
+            var macroName = GetSimpleMethodName(inv);
+            if (macroName == "either")
+            {
+                var values = ExtractMacroArgs(inv);
+                return new EffectNode { VarRandom = new() { [varName] = new VarRandom { RandomType = "choose-one", Values = values } } };
+            }
+            if (macroName == "random")
+            {
+                var rArgs = inv.ArgumentList.Arguments;
+                var min = rArgs.Count > 0 ? TryParseDouble(rArgs[0].Expression) : null;
+                var max = rArgs.Count > 1 ? TryParseDouble(rArgs[1].Expression) : null;
+                return new EffectNode { VarRandom = new() { [varName] = new VarRandom { RandomType = "range", Min = min, Max = max } } };
+            }
+        }
+        _report.AddWarning(_passageName, $"Unhandled branch expression for {varName}", expr.ToString(), GetLine(expr));
+        return new EffectNode { VarSets = new() { [varName] = $"?({Truncate(expr.ToString())})" } };
     }
 
     private static string? GetStringOrLiteral(ExpressionSyntax expr)

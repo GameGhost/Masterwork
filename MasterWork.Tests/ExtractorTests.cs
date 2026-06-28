@@ -771,6 +771,34 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void TernaryEither_DecomposesToConditionalNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.let1 = ((this.Vars.players == 3) ? this.Vars.nameC : this.macros1.either(new StoryVar[]
+                {
+                    this.Vars.nameA,
+                    this.Vars.nameB
+                }));
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
+        Assert.Equal("players == 3", cond.Branches[0].Condition);
+        var trueBranch = cond.Branches[0].Nodes.OfType<EffectNode>().First();
+        Assert.Equal("{nameC}", trueBranch.VarSets!["let1"]);
+        var falseBranch = cond.Branches[1].Nodes.OfType<EffectNode>().First();
+        Assert.NotNull(falseBranch.VarRandom);
+        Assert.Equal("choose-one", falseBranch.VarRandom!["let1"].RandomType);
+    }
+
+    [Fact]
     public void LogicOnlyGotoPassage_StripsBreaks()
     {
         var passages = Extract("""
