@@ -16,8 +16,8 @@ public class CradleExtractor
     private readonly SpriteMapper _spriteMapper;
     private readonly ExtractionReport _report;
 
-    // passage index → (name, tags[])
-    private readonly Dictionary<int, (string Name, string[] Tags)> _registry = [];
+    // passage index → (name, tags[], sourceFile)
+    private readonly Dictionary<int, (string Name, string[] Tags, string SourceFile)> _registry = [];
     // passage index → Main method syntax
     private readonly Dictionary<int, MethodDeclarationSyntax> _mainMethods = [];
     // passage index → (fragment index → method syntax)
@@ -207,7 +207,8 @@ public class CradleExtractor
             if (passageName is null) continue;
 
             var tags = ExtractStringArray(ctorArgs.Value[1].Expression);
-            _registry[idx] = (passageName, tags);
+            var sourceFile = initMethod.SyntaxTree.FilePath;
+            _registry[idx] = (passageName, tags, sourceFile);
             return;
         }
     }
@@ -246,13 +247,16 @@ public class CradleExtractor
     {
         var passages = new List<MwsPassage>();
 
-        foreach (var (idx, (name, tags)) in _registry.OrderBy(kv => kv.Key))
+        foreach (var (idx, (name, tags, sourceFile)) in _registry.OrderBy(kv => kv.Key))
         {
             if (!_mainMethods.TryGetValue(idx, out var mainMethod))
             {
                 _report.AddWarning(name, "No Main method found for this passage index");
                 continue;
             }
+
+            // 1-based line in the original file: Roslyn 0-based line - 1 (two wrapper lines prepended)
+            var mainMethodLine = mainMethod.GetLocation().GetLineSpan().StartLinePosition.Line - 1;
 
             var visitor = new PassageBodyVisitor(name, _spriteMapper, _report);
             var nodes = mainMethod.Body is not null
@@ -279,6 +283,8 @@ public class CradleExtractor
                 Layout = InferLayout(tags),
                 Nodes = nodes,
                 Debug = isDebug,
+                SourceFile = sourceFile,
+                MainMethodSourceLine = mainMethodLine >= 1 ? mainMethodLine : null,
             });
         }
 

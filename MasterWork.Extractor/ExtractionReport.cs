@@ -8,46 +8,146 @@ namespace MasterWork.Extractor;
 
 public class ExtractionReport
 {
-    private readonly record struct Flag(string PassageName, string Kind, string Detail);
+    private readonly record struct Flag(
+        string PassageName,
+        string Kind,
+        string Detail,
+        string? Code = null,
+        int? SourceLine = null);
+
     private readonly List<Flag> _flags = [];
 
     public int PassagesExtracted { get; set; }
     public int VariablesDiscovered { get; set; }
     public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node");
 
-    public void AddUnhandled(string passageName, string code) =>
-        _flags.Add(new(passageName, "unknown_node", code.Length > 120 ? code[..120] + "…" : code));
+    // Set before Write() so the report can generate relative-path links.
+    public string? SourceFilePath { get; set; }
+    public string? OutputDirPath { get; set; }
 
-    public void AddWarning(string passageName, string message) =>
-        _flags.Add(new(passageName, "warning", message));
+    // Unknown node — the code is the primary content; no separate message.
+    public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
+        _flags.Add(new(passageName, "unknown_node",
+            code.Length > 600 ? code[..600] + "…" : code,
+            null, sourceLine));
 
-    public void AddInfo(string passageName, string message) =>
-        _flags.Add(new(passageName, "info", message));
+    // Warning — message describes the problem; optional code excerpt provides context.
+    public void AddWarning(string passageName, string message, string? code = null, int? sourceLine = null) =>
+        _flags.Add(new(passageName, "warning", message,
+            code is null ? null : code.Length > 600 ? code[..600] + "…" : code,
+            sourceLine));
+
+    public void AddInfo(string passageName, string message, int? sourceLine = null) =>
+        _flags.Add(new(passageName, "info", message, null, sourceLine));
 
     public void Write(string outputPath)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Extraction Report");
         sb.AppendLine();
-        sb.AppendLine($"- Passages extracted: {PassagesExtracted}");
-        sb.AppendLine($"- Variables discovered: {VariablesDiscovered}");
-        sb.AppendLine($"- Unknown nodes (require human review): {UnknownNodeCount}");
+
+        var unknownCount = _flags.Count(f => f.Kind == "unknown_node");
+        var warnCount = _flags.Count(f => f.Kind == "warning");
+        var infoCount = _flags.Count(f => f.Kind == "info");
+
+        sb.AppendLine("| | |");
+        sb.AppendLine("|---|---|");
+        sb.AppendLine($"| Passages extracted | **{PassagesExtracted}** |");
+        sb.AppendLine($"| Variables discovered | **{VariablesDiscovered}** |");
+        sb.AppendLine($"| Unknown nodes | **{unknownCount}** |");
+        sb.AppendLine($"| Warnings | **{warnCount}** |");
+        sb.AppendLine($"| Info | **{infoCount}** |");
         sb.AppendLine();
 
-        var byKind = _flags.GroupBy(f => f.Kind).OrderBy(g => g.Key);
-        foreach (var group in byKind)
-        {
-            sb.AppendLine($"## {group.Key} ({group.Count()})");
-            sb.AppendLine();
-            foreach (var f in group.OrderBy(f => f.PassageName))
-            {
-                sb.AppendLine($"**{f.PassageName}**: `{f.Detail}`");
-            }
-            sb.AppendLine();
-        }
+        WriteSection(sb, "unknown_node", "Unknown Nodes",
+            "Unrecognized statements — emitted as `type: unknown` in the passage YAML. Each requires manual review.");
+        WriteSection(sb, "warning", "Warnings",
+            "Recognized patterns that required a fallback or approximation.");
+        WriteSection(sb, "info", "Info",
+            "Informational notes — no action required.");
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"Report written to: {outputPath}");
+    }
+
+    private void WriteSection(StringBuilder sb, string kind, string title, string description)
+    {
+        var items = _flags.Where(f => f.Kind == kind).ToList();
+        if (items.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine($"## {title} ({items.Count})");
+        sb.AppendLine();
+        sb.AppendLine(description);
+        sb.AppendLine();
+
+        foreach (var group in items.GroupBy(f => f.PassageName).OrderBy(g => g.Key))
+        {
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine($"### {group.Key}");
+            sb.AppendLine();
+
+            foreach (var flag in group)
+            {
+                // Location line as a file:line link
+                if (flag.SourceLine.HasValue)
+                {
+                    sb.AppendLine($"**{FormatLocation(flag.SourceLine.Value)}**");
+                    sb.AppendLine();
+                }
+
+                // For unknown_node the detail IS the raw C# code — always use a fenced block.
+                // For warning/info the detail is a human-readable message — plain text.
+                // If a warning also has a Code field, render that separately as a fenced block.
+                if (kind == "unknown_node")
+                {
+                    sb.AppendLine("```cs");
+                    sb.AppendLine(flag.Detail);
+                    sb.AppendLine("```");
+                }
+                else if (flag.Detail.Contains('\n') || flag.Detail.Length > 120)
+                {
+                    // Long or multi-line detail without a separate code field — treat as code.
+                    sb.AppendLine("```cs");
+                    sb.AppendLine(flag.Detail);
+                    sb.AppendLine("```");
+                }
+                else
+                {
+                    sb.AppendLine(flag.Detail);
+                }
+
+                // Separate code excerpt (warnings with an explicit Code field)
+                if (flag.Code is not null)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("```cs");
+                    sb.AppendLine(flag.Code);
+                    sb.AppendLine("```");
+                }
+
+                sb.AppendLine();
+            }
+        }
+    }
+
+    // Returns a markdown link "[filename:N](relative/path#LN)" when SourceFilePath and
+    // OutputDirPath are set; falls back to plain "filename:N" otherwise.
+    private string FormatLocation(int line)
+    {
+        if (SourceFilePath is null)
+            return $"line {line}";
+
+        var fileName = Path.GetFileName(SourceFilePath);
+        var display = $"{fileName}:{line}";
+
+        if (OutputDirPath is null)
+            return display;
+
+        var relPath = Path.GetRelativePath(OutputDirPath, SourceFilePath).Replace('\\', '/');
+        return $"[{display}]({relPath}#L{line})";
     }
 
     public void PrintSummary()

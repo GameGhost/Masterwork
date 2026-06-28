@@ -51,7 +51,11 @@ class Program
             ? SpriteMapper.FromJsonFile(opts.SpriteMapPath)
             : SpriteMapper.Empty();
 
-        var report = new ExtractionReport();
+        var report = new ExtractionReport
+        {
+            SourceFilePath = sourceFiles.Count == 1 ? sourceFiles[0] : null,
+            OutputDirPath = Path.GetFullPath(opts.OutputDir),
+        };
         var extractor = new CradleExtractor(opts, spriteMapper, report);
 
         Console.WriteLine("Extracting...");
@@ -78,6 +82,7 @@ class Program
             var outPath = Path.Combine(opts.OutputDir, $"{SanitizeFileName(passage.PassageId)}.mws.yaml");
             var dict = passage.ToDict();
             var yaml = "---\n" + serializer.Serialize(dict);
+            yaml = InjectSourceComments(yaml, passage);
             File.WriteAllText(outPath, yaml, Encoding.UTF8);
         }
 
@@ -158,6 +163,52 @@ class Program
         }
 
         return opts;
+    }
+
+    // Injects YAML comments for passage and node source locations.
+    // Format: "# filename:line-number" before the --- marker and before each top-level node.
+    private static string InjectSourceComments(string yaml, MwsPassage passage)
+    {
+        if (passage.SourceFile is null && passage.Nodes.All(n => n.SourceLine is null))
+            return yaml;
+
+        var sourceFileName = passage.SourceFile is not null
+            ? Path.GetFileName(passage.SourceFile)
+            : null;
+
+        var lines = yaml.Split('\n');
+        var result = new List<string>(lines.Length + passage.Nodes.Count + 2);
+
+        int nodeIndex = 0;
+        bool inNodes = false;
+        bool firstLine = true;
+
+        foreach (var line in lines)
+        {
+            // Prepend passage-level comment before the YAML document marker
+            if (firstLine && line == "---" && passage.MainMethodSourceLine.HasValue && sourceFileName is not null)
+                result.Add($"# {sourceFileName}:{passage.MainMethodSourceLine}");
+            firstLine = false;
+
+            if (!inNodes && line.TrimEnd() == "nodes:")
+            {
+                inNodes = true;
+                result.Add(line);
+                continue;
+            }
+
+            // Unindented list item = top-level node entry
+            if (inNodes && line.StartsWith("- ") && nodeIndex < passage.Nodes.Count)
+            {
+                var node = passage.Nodes[nodeIndex++];
+                if (node.SourceLine.HasValue && sourceFileName is not null)
+                    result.Add($"# {sourceFileName}:{node.SourceLine}");
+            }
+
+            result.Add(line);
+        }
+
+        return string.Join('\n', result);
     }
 
     private static string SanitizeFileName(string name) =>

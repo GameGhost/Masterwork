@@ -21,6 +21,10 @@ public class PassageBodyVisitor
     private List<TextRun> _pendingRuns = [];
     // Style stack — tracks nested styleScope calls (bold, italic, etc.)
     private readonly Stack<string> _styleStack = new();
+    // Source line of the statement currently being processed (1-based in original file)
+    private int? _currentStatementLine;
+    // Source line of the first text() call that started the current pending-runs buffer
+    private int? _pendingTextStartLine;
 
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report)
     {
@@ -40,6 +44,7 @@ public class PassageBodyVisitor
         for (int i = 0; i < list.Count; i++)
         {
             var stmt = list[i];
+            _currentStatementLine = GetLine(stmt);
 
             // Skip Cradle cleanup artifacts: StyleScope styleScope = null;
             if (IsCradleCleanupStatement(stmt)) continue;
@@ -52,6 +57,7 @@ public class PassageBodyVisitor
             if (stmt is YieldStatementSyntax { RawKind: (int)SyntaxKind.YieldReturnStatement } ys)
             {
                 var nodes = ProcessYieldExpression(ys.Expression!);
+                TagNodes(nodes, _currentStatementLine);
                 result.AddRange(FlushAndAdd(nodes));
                 continue;
             }
@@ -64,8 +70,7 @@ public class PassageBodyVisitor
                     : VisitStyleScopeBlock(scopeName!, hookId,
                         SyntaxFactory.Block(us.Statement));
 
-                // Text within a styleScope was already flushed with style applied;
-                // structural scope nodes are emitted directly
+                TagNodes(inner, _currentStatementLine);
                 result.AddRange(FlushAndAdd(inner));
                 continue;
             }
@@ -77,12 +82,15 @@ public class PassageBodyVisitor
                 if (IsInputPromptIf(ifs, out var inputNode))
                 {
                     result.AddRange(FlushText());
+                    inputNode!.SourceLine = _currentStatementLine;
                     result.Add(inputNode!);
                     continue;
                 }
 
                 result.AddRange(FlushText());
-                result.Add(BuildConditional(ifs));
+                var cond = BuildConditional(ifs);
+                cond.SourceLine = _currentStatementLine;
+                result.Add(cond);
                 continue;
             }
 
@@ -91,6 +99,7 @@ public class PassageBodyVisitor
             {
                 if (IsIgnorableAssignment(es)) continue;
                 var nodes = ProcessExpressionStatement(es);
+                TagNodes(nodes, _currentStatementLine);
                 result.AddRange(FlushAndAdd(nodes));
                 continue;
             }
@@ -100,13 +109,19 @@ public class PassageBodyVisitor
             if (!string.IsNullOrWhiteSpace(code) && code != ";")
             {
                 result.AddRange(FlushText());
-                result.Add(new UnknownNode { OriginalCode = Truncate(code) });
-                _report.AddUnhandled(_passageName, code);
+                result.Add(new UnknownNode { OriginalCode = Truncate(code), SourceLine = _currentStatementLine });
+                _report.AddUnhandled(_passageName, code, GetLine(stmt));
             }
         }
 
         result.AddRange(FlushText());
         return result;
+    }
+
+    private static void TagNodes(List<MwsNode> nodes, int? line)
+    {
+        foreach (var n in nodes)
+            if (n.SourceLine is null) n.SourceLine = line;
     }
 
     // ── Style scope handling ───────────────────────────────────────────────
@@ -151,7 +166,7 @@ public class PassageBodyVisitor
                 return VisitStatements(block.Statements);
 
             default:
-                _report.AddWarning(_passageName, $"Unknown styleScope: {scopeName}");
+                _report.AddWarning(_passageName, $"Unknown styleScope: {scopeName}", sourceLine: GetLine(block));
                 return VisitStatements(block.Statements);
         }
     }
@@ -197,16 +212,16 @@ public class PassageBodyVisitor
                 foreach (var (t, assetRef) in richRuns)
                 {
                     if (assetRef is not null)
-                        _pendingRuns.Add(new TextRun { AssetRef = assetRef });
+                        AddRun(new TextRun { AssetRef = assetRef });
                     else if (!string.IsNullOrEmpty(t))
-                        _pendingRuns.Add(new TextRun { Text = t, Style = currentStyle });
+                        AddRun(new TextRun { Text = t, Style = currentStyle });
                 }
             }
             else
             {
                 var cleaned = _spriteMapper.StripLayoutTags(raw);
                 if (!string.IsNullOrEmpty(cleaned))
-                    _pendingRuns.Add(new TextRun { Text = cleaned, Style = currentStyle });
+                    AddRun(new TextRun { Text = cleaned, Style = currentStyle });
             }
             return [];
         }
@@ -214,7 +229,7 @@ public class PassageBodyVisitor
         // this.Vars.X — variable interpolation
         if (IsVarAccess(arg, out var varName))
         {
-            _pendingRuns.Add(new TextRun { Text = $"{{{varName}}}", Style = currentStyle });
+            AddRun(new TextRun { Text = $"{{{varName}}}", Style = currentStyle });
             return [];
         }
 
@@ -223,7 +238,7 @@ public class PassageBodyVisitor
             binText.Right is LiteralExpressionSyntax litArith)
         {
             var op = binText.OperatorToken.Text;
-            _pendingRuns.Add(new TextRun { Text = $"{{{varNameArith}{op}{litArith.Token.ValueText}}}", Style = currentStyle });
+            AddRun(new TextRun { Text = $"{{{varNameArith}{op}{litArith.Token.ValueText}}}", Style = currentStyle });
             return [];
         }
 
@@ -241,7 +256,7 @@ public class PassageBodyVisitor
                 {
                     VarRandom = new() { [tempVar] = new VarRandom { RandomType = "either", Values = values } }
                 });
-                _pendingRuns.Add(new TextRun { Text = $"{{{tempVar}}}", Style = currentStyle });
+                AddRun(new TextRun { Text = $"{{{tempVar}}}", Style = currentStyle });
                 return flushNodes;
             }
             if (macroName == "random")
@@ -255,14 +270,15 @@ public class PassageBodyVisitor
                 {
                     VarRandom = new() { [tempVar2] = new VarRandom { RandomType = "range", Min = min, Max = max } }
                 });
-                _pendingRuns.Add(new TextRun { Text = $"{{{tempVar2}}}", Style = currentStyle });
+                AddRun(new TextRun { Text = $"{{{tempVar2}}}", Style = currentStyle });
                 return flushNodes2;
             }
         }
 
         // Fallback — flag for review
-        _report.AddWarning(_passageName, $"text() with non-literal arg: {arg}");
-        _pendingRuns.Add(new TextRun { Text = $"{{?{Truncate(arg.ToString())}}}", Style = currentStyle });
+        _report.AddWarning(_passageName, "text() with non-literal arg",
+            arg.ToString(), GetLine(arg));
+        AddRun(new TextRun { Text = $"{{?{Truncate(arg.ToString())}}}", Style = currentStyle });
         return [];
     }
 
@@ -322,7 +338,8 @@ public class PassageBodyVisitor
             var cond = new ConditionalNode();
             // Since this is a random either(), we can't statically know the condition;
             // emit as unknown for human review
-            _report.AddWarning(_passageName, $"Dynamic passage inclusion via either(): {arg}");
+            _report.AddWarning(_passageName, "Dynamic passage inclusion via either()",
+                arg.ToString(), GetLine(arg));
             return new UnknownNode
             {
                 OriginalCode = inv.ToString(),
@@ -384,7 +401,7 @@ public class PassageBodyVisitor
         // locationName/locationIcon assignments; emit as SetLocationNode stub
         if (expr is InvocationExpressionSyntax locInv && IsSetLocationCall(locInv))
         {
-            _report.AddInfo(_passageName, $"set_location call detected: {locInv}");
+            _report.AddInfo(_passageName, $"set_location call detected: {locInv}", GetLine(locInv));
             return [new SetLocationNode()];
         }
 
@@ -394,7 +411,7 @@ public class PassageBodyVisitor
 
         // Unknown expression statement
         var code = es.ToString().Trim();
-        _report.AddUnhandled(_passageName, code);
+        _report.AddUnhandled(_passageName, code, GetLine(es));
         return [new UnknownNode { OriginalCode = Truncate(code) }];
     }
 
@@ -439,7 +456,7 @@ public class PassageBodyVisitor
         // ViewPopupPanel.instance.PassageValueString() — string input (stored variant)
         if (right is InvocationExpressionSyntax pvs && GetSimpleMethodName(pvs) == "PassageValueString")
         {
-            _report.AddInfo(_passageName, $"String input stored in {varName}");
+            _report.AddInfo(_passageName, $"String input stored in {varName}", GetLine(pvs));
             return new EffectNode { VarSets = new() { [varName!] = "{input:string}" } };
         }
 
@@ -529,7 +546,8 @@ public class PassageBodyVisitor
         }
 
         // Fallback — record raw expression
-        _report.AddWarning(_passageName, $"Unhandled assignment RHS for {varName}: {right}");
+        _report.AddWarning(_passageName, $"Unhandled assignment RHS for {varName}",
+            right.ToString(), GetLine(right));
         return new EffectNode { VarSets = new() { [varName!] = $"?({Truncate(right.ToString())})" } };
     }
 
@@ -611,9 +629,17 @@ public class PassageBodyVisitor
     private List<MwsNode> FlushText()
     {
         if (_pendingRuns.Count == 0) return [];
-        var node = new TextNode { Runs = _pendingRuns };
+        var node = new TextNode { Runs = _pendingRuns, SourceLine = _pendingTextStartLine };
         _pendingRuns = [];
+        _pendingTextStartLine = null;
         return [node];
+    }
+
+    // Adds a run to the pending buffer; records the source line of the first run in the group.
+    private void AddRun(TextRun run)
+    {
+        if (_pendingRuns.Count == 0) _pendingTextStartLine = _currentStatementLine;
+        _pendingRuns.Add(run);
     }
 
     private List<MwsNode> FlushAndAdd(List<MwsNode> nodes)
@@ -869,8 +895,16 @@ public class PassageBodyVisitor
     private UnknownNode Unknown(SyntaxNode node)
     {
         var code = node.ToString().Trim();
-        _report.AddUnhandled(_passageName, code);
+        _report.AddUnhandled(_passageName, code, GetLine(node));
         return new UnknownNode { OriginalCode = Truncate(code) };
+    }
+
+    // Returns the 1-based line number in the original source file.
+    // The wrapped source prepends 2 lines, so Roslyn's 0-based line - 1 = original 1-based line.
+    private static int? GetLine(SyntaxNode node)
+    {
+        var line = node.GetLocation().GetLineSpan().StartLinePosition.Line - 1;
+        return line >= 1 ? line : null;
     }
 
     private static string Truncate(string s) =>

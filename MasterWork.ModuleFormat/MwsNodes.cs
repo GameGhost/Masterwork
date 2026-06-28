@@ -15,6 +15,10 @@ public class MwsPassage
     public List<MwsNode> Nodes { get; set; } = [];
     public bool Debug { get; set; }
 
+    // Extraction metadata — not serialized to YAML content, used for comment injection.
+    public int? MainMethodSourceLine { get; set; }
+    public string? SourceFile { get; set; }
+
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?>
@@ -36,6 +40,8 @@ public class MwsPassage
 public abstract class MwsNode
 {
     public abstract string Type { get; }
+    // Extraction metadata — not serialized to YAML content, used for comment injection.
+    public int? SourceLine { get; set; }
     public abstract Dictionary<string, object?> ToDict();
 }
 
