@@ -25,6 +25,8 @@ public class PassageBodyVisitor
     private int? _currentStatementLine;
     // Source line of the first text() call that started the current pending-runs buffer
     private int? _pendingTextStartLine;
+    // Monotonically incrementing counter for unique inline-random variable names within a passage
+    private int _varRandomSeq = 0;
     // Local string variables declared in this passage method (name → literal value)
     private readonly Dictionary<string, string> _localVars = new(StringComparer.Ordinal);
     // Local delegate variables that are captures of ViewEndOfGeneration.S_OnEndOfGeneration
@@ -272,7 +274,7 @@ public class PassageBodyVisitor
                 var values = ExtractMacroArgs(macroInv2);
                 // Flush pending text, emit effect + text run
                 var flushNodes = FlushText();
-                var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_pendingRuns.Count}";
+                var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
                 flushNodes.Add(new EffectNode
                 {
                     VarRandom = new() { [tempVar] = new VarRandom { RandomType = "choose-one", Values = values } }
@@ -285,7 +287,7 @@ public class PassageBodyVisitor
                 var macArgs = macroInv2.ArgumentList.Arguments;
                 var min = macArgs.Count > 0 ? TryParseDouble(macArgs[0].Expression) : null;
                 var max = macArgs.Count > 1 ? TryParseDouble(macArgs[1].Expression) : null;
-                var tempVar2 = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_pendingRuns.Count}";
+                var tempVar2 = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
                 var flushNodes2 = FlushText();
                 flushNodes2.Add(new EffectNode
                 {

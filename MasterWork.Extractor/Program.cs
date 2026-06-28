@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using MasterWork.ModuleFormat;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace MasterWork.Extractor;
 
-class Program
+partial class Program
 {
     static int Main(string[] args)
     {
@@ -100,6 +101,9 @@ class Program
             File.WriteAllText(outPath, yaml, Encoding.UTF8);
         }
 
+        // Apply hand-authored overrides before writing the report so override info is included
+        ApplyOverrides(opts, report);
+
         // Write variables manifest
         var vars = extractor.GetDiscoveredVariables();
         WriteVarsManifest(vars, opts.OutputDir, serializer);
@@ -164,6 +168,8 @@ class Program
                     opts.DryRun = true; break;
                 case "--seed-analysis":
                     opts.SeedAnalysis = true; break;
+                case "--overrides" when i + 1 < args.Length:
+                    opts.OverridesDir = args[++i]; break;
                 default:
                     Console.Error.WriteLine($"Unknown option: {args[i]}");
                     return null;
@@ -176,7 +182,77 @@ class Program
             return null;
         }
 
+        if (opts.OverridesDir is not null && !Directory.Exists(opts.OverridesDir))
+        {
+            Console.Error.WriteLine($"Overrides directory not found: {opts.OverridesDir}");
+            return null;
+        }
+
         return opts;
+    }
+
+    private static void ApplyOverrides(ExtractionOptions opts, ExtractionReport report)
+    {
+        if (opts.OverridesDir is null) return;
+
+        var overrideFiles = Directory.GetFiles(opts.OverridesDir, "*.mws.yaml", SearchOption.TopDirectoryOnly)
+            .OrderBy(f => f)
+            .ToList();
+
+        if (overrideFiles.Count == 0)
+        {
+            Console.WriteLine("[overrides] No override files found.");
+            return;
+        }
+
+        Console.WriteLine($"[overrides] Applying {overrideFiles.Count} override(s)...");
+
+        foreach (var overridePath in overrideFiles)
+        {
+            var fileName = Path.GetFileName(overridePath);
+            var generatedPath = Path.Combine(opts.OutputDir, fileName);
+
+            if (!File.Exists(generatedPath))
+            {
+                Console.Error.WriteLine($"[overrides] SKIP {fileName}: no matching generated file in output dir.");
+                continue;
+            }
+
+            var overrideContent = File.ReadAllText(overridePath, Encoding.UTF8);
+            var generatedContent = File.ReadAllText(generatedPath, Encoding.UTF8);
+
+            var overrideId = ExtractPassageId(overrideContent);
+            var generatedId = ExtractPassageId(generatedContent);
+
+            if (overrideId is null)
+            {
+                Console.Error.WriteLine($"[overrides] SKIP {fileName}: could not extract passage_id from override.");
+                continue;
+            }
+            if (generatedId is null)
+            {
+                Console.Error.WriteLine($"[overrides] SKIP {fileName}: could not extract passage_id from generated file.");
+                continue;
+            }
+            if (!string.Equals(overrideId, generatedId, StringComparison.Ordinal))
+            {
+                Console.Error.WriteLine($"[overrides] SKIP {fileName}: passage_id mismatch — override='{overrideId}' vs generated='{generatedId}'.");
+                continue;
+            }
+
+            File.Copy(overridePath, generatedPath, overwrite: true);
+            report.AddOverrideApplied(overrideId, fileName);
+            Console.WriteLine($"[overrides] Applied: {fileName} (passage_id: {overrideId})");
+        }
+    }
+
+    [GeneratedRegex(@"^passage_id:\s*(\S+)", RegexOptions.Multiline)]
+    private static partial Regex PassageIdRegex();
+
+    private static string? ExtractPassageId(string content)
+    {
+        var m = PassageIdRegex().Match(content);
+        return m.Success ? m.Groups[1].Value : null;
     }
 
     // Injects YAML comments for passage and node source locations.
@@ -277,6 +353,8 @@ class Program
               --include-debug         Include devpage-gated debug passages
               --dry-run               Parse and report without writing files
               --seed-analysis         Emit seed dependency report
+              --overrides <dir>       Directory of hand-authored override YAML files;
+                                      each must match the generated filename and passage_id
             """);
     }
 }

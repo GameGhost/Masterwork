@@ -19,7 +19,8 @@ public class ExtractionReport
 
     public int PassagesExtracted { get; set; }
     public int VariablesDiscovered { get; set; }
-    public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node");
+    public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node" &&
+        !_overrides.Any(o => o.PassageId == f.PassageName));
 
     // Set before Write() so the report can generate relative-path links.
     public string? SourceFilePath { get; set; }
@@ -30,6 +31,10 @@ public class ExtractionReport
 
     private List<string>? _isolatedPassages;
     public void AddIsolatedPassages(List<string> names) => _isolatedPassages = names;
+
+    private readonly List<(string PassageId, string FileName)> _overrides = [];
+    public void AddOverrideApplied(string passageId, string fileName) =>
+        _overrides.Add((passageId, fileName));
 
     // Unknown node — the code is the primary content; no separate message.
     public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
@@ -52,10 +57,15 @@ public class ExtractionReport
         sb.AppendLine("# Extraction Report");
         sb.AppendLine();
 
-        var unknownCount = _flags.Count(f => f.Kind == "unknown_node");
-        var warnCount = _flags.Count(f => f.Kind == "warning");
-        var infoCount = _flags.Count(f => f.Kind == "info");
+        // Flags for overridden passages reflect the discarded generated file — suppress them.
+        var overriddenIds = new HashSet<string>(_overrides.Select(o => o.PassageId), StringComparer.Ordinal);
+        var activeFlags = _flags.Where(f => !overriddenIds.Contains(f.PassageName)).ToList();
+
+        var unknownCount = activeFlags.Count(f => f.Kind == "unknown_node");
+        var warnCount = activeFlags.Count(f => f.Kind == "warning");
+        var infoCount = activeFlags.Count(f => f.Kind == "info");
         var isolatedCount = _isolatedPassages?.Count ?? 0;
+        var overrideCount = _overrides.Count;
 
         sb.AppendLine("| | |");
         sb.AppendLine("|---|---|");
@@ -66,18 +76,40 @@ public class ExtractionReport
         sb.AppendLine($"| Info | **{infoCount}** |");
         if (isolatedCount > 0)
             sb.AppendLine($"| Isolated passages | **{isolatedCount}** |");
+        if (overrideCount > 0)
+            sb.AppendLine($"| Overrides applied | **{overrideCount}** |");
         sb.AppendLine();
 
-        WriteSection(sb, "unknown_node", "Unknown Nodes",
+        WriteOverridesSection(sb);
+        WriteSection(sb, activeFlags, "unknown_node", "Unknown Nodes",
             "Unrecognized statements — emitted as `type: unknown` in the passage YAML. Each requires manual review.");
-        WriteSection(sb, "warning", "Warnings",
+        WriteSection(sb, activeFlags, "warning", "Warnings",
             "Recognized patterns that required a fallback or approximation.");
-        WriteSection(sb, "info", "Info",
+        WriteSection(sb, activeFlags, "info", "Info",
             "Informational notes — no action required.");
         WriteIsolatedSection(sb);
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"Report written to: {outputPath}");
+    }
+
+    private void WriteOverridesSection(StringBuilder sb)
+    {
+        if (_overrides.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine($"## Applied Overrides ({_overrides.Count})");
+        sb.AppendLine();
+        sb.AppendLine("These passages were replaced by hand-authored override YAML files. " +
+            "The generated file has been discarded; the override is the authoritative source.");
+        sb.AppendLine();
+
+        foreach (var (passageId, fileName) in _overrides.OrderBy(o => o.FileName))
+        {
+            sb.AppendLine($"- [{fileName}]({fileName}) (`{passageId}`)");
+        }
+        sb.AppendLine();
     }
 
     private void WriteIsolatedSection(StringBuilder sb)
@@ -105,9 +137,9 @@ public class ExtractionReport
         sb.AppendLine();
     }
 
-    private void WriteSection(StringBuilder sb, string kind, string title, string description)
+    private void WriteSection(StringBuilder sb, List<Flag> flags, string kind, string title, string description)
     {
-        var items = _flags.Where(f => f.Kind == kind).ToList();
+        var items = flags.Where(f => f.Kind == kind).ToList();
         if (items.Count == 0) return;
 
         sb.AppendLine("---");
