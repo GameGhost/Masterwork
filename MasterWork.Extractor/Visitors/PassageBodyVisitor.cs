@@ -207,7 +207,7 @@ public class PassageBodyVisitor
             "text" => ProcessTextInvocation(inv),
             "lineBreak" => [new BreakNode()],
             "link" => [ProcessLink(inv)],
-            "passage" => [ProcessPassageInclusion(inv)],
+            "passage" => ProcessPassageInclusionNodes(inv),
             "abort" => [ProcessAbort(inv)],
             _ => [Unknown(inv)],
         };
@@ -342,39 +342,40 @@ public class PassageBodyVisitor
 
     // ── passage() ─────────────────────────────────────────────────────────
 
-    private MwsNode ProcessPassageInclusion(InvocationExpressionSyntax inv)
+    private List<MwsNode> ProcessPassageInclusionNodes(InvocationExpressionSyntax inv)
     {
         var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-        if (arg is null) return Unknown(inv);
+        if (arg is null) return [Unknown(inv)];
 
         var passageName = GetStringValue(arg);
         if (passageName is not null)
-            return new IncludePassageNode { Target = passageName };
+            return [new IncludePassageNode { Target = passageName }];
 
         // base.passage(this.Vars.X, ...) — dynamic inclusion via variable
         if (IsVarAccess(arg, out var targetVar))
-            return new IncludePassageNode { Target = $"{{{targetVar}}}" };
+            return [new IncludePassageNode { Target = $"{{{targetVar}}}" }];
 
-        // base.passage(macros1.either("A","B",...)) — dynamic inclusion
-        // Emit as conditional with one include per branch
+        // base.passage(macros1.either([list of string passage IDs])) — random passage pick.
+        // Emit: let var = choose-one(ids); include-passage target: '{var}'
         if (arg is InvocationExpressionSyntax macroInv && GetSimpleMethodName(macroInv) == "either")
         {
-            var values = macroInv.ArgumentList.Arguments
-                .Select(a => GetStringValue(a.Expression) ?? a.Expression.ToString())
-                .ToList();
-            var cond = new ConditionalNode();
-            // Since this is a random either(), we can't statically know the condition;
-            // emit as unknown for human review
-            _report.AddWarning(_passageName, "Dynamic passage inclusion via either()",
-                arg.ToString(), GetLine(arg));
-            return new UnknownNode
+            var values = ExtractMacroArgs(macroInv);
+            if (values.Count > 0 && values.All(v => v is string))
             {
-                OriginalCode = inv.ToString(),
-                Note = "dynamic_passage_inclusion: " + string.Join(", ", values),
-            };
+                var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+                return
+                [
+                    new LetNode
+                    {
+                        Var = tempVar,
+                        Random = new VarRandom { RandomType = "choose-one", Values = values },
+                    },
+                    new IncludePassageNode { Target = $"{{{tempVar}}}" },
+                ];
+            }
         }
 
-        return Unknown(inv);
+        return [Unknown(inv)];
     }
 
     // ── abort() ───────────────────────────────────────────────────────────

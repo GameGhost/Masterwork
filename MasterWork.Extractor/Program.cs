@@ -332,6 +332,10 @@ partial class Program
                 case SetupBlockNode sb2: CollectFromNodes(sb2.Nodes, ids); break;
                 case ExpandLinkNode exp: CollectFromNodes(exp.ExpandNodes, ids); break;
                 case ForeachNode fe: CollectFromNodes(fe.Nodes, ids); break;
+                // choose-one values on a let node may be passage IDs (dynamic inclusion pattern)
+                case LetNode let when let.Random?.RandomType == "choose-one":
+                    foreach (var v in let.Random.Values.OfType<string>()) ids.Add(v);
+                    break;
             }
         }
     }
