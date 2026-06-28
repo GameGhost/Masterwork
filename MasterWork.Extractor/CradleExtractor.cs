@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using MasterWork.ModuleFormat;
 using MasterWork.Extractor.Visitors;
 using Microsoft.CodeAnalysis;
@@ -11,8 +12,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace MasterWork.Extractor;
 
-public class CradleExtractor
+public partial class CradleExtractor
 {
+    // Matches "varName op value" switch conditions, e.g. "players == 2", "costC == "Biology"", "players <= 5"
+    [GeneratedRegex(@"^(\w+)\s*(==|!=|<=|>=|<|>)\s*(.+)$")]
+    private static partial Regex SwitchCondRegex();
     private readonly ExtractionOptions _opts;
     private readonly SpriteMapper _spriteMapper;
     private readonly ExtractionReport _report;
@@ -268,9 +272,9 @@ public class CradleExtractor
             if (_fragmentMethods.TryGetValue(idx, out var frags))
                 StitchFragments(name, nodes, frags);
 
-            // Consolidate text: merge consecutive TextNodes into template strings,
-            // promote _rnd_* EffectNodes to LetNodes
+            // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
+            NormalizeAllVarRandoms(nodes);
 
             // Filter debug passages if requested
             var isDebug = tags.Contains("devpage") || HasDevpageGuard(nodes);
@@ -452,7 +456,7 @@ public class CradleExtractor
             }
         }
         FlushGroup();
-        return ConsolidateBreaks(result);
+        return ConsolidateSwitches(ConsolidateBreaks(result));
     }
 
     // Pure-text TextNodes always start or extend a group.
@@ -493,6 +497,10 @@ public class CradleExtractor
                 foreach (var b in cond.Branches)
                     b.Nodes = ConsolidateTextNodes(b.Nodes);
                 break;
+            case SwitchNode sw:
+                foreach (var c in sw.Cases)
+                    c.Nodes = ConsolidateTextNodes(c.Nodes);
+                break;
             case SectionBodyNode section:
                 section.Nodes = ConsolidateTextNodes(section.Nodes);
                 break;
@@ -524,6 +532,164 @@ public class CradleExtractor
             }
         }
         return result;
+    }
+
+    // ── Switch consolidation ──────────────────────────────────────────────────
+    // Collapses 2+ consecutive ConditionalNodes that all test the same variable
+    // (with simple "var op value" conditions) into a single SwitchNode.
+    // An else branch on the final conditional becomes the default case.
+
+    private static List<MwsNode> ConsolidateSwitches(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>();
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (nodes[i] is not ConditionalNode firstCond ||
+                TryExtractSwitchVar(firstCond) is not { } switchVar)
+            {
+                result.Add(nodes[i++]);
+                continue;
+            }
+
+            // Collect consecutive conditionals with the same switch variable.
+            // Stop extending the run if the current tail already has an else branch.
+            var run = new List<ConditionalNode> { firstCond };
+            while (i + run.Count < nodes.Count &&
+                   !HasElseBranch(run[^1]) &&
+                   nodes[i + run.Count] is ConditionalNode next &&
+                   TryExtractSwitchVar(next) == switchVar)
+            {
+                run.Add(next);
+            }
+
+            if (run.Count >= 2)
+            {
+                result.Add(BuildSwitchNode(switchVar, run));
+                i += run.Count;
+            }
+            else
+            {
+                result.Add(nodes[i++]);
+            }
+        }
+        return result;
+    }
+
+    // Returns the switch variable name if the conditional has exactly one "if" branch
+    // (plus optional else) whose condition matches a simple "varName op value" pattern,
+    // with a simple (non-compound) value.
+    private static string? TryExtractSwitchVar(ConditionalNode cond)
+    {
+        if (cond.Branches.Count == 0 || cond.Branches.Count > 2) return null;
+        var first = cond.Branches[0];
+        if (first.Condition is null || first.Else == true) return null;
+        if (cond.Branches.Count == 2 && cond.Branches[1].Else != true) return null;
+
+        var m = SwitchCondRegex().Match(first.Condition);
+        if (!m.Success) return null;
+
+        // Reject compound values like "2 || x == 3"
+        var rawVal = m.Groups[3].Value.Trim();
+        bool isQuoted = rawVal.StartsWith('"') && rawVal.EndsWith('"');
+        if (!isQuoted && rawVal.Contains(' ')) return null;
+
+        return m.Groups[1].Value;
+    }
+
+    private static bool HasElseBranch(ConditionalNode cond) =>
+        cond.Branches.Count > 0 && cond.Branches[^1].Else == true;
+
+    private static SwitchNode BuildSwitchNode(string varName, List<ConditionalNode> run)
+    {
+        var cases = new List<SwitchCase>();
+        for (int k = 0; k < run.Count; k++)
+        {
+            var cond = run[k];
+            var first = cond.Branches[0];
+            var m = SwitchCondRegex().Match(first.Condition!);
+            cases.Add(new SwitchCase
+            {
+                Match = BuildMatchValue(m.Groups[2].Value, m.Groups[3].Value.Trim()),
+                Nodes = first.Nodes,
+            });
+            if (k == run.Count - 1 && HasElseBranch(cond))
+                cases.Add(new SwitchCase { Default = true, Nodes = cond.Branches[^1].Nodes });
+        }
+        return new SwitchNode { On = varName, Cases = cases, SourceLine = run[0].SourceLine };
+    }
+
+    private static object BuildMatchValue(string op, string rawVal)
+    {
+        if (op == "==")
+        {
+            if (rawVal.StartsWith('"') && rawVal.EndsWith('"'))
+                return rawVal[1..^1];
+            if (int.TryParse(rawVal, out var n)) return n;
+            return rawVal;
+        }
+        return $"{op}{rawVal}";
+    }
+
+    // ── VarRandom normalization ───────────────────────────────────────────────
+    // Converts choose-one with a contiguous all-integer list to rand-between.
+    // Recurses into all container types including SwitchNode.
+
+    private static void NormalizeAllVarRandoms(List<MwsNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case EffectNode e when e.VarRandom is not null:
+                    foreach (var key in e.VarRandom.Keys.ToList())
+                        e.VarRandom[key] = NormalizeVarRandom(e.VarRandom[key]);
+                    break;
+                case LetNode let when let.Random is not null:
+                    let.Random = NormalizeVarRandom(let.Random);
+                    break;
+                case ConditionalNode cond:
+                    foreach (var b in cond.Branches) NormalizeAllVarRandoms(b.Nodes);
+                    break;
+                case SwitchNode sw:
+                    foreach (var c in sw.Cases) NormalizeAllVarRandoms(c.Nodes);
+                    break;
+                case SectionBodyNode section:
+                    NormalizeAllVarRandoms(section.Nodes);
+                    break;
+                case SetupBlockNode setup:
+                    NormalizeAllVarRandoms(setup.Nodes);
+                    break;
+                case ExpandLinkNode expand:
+                    NormalizeAllVarRandoms(expand.ExpandNodes);
+                    break;
+            }
+        }
+    }
+
+    private static VarRandom NormalizeVarRandom(VarRandom vr)
+    {
+        if (vr.RandomType != "choose-one" || vr.Values.Count < 2) return vr;
+        if (!IsContiguousIntegerList(vr.Values, out var min, out var max)) return vr;
+        return new VarRandom { RandomType = "rand-between", Min = min, Max = max };
+    }
+
+    private static bool IsContiguousIntegerList(List<object> values, out int min, out int max)
+    {
+        min = max = 0;
+        var ints = new List<int>(values.Count);
+        foreach (var v in values)
+        {
+            if (v is int i) ints.Add(i);
+            else if (v is long l) ints.Add((int)l);
+            else return false;
+        }
+        if (ints.Count < 2) return false;
+        ints.Sort();
+        min = ints[0]; max = ints[^1];
+        for (int k = 1; k < ints.Count; k++)
+            if (ints[k] != ints[k - 1] + 1) return false;
+        return true;
     }
 
     private static string? ComputeDominantStyle(List<TextRun> runs)

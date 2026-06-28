@@ -247,7 +247,7 @@ public class ExtractorTests
         var effect = passages[0].Nodes.OfType<EffectNode>().First();
         Assert.NotNull(effect.VarRandom);
         var rand = effect.VarRandom!["wolves"];
-        Assert.Equal("either", rand.RandomType);
+        Assert.Equal("choose-one", rand.RandomType);
         Assert.Equal(new List<object> { "evil", "good" }, rand.Values);
     }
 
@@ -374,7 +374,7 @@ public class ExtractorTests
 
         var letNode = passages[0].Nodes.OfType<LetNode>().First();
         Assert.NotNull(letNode.Random);
-        Assert.Equal("either", letNode.Random!.RandomType);
+        Assert.Equal("choose-one", letNode.Random!.RandomType);
         Assert.Equal(new List<object> { "dark", "light" }, letNode.Random.Values);
 
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
@@ -408,6 +408,102 @@ public class ExtractorTests
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
         Assert.Equal("bold", textNode.Style);
         Assert.Equal("All {name} bold", textNode.Template);
+    }
+
+    // ── Random type normalization ──────────────────────────────────────────
+
+    [Fact]
+    public void ContiguousIntList_EmitsRandBetween()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.tracker = this.macros1.either(new StoryVar[] { 9, 10, 11 });
+                yield break;
+            }
+            """);
+
+        var effect = passages[0].Nodes.OfType<EffectNode>().First();
+        var rand = effect.VarRandom!["tracker"];
+        Assert.Equal("rand-between", rand.RandomType);
+        Assert.Equal(9.0, rand.Min);
+        Assert.Equal(11.0, rand.Max);
+        Assert.Empty(rand.Values);
+    }
+
+    [Fact]
+    public void NonContiguousIntList_KeepsChooseOne()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.tracker = this.macros1.either(new StoryVar[] { 2, 5, 8 });
+                yield break;
+            }
+            """);
+
+        var effect = passages[0].Nodes.OfType<EffectNode>().First();
+        var rand = effect.VarRandom!["tracker"];
+        Assert.Equal("choose-one", rand.RandomType);
+    }
+
+    // ── Switch node ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ConsecutiveSameVarConditionals_EmitsSwitchNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.players == 2) { this.Vars.slots = 3; }
+                if (this.Vars.players == 3) { this.Vars.slots = 4; }
+                if (this.Vars.players == 4) { this.Vars.slots = 5; }
+                yield break;
+            }
+            """);
+
+        var sw = passages[0].Nodes.OfType<SwitchNode>().First();
+        Assert.Equal("players", sw.On);
+        Assert.Equal(3, sw.Cases.Count);
+        Assert.Equal(2, sw.Cases[0].Match);
+        Assert.Equal(3, sw.Cases[1].Match);
+        Assert.Equal(4, sw.Cases[2].Match);
+    }
+
+    [Fact]
+    public void SwitchWithElse_LastConditionalElseBecomesDefault()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.players == 2) { this.Vars.slots = 3; }
+                if (this.Vars.players == 3) { this.Vars.slots = 4; }
+                else { this.Vars.slots = 6; }
+                yield break;
+            }
+            """);
+
+        var sw = passages[0].Nodes.OfType<SwitchNode>().First();
+        Assert.Equal("players", sw.On);
+        Assert.Equal(3, sw.Cases.Count);
+        Assert.Null(sw.Cases[2].Match);
+        Assert.True(sw.Cases[2].Default);
     }
 
     // ── Break node ─────────────────────────────────────────────────────────

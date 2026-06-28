@@ -254,7 +254,7 @@ public class PassageBodyVisitor
                 var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_pendingRuns.Count}";
                 flushNodes.Add(new EffectNode
                 {
-                    VarRandom = new() { [tempVar] = new VarRandom { RandomType = "either", Values = values } }
+                    VarRandom = new() { [tempVar] = new VarRandom { RandomType = "choose-one", Values = values } }
                 });
                 AddRun(new TextRun { Text = $"{{{tempVar}}}", Style = currentStyle });
                 return flushNodes;
@@ -487,7 +487,7 @@ public class PassageBodyVisitor
                     {
                         VarRandom = new() { [varName!] = new VarRandom
                         {
-                            RandomType = "either",
+                            RandomType = "choose-one",
                             Values = values,
                         }}
                     };

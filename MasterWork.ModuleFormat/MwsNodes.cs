@@ -235,9 +235,39 @@ public class ConditionalNode : MwsNode
     };
 }
 
+public class SwitchCase
+{
+    public object? Match { get; set; }  // int for numeric equality, string for pattern (e.g. "<=5")
+    public bool? Default { get; set; }
+    public List<MwsNode> Nodes { get; set; } = [];
+
+    public Dictionary<string, object?> ToDict()
+    {
+        var d = new Dictionary<string, object?>();
+        if (Match is not null) d["match"] = Match;
+        if (Default == true) d["default"] = true;
+        d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
+        return d;
+    }
+}
+
+public class SwitchNode : MwsNode
+{
+    public override string Type => "switch";
+    public string On { get; set; } = "";
+    public List<SwitchCase> Cases { get; set; } = [];
+
+    public override Dictionary<string, object?> ToDict() => new()
+    {
+        ["type"] = Type,
+        ["on"] = On,
+        ["cases"] = Cases.Select(c => c.ToDict()).ToList(),
+    };
+}
+
 public class VarRandom
 {
-    public string RandomType { get; set; } = "either";
+    public string RandomType { get; set; } = "choose-one";
     public List<object> Values { get; set; } = [];
     public double? Min { get; set; }
     public double? Max { get; set; }
