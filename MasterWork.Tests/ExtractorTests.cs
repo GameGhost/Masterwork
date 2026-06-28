@@ -703,4 +703,91 @@ public class ExtractorTests
         Assert.Equal(3, eog.Generation);
         Assert.Equal("Remove all player pieces and end the generation.", eog.Message);
     }
+
+    // ── Array operations ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ArrayRemove_EmitsVarRemoveNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.det1 == "visited")
+                {
+                    this.Vars.effect = this.Vars.effect - this.macros1.a(new StoryVar[] { "DetEffect1" });
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
+        var effect = cond.Branches[0].Nodes.OfType<EffectNode>().First();
+        Assert.NotNull(effect.VarRemove);
+        Assert.Equal("DetEffect1", effect.VarRemove!["effect"]);
+    }
+
+    [Fact]
+    public void ArrayShuffle_EmitsVarShuffleNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.effect = this.macros1.shuffled(new StoryVar[] { (HarloweSpread)this.Vars.effect });
+                yield break;
+            }
+            """);
+
+        var effect = passages[0].Nodes.OfType<EffectNode>().First();
+        Assert.Equal("effect", effect.VarShuffle);
+    }
+
+    [Fact]
+    public void ArrayDequeue_EmitsLetDequeueNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.tempeffect = this.Vars.effect["1st"];
+                yield break;
+            }
+            """);
+
+        var let = passages[0].Nodes.OfType<LetNode>().First();
+        Assert.Equal("tempeffect", let.Var);
+        Assert.Equal("effect", let.Dequeue);
+    }
+
+    [Fact]
+    public void LogicOnlyGotoPassage_StripsBreaks()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.x = 1;
+                yield return base.lineBreak();
+                yield return base.abort(this.Vars.target);
+                yield return base.lineBreak();
+                yield break;
+            }
+            """);
+
+        Assert.DoesNotContain(passages[0].Nodes, n => n is BreakNode or ParagraphBreakNode);
+        Assert.Contains(passages[0].Nodes, n => n is GotoNode);
+    }
 }

@@ -328,6 +328,10 @@ public class EffectNode : MwsNode
     public string? VarPop { get; set; }
     // Array sort in-place: {arrayVar: {direction, property}}
     public Dictionary<string, SortSpec>? VarSort { get; set; }
+    // Array remove: remove a specific value from a named array variable
+    public Dictionary<string, string>? VarRemove { get; set; }
+    // Array shuffle in-place: name of array variable to shuffle
+    public string? VarShuffle { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -344,6 +348,8 @@ public class EffectNode : MwsNode
             d["var_sort"] = VarSort.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
+        if (VarRemove is { Count: > 0 }) d["var_remove"] = VarRemove;
+        if (VarShuffle is not null) d["var_shuffle"] = VarShuffle;
         return d;
     }
 }
@@ -359,8 +365,10 @@ public class LetNode : MwsNode
     public List<string>? Array { get; set; }
     // Aggregate compute expression: max(...), min(...), countif(<pattern>, ...)
     public string? Compute { get; set; }
-    // Pop the top element from a named array variable and assign to var
+    // Pop the last element from a named array variable and assign to var
     public string? Pop { get; set; }
+    // Dequeue (shift) the first element from a named array variable and assign to var
+    public string? Dequeue { get; set; }
     // Sort a named array into this var (From = source array)
     public SortSpec? Sort { get; set; }
 
@@ -371,6 +379,7 @@ public class LetNode : MwsNode
         if (Array is not null) d["array"] = Array;
         if (Compute is not null) d["compute"] = Compute;
         if (Pop is not null) d["pop"] = Pop;
+        if (Dequeue is not null) d["dequeue"] = Dequeue;
         if (Sort is not null) d["sort"] = Sort.ToDict();
         return d;
     }

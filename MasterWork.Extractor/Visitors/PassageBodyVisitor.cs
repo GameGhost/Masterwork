@@ -471,9 +471,9 @@ public class PassageBodyVisitor
             SyntaxKind.LessThanEqualsToken or
             SyntaxKind.GreaterThanEqualsToken;
 
-    // ── Variable assignment → EffectNode ─────────────────────────────────
+    // ── Variable assignment → EffectNode or LetNode ──────────────────────
 
-    private EffectNode? ProcessAssignment(AssignmentExpressionSyntax assign)
+    private MwsNode? ProcessAssignment(AssignmentExpressionSyntax assign)
     {
         // Must be this.Vars.X = ...
         if (!IsVarAccess(assign.Left, out var varName)) return null;
@@ -498,15 +498,14 @@ public class PassageBodyVisitor
             };
         }
 
-        // this.Vars.Y["key"] — array index access on a shuffled/sorted array
+        // this.Vars.Y["key"] — array index access; "1st" → dequeue, others → opaque ref
         if (right is ElementAccessExpressionSyntax elemAccess && IsVarAccess(elemAccess.Expression, out var srcArray))
         {
             var indexArg = elemAccess.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-            var indexStr = GetStringValue(indexArg!) ?? indexArg?.ToString() ?? "?";
-            return new EffectNode
-            {
-                VarSets = new() { [varName!] = $"{{{srcArray}[{indexStr}]}}" }
-            };
+            if (GetStringValue(indexArg!) == "1st")
+                return new LetNode { Var = varName!, Dequeue = srcArray };
+            var indexStr = indexArg?.ToString() ?? "?";
+            return new EffectNode { VarSets = new() { [varName!] = $"{{{srcArray}[{indexStr}]}}" } };
         }
 
         // ViewPopupPanel.instance.PassageValueString() — string input (stored variant)
@@ -523,11 +522,22 @@ public class PassageBodyVisitor
         }
 
         // int.Parse(this.Vars.X) + N  →  var_math "+N"
+        // this.Vars.X - macros1.a([value]) → var_remove (remove value from array)
         if (right is BinaryExpressionSyntax bin)
         {
             var mathExpr = ExtractVarMath(bin, varName!);
             if (mathExpr is not null)
                 return new EffectNode { VarMath = new() { [varName!] = mathExpr } };
+
+            if (bin.OperatorToken.Text == "-" &&
+                IsVarAccess(bin.Left, out var removeFrom) && removeFrom == varName &&
+                bin.Right is InvocationExpressionSyntax removeInv &&
+                GetSimpleMethodName(removeInv) == "a")
+            {
+                var removeValues = ExtractMacroArgs(removeInv);
+                if (removeValues.Count == 1 && removeValues[0] is string removeValue)
+                    return new EffectNode { VarRemove = new() { [varName!] = removeValue } };
+            }
         }
 
         // macros1.either(values)
@@ -565,6 +575,18 @@ public class PassageBodyVisitor
                 }
                 case "shuffled":
                 {
+                    // shuffled([(HarloweSpread)this.Vars.X]) where X == varName → shuffle in-place
+                    var args = macroInv.ArgumentList.Arguments;
+                    if (args.Count == 1 &&
+                        args[0].Expression is ArrayCreationExpressionSyntax arr &&
+                        arr.Initializer?.Expressions.Count == 1 &&
+                        arr.Initializer.Expressions[0] is CastExpressionSyntax cast &&
+                        cast.Type.ToString() == "HarloweSpread" &&
+                        IsVarAccess(cast.Expression, out var shuffleVar) &&
+                        shuffleVar == varName)
+                    {
+                        return new EffectNode { VarShuffle = varName };
+                    }
                     var values = ExtractMacroArgs(macroInv);
                     return new EffectNode
                     {

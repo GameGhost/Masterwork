@@ -275,6 +275,9 @@ public partial class CradleExtractor
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
             NormalizeAllVarRandoms(nodes);
+            // Strip decorative breaks from logic-only goto passages (no text, ends in goto)
+            if (!HasTextOutput(nodes) && nodes.Any(n => n is GotoNode))
+                nodes = nodes.Where(n => n is not BreakNode and not ParagraphBreakNode).ToList();
 
             // Filter debug passages if requested
             var isDebug = tags.Contains("devpage") || HasDevpageGuard(nodes);
@@ -364,6 +367,33 @@ public partial class CradleExtractor
                 {
                     if (branch.Condition?.Contains("devpage") == true) return true;
                 }
+            }
+        }
+        return false;
+    }
+
+    private static bool HasTextOutput(List<MwsNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case TextNode: case SectionHeadingNode: return true;
+                case ConditionalNode cond:
+                    if (cond.Branches.Any(b => HasTextOutput(b.Nodes))) return true;
+                    break;
+                case SwitchNode sw:
+                    if (sw.Cases.Any(c => HasTextOutput(c.Nodes))) return true;
+                    break;
+                case SectionBodyNode sec:
+                    if (HasTextOutput(sec.Nodes)) return true;
+                    break;
+                case SetupBlockNode sb:
+                    if (HasTextOutput(sb.Nodes)) return true;
+                    break;
+                case ForeachNode fe:
+                    if (HasTextOutput(fe.Nodes)) return true;
+                    break;
             }
         }
         return false;
