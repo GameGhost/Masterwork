@@ -330,8 +330,6 @@ public class EffectNode : MwsNode
     public Dictionary<string, SortSpec>? VarSort { get; set; }
     // Array remove: remove a specific value from a named array variable
     public Dictionary<string, string>? VarRemove { get; set; }
-    // Array shuffle in-place: name of array variable to shuffle
-    public string? VarShuffle { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -349,7 +347,6 @@ public class EffectNode : MwsNode
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
         if (VarRemove is { Count: > 0 }) d["var_remove"] = VarRemove;
-        if (VarShuffle is not null) d["var_shuffle"] = VarShuffle;
         return d;
     }
 }

@@ -471,9 +471,9 @@ public class PassageBodyVisitor
             SyntaxKind.LessThanEqualsToken or
             SyntaxKind.GreaterThanEqualsToken;
 
-    // ── Variable assignment → EffectNode or LetNode ──────────────────────
+    // ── Variable assignment → EffectNode ─────────────────────────────────
 
-    private MwsNode? ProcessAssignment(AssignmentExpressionSyntax assign)
+    private EffectNode? ProcessAssignment(AssignmentExpressionSyntax assign)
     {
         // Must be this.Vars.X = ...
         if (!IsVarAccess(assign.Left, out var varName)) return null;
@@ -498,12 +498,12 @@ public class PassageBodyVisitor
             };
         }
 
-        // this.Vars.Y["key"] — array index access; "1st" → dequeue, others → opaque ref
+        // this.Vars.Y["key"] — array index access; "1st" → .first() expression
         if (right is ElementAccessExpressionSyntax elemAccess && IsVarAccess(elemAccess.Expression, out var srcArray))
         {
             var indexArg = elemAccess.ArgumentList.Arguments.FirstOrDefault()?.Expression;
             if (GetStringValue(indexArg!) == "1st")
-                return new LetNode { Var = varName!, Dequeue = srcArray };
+                return new EffectNode { VarSets = new() { [varName!] = $"{srcArray}.first()" } };
             var indexStr = indexArg?.ToString() ?? "?";
             return new EffectNode { VarSets = new() { [varName!] = $"{{{srcArray}[{indexStr}]}}" } };
         }
@@ -575,7 +575,7 @@ public class PassageBodyVisitor
                 }
                 case "shuffled":
                 {
-                    // shuffled([(HarloweSpread)this.Vars.X]) where X == varName → shuffle in-place
+                    // shuffled([(HarloweSpread)this.Vars.X]) where X == varName → X = X.shuffle()
                     var args = macroInv.ArgumentList.Arguments;
                     if (args.Count == 1 &&
                         args[0].Expression is ArrayCreationExpressionSyntax arr &&
@@ -585,7 +585,7 @@ public class PassageBodyVisitor
                         IsVarAccess(cast.Expression, out var shuffleVar) &&
                         shuffleVar == varName)
                     {
-                        return new EffectNode { VarShuffle = varName };
+                        return new EffectNode { VarSets = new() { [varName!] = $"{varName}.shuffle()" } };
                     }
                     var values = ExtractMacroArgs(macroInv);
                     return new EffectNode

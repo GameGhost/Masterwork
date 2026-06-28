@@ -731,7 +731,7 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void ArrayShuffle_EmitsVarShuffleNode()
+    public void ArrayShuffle_EmitsShuffleExpression()
     {
         var passages = Extract("""
             private void passage1_Init()
@@ -746,11 +746,12 @@ public class ExtractorTests
             """);
 
         var effect = passages[0].Nodes.OfType<EffectNode>().First();
-        Assert.Equal("effect", effect.VarShuffle);
+        Assert.NotNull(effect.VarSets);
+        Assert.Equal("effect.shuffle()", effect.VarSets!["effect"]);
     }
 
     [Fact]
-    public void ArrayDequeue_EmitsLetDequeueNode()
+    public void ArrayFirst_EmitsFirstExpression()
     {
         var passages = Extract("""
             private void passage1_Init()
@@ -764,9 +765,9 @@ public class ExtractorTests
             }
             """);
 
-        var let = passages[0].Nodes.OfType<LetNode>().First();
-        Assert.Equal("tempeffect", let.Var);
-        Assert.Equal("effect", let.Dequeue);
+        var effect = passages[0].Nodes.OfType<EffectNode>().First();
+        Assert.NotNull(effect.VarSets);
+        Assert.Equal("effect.first()", effect.VarSets!["tempeffect"]);
     }
 
     [Fact]
