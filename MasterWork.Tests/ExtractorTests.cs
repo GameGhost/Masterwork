@@ -588,6 +588,77 @@ public class ExtractorTests
         Assert.Equal(42, passages[0].PassageIndex);
     }
 
+    // ── Let array and aggregate compute ───────────────────────────────────
+
+    [Fact]
+    public void ListDeclaration_EmitsLetArrayNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                List<int> scores = new List<int>(new int[] { this.Vars.scoreA, this.Vars.scoreB, this.Vars.scoreC });
+                yield break;
+            }
+            """);
+
+        var let = passages[0].Nodes.OfType<LetNode>().First();
+        Assert.Equal("scores", let.Var);
+        Assert.Equal(["scoreA", "scoreB", "scoreC"], let.Array);
+    }
+
+    [Fact]
+    public void LinqCountIfMax_EmitsMaxLetAndSubstitutesCondition()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                List<int> scores = new List<int>(new int[] { this.Vars.scoreA, this.Vars.scoreB });
+                int ties = (from value in scores where value == scores.Max() select value).Count<int>();
+                if (ties > 1) { this.Vars.winner = 0; }
+                yield break;
+            }
+            """);
+
+        var lets = passages[0].Nodes.OfType<LetNode>().ToList();
+        Assert.Equal(2, lets.Count);
+        Assert.Equal("scores", lets[0].Var);
+        Assert.Equal("max_scores", lets[1].Var);
+        Assert.Equal("max(scores)", lets[1].Compute);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
+        Assert.Equal("countif(==max_scores, scores) > 1", cond.Branches[0].Condition);
+    }
+
+    [Fact]
+    public void MathfMax_SimplifiesInCondition()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.scoreA > Mathf.Max(new int[] { this.Vars.scoreB, this.Vars.scoreC }))
+                {
+                    this.Vars.winner = this.Vars.nameA;
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
+        Assert.Equal("scoreA > max(scoreB, scoreC)", cond.Branches[0].Condition);
+    }
+
     // ── Dynamic passage inclusion ──────────────────────────────────────────
 
     [Fact]

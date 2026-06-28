@@ -29,6 +29,11 @@ public class PassageBodyVisitor
     private readonly Dictionary<string, string> _localVars = new(StringComparer.Ordinal);
     // Local delegate variables that are captures of ViewEndOfGeneration.S_OnEndOfGeneration
     private readonly HashSet<string> _eogDelegates = new(StringComparer.Ordinal);
+    // Local array variables: name → list of member variable names (for let array nodes)
+    private readonly Dictionary<string, List<string>> _localArrayVars = new(StringComparer.Ordinal);
+    // Local computed variables: name → aggregate expression string (for condition substitution)
+    // e.g. "num" → "countif(==max_play, play)" from a LINQ Count-where-Max pattern
+    private readonly Dictionary<string, string> _localComputedVars = new(StringComparer.Ordinal);
 
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report)
     {
@@ -108,10 +113,16 @@ public class PassageBodyVisitor
                 continue;
             }
 
-            // Local variable declarations — track string literals and EOG delegate captures
+            // Local variable declarations — track known patterns and emit nodes where needed
             if (stmt is LocalDeclarationStatementSyntax localDecl)
             {
-                if (TryTrackLocalDeclaration(localDecl)) continue;
+                var localNodes = ProcessLocalDeclaration(localDecl);
+                if (localNodes is not null)
+                {
+                    TagNodes(localNodes, _currentStatementLine);
+                    result.AddRange(FlushAndAdd(localNodes));
+                    continue;
+                }
             }
 
             // Anything else — flag for review
@@ -912,14 +923,33 @@ public class PassageBodyVisitor
         return false;
     }
 
-    private static string SimplifyCondition(string cond)
+    private string SimplifyCondition(string cond)
     {
-        // Normalize "this.Vars.X" → "vars.x"
+        // Normalize "this.Vars.X" → "X"
         cond = Regex.Replace(cond, @"this\.Vars\.(\w+)", m => m.Groups[1].Value);
         // Normalize "int.Parse(...)" → the inner expression
         cond = Regex.Replace(cond, @"int\.Parse\((\w+)\)", "$1");
         // Normalize compound falsy: "x == 0 || x == """ → "!x"
         cond = Regex.Replace(cond, @"(\w+)\s*==\s*0\s*\|\|\s*\1\s*==\s*""""", "!$1");
+
+        // Mathf.Max(new T[] { a, b, c }) → max(a, b, c)
+        cond = Regex.Replace(cond,
+            @"Mathf\.Max\(\s*new\s+\w+\s*\[\s*\]\s*\{([^}]*)\}\s*\)",
+            m =>
+            {
+                var args = m.Groups[1].Value
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(a => a.Trim())
+                    .Where(a => a.Length > 0);
+                return $"max({string.Join(", ", args)})";
+            });
+        // Mathf.Max(a, b) → max(a, b)
+        cond = Regex.Replace(cond, @"Mathf\.Max\(", "max(");
+
+        // Substitute local computed variables (LINQ aliases → aggregate expressions)
+        foreach (var (name, expr) in _localComputedVars)
+            cond = Regex.Replace(cond, $@"\b{Regex.Escape(name)}\b", _ => expr);
+
         return cond.Trim();
     }
 
@@ -952,32 +982,105 @@ public class PassageBodyVisitor
     private static string Truncate(string s) =>
         s.Length > 200 ? s[..200] + "…" : s;
 
-    // Tracks local string literal and EOG delegate declarations; returns true if consumed.
-    private bool TryTrackLocalDeclaration(LocalDeclarationStatementSyntax decl)
+    // Returns nodes to emit (possibly empty list) if the local declaration was handled,
+    // or null to fall through to the unknown-node handler.
+    private List<MwsNode>? ProcessLocalDeclaration(LocalDeclarationStatementSyntax decl)
     {
-        bool tracked = false;
+        bool anyHandled = false;
+        var nodes = new List<MwsNode>();
+
         foreach (var v in decl.Declaration.Variables)
         {
+            var name = v.Identifier.Text;
             var init = v.Initializer?.Value;
             if (init is null) continue;
 
-            // string varName = "literal"
+            // string varName = "literal" → track for EOG message resolution
             if (init is LiteralExpressionSyntax strLit &&
                 strLit.IsKind(SyntaxKind.StringLiteralExpression))
             {
-                _localVars[v.Identifier.Text] = strLit.Token.ValueText;
-                tracked = true;
+                _localVars[name] = strLit.Token.ValueText;
+                anyHandled = true;
                 continue;
             }
 
-            // Action<...> varName = ViewEndOfGeneration.S_OnEndOfGeneration
+            // Action<...> varName = ViewEndOfGeneration.S_OnEndOfGeneration → track delegate
             if (init.ToString().Contains("S_OnEndOfGeneration"))
             {
-                _eogDelegates.Add(v.Identifier.Text);
-                tracked = true;
+                _eogDelegates.Add(name);
+                anyHandled = true;
+                continue;
+            }
+
+            // List<T> varName = new List<T>(new T[] { this.Vars.A, ... }) → let array node
+            if (TryExtractListInit(decl.Declaration.Type, init, out var listVars))
+            {
+                _localArrayVars[name] = listVars!;
+                nodes.Add(new LetNode { Var = name, Array = listVars! });
+                anyHandled = true;
+                continue;
+            }
+
+            // LINQ countif: int num = (from value in play where value == play.Max() ...).Count()
+            // Emits: LetNode for max_<array> and tracks num → countif expression
+            if (TryExtractLinqCountIf(name, init, nodes))
+            {
+                anyHandled = true;
+                continue;
             }
         }
-        return tracked;
+
+        return anyHandled ? nodes : null;
+    }
+
+    // Recognizes: new List<T>(new T[] { this.Vars.A, this.Vars.B, ... })
+    private static bool TryExtractListInit(TypeSyntax type, ExpressionSyntax init, out List<string>? vars)
+    {
+        vars = null;
+        if (!type.ToString().StartsWith("List<", StringComparison.Ordinal)) return false;
+
+        if (init is not ObjectCreationExpressionSyntax objCreate) return false;
+        var arg = objCreate.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+        if (arg is not ArrayCreationExpressionSyntax arr || arr.Initializer is null) return false;
+
+        var result = new List<string>();
+        foreach (var elem in arr.Initializer.Expressions)
+        {
+            if (IsVarAccess(elem, out var varName))
+                result.Add(varName!);
+            else
+                return false;
+        }
+        vars = result;
+        return true;
+    }
+
+    // Recognizes: int num = (from value in <arr> where value == <arr>.Max() select value).Count<int>()
+    // Emits:      LetNode { Var = "max_<arr>", Compute = "max(<arr>)" }
+    // Tracks:     _localComputedVars[num] = "countif(==max_<arr>, <arr>)"
+    private bool TryExtractLinqCountIf(string varName, ExpressionSyntax init, List<MwsNode> emittedNodes)
+    {
+        if (init is not InvocationExpressionSyntax countInv) return false;
+        if (GetSimpleMethodName(countInv) != "Count") return false;
+
+        var receiver = (countInv.Expression as MemberAccessExpressionSyntax)?.Expression;
+        if (receiver is not ParenthesizedExpressionSyntax paren) return false;
+        if (paren.Expression is not QueryExpressionSyntax query) return false;
+
+        // "from value in <arrayVar>"
+        if (query.FromClause.Expression is not IdentifierNameSyntax fromId) return false;
+        var arrayVarName = fromId.Identifier.Text;
+
+        // "where value == <arrayVar>.Max()"
+        var whereClause = query.Body.Clauses.OfType<WhereClauseSyntax>().FirstOrDefault();
+        if (whereClause?.Condition is not BinaryExpressionSyntax whereBin) return false;
+        if (!whereBin.IsKind(SyntaxKind.EqualsExpression)) return false;
+        if (!whereBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal)) return false;
+
+        var maxVarName = $"max_{arrayVarName}";
+        emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
+        _localComputedVars[varName] = $"countif(=={maxVarName}, {arrayVarName})";
+        return true;
     }
 
     // Detects s_OnEndOfGeneration(arg, N) or ViewEndOfGeneration.S_OnEndOfGeneration(arg, N).

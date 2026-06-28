@@ -325,11 +325,17 @@ public class LetNode : MwsNode
     public override string Type => "let";
     public string Var { get; set; } = "";
     public VarRandom? Random { get; set; }
+    // Temporary array: list of variable names whose values form the array
+    public List<string>? Array { get; set; }
+    // Aggregate compute expression: max(...), min(...), countif(<pattern>, ...)
+    public string? Compute { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["var"] = Var };
         if (Random is not null) d["random"] = Random.ToDict();
+        if (Array is not null) d["array"] = Array;
+        if (Compute is not null) d["compute"] = Compute;
         return d;
     }
 }
