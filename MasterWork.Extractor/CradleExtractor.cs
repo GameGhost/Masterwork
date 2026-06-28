@@ -512,6 +512,9 @@ public partial class CradleExtractor
             case ExpandLinkNode expand:
                 expand.ExpandNodes = ConsolidateTextNodes(expand.ExpandNodes);
                 break;
+            case ForeachNode fe:
+                fe.Nodes = ConsolidateTextNodes(fe.Nodes);
+                break;
         }
         return node;
     }
@@ -664,6 +667,9 @@ public partial class CradleExtractor
                     break;
                 case ExpandLinkNode expand:
                     NormalizeAllVarRandoms(expand.ExpandNodes);
+                    break;
+                case ForeachNode fe:
+                    NormalizeAllVarRandoms(fe.Nodes);
                     break;
             }
         }

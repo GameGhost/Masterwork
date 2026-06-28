@@ -255,6 +255,7 @@ class Program
                 case SectionBodyNode sec: CollectFromNodes(sec.Nodes, ids); break;
                 case SetupBlockNode sb2: CollectFromNodes(sb2.Nodes, ids); break;
                 case ExpandLinkNode exp: CollectFromNodes(exp.ExpandNodes, ids); break;
+                case ForeachNode fe: CollectFromNodes(fe.Nodes, ids); break;
             }
         }
     }

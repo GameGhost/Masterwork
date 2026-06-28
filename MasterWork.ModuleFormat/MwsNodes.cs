@@ -298,12 +298,36 @@ public class VarRandom
     }
 }
 
+// Direction + optional property for sort operations.
+// Used both for in-place sort (EffectNode.VarSort, From=null) and
+// for sort-into-var (LetNode.Sort, From=source array name).
+public class SortSpec
+{
+    public string? From { get; set; }
+    public string Direction { get; set; } = "ascending";
+    public string? Property { get; set; }
+
+    public Dictionary<string, object?> ToDict()
+    {
+        var d = new Dictionary<string, object?> { ["direction"] = Direction };
+        if (From is not null) d["from"] = From;
+        if (Property is not null) d["property"] = Property;
+        return d;
+    }
+}
+
 public class EffectNode : MwsNode
 {
     public override string Type => "effect";
     public Dictionary<string, object?>? VarSets { get; set; }
     public Dictionary<string, string>? VarMath { get; set; }
     public Dictionary<string, VarRandom>? VarRandom { get; set; }
+    // Array mutation: push a constructed value onto a named array variable
+    public Dictionary<string, string>? VarPush { get; set; }
+    // Array mutation: pop from a named array variable (discard result)
+    public string? VarPop { get; set; }
+    // Array sort in-place: {arrayVar: {direction, property}}
+    public Dictionary<string, SortSpec>? VarSort { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -312,6 +336,12 @@ public class EffectNode : MwsNode
         if (VarMath is { Count: > 0 }) d["var_math"] = VarMath;
         if (VarRandom is { Count: > 0 })
             d["var_random"] = VarRandom.ToDictionary(
+                kv => kv.Key,
+                kv => (object?)kv.Value.ToDict());
+        if (VarPush is { Count: > 0 }) d["var_push"] = VarPush;
+        if (VarPop is not null) d["var_pop"] = VarPop;
+        if (VarSort is { Count: > 0 })
+            d["var_sort"] = VarSort.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
         return d;
@@ -329,6 +359,10 @@ public class LetNode : MwsNode
     public List<string>? Array { get; set; }
     // Aggregate compute expression: max(...), min(...), countif(<pattern>, ...)
     public string? Compute { get; set; }
+    // Pop the top element from a named array variable and assign to var
+    public string? Pop { get; set; }
+    // Sort a named array into this var (From = source array)
+    public SortSpec? Sort { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -336,8 +370,26 @@ public class LetNode : MwsNode
         if (Random is not null) d["random"] = Random.ToDict();
         if (Array is not null) d["array"] = Array;
         if (Compute is not null) d["compute"] = Compute;
+        if (Pop is not null) d["pop"] = Pop;
+        if (Sort is not null) d["sort"] = Sort.ToDict();
         return d;
     }
+}
+
+public class ForeachNode : MwsNode
+{
+    public override string Type => "foreach";
+    public string Var { get; set; } = "";   // loop variable name
+    public string In { get; set; } = "";    // array variable to iterate
+    public List<MwsNode> Nodes { get; set; } = [];
+
+    public override Dictionary<string, object?> ToDict() => new()
+    {
+        ["type"] = Type,
+        ["var"] = Var,
+        ["in"] = In,
+        ["nodes"] = Nodes.Select(n => n.ToDict()).ToList(),
+    };
 }
 
 // ── Input & interaction ────────────────────────────────────────────────────

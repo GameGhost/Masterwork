@@ -1079,7 +1079,7 @@ public class PassageBodyVisitor
 
         var maxVarName = $"max_{arrayVarName}";
         emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
-        _localComputedVars[varName] = $"countif(=={maxVarName}, {arrayVarName})";
+        _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
         return true;
     }
 

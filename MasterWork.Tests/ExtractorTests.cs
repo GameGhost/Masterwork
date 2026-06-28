@@ -634,7 +634,7 @@ public class ExtractorTests
         Assert.Equal("max(scores)", lets[1].Compute);
 
         var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
-        Assert.Equal("countif(==max_scores, scores) > 1", cond.Branches[0].Condition);
+        Assert.Equal("countif(=max_scores, scores) > 1", cond.Branches[0].Condition);
     }
 
     [Fact]
