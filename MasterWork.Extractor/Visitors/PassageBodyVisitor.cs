@@ -220,7 +220,7 @@ public class PassageBodyVisitor
             "lineBreak" => [new BreakNode()],
             "link" => [ProcessLink(inv)],
             "passage" => ProcessPassageInclusionNodes(inv),
-            "abort" => [ProcessAbort(inv)],
+            "abort" => ProcessAbort(inv),
             _ => [Unknown(inv)],
         };
     }
@@ -458,21 +458,36 @@ public class PassageBodyVisitor
 
     // ── abort() ───────────────────────────────────────────────────────────
 
-    private MwsNode ProcessAbort(InvocationExpressionSyntax inv)
+    private List<MwsNode> ProcessAbort(InvocationExpressionSyntax inv)
     {
         // abort(goToPassage: "Name") or abort("Name") or abort(this.Vars.X)
         var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-        if (arg is null) return Unknown(inv);
+        if (arg is null) return [Unknown(inv)];
 
         var target = GetStringValue(arg);
         if (target is not null)
-            return new GotoNode { Target = target };
+            return [new GotoNode { Target = target }];
 
         // Variable target: abort(this.Vars.tempeffect)
         if (IsVarAccess(arg, out var varName))
-            return new GotoNode { Target = $"{{{varName}}}" };
+            return [new GotoNode { Target = $"{{{varName}}}" }];
 
-        return Unknown(inv);
+        // abort(either([id1, id2, ...])) — random goto
+        if (arg is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
+        {
+            var values = ExtractMacroArgs(eitherInv);
+            if (values.Count > 0 && values.All(v => v is string))
+            {
+                var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+                return
+                [
+                    new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } },
+                    new GotoNode { Target = $"{{{tempVar}}}" },
+                ];
+            }
+        }
+
+        return [Unknown(inv)];
     }
 
     // ── Expression statements (assignments, Unity API calls) ──────────────
@@ -534,6 +549,31 @@ public class PassageBodyVisitor
         // EOG delegate invocation: s_OnEndOfGeneration(arg, N) or direct ViewEndOfGeneration.S_OnEndOfGeneration(...)
         if (expr is InvocationExpressionSyntax eogInv && TryBuildEogNode(eogInv, out var eogNode))
             return [eogNode!];
+
+        // Local string variable compound assignment: text += "..." or text += "str" + var
+        // Updates the tracked local var so EOG/input nodes that read it get the appended value.
+        if (expr is AssignmentExpressionSyntax localAppend &&
+            localAppend.OperatorToken.IsKind(SyntaxKind.PlusEqualsToken) &&
+            localAppend.Left is IdentifierNameSyntax localAppendId &&
+            _localVars.TryGetValue(localAppendId.Identifier.Text, out var existingVal))
+        {
+            var rhs2 = localAppend.Right;
+            string addition;
+            if (rhs2 is LiteralExpressionSyntax appLit && appLit.IsKind(SyntaxKind.StringLiteralExpression))
+                addition = _spriteMapper.StripLayoutTags(appLit.Token.ValueText) ?? appLit.Token.ValueText;
+            else if (IsTemplateConcatExpr(rhs2) && ContainsStringOrEither(rhs2))
+            {
+                var appendLets = new List<LetNode>();
+                var appendTmpl = new StringBuilder();
+                TryExtractTemplateConcat(rhs2, appendLets, appendTmpl);
+                addition = appendTmpl.ToString();
+            }
+            else
+                addition = $"{{?{Truncate(rhs2.ToString())}}}";
+
+            _localVars[localAppendId.Identifier.Text] = existingVal + addition;
+            return [];
+        }
 
         // Unknown expression statement
         var code = es.ToString().Trim();
@@ -1468,6 +1508,36 @@ public class PassageBodyVisitor
                 strLit.IsKind(SyntaxKind.StringLiteralExpression))
             {
                 _localVars[name] = strLit.Token.ValueText;
+                anyHandled = true;
+                continue;
+            }
+
+            // string varName = this.Vars.X  — store as "{X}" placeholder
+            // string varName = this.Vars.X.ToString()  — same, strip .ToString()
+            {
+                var initUnwrapped = init;
+                if (initUnwrapped is InvocationExpressionSyntax toStrInv &&
+                    toStrInv.Expression is MemberAccessExpressionSyntax toStrMa &&
+                    toStrMa.Name.Identifier.Text == "ToString" &&
+                    toStrInv.ArgumentList.Arguments.Count == 0)
+                    initUnwrapped = toStrMa.Expression;
+
+                if (IsVarAccess(initUnwrapped, out var trackedVar))
+                {
+                    _localVars[name] = $"{{{trackedVar}}}";
+                    anyHandled = true;
+                    continue;
+                }
+            }
+
+            // string varName = "str " + var + "suffix"  — template concat
+            if (IsTemplateConcatExpr(init) && ContainsStringOrEither(init))
+            {
+                var concatLets = new List<LetNode>();
+                var concatTmpl = new StringBuilder();
+                TryExtractTemplateConcat(init, concatLets, concatTmpl);
+                _localVars[name] = concatTmpl.ToString();
+                foreach (var let in concatLets) nodes.Add(let);
                 anyHandled = true;
                 continue;
             }
