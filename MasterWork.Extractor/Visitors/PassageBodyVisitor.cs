@@ -625,14 +625,20 @@ public class PassageBodyVisitor
             if (mathExpr is not null)
                 return new EffectNode { VarMath = new() { [varName!] = mathExpr } };
 
-            if (bin.OperatorToken.Text == "-" &&
-                IsVarAccess(bin.Left, out var removeFrom) && removeFrom == varName &&
-                bin.Right is InvocationExpressionSyntax removeInv &&
-                GetSimpleMethodName(removeInv) == "a")
+            if (bin.OperatorToken.Text == "-")
             {
-                var removeValues = ExtractMacroArgs(removeInv);
-                if (removeValues.Count == 1 && removeValues[0] is string removeValue)
-                    return new EffectNode { VarRemove = new() { [varName!] = removeValue } };
+                // Unwrap int.Parse(this.Vars.X) / int.Parse(macros1.a([N])) if present
+                var leftExpr = UnwrapIntParse(bin.Left);
+                var rightExpr = UnwrapIntParse(bin.Right);
+
+                if (IsVarAccess(leftExpr, out var removeFrom) && removeFrom == varName &&
+                    rightExpr is InvocationExpressionSyntax removeInv &&
+                    GetSimpleMethodName(removeInv) == "a")
+                {
+                    var removeValues = ExtractMacroArgs(removeInv);
+                    if (removeValues.Count == 1)
+                        return new EffectNode { VarRemove = new() { [varName!] = removeValues[0].ToString()! } };
+                }
             }
 
             // random(min, max) + var  or  var + random(min, max)  →  let _rnd = range, varName = {addend} + {_rnd}
@@ -1145,6 +1151,17 @@ public class PassageBodyVisitor
     private static ExpressionSyntax UnwrapParens(ExpressionSyntax expr)
     {
         while (expr is ParenthesizedExpressionSyntax p) expr = p.Expression;
+        return expr;
+    }
+
+    // Strips int.Parse(...) wrapper if present; otherwise returns expr unchanged.
+    private static ExpressionSyntax UnwrapIntParse(ExpressionSyntax expr)
+    {
+        if (expr is InvocationExpressionSyntax inv &&
+            (inv.Expression is IdentifierNameSyntax { Identifier.Text: "Parse" } ||
+             (inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Parse")) &&
+            inv.ArgumentList.Arguments.Count == 1)
+            return inv.ArgumentList.Arguments[0].Expression;
         return expr;
     }
 
