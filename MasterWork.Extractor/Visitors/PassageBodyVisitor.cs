@@ -310,10 +310,76 @@ public class PassageBodyVisitor
             }
         }
 
+        // String concat chain: "prefix " + var + " suffix" → add runs for each leaf
+        if (arg is BinaryExpressionSyntax concatText && concatText.OperatorToken.Text == "+"
+            && IsTemplateConcatExpr(arg) && ContainsStringOrEither(arg))
+        {
+            return ProcessTextConcatPart(arg, currentStyle);
+        }
+
         // Fallback — flag for review
         _report.AddWarning(_passageName, "text() with non-literal arg",
             arg.ToString(), GetLine(arg));
         AddRun(new TextRun { Text = $"{{?{Truncate(arg.ToString())}}}", Style = currentStyle });
+        return [];
+    }
+
+    // Recursively walks a + chain in text() argument position, adding runs for each recognisable
+    // leaf. either() calls flush pending text and emit a preceding EffectNode.
+    private List<MwsNode> ProcessTextConcatPart(ExpressionSyntax expr, string? style)
+    {
+        expr = UnwrapParens(expr);
+
+        if (expr is LiteralExpressionSyntax lit2)
+        {
+            var raw2 = lit2.Token.ValueText;
+            var richRuns2 = _spriteMapper.TryParseRichText(raw2);
+            if (richRuns2 is not null)
+            {
+                foreach (var (t2, assetRef2) in richRuns2)
+                {
+                    if (assetRef2 is not null)
+                        AddRun(new TextRun { AssetRef = assetRef2 });
+                    else if (!string.IsNullOrEmpty(t2))
+                        AddRun(new TextRun { Text = t2, Style = style });
+                }
+            }
+            else
+            {
+                var cleaned2 = _spriteMapper.StripLayoutTags(raw2);
+                if (!string.IsNullOrEmpty(cleaned2))
+                    AddRun(new TextRun { Text = cleaned2, Style = style });
+            }
+            return [];
+        }
+
+        if (IsVarAccess(expr, out var v2))
+        {
+            AddRun(new TextRun { Text = $"{{{v2}}}", Style = style });
+            return [];
+        }
+
+        if (expr is InvocationExpressionSyntax inv2 && GetSimpleMethodName(inv2) == "either")
+        {
+            var values2 = ExtractMacroArgs(inv2);
+            var preNodes = FlushText();
+            var tmpVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+            preNodes.Add(new EffectNode
+            {
+                VarRandom = new() { [tmpVar] = new VarRandom { RandomType = "choose-one", Values = values2 } },
+            });
+            AddRun(new TextRun { Text = $"{{{tmpVar}}}", Style = style });
+            return preNodes;
+        }
+
+        if (expr is BinaryExpressionSyntax bin2 && bin2.OperatorToken.Text == "+")
+        {
+            var left2 = ProcessTextConcatPart(bin2.Left, style);
+            var right2 = ProcessTextConcatPart(bin2.Right, style);
+            left2.AddRange(right2);
+            return left2;
+        }
+
         return [];
     }
 
