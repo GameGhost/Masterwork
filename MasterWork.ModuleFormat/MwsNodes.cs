@@ -206,6 +206,20 @@ public class IncludePassageNode : MwsNode
     public override Dictionary<string, object?> ToDict() => new() { ["type"] = Type, ["target"] = Target };
 }
 
+public class EndOfGenerationNode : MwsNode
+{
+    public override string Type => "end_of_generation";
+    public int Generation { get; set; }
+    public string? Message { get; set; }
+
+    public override Dictionary<string, object?> ToDict() => new()
+    {
+        ["type"] = Type,
+        ["generation"] = Generation,
+        ["message"] = Message,
+    };
+}
+
 // ── Logic ──────────────────────────────────────────────────────────────────
 
 public class ConditionalBranch

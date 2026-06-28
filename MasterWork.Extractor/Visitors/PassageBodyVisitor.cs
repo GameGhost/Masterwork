@@ -25,6 +25,10 @@ public class PassageBodyVisitor
     private int? _currentStatementLine;
     // Source line of the first text() call that started the current pending-runs buffer
     private int? _pendingTextStartLine;
+    // Local string variables declared in this passage method (name → literal value)
+    private readonly Dictionary<string, string> _localVars = new(StringComparer.Ordinal);
+    // Local delegate variables that are captures of ViewEndOfGeneration.S_OnEndOfGeneration
+    private readonly HashSet<string> _eogDelegates = new(StringComparer.Ordinal);
 
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report)
     {
@@ -102,6 +106,12 @@ public class PassageBodyVisitor
                 TagNodes(nodes, _currentStatementLine);
                 result.AddRange(FlushAndAdd(nodes));
                 continue;
+            }
+
+            // Local variable declarations — track string literals and EOG delegate captures
+            if (stmt is LocalDeclarationStatementSyntax localDecl)
+            {
+                if (TryTrackLocalDeclaration(localDecl)) continue;
             }
 
             // Anything else — flag for review
@@ -328,6 +338,10 @@ public class PassageBodyVisitor
         if (passageName is not null)
             return new IncludePassageNode { Target = passageName };
 
+        // base.passage(this.Vars.X, ...) — dynamic inclusion via variable
+        if (IsVarAccess(arg, out var targetVar))
+            return new IncludePassageNode { Target = $"{{{targetVar}}}" };
+
         // base.passage(macros1.either("A","B",...)) — dynamic inclusion
         // Emit as conditional with one include per branch
         if (arg is InvocationExpressionSyntax macroInv && GetSimpleMethodName(macroInv) == "either")
@@ -423,6 +437,10 @@ public class PassageBodyVisitor
                 Branches = [new ConditionalBranch { Condition = condStr, Nodes = [] }]
             }];
         }
+
+        // EOG delegate invocation: s_OnEndOfGeneration(arg, N) or direct ViewEndOfGeneration.S_OnEndOfGeneration(...)
+        if (expr is InvocationExpressionSyntax eogInv && TryBuildEogNode(eogInv, out var eogNode))
+            return [eogNode!];
 
         // Unknown expression statement
         var code = es.ToString().Trim();
@@ -933,4 +951,95 @@ public class PassageBodyVisitor
 
     private static string Truncate(string s) =>
         s.Length > 200 ? s[..200] + "…" : s;
+
+    // Tracks local string literal and EOG delegate declarations; returns true if consumed.
+    private bool TryTrackLocalDeclaration(LocalDeclarationStatementSyntax decl)
+    {
+        bool tracked = false;
+        foreach (var v in decl.Declaration.Variables)
+        {
+            var init = v.Initializer?.Value;
+            if (init is null) continue;
+
+            // string varName = "literal"
+            if (init is LiteralExpressionSyntax strLit &&
+                strLit.IsKind(SyntaxKind.StringLiteralExpression))
+            {
+                _localVars[v.Identifier.Text] = strLit.Token.ValueText;
+                tracked = true;
+                continue;
+            }
+
+            // Action<...> varName = ViewEndOfGeneration.S_OnEndOfGeneration
+            if (init.ToString().Contains("S_OnEndOfGeneration"))
+            {
+                _eogDelegates.Add(v.Identifier.Text);
+                tracked = true;
+            }
+        }
+        return tracked;
+    }
+
+    // Detects s_OnEndOfGeneration(arg, N) or ViewEndOfGeneration.S_OnEndOfGeneration(arg, N).
+    private bool TryBuildEogNode(InvocationExpressionSyntax inv, out EndOfGenerationNode? node)
+    {
+        node = null;
+        var methodName = GetSimpleMethodName(inv);
+        var exprStr = inv.Expression.ToString();
+
+        bool isEog = _eogDelegates.Contains(methodName) ||
+                     exprStr.Contains("S_OnEndOfGeneration");
+        if (!isEog) return false;
+
+        var args = inv.ArgumentList.Arguments;
+        string? rawMessage = null;
+        if (args.Count > 0)
+        {
+            var msgExpr = args[0].Expression;
+            if (msgExpr is LiteralExpressionSyntax msgLit &&
+                msgLit.IsKind(SyntaxKind.StringLiteralExpression))
+                rawMessage = msgLit.Token.ValueText;
+            else if (msgExpr is IdentifierNameSyntax msgId &&
+                     _localVars.TryGetValue(msgId.Identifier.Text, out var stored))
+                rawMessage = stored;
+        }
+
+        int generation = 0;
+        if (args.Count > 1 && args[1].Expression is LiteralExpressionSyntax genLit &&
+            genLit.IsKind(SyntaxKind.NumericLiteralExpression))
+            int.TryParse(genLit.Token.ValueText, out generation);
+
+        node = new EndOfGenerationNode
+        {
+            Generation = generation,
+            Message = BuildEogMessageTemplate(rawMessage),
+        };
+        return true;
+    }
+
+    // Converts Unity Rich Text in EOG messages to MWS template strings.
+    // <sprite="X" index=N> → {icon:slug}, <b>text</b> → stripped (kept as plain text for now).
+    // TryParseRichText trims each segment, so we add spaces between adjacent segments to
+    // restore the word boundaries that surrounded the original sprite tags.
+    private string? BuildEogMessageTemplate(string? rawMessage)
+    {
+        if (rawMessage is null) return null;
+        var richRuns = _spriteMapper.TryParseRichText(rawMessage);
+        if (richRuns is not null)
+        {
+            var sb = new System.Text.StringBuilder();
+            bool prevWasSeg = false;
+            foreach (var (text, assetRef) in richRuns)
+            {
+                if (prevWasSeg) sb.Append(' ');
+                if (assetRef is not null)
+                    sb.Append($"{{icon:{assetRef.Replace("icon://", "")}}}");
+                else if (text is not null)
+                    sb.Append(text);
+                prevWasSeg = true;
+            }
+            return sb.ToString().Trim();
+        }
+        return _spriteMapper.StripLayoutTags(rawMessage).Trim();
+    }
 }

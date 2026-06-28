@@ -587,4 +587,49 @@ public class ExtractorTests
 
         Assert.Equal(42, passages[0].PassageIndex);
     }
+
+    // ── Dynamic passage inclusion ──────────────────────────────────────────
+
+    [Fact]
+    public void DynamicPassageVar_EmitsIncludePassageWithVarTarget()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Hunt"] = new StoryPassage("Hunt", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.passage(this.Vars.direction, System.Array.Empty<StoryVar>());
+                yield break;
+            }
+            """);
+
+        var inc = passages[0].Nodes.OfType<IncludePassageNode>().First();
+        Assert.Equal("{direction}", inc.Target);
+    }
+
+    // ── End of generation node ─────────────────────────────────────────────
+
+    [Fact]
+    public void EndOfGenerationPattern_EmitsEogNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Fate1"] = new StoryPassage("Fate1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                string arg = "Remove all player pieces and end the generation.";
+                System.Action<string, int> s_OnEndOfGeneration = ViewEndOfGeneration.S_OnEndOfGeneration;
+                s_OnEndOfGeneration(arg, 3);
+                yield break;
+            }
+            """);
+
+        var eog = passages[0].Nodes.OfType<EndOfGenerationNode>().First();
+        Assert.Equal(3, eog.Generation);
+        Assert.Equal("Remove all player pieces and end the generation.", eog.Message);
+    }
 }
