@@ -220,6 +220,27 @@ public class EndOfGenerationNode : MwsNode
     };
 }
 
+public class ModalNode : MwsNode
+{
+    public override string Type => "modal";
+    public string? Chrome { get; set; }
+    public string? Body { get; set; }
+    public int? Round { get; set; }
+    public string? Next { get; set; }
+    public string? Instruction { get; set; }
+
+    public override Dictionary<string, object?> ToDict()
+    {
+        var d = new Dictionary<string, object?> { ["type"] = Type };
+        if (Chrome is not null) d["chrome"] = Chrome;
+        if (Body is not null) d["body"] = Body;
+        if (Round is not null) d["round"] = Round;
+        if (Next is not null) d["next"] = Next;
+        if (Instruction is not null) d["instruction"] = Instruction;
+        return d;
+    }
+}
+
 // ── Logic ──────────────────────────────────────────────────────────────────
 
 public class ConditionalBranch
@@ -283,8 +304,8 @@ public class VarRandom
 {
     public string RandomType { get; set; } = "choose-one";
     public List<object> Values { get; set; } = [];
-    public double? Min { get; set; }
-    public double? Max { get; set; }
+    public int? Min { get; set; }
+    public int? Max { get; set; }
     public string? SeedKey { get; set; }
 
     public Dictionary<string, object?> ToDict()

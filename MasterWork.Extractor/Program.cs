@@ -335,6 +335,8 @@ partial class Program
                     ids.Add(sn.NextPassage); break;
                 case CheckProgressNode cp:
                     ids.Add(cp.CurrentPassage); ids.Add(cp.TargetPassage); break;
+                case ModalNode mo when mo.Next is not null:
+                    ids.Add(mo.Next); break;
                 case ConditionalNode cond:
                     foreach (var b in cond.Branches) CollectFromNodes(b.Nodes, ids);
                     break;

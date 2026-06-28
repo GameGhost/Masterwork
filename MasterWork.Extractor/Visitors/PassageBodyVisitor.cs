@@ -550,6 +550,20 @@ public class PassageBodyVisitor
         if (expr is InvocationExpressionSyntax eogInv && TryBuildEogNode(eogInv, out var eogNode))
             return [eogNode!];
 
+        // ViewEndOfRound.instance.SetEndOfRound(body, round, nextPassage, instruction)
+        if (expr is InvocationExpressionSyntax setEorInv &&
+            setEorInv.Expression is MemberAccessExpressionSyntax setEorMa &&
+            setEorMa.Name.Identifier.Text == "SetEndOfRound" &&
+            setEorMa.Expression.ToString().Contains("ViewEndOfRound"))
+        {
+            var eorArgs = setEorInv.ArgumentList.Arguments;
+            var body = eorArgs.Count > 0 ? GetStringValue(eorArgs[0].Expression) : null;
+            var round = eorArgs.Count > 1 ? TryParseInt(eorArgs[1].Expression) : null;
+            var next = eorArgs.Count > 2 ? GetStringValue(eorArgs[2].Expression) : null;
+            var instruction = eorArgs.Count > 3 ? GetStringValue(eorArgs[3].Expression) : null;
+            return [new ModalNode { Chrome = "end_of_round", Body = body, Round = round, Next = next, Instruction = instruction }];
+        }
+
         // Local string variable compound assignment: text += "..." or text += "str" + var
         // Updates the tracked local var so EOG/input nodes that read it get the appended value.
         if (expr is AssignmentExpressionSyntax localAppend &&
