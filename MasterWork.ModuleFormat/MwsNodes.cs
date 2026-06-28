@@ -66,13 +66,32 @@ public class TextRun
 public class TextNode : MwsNode
 {
     public override string Type => "text";
+
+    // Template path — single i18n-translatable string.
+    // Use {varName} for variable refs, {icon:slug} for inline assets,
+    // **...** for bold spans, _..._ for italic spans.
+    public string? Template { get; set; }
+    public string? Style { get; set; }      // uniform style for the whole string
+    public List<string>? Lets { get; set; } // let-var names consumed by this template
+
+    // Runs path — kept for mixed asset+text nodes that need separate localization keys.
     public List<TextRun> Runs { get; set; } = [];
 
-    public override Dictionary<string, object?> ToDict() => new()
+    public override Dictionary<string, object?> ToDict()
     {
-        ["type"] = Type,
-        ["runs"] = Runs.Select(r => r.ToDict()).ToList(),
-    };
+        var d = new Dictionary<string, object?> { ["type"] = Type };
+        if (Template is not null)
+        {
+            d["template"] = Template;
+            if (Style is not null) d["style"] = Style;
+            if (Lets is { Count: > 0 }) d["lets"] = Lets;
+        }
+        else
+        {
+            d["runs"] = Runs.Select(r => r.ToDict()).ToList();
+        }
+        return d;
+    }
 }
 
 // ── Structural ─────────────────────────────────────────────────────────────
@@ -244,6 +263,22 @@ public class EffectNode : MwsNode
             d["var_random"] = VarRandom.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
+        return d;
+    }
+}
+
+// ── Let — passage-scoped variable ─────────────────────────────────────────
+
+public class LetNode : MwsNode
+{
+    public override string Type => "let";
+    public string Var { get; set; } = "";
+    public VarRandom? Random { get; set; }
+
+    public override Dictionary<string, object?> ToDict()
+    {
+        var d = new Dictionary<string, object?> { ["type"] = Type, ["var"] = Var };
+        if (Random is not null) d["random"] = Random.ToDict();
         return d;
     }
 }

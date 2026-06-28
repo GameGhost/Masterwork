@@ -100,7 +100,7 @@ public class ExtractorTests
             """);
 
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
-        Assert.Equal("Hello world", textNode.Runs[0].Text);
+        Assert.Equal("Hello world", textNode.Template);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class ExtractorTests
             """);
 
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
-        Assert.Equal("bold", textNode.Runs[0].Style);
+        Assert.Equal("bold", textNode.Style);
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class ExtractorTests
             """);
 
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
-        Assert.Equal("{townname}", textNode.Runs[0].Text);
+        Assert.Equal("{townname}", textNode.Template);
     }
 
     // ── Navigation ─────────────────────────────────────────────────────────
@@ -329,6 +329,85 @@ public class ExtractorTests
 
         // Only one text node — no UnknownNode from cleanup statements
         Assert.DoesNotContain(passages[0].Nodes, n => n is UnknownNode);
+    }
+
+    // ── Text consolidation ─────────────────────────────────────────────────
+
+    [Fact]
+    public void ConsecutiveText_MergesIntoTemplate()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("For the monsters of ");
+                yield return base.text(this.Vars.townname);
+                yield return base.text(", these were no longer...");
+                yield break;
+            }
+            """);
+
+        var textNodes = passages[0].Nodes.OfType<TextNode>().ToList();
+        Assert.Single(textNodes);
+        Assert.Equal("For the monsters of {townname}, these were no longer...", textNodes[0].Template);
+    }
+
+    [Fact]
+    public void InlineEither_EmitsLetThenTemplate()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("The ");
+                yield return base.text(this.macros1.either(new StoryVar[] { "dark", "light" }));
+                yield return base.text(" night");
+                yield break;
+            }
+            """);
+
+        var letNode = passages[0].Nodes.OfType<LetNode>().First();
+        Assert.NotNull(letNode.Random);
+        Assert.Equal("either", letNode.Random!.RandomType);
+        Assert.Equal(new List<object> { "dark", "light" }, letNode.Random.Values);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        Assert.NotNull(textNode.Template);
+        Assert.Contains(letNode.Var, textNode.Template);
+        Assert.Contains("The ", textNode.Template);
+        Assert.Contains(" night", textNode.Template);
+    }
+
+    [Fact]
+    public void UniformBoldScope_HoistsStyleToNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("All ");
+                    yield return base.text(this.Vars.name);
+                    yield return base.text(" bold");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        Assert.Equal("bold", textNode.Style);
+        Assert.Equal("All {name} bold", textNode.Template);
     }
 
     // ── Break node ─────────────────────────────────────────────────────────

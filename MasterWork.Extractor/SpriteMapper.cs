@@ -117,8 +117,8 @@ public class SpriteMapper
         return runs;
     }
 
-    // Strip HTML-like layout tags from plain text
-    public string StripLayoutTags(string raw) => HtmlTag.Replace(raw, "").Trim();
+    // Strip HTML-like layout tags from plain text (spaces preserved — caller uses IsNullOrWhiteSpace)
+    public string StripLayoutTags(string raw) => HtmlTag.Replace(raw, "");
 
     private static string SlugifyName(string name) =>
         Regex.Replace(name.ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');

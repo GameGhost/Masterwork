@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using MasterWork.ModuleFormat;
 using MasterWork.Extractor.Visitors;
 using Microsoft.CodeAnalysis;
@@ -267,6 +268,10 @@ public class CradleExtractor
             if (_fragmentMethods.TryGetValue(idx, out var frags))
                 StitchFragments(name, nodes, frags);
 
+            // Consolidate text: merge consecutive TextNodes into template strings,
+            // promote _rnd_* EffectNodes to LetNodes
+            nodes = ConsolidateTextNodes(nodes);
+
             // Filter debug passages if requested
             var isDebug = tags.Contains("devpage") || HasDevpageGuard(nodes);
             if (isDebug && !_opts.IncludeDebug)
@@ -368,6 +373,183 @@ public class CradleExtractor
         if (tags.Any(t => t.Equals("ck2", StringComparison.OrdinalIgnoreCase)))
             return "event";
         return "narration";
+    }
+
+    // ── Text consolidation post-pass ─────────────────────────────────────────
+    // Merges consecutive pure-text TextNodes into a single template string.
+    // Promotes _rnd_* EffectNodes (inline random text) to LetNodes, emitting
+    // them before the merged TextNode that consumes them.
+    // Recurses into all container node types.
+
+    private static List<MwsNode> ConsolidateTextNodes(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>();
+        var group = new List<MwsNode>(); // TextNodes + promotable EffectNodes
+
+        void FlushGroup()
+        {
+            if (group.Count == 0) return;
+
+            var textNodes = group.OfType<TextNode>().ToList();
+            var allRuns = new List<TextRun>();
+            var letNodes = new List<LetNode>();
+            var letVarNames = new List<string>();
+
+            foreach (var n in group)
+            {
+                if (n is TextNode t)
+                    allRuns.AddRange(t.Runs);
+                else if (n is EffectNode e && e.VarRandom is not null)
+                {
+                    foreach (var kv in e.VarRandom)
+                        letNodes.Add(new LetNode { Var = kv.Key, Random = kv.Value, SourceLine = e.SourceLine });
+                    letVarNames.AddRange(e.VarRandom.Keys);
+                }
+            }
+
+            var firstLine = textNodes.FirstOrDefault()?.SourceLine;
+
+            if (letNodes.Count == 0 && textNodes.Count == 1)
+            {
+                result.Add(TemplatizeNode(textNodes[0]));
+            }
+            else if (allRuns.All(r => r.AssetRef is null))
+            {
+                var dominantStyle = ComputeDominantStyle(allRuns);
+                result.AddRange(letNodes);
+                result.Add(new TextNode
+                {
+                    Template = BuildTemplate(allRuns, dominantStyle),
+                    Style = dominantStyle,
+                    Lets = letVarNames.Count > 0 ? letVarNames : null,
+                    SourceLine = firstLine,
+                });
+            }
+            else
+            {
+                // Mixed asset+text group — promote lets but preserve each TextNode's runs
+                result.AddRange(letNodes);
+                foreach (var n in group)
+                    if (n is TextNode t2) result.Add(t2);
+            }
+
+            group.Clear();
+        }
+
+        foreach (var node in nodes)
+        {
+            if (IsGroupableTextNode(node))
+            {
+                group.Add(node);
+            }
+            else if (IsPromotableEffect(node) && group.Any(n => n is TextNode))
+            {
+                group.Add(node);
+            }
+            else
+            {
+                FlushGroup();
+                result.Add(RecurseContainers(node));
+            }
+        }
+        FlushGroup();
+        return result;
+    }
+
+    private static bool IsGroupableTextNode(MwsNode node)
+    {
+        if (node is not TextNode t) return false;
+        if (t.Template is not null) return true;
+        return t.Runs.All(r => r.AssetRef is null);
+    }
+
+    private static bool IsPromotableEffect(MwsNode node)
+    {
+        if (node is not EffectNode e) return false;
+        if (e.VarSets is { Count: > 0 }) return false;
+        if (e.VarMath is { Count: > 0 }) return false;
+        if (e.VarRandom is null || e.VarRandom.Count == 0) return false;
+        return e.VarRandom.Keys.All(k => k.StartsWith("_rnd_"));
+    }
+
+    private static MwsNode RecurseContainers(MwsNode node)
+    {
+        switch (node)
+        {
+            case ConditionalNode cond:
+                foreach (var b in cond.Branches)
+                    b.Nodes = ConsolidateTextNodes(b.Nodes);
+                break;
+            case SectionBodyNode section:
+                section.Nodes = ConsolidateTextNodes(section.Nodes);
+                break;
+            case SetupBlockNode setup:
+                setup.Nodes = ConsolidateTextNodes(setup.Nodes);
+                break;
+            case ExpandLinkNode expand:
+                expand.ExpandNodes = ConsolidateTextNodes(expand.ExpandNodes);
+                break;
+        }
+        return node;
+    }
+
+    private static MwsNode TemplatizeNode(TextNode node)
+    {
+        if (node.Template is not null) return node;
+        if (node.Runs.Count == 0) return node;
+        if (node.Runs.Any(r => r.AssetRef is not null)) return node;
+
+        var dominantStyle = ComputeDominantStyle(node.Runs);
+        return new TextNode
+        {
+            Template = BuildTemplate(node.Runs, dominantStyle),
+            Style = dominantStyle,
+            SourceLine = node.SourceLine,
+        };
+    }
+
+    private static string? ComputeDominantStyle(List<TextRun> runs)
+    {
+        var significant = runs.Where(r => r.Text?.Trim().Length > 0).ToList();
+        if (significant.Count == 0) return null;
+        var first = significant[0].Style;
+        return significant.All(r => r.Style == first) ? first : null;
+    }
+
+    private static string BuildTemplate(IEnumerable<TextRun> runs, string? dominantStyle)
+    {
+        var sb = new StringBuilder();
+        bool inBold = false, inItalic = false;
+
+        foreach (var run in runs)
+        {
+            if (run.AssetRef is not null)
+            {
+                if (inBold) { sb.Append("**"); inBold = false; }
+                if (inItalic) { sb.Append("_"); inItalic = false; }
+                var slug = run.AssetRef.StartsWith("icon://") ? run.AssetRef["icon://".Length..] : run.AssetRef;
+                sb.Append($"{{icon:{slug}}}");
+                continue;
+            }
+            if (run.Text is null) continue;
+
+            // Dominant style is already expressed at the node level — don't repeat it inline
+            var effective = run.Style == dominantStyle ? null : run.Style;
+            bool needBold = effective == "bold";
+            bool needItalic = effective == "italic";
+
+            if (inBold && !needBold) { sb.Append("**"); inBold = false; }
+            if (inItalic && !needItalic) { sb.Append("_"); inItalic = false; }
+            if (!inBold && needBold) { sb.Append("**"); inBold = true; }
+            if (!inItalic && needItalic) { sb.Append("_"); inItalic = true; }
+
+            sb.Append(run.Text);
+        }
+
+        if (inBold) sb.Append("**");
+        if (inItalic) sb.Append("_");
+
+        return sb.ToString();
     }
 
     public Dictionary<string, VarDef> GetDiscoveredVariables() => _variables;
