@@ -1,6 +1,6 @@
-# MasterWork Script Format — v0.1 Reference
+﻿# Masterwork Script Format — v0.1 Reference
 
-MWS (MasterWork Script) is the YAML-based passage format used to represent interactive narrative content for the MasterWork engine. Each `.mws.yaml` file is a single passage.
+MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
 
 ---
 
@@ -9,7 +9,7 @@ MWS (MasterWork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: mws/1.0
+format: mws/0.1
 passage_id: Fever1
 title: Fever1
 tags:
@@ -23,7 +23,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/1.0` |
+| `format` | string | yes | Always `mws/0.1` |
 | `passage_id` | string | yes | Canonical passage identifier; matches the original Twine passage name |
 | `title` | string | no | Display title; defaults to `passage_id` |
 | `tags` | list of strings | no | Original Twine tags; drives layout inference |
@@ -864,7 +864,7 @@ Extracted passage files include YAML comments injected by the extractor. These a
 ```yaml
 # TheCostofDisease.cs:29539       ← method declaration line
 ---
-format: mws/1.0
+format: mws/0.1
 passage_id: Expedition3
 ...
 nodes:
@@ -882,7 +882,7 @@ A real extracted passage from *A Time of War* demonstrating `switch`, `let`, `te
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: mws/1.0
+format: mws/0.1
 passage_id: BattleTime
 title: BattleTime
 layout: narration
@@ -961,4 +961,4 @@ nodes:
 
 ---
 
-*MWS format v0.1 — MasterWork project. This document describes the format as produced by `MasterWork.Extractor` and consumed by `MasterWork.Engine`.*
+*MWS format v0.1 — Masterwork project. This document describes the format as produced by `Masterwork.Extractor` and consumed by `Masterwork.Engine`.*

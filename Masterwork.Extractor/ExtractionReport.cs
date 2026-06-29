@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using MasterWork.ModuleFormat;
+using Masterwork.ModuleFormat;
 
-namespace MasterWork.Extractor;
+namespace Masterwork.Extractor;
 
 public class ExtractionReport
 {

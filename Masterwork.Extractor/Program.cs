@@ -1,14 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using MasterWork.ModuleFormat;
+using Masterwork.ModuleFormat;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
-namespace MasterWork.Extractor;
+namespace Masterwork.Extractor;
 
 partial class Program
 {

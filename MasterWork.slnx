@@ -1,8 +1,0 @@
-<Solution>
-  <Project Path="MasterWork.App/MasterWork.App.csproj" />
-  <Project Path="MasterWork.Editor/MasterWork.Editor.csproj" />
-  <Project Path="MasterWork.Engine/MasterWork.Engine.csproj" />
-  <Project Path="MasterWork.Extractor/MasterWork.Extractor.csproj" />
-  <Project Path="MasterWork.ModuleFormat/MasterWork.ModuleFormat.csproj" />
-  <Project Path="MasterWork.Tests/MasterWork.Tests.csproj" />
-</Solution>

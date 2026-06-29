@@ -1,10 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using MasterWork.Extractor;
-using MasterWork.ModuleFormat;
+using Masterwork.Extractor;
+using Masterwork.ModuleFormat;
 using Xunit;
 
-namespace MasterWork.Tests;
+namespace Masterwork.Tests;
 
 public class ExtractorTests
 {

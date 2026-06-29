@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace MasterWork.Extractor;
+namespace Masterwork.Extractor;
 
 // Converts TextMesh Pro <sprite="AtlasName" index=N> tags to asset_ref URIs.
 // Loads the sprite-to-name mapping from ItemObtain JSON files.

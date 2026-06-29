@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Masterwork.Engine/Masterwork.Engine.csproj" />
+  <Project Path="Masterwork.Extractor/Masterwork.Extractor.csproj" />
+</Solution>

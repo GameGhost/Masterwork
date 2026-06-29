@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\MasterWork.ModuleFormat\MasterWork.ModuleFormat.csproj" />
+    <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
   </ItemGroup>
 
   <ItemGroup>

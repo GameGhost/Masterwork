@@ -1,13 +1,13 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace MasterWork.ModuleFormat;
+namespace Masterwork.ModuleFormat;
 
 // ── Passage ────────────────────────────────────────────────────────────────
 
 public class MwsPassage
 {
-    public string Format { get; set; } = "mws/1.0";
+    public string Format { get; set; } = "mws/0.1";
     public string PassageId { get; set; } = "";
     public string Title { get; set; } = "";
     public string[] Tags { get; set; } = [];

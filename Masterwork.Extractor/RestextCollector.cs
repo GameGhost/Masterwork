@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace MasterWork.Extractor;
+namespace Masterwork.Extractor;
 
 /// <summary>
 /// Walks a passage's ToDict() output, extracts human-readable strings into

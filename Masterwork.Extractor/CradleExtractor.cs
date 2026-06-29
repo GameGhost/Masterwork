@@ -1,16 +1,16 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using MasterWork.ModuleFormat;
-using MasterWork.Extractor.Visitors;
+using Masterwork.ModuleFormat;
+using Masterwork.Extractor.Visitors;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace MasterWork.Extractor;
+namespace Masterwork.Extractor;
 
 public partial class CradleExtractor
 {

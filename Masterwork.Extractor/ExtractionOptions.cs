@@ -1,4 +1,4 @@
-namespace MasterWork.Extractor;
+﻿namespace Masterwork.Extractor;
 
 public class ExtractionOptions
 {

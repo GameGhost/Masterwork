@@ -1,14 +1,14 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using MasterWork.ModuleFormat;
+using Masterwork.ModuleFormat;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace MasterWork.Extractor.Visitors;
+namespace Masterwork.Extractor.Visitors;
 
 // Walks the statements of a Cradle passageN_Main() iterator method and
 // produces a list of MwsNode objects representing the passage content.

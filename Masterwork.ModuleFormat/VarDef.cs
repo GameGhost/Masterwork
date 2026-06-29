@@ -1,4 +1,4 @@
-namespace MasterWork.ModuleFormat;
+﻿namespace Masterwork.ModuleFormat;
 
 public class VarDef
 {
