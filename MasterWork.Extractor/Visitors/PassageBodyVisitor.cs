@@ -932,16 +932,11 @@ public class PassageBodyVisitor
         }
 
         // Pattern B: main condition contains ispopup → if-body has OnGenerationBtn, else stores value
+        // The OnGenerationBtn may be nested inside an inner conditional (e.g. players == 2 selects prompt text)
         if (condStr.Contains("this.ispopup"))
         {
             var ifStmts = ifs.Statement is BlockSyntax bb ? bb.Statements.AsEnumerable() : [ifs.Statement];
-            InvocationExpressionSyntax? genBtn = null;
-            foreach (var s in ifStmts)
-            {
-                if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
-                    && GetSimpleMethodName(inv) == "OnGenerationBtn")
-                { genBtn = inv; break; }
-            }
+            var genBtn = FindFirstOnGenerationBtn(ifStmts);
             if (genBtn is not null)
             {
                 var storeIn = ExtractStoreIn(elseStmt);
@@ -968,6 +963,30 @@ public class PassageBodyVisitor
         }
 
         return false;
+    }
+
+    // Searches stmts (and one level of nested if/else) for the first OnGenerationBtn invocation.
+    private static InvocationExpressionSyntax? FindFirstOnGenerationBtn(IEnumerable<StatementSyntax> stmts)
+    {
+        foreach (var s in stmts)
+        {
+            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
+                && GetSimpleMethodName(inv) == "OnGenerationBtn")
+                return inv;
+            if (s is IfStatementSyntax innerIf)
+            {
+                var thenStmts = innerIf.Statement is BlockSyntax bt ? bt.Statements.AsEnumerable() : [innerIf.Statement];
+                var found = FindFirstOnGenerationBtn(thenStmts);
+                if (found is not null) return found;
+                if (innerIf.Else is not null)
+                {
+                    var elseStmts2 = innerIf.Else.Statement is BlockSyntax be ? be.Statements.AsEnumerable() : [innerIf.Else.Statement];
+                    found = FindFirstOnGenerationBtn(elseStmts2);
+                    if (found is not null) return found;
+                }
+            }
+        }
+        return null;
     }
 
     // Two-statement input prompt:
@@ -1154,6 +1173,9 @@ public class PassageBodyVisitor
 
     private static string? ExtractStoreIn(StatementSyntax ifStatement)
     {
+        // Unwrap else-if: the else clause may be another IfStatementSyntax — look inside its body
+        if (ifStatement is IfStatementSyntax innerIf)
+            return ExtractStoreIn(innerIf.Statement);
         var stmts = ifStatement is BlockSyntax b ? b.Statements.AsEnumerable() : [ifStatement];
         foreach (var s in stmts)
         {
