@@ -430,8 +430,8 @@ public class ExtractorTests
         var effect = passages[0].Nodes.OfType<EffectNode>().First();
         var rand = effect.VarRandom!["tracker"];
         Assert.Equal("rand-between", rand.RandomType);
-        Assert.Equal(9.0, rand.Min);
-        Assert.Equal(11.0, rand.Max);
+        Assert.Equal<int?>(9, rand.Min);
+        Assert.Equal<int?>(11, rand.Max);
         Assert.Empty(rand.Values);
     }
 
@@ -796,6 +796,78 @@ public class ExtractorTests
         var falseBranch = cond.Branches[1].Nodes.OfType<EffectNode>().First();
         Assert.NotNull(falseBranch.VarRandom);
         Assert.Equal("choose-one", falseBranch.VarRandom!["let1"].RandomType);
+    }
+
+    [Fact]
+    public void RandomPlusVar_EmitsLetThenVarSets()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.hearttotal = this.macros1.random(1.0, 6.0) + this.Vars.heart;
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var let = nodes.OfType<LetNode>().First();
+        Assert.Equal("range", let.Random!.RandomType);
+        Assert.Equal<int?>(1, let.Random.Min);
+        Assert.Equal<int?>(6, let.Random.Max);
+
+        var effect = nodes.OfType<EffectNode>().First();
+        Assert.NotNull(effect.VarSets);
+        Assert.True(effect.VarSets!.ContainsKey("hearttotal"));
+        var heartotalVal = (string)effect.VarSets["hearttotal"]!;
+        Assert.Contains("{heart}", heartotalVal);
+        Assert.Contains(let.Var, heartotalVal);
+    }
+
+    [Fact]
+    public void ChainedTernaryEquality_EmitsSwitchNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.let1 = ((this.Vars.players == 4) ? this.Vars.nameD : ((this.Vars.players == 3) ? this.macros1.either(new StoryVar[]
+                {
+                    this.Vars.nameA,
+                    this.Vars.nameB,
+                    this.Vars.nameC
+                }) : this.macros1.either(new StoryVar[]
+                {
+                    this.Vars.nameA,
+                    this.Vars.nameB
+                })));
+                yield break;
+            }
+            """);
+
+        var sw = passages[0].Nodes.OfType<SwitchNode>().First();
+        Assert.Equal("players", sw.On);
+        Assert.Equal(3, sw.Cases.Count);
+
+        Assert.Equal(4, sw.Cases[0].Match);
+        var case4 = sw.Cases[0].Nodes.OfType<EffectNode>().First();
+        Assert.Equal("{nameD}", case4.VarSets!["let1"]);
+
+        Assert.Equal(3, sw.Cases[1].Match);
+        var case3 = sw.Cases[1].Nodes.OfType<EffectNode>().First();
+        Assert.Equal("choose-one", case3.VarRandom!["let1"].RandomType);
+        Assert.Equal(3, case3.VarRandom["let1"].Values.Count);
+
+        Assert.True(sw.Cases[2].Default);
+        var caseDefault = sw.Cases[2].Nodes.OfType<EffectNode>().First();
+        Assert.Equal("choose-one", caseDefault.VarRandom!["let1"].RandomType);
+        Assert.Equal(2, caseDefault.VarRandom["let1"].Values.Count);
     }
 
     [Fact]

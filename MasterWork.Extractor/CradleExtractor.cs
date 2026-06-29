@@ -137,7 +137,7 @@ public partial class CradleExtractor
             var methodName = (inv2.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text
                 ?? (inv2.Expression as IdentifierNameSyntax)?.Identifier.Text;
             if (methodName == "a" || methodName == "shuffled") return "array";
-            if (methodName == "num" || methodName == "random") return "int";
+            if (methodName == "num" || methodName == "random" || methodName == "PassageValueNumber") return "int";
         }
         if (rhs is ArrayCreationExpressionSyntax) return "array";
         return "string";
@@ -450,6 +450,12 @@ public partial class CradleExtractor
                         letNodes.Add(new LetNode { Var = kv.Key, Random = kv.Value, SourceLine = e.SourceLine });
                     letVarNames.AddRange(e.VarRandom.Keys);
                 }
+                else if (n is LetNode ln)
+                {
+                    firstLine ??= ln.SourceLine;
+                    letNodes.Add(ln);
+                    letVarNames.Add(ln.Var);
+                }
                 else
                 {
                     // Promotable conditional — emitted before the merged TextNode
@@ -491,7 +497,7 @@ public partial class CradleExtractor
 
     // Pure-text TextNodes always start or extend a group.
     // Icon-only TextNodes only extend an existing group (never start one).
-    // _rnd_*-only EffectNodes and promotable ConditionalNodes only extend an existing group.
+    // _rnd_*-only EffectNodes, direct LetNodes, and promotable ConditionalNodes only extend an existing group.
     private static bool CanJoinGroup(MwsNode node, List<MwsNode> group)
     {
         if (node is TextNode t)
@@ -501,6 +507,7 @@ public partial class CradleExtractor
             return group.Count > 0; // icon-only: only extends existing group
         }
         if (group.Count == 0) return false;
+        if (node is LetNode) return true;
         return IsRndOnlyEffect(node) || IsPromotableConditional(node);
     }
 

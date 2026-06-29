@@ -321,6 +321,34 @@ public class PassageBodyVisitor
             return ProcessTextConcatPart(arg, currentStyle);
         }
 
+        // intLiteral - int.Parse(random(min, max)) → fold to let with range random
+        // int.Parse is a no-op since macros1.random already returns an int
+        if (arg is BinaryExpressionSyntax subBin && subBin.OperatorToken.Text == "-"
+            && subBin.Left is LiteralExpressionSyntax constLit
+            && constLit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
+            var unwrappedRhs = UnwrapIntParse(subBin.Right);
+            if (unwrappedRhs is InvocationExpressionSyntax randInv2 && GetSimpleMethodName(randInv2) == "random")
+            {
+                var ra = randInv2.ArgumentList.Arguments;
+                var rMin = ra.Count > 0 ? TryParseInt(ra[0].Expression) : null;
+                var rMax = ra.Count > 1 ? TryParseInt(ra[1].Expression) : null;
+                if (rMin.HasValue && rMax.HasValue)
+                {
+                    var constVal = Convert.ToInt32(constLit.Token.Value);
+                    var letVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+                    var flushNodes3 = FlushText();
+                    flushNodes3.Add(new LetNode
+                    {
+                        Var = letVar,
+                        Random = new VarRandom { RandomType = "range", Min = constVal - rMax.Value, Max = constVal - rMin.Value },
+                    });
+                    AddRun(new TextRun { Text = $"{{{letVar}}}", Style = currentStyle });
+                    return flushNodes3;
+                }
+            }
+        }
+
         // this.Vars.X.ToString() — variable reference in text position
         if (arg is InvocationExpressionSyntax toStringInv
             && GetSimpleMethodName(toStringInv) == "ToString"
