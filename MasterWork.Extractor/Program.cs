@@ -98,6 +98,8 @@ partial class Program
             .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults)
             .Build();
 
+        var restext = new RestextCollector();
+
         foreach (var passage in passages)
         {
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
@@ -105,8 +107,11 @@ partial class Program
             report.PassageFiles[passage.PassageId] = fileName;
             var outPath = Path.Combine(opts.OutputDir, fileName);
             var dict = passage.ToDict();
+            // Extract strings → restext://Key and collect for en-US.restext
+            restext.CollectPassage(passage.PassageId, fileName, dict);
             var yaml = "---\n" + serializer.Serialize(dict);
             yaml = InjectSourceComments(yaml, passage);
+            yaml = InjectRestextComments(yaml, restext.BuildCommentMap());
             File.WriteAllText(outPath, yaml, Encoding.UTF8);
         }
 
@@ -115,6 +120,9 @@ partial class Program
 
         // Print summary after overrides so unknown-node count excludes suppressed passages
         report.PrintSummary();
+
+        // Write restext locale file
+        WriteRestextFile(restext, opts.OutputDir);
 
         // Write variables manifest
         var vars = extractor.GetDiscoveredVariables();
@@ -312,6 +320,67 @@ partial class Program
         }
 
         return string.Join('\n', result);
+    }
+
+    // Appends " # "preview"" after each restext://Key in the YAML.
+    // Only touches lines that contain a restext:// reference.
+    [GeneratedRegex(@"restext://(\S+)")]
+    private static partial Regex RestextKeyRegex();
+
+    private static string InjectRestextComments(string yaml, IReadOnlyDictionary<string, string> commentMap)
+    {
+        if (commentMap.Count == 0) return yaml;
+        return RestextKeyRegex().Replace(yaml, m =>
+        {
+            var key = m.Groups[1].Value;
+            if (!commentMap.TryGetValue(key, out var value)) return m.Value;
+            return $"{m.Value} {BuildRestextPreview(value)}";
+        });
+    }
+
+    private static string BuildRestextPreview(string value)
+    {
+        if (value.Contains('\n')) return "# [multiline]";
+        var escaped = value.Replace("\"", "\\\"");
+        return escaped.Length <= 80 ? $"# \"{escaped}\"" : $"# \"{escaped[..77]}...\"";
+    }
+
+    // Writes en-US.restext: one Key=Value per string, grouped by passage with a comment header.
+    // Multi-line values use the """...""" block syntax.
+    private static void WriteRestextFile(RestextCollector restext, string outputDir)
+    {
+        var outPath = Path.Combine(outputDir, "en-US.restext");
+        var sb = new StringBuilder();
+        sb.AppendLine("# MasterWork locale file — en-US");
+        sb.AppendLine("# Format: Key=Value  (one string per line)");
+        sb.AppendLine("# Multi-line values: Key=\"\"\"");
+        sb.AppendLine("#   line 1");
+        sb.AppendLine("# \"\"\"");
+        sb.AppendLine();
+
+        int totalStrings = 0;
+        foreach (var (fileName, entries) in restext.Passages)
+        {
+            sb.AppendLine($"# {fileName}");
+            foreach (var entry in entries)
+            {
+                if (entry.Value.Contains('\n'))
+                {
+                    sb.AppendLine($"{entry.Key}=\"\"\"");
+                    sb.AppendLine(entry.Value);
+                    sb.AppendLine("\"\"\"");
+                }
+                else
+                {
+                    sb.AppendLine($"{entry.Key}={entry.Value}");
+                }
+                totalStrings++;
+            }
+            sb.AppendLine();
+        }
+
+        File.WriteAllText(outPath, sb.ToString(), Encoding.UTF8);
+        Console.WriteLine($"Locale file: {outPath} ({totalStrings} strings)");
     }
 
     private static HashSet<string> CollectReferencedPassageIds(List<MwsPassage> passages)
