@@ -56,8 +56,60 @@ public partial class CradleExtractor
         _report.VariablesDiscovered = _variables.Count;
 
         var passages = BuildPassages();
+        AssignSeedKeys(passages);
         _report.PassagesExtracted = passages.Count;
         return passages;
+    }
+
+    // ── Seed key assignment ────────────────────────────────────────────────
+
+    // Assigns stable seed_key values to every VarRandom node in every passage.
+    // Keys are scoped per passage: "PassageId_N" (N is 0-based, DFS order).
+    // Does not overwrite already-set keys, so hand-authored overrides are preserved.
+    private static void AssignSeedKeys(List<MwsPassage> passages)
+    {
+        foreach (var passage in passages)
+        {
+            int counter = 0;
+            AssignSeedKeysInNodes(passage.Nodes, passage.PassageId, ref counter);
+        }
+    }
+
+    private static void AssignSeedKeysInNodes(List<MwsNode> nodes, string passageId, ref int counter)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case EffectNode effect when effect.VarRandom is not null:
+                    foreach (var kv in effect.VarRandom)
+                        kv.Value.SeedKey ??= $"{passageId}_{counter++}";
+                    break;
+                case LetNode let when let.Random is not null:
+                    let.Random.SeedKey ??= $"{passageId}_{counter++}";
+                    break;
+                case ConditionalNode cond:
+                    foreach (var branch in cond.Branches)
+                        AssignSeedKeysInNodes(branch.Nodes, passageId, ref counter);
+                    break;
+                case SwitchNode sw:
+                    foreach (var cas in sw.Cases)
+                        AssignSeedKeysInNodes(cas.Nodes, passageId, ref counter);
+                    break;
+                case SectionBodyNode sec:
+                    AssignSeedKeysInNodes(sec.Nodes, passageId, ref counter);
+                    break;
+                case SetupBlockNode setup:
+                    AssignSeedKeysInNodes(setup.Nodes, passageId, ref counter);
+                    break;
+                case ExpandLinkNode expand:
+                    AssignSeedKeysInNodes(expand.ExpandNodes, passageId, ref counter);
+                    break;
+                case ForeachNode fe:
+                    AssignSeedKeysInNodes(fe.Nodes, passageId, ref counter);
+                    break;
+            }
+        }
     }
 
     // ── Pass 1: Variable discovery ─────────────────────────────────────────
