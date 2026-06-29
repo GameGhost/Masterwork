@@ -419,6 +419,7 @@ public partial class CradleExtractor
 
     private static List<MwsNode> ConsolidateTextNodes(List<MwsNode> nodes)
     {
+        nodes = HoistConditionalLets(nodes);
         var result = new List<MwsNode>();
         var group = new List<MwsNode>();
 
@@ -493,6 +494,60 @@ public partial class CradleExtractor
         }
         FlushGroup();
         return ConsolidateSwitches(ConsolidateBreaks(result));
+    }
+
+    // When every branch of a ConditionalNode contains exactly [LetNode(Random), TextNode({var})],
+    // the conditional is "homogeneous random" — all branches produce the same kind of value and
+    // the only difference is the random range. Rename all let vars to a single canonical name,
+    // strip the TextNodes from branches (making the conditional promotable), and inject a synthetic
+    // TextNode({canonical}) immediately after the conditional so text consolidation merges it with
+    // the surrounding text fragments.
+    private static List<MwsNode> HoistConditionalLets(List<MwsNode> nodes)
+    {
+        if (!nodes.Any(n => n is ConditionalNode c && IsHoistableConditionalLets(c)))
+            return nodes;
+
+        var result = new List<MwsNode>(nodes.Count + 2);
+        foreach (var node in nodes)
+        {
+            if (node is ConditionalNode cond && IsHoistableConditionalLets(cond))
+            {
+                var firstLet = cond.Branches[0].Nodes.OfType<LetNode>().First();
+                var firstTxt = cond.Branches[0].Nodes.OfType<TextNode>().First();
+                var canonical = firstLet.Var;
+                var style = firstTxt.Style ?? firstTxt.Runs?.FirstOrDefault()?.Style;
+                foreach (var branch in cond.Branches)
+                {
+                    branch.Nodes.OfType<LetNode>().First().Var = canonical;
+                    branch.Nodes.RemoveAll(n => n is TextNode);
+                }
+                result.Add(cond);
+                result.Add(new TextNode { Template = $"{{{canonical}}}", Style = style });
+            }
+            else
+                result.Add(node);
+        }
+        return result;
+    }
+
+    private static bool IsHoistableConditionalLets(ConditionalNode cond)
+    {
+        if (cond.Branches.Count < 2) return false;
+        foreach (var branch in cond.Branches)
+        {
+            if (branch.Nodes.Count != 2) return false;
+            // Accept both [LetNode, TextNode] and [TextNode, LetNode] orderings
+            var let = branch.Nodes.OfType<LetNode>().SingleOrDefault();
+            var txt = branch.Nodes.OfType<TextNode>().SingleOrDefault();
+            if (let is null || let.Random is null) return false;
+            if (txt is null) return false;
+            var expected = $"{{{let.Var}}}";
+            bool match = txt.Template == expected
+                || (txt.Template is null && txt.Runs is { Count: 1 }
+                    && txt.Runs[0].Text == expected && txt.Runs[0].AssetRef is null);
+            if (!match) return false;
+        }
+        return true;
     }
 
     // Pure-text TextNodes always start or extend a group.
@@ -587,35 +642,83 @@ public partial class CradleExtractor
         int i = 0;
         while (i < nodes.Count)
         {
-            if (nodes[i] is not ConditionalNode firstCond ||
-                TryExtractSwitchVar(firstCond) is not { } switchVar)
+            if (nodes[i] is not ConditionalNode firstCond)
             {
                 result.Add(nodes[i++]);
                 continue;
             }
 
-            // Collect consecutive conditionals with the same switch variable.
-            // Stop extending the run if the current tail already has an else branch.
-            var run = new List<ConditionalNode> { firstCond };
-            while (i + run.Count < nodes.Count &&
-                   !HasElseBranch(run[^1]) &&
-                   nodes[i + run.Count] is ConditionalNode next &&
-                   TryExtractSwitchVar(next) == switchVar)
+            // Try consecutive simple-condition switch (e.g. "var == value" across multiple ConditionalNodes).
+            if (TryExtractSwitchVar(firstCond) is { } switchVar)
             {
-                run.Add(next);
+                var run = new List<ConditionalNode> { firstCond };
+                while (i + run.Count < nodes.Count &&
+                       !HasElseBranch(run[^1]) &&
+                       nodes[i + run.Count] is ConditionalNode next &&
+                       TryExtractSwitchVar(next) == switchVar)
+                {
+                    run.Add(next);
+                }
+
+                if (run.Count >= 2)
+                {
+                    result.Add(BuildSwitchNode(switchVar, run));
+                    i += run.Count;
+                    continue;
+                }
             }
 
-            if (run.Count >= 2)
+            // Try a single ConditionalNode whose branches use compound "var == a || var == b" conditions.
+            if (TryConvertCompoundConditionalToSwitch(firstCond) is { } sw)
             {
-                result.Add(BuildSwitchNode(switchVar, run));
-                i += run.Count;
+                result.Add(sw);
+                i++;
+                continue;
             }
-            else
-            {
-                result.Add(nodes[i++]);
-            }
+
+            result.Add(nodes[i++]);
         }
         return result;
+    }
+
+    // Converts a single ConditionalNode whose branches use compound "var == a || var == b" conditions
+    // into a SwitchNode with match: [a, b] per case. Requires all non-else branches to be purely
+    // equality ORs on the same variable with at least two alternatives.
+    private static SwitchNode? TryConvertCompoundConditionalToSwitch(ConditionalNode cond)
+    {
+        if (cond.Branches.Count < 2) return null;
+        string? switchVar = null;
+        var cases = new List<SwitchCase>();
+
+        foreach (var branch in cond.Branches)
+        {
+            if (branch.Else == true)
+            {
+                cases.Add(new SwitchCase { Default = true, Nodes = branch.Nodes });
+                continue;
+            }
+            if (branch.Condition is null) return null;
+
+            var parts = branch.Condition.Split("||", StringSplitOptions.TrimEntries);
+            if (parts.Length < 2) return null;
+
+            var matchValues = new List<object>();
+            foreach (var part in parts)
+            {
+                var m = SwitchCondRegex().Match(part);
+                if (!m.Success || m.Groups[2].Value != "==") return null;
+                var varName = m.Groups[1].Value;
+                var rawVal = m.Groups[3].Value.Trim();
+                if (rawVal.Contains(' ')) return null;
+                switchVar ??= varName;
+                if (varName != switchVar) return null;
+                matchValues.Add(BuildMatchValue("==", rawVal));
+            }
+            cases.Add(new SwitchCase { Match = matchValues, Nodes = branch.Nodes });
+        }
+
+        if (switchVar is null) return null;
+        return new SwitchNode { On = switchVar, Cases = cases, SourceLine = cond.SourceLine };
     }
 
     // Returns the switch variable name if the conditional has exactly one "if" branch
