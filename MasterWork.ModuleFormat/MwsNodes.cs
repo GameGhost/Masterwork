@@ -374,11 +374,26 @@ public class EffectNode : MwsNode
 
 // ── Let — passage-scoped variable ─────────────────────────────────────────
 
+public class VarReplace
+{
+    public string Source { get; set; } = "";
+    public object Find { get; set; } = "";  // string (single) or List<string> (multiple)
+    public string With { get; set; } = "";
+
+    public Dictionary<string, object?> ToDict() => new()
+    {
+        ["source"] = Source,
+        ["find"] = Find,
+        ["with"] = With,
+    };
+}
+
 public class LetNode : MwsNode
 {
     public override string Type => "let";
     public string Var { get; set; } = "";
     public VarRandom? Random { get; set; }
+    public VarReplace? Replace { get; set; }
     // Temporary array: list of variable names whose values form the array
     public List<string>? Array { get; set; }
     // Aggregate compute expression: max(...), min(...), countif(<pattern>, ...)
@@ -394,6 +409,7 @@ public class LetNode : MwsNode
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["var"] = Var };
         if (Random is not null) d["random"] = Random.ToDict();
+        if (Replace is not null) d["replace"] = Replace.ToDict();
         if (Array is not null) d["array"] = Array;
         if (Compute is not null) d["compute"] = Compute;
         if (Pop is not null) d["pop"] = Pop;

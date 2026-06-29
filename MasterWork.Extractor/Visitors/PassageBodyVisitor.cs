@@ -317,6 +317,54 @@ public class PassageBodyVisitor
             return ProcessTextConcatPart(arg, currentStyle);
         }
 
+        // this.Vars.X.ToString() — variable reference in text position
+        if (arg is InvocationExpressionSyntax toStringInv
+            && GetSimpleMethodName(toStringInv) == "ToString"
+            && toStringInv.ArgumentList.Arguments.Count == 0
+            && toStringInv.Expression is MemberAccessExpressionSyntax toStringMa
+            && IsVarAccess(toStringMa.Expression, out var tsVar))
+        {
+            AddRun(new TextRun { Text = $"{{{tsVar}}}", Style = currentStyle });
+            return [];
+        }
+
+        // localVar.Replace("X","Y").Replace(...)... chain — strip player-number suffixes
+        if (TryUnwrapReplaceChain(arg, out var replaceBase, out var replacePairs) && replaceBase is not null)
+        {
+            string? sourceVar = null;
+            if (replaceBase is IdentifierNameSyntax replId
+                && _localVars.TryGetValue(replId.Identifier.Text, out var localVal)
+                && localVal.StartsWith("{") && localVal.EndsWith("}"))
+            {
+                sourceVar = localVal[1..^1];
+            }
+            else if (IsVarAccess(replaceBase, out var directVar))
+            {
+                sourceVar = directVar;
+            }
+
+            if (sourceVar is not null)
+            {
+                var finds = replacePairs.Select(r => r.find).ToList();
+                var withVal = replacePairs[0].with;
+                var letVar = $"_rpl_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+                var letNode = new LetNode
+                {
+                    Var = letVar,
+                    Replace = new VarReplace
+                    {
+                        Source = sourceVar,
+                        Find = finds.Count == 1 ? (object)finds[0] : finds,
+                        With = withVal,
+                    },
+                };
+                var flushNodes = FlushText();
+                flushNodes.Add(letNode);
+                AddRun(new TextRun { Text = $"{{{letVar}}}", Style = currentStyle });
+                return flushNodes;
+            }
+        }
+
         // Fallback — flag for review
         _report.AddWarning(_passageName, "text() with non-literal arg",
             arg.ToString(), GetLine(arg));
@@ -987,6 +1035,35 @@ public class PassageBodyVisitor
             }
         }
         return null;
+    }
+
+    // Unwraps a chain of .Replace(literal, literal) calls, returning the base expression and
+    // the ordered list of (find, with) pairs. Returns false if the chain is not purely Replace calls
+    // with string literals, or if there are no Replace calls at all.
+    private static bool TryUnwrapReplaceChain(
+        ExpressionSyntax expr,
+        out ExpressionSyntax? baseExpr,
+        out List<(string find, string with)> pairs)
+    {
+        pairs = [];
+        baseExpr = null;
+        ExpressionSyntax current = UnwrapParens(expr);
+
+        // Walk the outer-most chain: expr is the result of the last Replace call
+        while (current is InvocationExpressionSyntax ci
+            && ci.Expression is MemberAccessExpressionSyntax ma
+            && ma.Name.Identifier.Text == "Replace"
+            && ci.ArgumentList.Arguments.Count == 2
+            && ci.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax findLit
+            && ci.ArgumentList.Arguments[1].Expression is LiteralExpressionSyntax withLit)
+        {
+            pairs.Insert(0, (findLit.Token.ValueText, withLit.Token.ValueText));
+            current = UnwrapParens(ma.Expression);
+        }
+
+        if (pairs.Count == 0) return false;
+        baseExpr = current;
+        return true;
     }
 
     // Two-statement input prompt:
