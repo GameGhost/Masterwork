@@ -681,12 +681,16 @@ public partial class CradleExtractor
         return result;
     }
 
-    // Converts a single ConditionalNode whose branches use compound "var == a || var == b" conditions
-    // into a SwitchNode with match: [a, b] per case. Requires all non-else branches to be purely
-    // equality ORs on the same variable with at least two alternatives.
+    // Converts a single ConditionalNode into a SwitchNode. Handles two forms:
+    //   • Compound OR:  "var == a || var == b" per branch → match: [a, b]
+    //   • Multi-branch comparison: 3+ branches using "var op val" (e.g. players > 4)
+    //     where simple if/else (2 branches) is left as a ConditionalNode.
     private static SwitchNode? TryConvertCompoundConditionalToSwitch(ConditionalNode cond)
     {
         if (cond.Branches.Count < 2) return null;
+        // For single-condition branches (no ||), only convert when there are 3+ total branches
+        // to distinguish multi-case "switch" from a simple if/else.
+        bool allowSimpleConditions = cond.Branches.Count >= 3;
         string? switchVar = null;
         var cases = new List<SwitchCase>();
 
@@ -700,21 +704,24 @@ public partial class CradleExtractor
             if (branch.Condition is null) return null;
 
             var parts = branch.Condition.Split("||", StringSplitOptions.TrimEntries);
-            if (parts.Length < 2) return null;
+            if (parts.Length < 2 && !allowSimpleConditions) return null;
 
             var matchValues = new List<object>();
             foreach (var part in parts)
             {
                 var m = SwitchCondRegex().Match(part);
-                if (!m.Success || m.Groups[2].Value != "==") return null;
+                // Compound OR branches require == only; simple comparison branches allow any op.
+                if (!m.Success) return null;
+                if (parts.Length > 1 && m.Groups[2].Value != "==") return null;
                 var varName = m.Groups[1].Value;
                 var rawVal = m.Groups[3].Value.Trim();
                 if (rawVal.Contains(' ')) return null;
                 switchVar ??= varName;
                 if (varName != switchVar) return null;
-                matchValues.Add(BuildMatchValue("==", rawVal));
+                matchValues.Add(BuildMatchValue(m.Groups[2].Value, rawVal));
             }
-            cases.Add(new SwitchCase { Match = matchValues, Nodes = branch.Nodes });
+            var matchObj = matchValues.Count == 1 ? matchValues[0] : (object)matchValues;
+            cases.Add(new SwitchCase { Match = matchObj, Nodes = branch.Nodes });
         }
 
         if (switchVar is null) return null;

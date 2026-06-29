@@ -1527,7 +1527,26 @@ public class PassageBodyVisitor
         return expr.ToString();
     }
 
-    private static List<object> ExtractMacroArgs(InvocationExpressionSyntax inv)
+    // Resolves a + chain to a string, handling string literals, Vars.X accesses, and
+    // local variables registered in _localVars. Returns null if any leaf is unrecognised.
+    private string? TryBuildConcatString(ExpressionSyntax expr)
+    {
+        expr = UnwrapParens(expr);
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            return lit.Token.ValueText;
+        if (IsVarAccess(expr, out var v)) return $"{{{v}}}";
+        if (expr is IdentifierNameSyntax id && _localVars.TryGetValue(id.Identifier.Text, out var lv))
+            return lv;
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
+            var left = TryBuildConcatString(bin.Left);
+            var right = TryBuildConcatString(bin.Right);
+            if (left is not null && right is not null) return left + right;
+        }
+        return null;
+    }
+
+    private List<object> ExtractMacroArgs(InvocationExpressionSyntax inv)
     {
         // macros1.either(new StoryVar[] { 1, 2, "x" }) or macros1.shuffled(new StoryVar[] { ... })
         var result = new List<object>();
@@ -1541,7 +1560,7 @@ public class PassageBodyVisitor
                 {
                     if (elem is LiteralExpressionSyntax lit2) result.Add(LiteralValue(lit2));
                     else if (IsVarAccess(elem, out var vn)) result.Add($"{{{vn}}}");
-                    else result.Add(elem.ToString());
+                    else result.Add((object?)TryBuildConcatString(elem) ?? elem.ToString());
                 }
             }
             else if (arg.Expression is LiteralExpressionSyntax lit3)
@@ -1553,7 +1572,7 @@ public class PassageBodyVisitor
     private static bool TryExtractVarAddChain(ExpressionSyntax expr, List<string> vars)
     {
         var unwrapped = UnwrapIntParse(expr);
-        if (IsVarAccess(unwrapped, out var v)) { vars.Add(v); return true; }
+        if (IsVarAccess(unwrapped, out var v) && v is not null) { vars.Add(v); return true; }
         if (unwrapped is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
             return TryExtractVarAddChain(bin.Left, vars) && TryExtractVarAddChain(bin.Right, vars);
         return false;
@@ -1802,6 +1821,49 @@ public class PassageBodyVisitor
             {
                 anyHandled = true;
                 continue;
+            }
+
+            // string localVar = (var op N) ? either([...]) : ((var op M) ? either([...]) : ...)
+            // Chained ternary where all branches are either() calls on the same comparison variable.
+            // Emits a ConditionalNode with one LetNode per branch; registers the local var
+            // so subsequent text() references resolve to the synthetic let variable.
+            if (init is ConditionalExpressionSyntax ternaryInit)
+            {
+                var topCond = SimplifyCondition(UnwrapParens(ternaryInit.Condition).ToString());
+                var topTrue = UnwrapParens(ternaryInit.WhenTrue);
+                var topFalse = UnwrapParens(ternaryInit.WhenFalse);
+
+                if (topFalse is ConditionalExpressionSyntax)
+                {
+                    var branches = FlattenTernaryChain(topCond, topTrue, topFalse);
+                    bool allEither = branches.All(b => b.Cond == "else" ||
+                        (b.Expr is InvocationExpressionSyntax ei && GetSimpleMethodName(ei) == "either"));
+                    if (allEither)
+                    {
+                        var letVarName = $"_rnd_{_passageName}_{_varRandomSeq++}";
+                        _localVars[name] = $"{{{letVarName}}}";
+                        var condBranches = branches.Select(b =>
+                        {
+                            List<MwsNode> branchNodes = [];
+                            if (b.Expr is InvocationExpressionSyntax eitherInv)
+                                branchNodes.Add(new LetNode
+                                {
+                                    Var = letVarName,
+                                    Random = new VarRandom
+                                    {
+                                        RandomType = "choose-one",
+                                        Values = ExtractMacroArgs(eitherInv),
+                                    },
+                                });
+                            return b.Cond == "else"
+                                ? new ConditionalBranch { Else = true, Nodes = branchNodes }
+                                : new ConditionalBranch { Condition = b.Cond, Nodes = branchNodes };
+                        }).ToList();
+                        nodes.Add(new ConditionalNode { Branches = condBranches, SourceLine = _currentStatementLine });
+                        anyHandled = true;
+                        continue;
+                    }
+                }
             }
 
             // List<int> varName = new List<int> { intLiterals... }
