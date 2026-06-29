@@ -2,8 +2,6 @@
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
 
-This document describes format v0.2. For the v0.1 format as produced by the initial extractor pass, see `mws-format-v0.1.md`.
-
 ---
 
 ## 1. File Structure
@@ -33,33 +31,28 @@ nodes:
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id` |
 | `tags` | list of strings | no | Source tags; drives layout inference |
-| `layout` | string | yes | One of: `hub`, `event`, `narration`, `private`, `menu`, `modal` |
+| `layout` | string | yes | One of: `hub`, `event`, `narration`, `private`, `modal` |
 | `debug` | bool | no | `true` for developer-only passages excluded from player builds |
-| `location` | object | no | Location displayed in app header chrome; fields: `name` (string), `icon` (asset URI) |
-| `check_progress` | string | no | `passage_id` that must have been visited before this passage is valid |
-
-`location` replaces the v0.1 `set_location` node. Because set-location was always the first node in a passage in the source modules, it maps cleanly to a header field.
-
-`check_progress` replaces the v0.1 `check_progress` node. It is a constraint enforced at passage load time, not mid-passage.
+| `location` | object | no | Location shown in app header. Fields: `name` (string), `icon` (asset URI) |
+| `check_progress` | string | no | `passage_id` that must have been visited before this passage is valid to render |
 
 ### Layout Values
 
 | Layout | Description |
 |---|---|
-| `hub` | Generation hub — section headings + collapsible bodies, multiple optional links |
+| `hub` | Generation hub — sections with headings, collapsible bodies, multiple optional links |
 | `event` | Full-page event card — narrative text with prominent bottom links |
-| `narration` | Pure story passage; minimal chrome |
-| `private` | Full-screen cover until player confirms; used for secret information |
-| `menu` | App navigation / main menu |
+| `narration` | Story passage; minimal chrome |
+| `private` | Full-screen cover until the player confirms; used for secret per-player information |
 | `modal` | Full-screen modal panel; used for generation-end summaries and special events |
 
-`modal` replaces the v0.1 `modal` node. The passage's nodes contain the modal body; `layout: modal` and optional `chrome` properties supply the visual frame. Passage-level layout chrome is defined in the module manifest (see §8).
+The passage `layout` selects the chrome from the module manifest or engine built-in defaults. Module-specific chrome is defined in the manifest (see §8).
 
 ---
 
-## 2. Value Syntax
+## 2. String Formatting
 
-The `value` field on `text` nodes is a human-readable, i18n-translatable string. Style is expressed inline using markup tokens; there is no separate `style` field.
+The `value` field on `text` nodes, and any other field that contains user-visible text, is a human-readable string that supports inline formatting tokens. This section defines the full string formatting syntax.
 
 ### Inline Style Markup
 
@@ -76,30 +69,43 @@ The `value` field on `text` nodes is a human-readable, i18n-translatable string.
   value: Turn to **The Cost of Disease** section. _(All tied players gain this bonus.)_
 ```
 
-A heading-style text is expressed as a bold span within the value, not as a separate `style: bold` field. This keeps the style co-located with the string so translators see the full formatted text.
-
 ### Variable References
 
-`{varName}` — resolved from session variables at render time.
+`{varName}` — resolved from the current variable scope at render time. Session variables and `let` variables are both in scope.
+
+```yaml
+- type: text
+  value: 'Round {round} of {maxRound}'
+```
+
+### Array Element Access
+
+`{arr[N]}` — resolves the element at 0-based index `N` of array variable `arr`. Supports C# range index syntax:
+
+| Syntax | Meaning |
+|---|---|
+| `{arr[0]}` | First element |
+| `{arr[1]}` | Second element |
+| `{arr[^1]}` | Last element |
+| `{arr[^2]}` | Second-to-last element |
+
+```yaml
+- type: text
+  value: 'First player: {playerNames[0]}, Last player: {playerNames[^1]}'
+```
 
 ### Inline Icons
 
-`{icon:slug}` — resolved to the asset identified by `icon://slug`.
+`{icon:slug}` — resolved to the visual asset identified by `icon://slug`.
 
 ```yaml
 - type: text
   value: All players take all their {icon:s3_weapontoken} tokens into their hands.
 ```
 
-### Array Element Access
-
-`{arr[1st]}` — resolves the value at the named ordinal index of array variable `arr`.
-
-Index names: `1st`, `2nd`, `3rd`, `4th`, `5th`, ... — mapped to 0-based positions.
-
 ### i18n String References
 
-`restext://Key` — resolved from the locale file at module startup.
+`restext://Key` — resolved from the locale file loaded at module startup.
 
 ```yaml
 - type: text
@@ -112,9 +118,9 @@ The `# "..."` comment is an inline preview for human readers; the engine ignores
 
 ## 3. Expression Language
 
-Expressions appear in `let / expr`, `assign / expr`, `action / nodes` (for `let` and `assign` nodes embedded before navigation), and `conditional / condition`.
+Expressions appear in `let / expr` and `assign / expr` nodes, and in `conditional / branches[i] / condition` fields.
 
-The expression evaluator is implemented in the engine (Phase 1). The extractor produces v0.2 expressions during its transformation pass.
+The expression evaluator is implemented in the engine. The extractor produces expressions during its v0.2 transformation pass.
 
 ### Literals
 
@@ -122,14 +128,14 @@ The expression evaluator is implemented in the engine (Phase 1). The extractor p
 |---|---|---|
 | Integer | Unquoted number | `0`, `42`, `-3` |
 | String | Double-quoted | `"yes"`, `"Biology"` |
-| Boolean | `true`, `false` | `true` |
+| Boolean | Keywords | `true`, `false` |
 | Array | `[item, ...]` | `[1, 2, 3]`, `["a", "b"]` |
 
 ### Variable References
 
-Plain identifiers refer to the current variable scope:
+Plain identifiers refer to the current scope:
 - Session variables (module globals): always in scope
-- `let` variables: in scope from their definition point to the end of the passage
+- `let` variables: in scope from their assignment point to the end of the passage (see §6 `let` for hoisting behaviour)
 
 ```
 round
@@ -139,7 +145,7 @@ _rnd_BattleTime_0
 
 ### Operators
 
-**Math** (integer only; integer divide and modulo):
+**Math** — integers only; integer divide and modulo:
 
 ```
 a + b    a - b    a * b    a / b    a % b
@@ -169,6 +175,7 @@ Uses C# range semantics:
 |---|---|
 | `arr[0]` | First element (0-based) |
 | `arr[^1]` | Last element |
+| `arr[^2]` | Second-to-last element |
 | `arr[1..3]` | Elements at indices 1 and 2 (exclusive upper) |
 | `arr[1..]` | All elements from index 1 onward |
 | `arr[..^1]` | All elements except the last |
@@ -177,7 +184,7 @@ Uses C# range semantics:
 
 ### Array Operations
 
-All array operations are **immutable** — they return a new array and do not modify the source.
+All array operations are **immutable** — they return a new value and do not modify the source.
 
 | Operation | Description |
 |---|---|
@@ -198,6 +205,7 @@ All string operations are **immutable**.
 | Operation | Description |
 |---|---|
 | `str.length()` | Number of characters |
+| `str.contains(substr)` | `true` if `str` contains `substr` |
 | `str.toLower()` | Lowercase copy |
 | `str.toUpper()` | Uppercase copy |
 | `str.replace(find, with)` | Replace all occurrences of `find` with `with` |
@@ -213,31 +221,31 @@ All string operations are **immutable**.
 | `rand_between(min, max, seed_key)` | Random integer in `[min, max]` inclusive |
 | `max(a, b, ...)` | Maximum of a variadic list of integers |
 | `min(a, b, ...)` | Minimum of a variadic list of integers |
-| `countif(pattern, a, b, ...)` | Count of values matching a condition pattern string |
+| `countif(pattern, a, b, ...)` | Count of values matching a pattern string |
 
-**`rand_between`**: `seed_key` is a string literal uniquely identifying this random call within the module. The engine uses it to derive a stable PRNG offset from the master seed.
+**`rand_between`**: `seed_key` is a string literal that uniquely identifies this random call within the module. The engine uses it to derive a stable PRNG offset from the master seed, ensuring the same game seed always produces the same outcomes.
 
 ```
 rand_between(1, 6, "Expedition3_0")
 ["a", "b", "c"].shuffled("BattleTime_0")[0]
 ```
 
-**`countif`** pattern strings use the comparison operator syntax from §4:
+**`countif`** pattern strings use the comparison operator format from §4:
 
 ```
-countif(">0", scoreA, scoreB, scoreC)   # count of scores greater than 0
-countif("==yes", flagA, flagB)           # count of flags equal to "yes"
+countif(">0", scoreA, scoreB, scoreC)
+countif("==yes", flagA, flagB)
 ```
 
 ### Pattern Expressions
 
-In `switch / cases[i] / match` and for simplified conditional comparisons, a *pattern* is a string with a leading comparison operator:
+In `switch / cases[i] / match` and for single-value comparisons, a *pattern* is a string with a leading comparison operator applied against an implicit variable:
 
 ```
 '>4'    '<=2'    '>=3'    '<5'    '!=0'    '=3'
 ```
 
-In switch `match:`, `=` means equality (since the variable being tested is implicit). In condition expressions, the full `var op value` form is used.
+`=` in a pattern means equality (not assignment). In full condition expressions, the `var == value` form is used.
 
 ---
 
@@ -274,7 +282,7 @@ The `match:` field on a switch case can be:
 | `string` | Text string | `""` |
 | `array` | Ordered list | `[]` |
 
-Variables are declared in `_variables.yaml` alongside the passage files:
+Variables are declared in `_variables.yaml`:
 
 ```yaml
 variables:
@@ -283,9 +291,9 @@ variables:
   build:   { type: array,  default: [] }
 ```
 
-`let` variables are passage-scoped: they exist from their definition point until the passage finishes rendering. Their type is inferred from the first expression that produces them. They are never written to session state.
+**Session variables** are module-global. They persist across passages and are written only by `assign` nodes.
 
-`assign` nodes write to session (module-global) variables.
+**Let variables** are passage-scoped. They exist from their assignment point until the passage finishes rendering. Type is inferred from the producing expression.
 
 ---
 
@@ -297,8 +305,8 @@ Displays human-readable content.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `value` | string | yes | Text with inline markup; supports `{varName}`, `{icon:slug}`, `**...**`, `_..._`, `restext://Key` |
-| `lets` | list of strings | no | Names of `let` vars consumed by this value (for editor grouping) |
+| `value` | string | yes | Formatted text string (see §2) |
+| `lets` | list of strings | no | Names of `let` vars consumed by this value, for editor grouping |
 
 ```yaml
 - type: text
@@ -313,34 +321,44 @@ Displays human-readable content.
   - _rnd_BattleTime_1
 ```
 
-There is no `style` field; all styling is inline. There is no `runs` form; use a single `value` with inline markup and restext references for mixed content.
-
 ---
 
 ### `let`
 
-Defines a passage-scoped variable. Evaluated at render time; never persisted. Subsequent nodes in the same passage can reference the variable via `{var}` in `value` strings or `var` in expressions.
+Defines a passage-scoped variable by evaluating an expression. Never persisted to session state.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `var` | string | yes | Variable name |
-| `expr` | string | yes | Expression to evaluate |
+| `expr` | string | yes | Expression to evaluate (see §3) |
+
+**Hoisting**: `let` variables are scoped to the entire passage from their assignment point. A `let` declared inside a `conditional` branch or `switch` case is accessible in nodes that follow the branch. If a branch is not taken, any `let` declared only in that branch is not set; accessing an unset `let` is a runtime error.
 
 ```yaml
-# Random integer
+# Passage-level let — always in scope below this point
 - type: let
   var: roll
   expr: rand_between(1, 6, "Expedition3_0")
 
-# Choose-one from a list
-- type: let
-  var: _rnd_BattleTime_0
-  expr: '["{nameA}", "{nameB}", "{nameC}"].shuffled("BattleTime_0")[0]'
-
-# Read last element of an array (non-destructive)
-- type: let
-  var: top
-  expr: scores[^1]
+# Let inside a switch — hoisted to passage scope after the switch
+- type: switch
+  on: players
+  cases:
+  - match: '>3'
+    nodes:
+    - type: let
+      var: chosen
+      expr: '[nameA, nameB, nameC, nameD].shuffled("BattleTime_1")[0]'
+  - default: true
+    nodes:
+    - type: let
+      var: chosen
+      expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
+# chosen is accessible here because all cases define it
+- type: text
+  value: '{chosen} leads this round.'
+  lets:
+  - chosen
 
 # Sort a session array into a let var without modifying the source
 - type: let
@@ -362,15 +380,14 @@ Defines a passage-scoped variable. Evaluated at render time; never persisted. Su
 
 ### `assign`
 
-Writes a value to a session (module-global) variable. Persisted to the timeline snapshot on the next player action. All `assign` nodes encountered during passage execution are bundled with the subsequent `action` (navigation) into a single state change.
+Writes a value to a session variable. Persistent; included in the next timeline snapshot. All `assign` nodes encountered during passage execution are bundled with the following `action` (navigation) into a single state change.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `var` | string | yes | Session variable name |
-| `expr` | string | yes | Expression to evaluate |
+| `expr` | string | yes | Expression to evaluate (see §3) |
 
 ```yaml
-# Direct assignment
 - type: assign
   var: round
   expr: '7'
@@ -379,32 +396,29 @@ Writes a value to a session (module-global) variable. Persisted to the timeline 
   var: wolves
   expr: '"yes"'
 
-# Arithmetic
 - type: assign
   var: tracker
   expr: tracker + 2
 
-# Random persistent assignment
 - type: assign
   var: wolves
   expr: '["evil", "good"].shuffled("WolvesEvent_0")[0]'
 
-# Shuffled array
 - type: assign
   var: build
   expr: '[1, 2, 3, 4, 5].shuffled("WolvesEvent_1")'
 
-# Array push (immutable — produces new array)
+# Append to array
 - type: assign
   var: winners
   expr: '[..winners, nameA]'
 
-# Array pop (remove last element)
+# Remove last element
 - type: assign
   var: candidates
   expr: candidates[..^1]
 
-# Array remove one value
+# Remove a specific value
 - type: assign
   var: candidates
   expr: candidates.except(nameA)
@@ -414,15 +428,15 @@ Writes a value to a session (module-global) variable. Persisted to the timeline 
 
 ### `action`
 
-A player-interactive element. Rendered in the passage UI; activates when tapped.
+A player-interactive element rendered in the passage UI.
 
 #### Common Fields
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `label` | string | yes | Displayed text |
-| `style` | string | no | Visual style: `link` (default), `button` |
-| `type` | string | yes | One of: `navigation`, `popup`, `prompt`, `menu` |
+| `label` | string | yes | Displayed text (supports string formatting — see §2) |
+| `style` | string | no | Visual style: `link` (default) or `button` |
+| `type` | string | yes | One of: `navigation`, `popup`, `prompt` |
 
 #### Type: `navigation`
 
@@ -433,7 +447,7 @@ Navigates to another passage. Bundles preceding `assign` nodes into a timeline s
 | `target` | string | yes | Destination `passage_id` |
 | `state_affecting` | bool | yes | `true` creates a timeline snapshot |
 | `timeline_label` | string | no | Custom label for the timeline scrubber entry |
-| `nodes` | list | no | `let` and `assign` nodes evaluated before navigation (inline effects) |
+| `nodes` | list | no | `let` and `assign` nodes evaluated before navigation |
 
 ```yaml
 - type: action
@@ -447,9 +461,8 @@ With inline effects:
 
 ```yaml
 - type: action
-  label: 2 Players.
+  label: 2 Players
   type: navigation
-  style: link
   state_affecting: true
   nodes:
   - type: assign
@@ -460,7 +473,7 @@ With inline effects:
 
 #### Type: `popup`
 
-Displays a modal overlay. Evaluated with the passage; popup content cannot contain `assign` or navigation nodes.
+Displays a modal overlay. Popup content is evaluated when the passage renders; it cannot contain `assign` or navigation nodes.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -472,24 +485,20 @@ Displays a modal overlay. Evaluated with the passage; popup content cannot conta
 - type: action
   label: Setup Instructions
   type: popup
-  style: link
   nodes:
   - type: text
     value: Place the hospital token on space 1 of the hospital track.
-  - type: break
-  - type: text
-    value: Assign starting resources as shown in the reference card.
   onclose: Hospital2
   button: Begin
 ```
 
 #### Type: `prompt`
 
-Displays an input panel when tapped. On submit, stores the value and navigates.
+Displays an input panel when activated. On submit, stores the value and navigates. Can be cancelled, which dismisses the panel without any state change.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `text` | string | yes | Instruction shown in the input panel |
+| `text` | string | yes | Instruction shown in the input panel (string formatting — see §2) |
 | `input_type` | string | yes | `string` or `number` |
 | `store_in` | string | yes | Session variable name to receive the submitted value |
 | `onsubmit` | string | yes | `passage_id` to navigate to after submission |
@@ -498,33 +507,21 @@ Displays an input panel when tapped. On submit, stores the value and navigates.
 - type: action
   label: Enter total hearts collected...
   type: prompt
-  style: link
   text: Count up all the heart tokens collected by ALL players. Enter the total here.
   input_type: number
   store_in: charitytotal
   onsubmit: Feverheart
 ```
 
-#### Type: `menu`
-
-Returns to the app's main navigation / module selection screen.
-
-```yaml
-- type: action
-  label: Return to Menu
-  type: menu
-  style: link
-```
-
 ---
 
 ### `prompt`
 
-An inline prompt node — encountered during passage evaluation and interrupts execution until the player submits. Cannot be cancelled. Execution resumes in the current passage after submission.
+An inline prompt — encountered during passage evaluation and interrupts execution until the player submits. Cannot be cancelled. Execution resumes in the current passage immediately after the prompt node.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `text` | string | yes | Instruction shown in the input panel |
+| `text` | string | yes | Instruction shown in the input panel (string formatting — see §2) |
 | `input_type` | string | yes | `string` or `number` |
 | `store_in` | string | yes | Session variable name to receive the submitted value |
 
@@ -535,24 +532,28 @@ An inline prompt node — encountered during passage evaluation and interrupts e
   store_in: nameA
 ```
 
-Use `prompt` (inline) when the input is mandatory and must be collected before passage content can be determined — for example, collecting player names at game start. Use `action` of type `prompt` when the input is triggered by a player-visible interaction that can be skipped or cancelled.
+Use `prompt` (inline) when the input is mandatory and blocks passage rendering — for example, collecting player names at game start. Use `action` of type `prompt` when the input is an optional player-triggered interaction that can be skipped.
 
 ---
 
 ### `goto`
 
-Unconditional navigation. Does not create a timeline snapshot; does not require player interaction. Used when the passage logic unconditionally routes to another passage.
+Unconditional navigation. Does not require player interaction and does not create a timeline snapshot. Used when passage logic unconditionally routes to another passage.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `target` | string | yes | Destination `passage_id` |
+| `target` | string | yes | Destination `passage_id`, or an expression that evaluates to a `passage_id` string |
 
 ```yaml
 - type: goto
   target: PlayerNameIntro
+
+# Dynamic target — evaluates the expression to determine the passage
+- type: goto
+  target: '{endingPassage}'
 ```
 
-For conditional navigation, wrap `goto` in a `conditional`:
+For conditional routing, wrap `goto` in a `conditional`:
 
 ```yaml
 - type: conditional
@@ -571,11 +572,11 @@ For conditional navigation, wrap `goto` in a `conditional`:
 
 ### `section`
 
-A visually-distinct content container. Replaces `section_heading`, `section_body`, and `setup_block` from v0.1.
+A visually-distinct content container. Optionally titled and collapsible.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `title` | string | no | Section heading (value syntax; supports inline markup) |
+| `title` | string | no | Section heading (string formatting — see §2) |
 | `collapsed` | bool | no | If `true`, section renders collapsed; player can expand. Default: `false` |
 | `style` | string | no | Visual style: `section` (default), `panel`, `well`, `quote`, `setup` |
 | `nodes` | list | yes | Content nodes |
@@ -587,14 +588,13 @@ A visually-distinct content container. Replaces `section_heading`, `section_body
   nodes:
   - type: text
     value: Each player may now purchase one building from the market.
-  - type: break
   - type: action
     label: Continue...
     type: navigation
     target: BuildPhase2
     state_affecting: true
 
-# Setup block (style: setup replaces v0.1 setup_block)
+# Setup instructions block
 - type: section
   style: setup
   nodes:
@@ -606,11 +606,11 @@ A visually-distinct content container. Replaces `section_heading`, `section_body
 
 # Collapsible section
 - type: section
-  title: Optional Reading
+  title: Optional Background
   collapsed: true
   nodes:
   - type: text
-    value: Background lore for this event...
+    value: Background lore text...
 ```
 
 ---
@@ -625,6 +625,8 @@ Evaluates conditions in order; renders the first matching branch.
 | `branches[i].condition` | string | no | Condition expression (see §3) |
 | `branches[i].else` | bool | no | `true` marks the fallback branch |
 | `branches[i].nodes` | list | yes | Nodes rendered when this branch is taken |
+
+Exactly one of `condition` or `else: true` per branch. Branches are evaluated in order; the first match wins.
 
 ```yaml
 - type: conditional
@@ -656,7 +658,7 @@ Tests a single variable against a set of cases.
 |---|---|---|---|
 | `on` | string | yes | Variable name to test |
 | `cases` | list | yes | Ordered list of case objects |
-| `cases[i].match` | int, string, list, or pattern | no | Value(s) to match; see §4 |
+| `cases[i].match` | int, string, list, or pattern | no | Value(s) to match (see §4) |
 | `cases[i].default` | bool | no | `true` marks the fallback case |
 | `cases[i].nodes` | list | yes | Nodes rendered when this case is taken |
 
@@ -699,6 +701,36 @@ Embeds another passage's content inline at this point.
 
 ---
 
+### `record`
+
+Records that the player has achieved or witnessed a named event in this module. Used for tracking module endings and other notable milestones. The engine persists these records across sessions for the player's module progress.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Unique record identifier within this module |
+
+```yaml
+- type: record
+  id: ending_wolves_evil_1
+```
+
+Records are evaluated when the node is encountered during passage rendering, before any navigation. Their identifiers are referenced in the module manifest to define achievement groups (e.g. "all endings found"):
+
+```yaml
+# _variables.yaml or module manifest (future spec)
+record_groups:
+  all_endings:
+    requires_all:
+      - ending_wolves_evil_1
+      - ending_wolves_good_1
+      - ending_hunters_evil_1
+      - ending_hunters_good_1
+```
+
+**Note on the original modules**: In the source modules, ending achievements were recorded implicitly when the player navigated to a passage with an `END-` prefix (e.g. `END-WolvesEvil1`). The extractor must identify these passages and insert a `record` node.
+
+---
+
 ### `break`
 
 A line break within a content block.
@@ -721,7 +753,7 @@ A paragraph separator — larger vertical gap than `break`.
 
 ### `checkpoint`
 
-A named milestone in the timeline. Creates a labeled marker in the timeline scrubber.
+A named milestone in the timeline. Creates a labeled marker in the scrubber; also used to signal the end of a generation phase, replacing what was previously a separate end-of-generation node.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -736,50 +768,30 @@ A named milestone in the timeline. Creates a labeled marker in the timeline scru
   diagnostic_label: gen2_end
 ```
 
----
-
-### `end_of_generation`
-
-Signals the end of a generation phase. Triggers end-of-generation UI; may suspend the session.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `generation` | int | yes | The generation number that just ended |
-| `message` | string | no | Optional display message |
+A generation-end sequence uses a `section` for the summary content and a `checkpoint` to mark the boundary, followed by `action` nodes for continuing:
 
 ```yaml
-- type: end_of_generation
-  generation: 2
-  message: Resolve all pending experiments before continuing.
+- type: section
+  style: panel
+  nodes:
+  - type: text
+    value: '**End of Generation 2**'
+  - type: paragraph_break
+  - type: text
+    value: Resolve all pending experiments before continuing.
+- type: checkpoint
+  id: generation_2_complete
+  display_label: Generation 2
+- type: action
+  label: Continue to Generation 3
+  type: navigation
+  target: Gen3Start
+  state_affecting: true
 ```
 
 ---
 
-## 7. Module Layout/Chrome
-
-The `layout` field selects the passage chrome from the module manifest (or the engine's built-in defaults). This allows modules and asset packs to define custom visual treatments for passage types, popups, inputs, and UI elements without changing the passage content nodes.
-
-Layout chrome is defined in the module manifest:
-
-```yaml
-# In module manifest (future spec)
-layouts:
-  generation_end:
-    base: modal
-    chrome: EndOfGeneration
-```
-
-A passage then uses:
-
-```yaml
-layout: generation_end
-```
-
-Custom layout chrome is a future capability. The v0.2 format reserves the `layout` field for this mechanism; the engine uses built-in defaults for all standard layout values.
-
----
-
-## 8. Source Annotations
+## 7. Source Annotations
 
 Extracted passage files include YAML comments injected by the extractor. These are informational only; the engine ignores them.
 
@@ -797,9 +809,31 @@ nodes:
 
 ---
 
+## 8. Module Layout/Chrome
+
+The `layout` field selects visual chrome from the module manifest or the engine's built-in defaults. This allows modules and asset packs to define custom visual treatments for passage types, popups, inputs, and UI elements.
+
+```yaml
+# Module manifest (future spec)
+layouts:
+  generation_end:
+    base: modal
+    chrome: EndOfGeneration
+```
+
+A passage then uses:
+
+```yaml
+layout: generation_end
+```
+
+Custom layout chrome is a planned capability. The engine uses built-in defaults for all standard layout values defined in §1.
+
+---
+
 ## 9. Complete Example
 
-A passage from *A Time of War* updated to v0.2:
+A passage from *A Time of War*:
 
 ```yaml
 # ATimeOfWar.cs:9247
@@ -867,45 +901,4 @@ nodes:
 
 ---
 
-## 10. Changes from v0.1
-
-### Removed nodes
-
-| v0.1 node | v0.2 replacement |
-|---|---|
-| `link` | `action` with `type: navigation` |
-| `expand_link` | `action` with `type: navigation` and `nodes:` for inline effects |
-| `goto_menu` | `action` with `type: menu` |
-| `section_heading` + `section_body` | `section` with `title:` |
-| `setup_block` | `section` with `style: setup` |
-| `input_prompt` | `prompt` (inline) or `action` with `type: prompt` |
-| `set_location` | `location:` header field |
-| `modal` | Passage with `layout: modal` |
-| `check_progress` | `check_progress:` header field |
-| `setup_notification` | `action` with `type: popup` |
-| `effect` | `assign` (one per variable) |
-
-### Changed nodes
-
-| Node | Change |
-|---|---|
-| `text` | `template` renamed to `value`; `style` field removed (inline markup only); `runs` form removed |
-| `let` | All sub-forms (`random`, `replace`, `pick_from`, `array`, `compute`, `pop`, `dequeue`, `sort`) replaced by single `expr` field |
-| `goto` | `condition` field removed; use `conditional` to wrap conditional gotos |
-
-### Preserved nodes
-
-`conditional`, `switch`, `foreach`, `include_passage`, `break`, `paragraph_break`, `checkpoint`, `end_of_generation`
-
-### Header changes
-
-- `location:` object added (replaces `set_location` node)
-- `check_progress:` string field added (replaces `check_progress` node)
-
-### Extractor compatibility
-
-The extractor produces v0.1 nodes internally, then runs a transformation pass to produce v0.2 output. v0.1 intermediate node types live in `Masterwork.Extractor`; v0.2 node types are the canonical types in `Masterwork.ModuleFormat`. See the extractor upgrade plan.
-
----
-
-*MWS format v0.2 — Masterwork project. This document describes the target format for `Masterwork.ModuleFormat` and `Masterwork.Engine`.*
+*MWS format v0.2 — Masterwork project.*
