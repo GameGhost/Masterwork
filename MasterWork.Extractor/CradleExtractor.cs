@@ -537,8 +537,8 @@ public partial class CradleExtractor
         {
             if (branch.Nodes.Count != 2) return false;
             // Accept both [LetNode, TextNode] and [TextNode, LetNode] orderings
-            var let = branch.Nodes.OfType<LetNode>().SingleOrDefault();
-            var txt = branch.Nodes.OfType<TextNode>().SingleOrDefault();
+            var let = branch.Nodes.OfType<LetNode>().FirstOrDefault();
+            var txt = branch.Nodes.OfType<TextNode>().FirstOrDefault();
             if (let is null || let.Random is null) return false;
             if (txt is null) return false;
             var expected = $"{{{let.Var}}}";

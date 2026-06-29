@@ -835,6 +835,11 @@ public class PassageBodyVisitor
                         VarSets = new() { [varName!] = $"{addendStr} + {{{rndName}}}" }
                     };
                 }
+
+                // Sum of 3+ variable references: VarA + VarB + VarC + ...
+                var sumVars = new List<string>();
+                if (TryExtractVarAddChain(bin, sumVars) && sumVars.Count >= 3)
+                    return new EffectNode { VarSets = new() { [varName!] = string.Join(" + ", sumVars.Select(v => $"{{{v}}}")) } };
             }
         }
 
@@ -1543,6 +1548,15 @@ public class PassageBodyVisitor
                 result.Add(LiteralValue(lit3));
         }
         return result;
+    }
+
+    private static bool TryExtractVarAddChain(ExpressionSyntax expr, List<string> vars)
+    {
+        var unwrapped = UnwrapIntParse(expr);
+        if (IsVarAccess(unwrapped, out var v)) { vars.Add(v); return true; }
+        if (unwrapped is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+            return TryExtractVarAddChain(bin.Left, vars) && TryExtractVarAddChain(bin.Right, vars);
+        return false;
     }
 
     private static string? ExtractVarMath(BinaryExpressionSyntax bin, string varName)
