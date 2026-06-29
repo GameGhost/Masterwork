@@ -37,6 +37,10 @@ public class PassageBodyVisitor
     // Local computed variables: name → aggregate expression string (for condition substitution)
     // e.g. "num" → "countif(==max_play, play)" from a LINQ Count-where-Max pattern
     private readonly Dictionary<string, string> _localComputedVars = new(StringComparer.Ordinal);
+    // Local List<int> variables: name → the Vars array variable they mirror (or null if unknown)
+    private readonly Dictionary<string, string?> _localIntLists = new(StringComparer.Ordinal);
+    // Vars variables set to int arrays in this passage: varName → int values (for localIntList matching)
+    private readonly Dictionary<string, List<int>> _passageIntArrayVars = new(StringComparer.Ordinal);
 
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report)
     {
@@ -637,6 +641,22 @@ public class PassageBodyVisitor
             return [];
         }
 
+        // localList.Remove(arg) — local int list mutation mirroring a Vars array
+        if (expr is InvocationExpressionSyntax listRemoveInv &&
+            listRemoveInv.Expression is MemberAccessExpressionSyntax listRemoveMa &&
+            listRemoveMa.Name.Identifier.Text == "Remove" &&
+            listRemoveMa.Expression is IdentifierNameSyntax listRemoveId &&
+            _localIntLists.TryGetValue(listRemoveId.Identifier.Text, out var listVarsRef) &&
+            listRemoveInv.ArgumentList.Arguments.Count == 1)
+        {
+            var listArg = listRemoveInv.ArgumentList.Arguments[0].Expression;
+            // Remove(intLiteral) — already covered by var_remove on the Vars array; suppress
+            if (listArg is LiteralExpressionSyntax) return [];
+            // Remove(Vars.X) — emit var_remove on the mirrored Vars array
+            if (IsVarAccess(listArg, out var removeVar) && listVarsRef is not null)
+                return [new EffectNode { VarRemove = new() { [listVarsRef] = $"{{{removeVar}}}" } }];
+        }
+
         // Unknown expression statement
         var code = es.ToString().Trim();
         _report.AddUnhandled(_passageName, code, GetLine(es));
@@ -850,6 +870,9 @@ public class PassageBodyVisitor
                 case "a":
                 {
                     var values = ExtractMacroArgs(macroInv);
+                    // Track int arrays so localList initializers can find the mirror
+                    if (varName is not null && values.All(v => v is int or long))
+                        _passageIntArrayVars[varName] = values.Select(v => Convert.ToInt32(v)).ToList();
                     return new EffectNode
                     {
                         VarSets = new() { [varName!] = values }
@@ -898,6 +921,19 @@ public class PassageBodyVisitor
             };
         }
 
+        // localList[Random.Range(0, localList.Count)] — random pick from mirrored Vars array
+        if (right is ElementAccessExpressionSyntax pickAccess &&
+            pickAccess.Expression is IdentifierNameSyntax pickListId &&
+            _localIntLists.TryGetValue(pickListId.Identifier.Text, out var pickVarsRef) &&
+            pickVarsRef is not null &&
+            pickAccess.ArgumentList.Arguments.Count == 1 &&
+            IsRandomRangeFromCount(pickAccess.ArgumentList.Arguments[0].Expression, pickListId.Identifier.Text))
+        {
+            var letVar = $"_pick_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+            preamble = [new LetNode { Var = letVar, PickFrom = pickVarsRef }];
+            return new EffectNode { VarSets = new() { [varName!] = $"{{{letVar}}}" } };
+        }
+
         // Fallback — record raw expression
         _report.AddWarning(_passageName, $"Unhandled assignment RHS for {varName}",
             right.ToString(), GetLine(right));
@@ -918,6 +954,10 @@ public class PassageBodyVisitor
                     currentIf.Condition.ToString(), GetLine(currentIf));
 
             var condStr = SimplifyCondition(currentIf.Condition.ToString());
+            // Translate localIntList.Count references to count(varsArrayRef)
+            foreach (var (listName, varsRef) in _localIntLists)
+                if (varsRef is not null)
+                    condStr = condStr.Replace($"{listName}.Count", $"count({varsRef})");
             var bodyNodes = currentIf.Statement is BlockSyntax blk
                 ? VisitStatements(blk.Statements)
                 : VisitStatements([currentIf.Statement]);
@@ -1064,6 +1104,24 @@ public class PassageBodyVisitor
         if (pairs.Count == 0) return false;
         baseExpr = current;
         return true;
+    }
+
+    // Returns true if expr is Random.Range(0, listName.Count) — the canonical C# random-index
+    // expression used to pick an element from a local List.
+    private static bool IsRandomRangeFromCount(ExpressionSyntax expr, string listName)
+    {
+        if (expr is not InvocationExpressionSyntax inv) return false;
+        if (GetSimpleMethodName(inv) != "Range") return false;
+        var args = inv.ArgumentList.Arguments;
+        if (args.Count != 2) return false;
+        if (args[0].Expression is not LiteralExpressionSyntax zeroLit ||
+            !zeroLit.IsKind(SyntaxKind.NumericLiteralExpression) ||
+            Convert.ToInt32(zeroLit.Token.Value) != 0)
+            return false;
+        if (args[1].Expression is not MemberAccessExpressionSyntax countMa) return false;
+        if (countMa.Name.Identifier.Text != "Count") return false;
+        if (countMa.Expression is not IdentifierNameSyntax countId) return false;
+        return countId.Identifier.Text == listName;
     }
 
     // Two-statement input prompt:
@@ -1700,6 +1758,27 @@ public class PassageBodyVisitor
             // Emits: LetNode for max_<array> and tracks num → countif expression
             if (TryExtractLinqCountIf(name, init, nodes))
             {
+                anyHandled = true;
+                continue;
+            }
+
+            // List<int> varName = new List<int> { intLiterals... }
+            // Mirror of a Vars array — track and suppress (the Vars assignment is already emitted)
+            if (decl.Declaration.Type.ToString().Contains("List<int>") &&
+                init is ObjectCreationExpressionSyntax listCreate &&
+                listCreate.Initializer is InitializerExpressionSyntax listInit &&
+                listInit.Expressions.All(e => e is LiteralExpressionSyntax l &&
+                    l.IsKind(SyntaxKind.NumericLiteralExpression)))
+            {
+                var intVals = listInit.Expressions
+                    .OfType<LiteralExpressionSyntax>()
+                    .Select(l => Convert.ToInt32(l.Token.Value))
+                    .ToList();
+                var mirrorVar = _passageIntArrayVars
+                    .Where(kv => kv.Value.SequenceEqual(intVals))
+                    .Select(kv => kv.Key)
+                    .FirstOrDefault();
+                _localIntLists[name] = mirrorVar;
                 anyHandled = true;
                 continue;
             }
