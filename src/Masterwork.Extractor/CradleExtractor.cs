@@ -29,6 +29,10 @@ public partial class CradleExtractor
     private readonly Dictionary<int, Dictionary<int, MethodDeclarationSyntax>> _fragmentMethods = [];
     // All discovered variables: name → VarDef
     private readonly Dictionary<string, VarDef> _variables = [];
+    // Variables whose type/default came from VarDefs field declarations (authoritative — not overridden by usage inference)
+    private readonly HashSet<string> _varDefsVars = [];
+    // Source file paths that are complete (class + VarDefs included) vs. partial (method-only)
+    private readonly HashSet<string> _completeFiles = [];
 
     // Standard variables from GLOBALS.cs that all modules share
     private static readonly HashSet<string> StandardVariables = new(StringComparer.OrdinalIgnoreCase)
@@ -47,7 +51,12 @@ public partial class CradleExtractor
     public List<MwsPassage> Extract(IEnumerable<string> sourceFiles)
     {
         var trees = sourceFiles.Select(f =>
-            CSharpSyntaxTree.ParseText(WrapPartialClass(File.ReadAllText(f)), path: f)).ToList();
+        {
+            var content = File.ReadAllText(f);
+            var (prepared, isComplete) = PrepareSource(content);
+            if (isComplete) _completeFiles.Add(f);
+            return CSharpSyntaxTree.ParseText(prepared, path: f);
+        }).ToList();
 
         Pass1_DiscoverVariables(trees);
         Pass2_BuildPassageRegistry(trees);
@@ -116,43 +125,112 @@ public partial class CradleExtractor
 
     private void Pass1_DiscoverVariables(List<SyntaxTree> trees)
     {
+        // Phase A: VarDefs inner class field declarations in complete files.
+        // public StoryVar @name = 0   → int, default 0
+        // public StoryVar @name = ""  → string, default ""
+        // public StoryVar @name       → string, no default
+        // These are authoritative; usage-based inference below will not override them.
+        foreach (var tree in trees)
+        {
+            if (!_completeFiles.Contains(tree.FilePath)) continue;
+            var root = tree.GetCompilationUnitRoot();
+            foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                if (cls.Identifier.Text != "VarDefs") continue;
+                foreach (var field in cls.Members.OfType<FieldDeclarationSyntax>())
+                {
+                    if (field.Declaration.Type.ToString() != "StoryVar") continue;
+                    foreach (var declarator in field.Declaration.Variables)
+                    {
+                        var varName = declarator.Identifier.Text.TrimStart('@');
+                        if (string.IsNullOrEmpty(varName)) continue;
+
+                        string varType;
+                        object? defaultVal;
+                        if (declarator.Initializer?.Value is LiteralExpressionSyntax initLit)
+                        {
+                            if (initLit.IsKind(SyntaxKind.NumericLiteralExpression))
+                            {
+                                varType = "int";
+                                defaultVal = initLit.Token.Value ?? 0;
+                            }
+                            else
+                            {
+                                varType = "string";
+                                defaultVal = initLit.Token.ValueText;
+                            }
+                        }
+                        else
+                        {
+                            varType = "string";
+                            defaultVal = null;
+                        }
+
+                        _variables[varName] = new VarDef
+                        {
+                            Name = varName,
+                            VarType = varType,
+                            Default = defaultVal,
+                            IsStandard = StandardVariables.Contains(varName),
+                        };
+                        // Only mark as authoritative when an explicit initializer is present.
+                        // Vars declared as "public StoryVar @x;" (no initializer) remain
+                        // refinable by usage-based inference in Phase C.
+                        if (declarator.Initializer is not null)
+                            _varDefsVars.Add(varName);
+                    }
+                }
+            }
+        }
+
+        // Phase B: scan this.Vars.X accesses — adds any variable not already known from VarDefs.
         foreach (var tree in trees)
         {
             var root = tree.GetCompilationUnitRoot();
             foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
                 // this.Vars.X  →  MemberAccess( MemberAccess(this, Vars), X )
-                if (access.Expression is MemberAccessExpressionSyntax inner &&
-                    inner.Name.Identifier.Text == "Vars")
-                {
-                    var varName = access.Name.Identifier.Text;
-                    if (string.IsNullOrEmpty(varName) || varName == "Vars") continue;
+                // Vars.X       →  MemberAccess( Identifier(Vars), X )           [complete files]
+                bool isVarsAccess =
+                    (access.Expression is MemberAccessExpressionSyntax inner &&
+                     inner.Name.Identifier.Text == "Vars") ||
+                    (access.Expression is IdentifierNameSyntax idName &&
+                     idName.Identifier.Text == "Vars");
 
-                    if (!_variables.ContainsKey(varName))
+                if (!isVarsAccess) continue;
+
+                var varName = access.Name.Identifier.Text;
+                if (string.IsNullOrEmpty(varName) || varName == "Vars") continue;
+
+                if (!_variables.ContainsKey(varName))
+                {
+                    _variables[varName] = new VarDef
                     {
-                        _variables[varName] = new VarDef
-                        {
-                            Name = varName,
-                            VarType = InferTypeFromContext(access),
-                            IsStandard = StandardVariables.Contains(varName),
-                        };
-                    }
+                        Name = varName,
+                        VarType = InferTypeFromContext(access),
+                        IsStandard = StandardVariables.Contains(varName),
+                    };
                 }
             }
         }
 
-        // Refine types from assignment RHS
+        // Phase C: refine types from assignment RHS for variables not from VarDefs.
         foreach (var tree in trees)
         {
             var root = tree.GetCompilationUnitRoot();
             foreach (var assign in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
             {
                 if (assign.Left is not MemberAccessExpressionSyntax leftAccess) continue;
-                if (leftAccess.Expression is not MemberAccessExpressionSyntax innerLeft ||
-                    innerLeft.Name.Identifier.Text != "Vars") continue;
+                bool isVarsLeft =
+                    (leftAccess.Expression is MemberAccessExpressionSyntax innerLeft2 &&
+                     innerLeft2.Name.Identifier.Text == "Vars") ||
+                    (leftAccess.Expression is IdentifierNameSyntax leftId &&
+                     leftId.Identifier.Text == "Vars");
+                if (!isVarsLeft) continue;
 
                 var varName = leftAccess.Name.Identifier.Text;
                 if (!_variables.TryGetValue(varName, out var def)) continue;
+                if (_varDefsVars.Contains(varName)) continue;
 
                 var inferredType = InferTypeFromRhs(assign.Right);
                 if (inferredType != "string" || def.VarType == "string")
@@ -312,8 +390,12 @@ public partial class CradleExtractor
                 continue;
             }
 
-            // 1-based line in the original file: Roslyn 0-based line - 1 (two wrapper lines prepended)
-            var mainMethodLine = mainMethod.GetLocation().GetLineSpan().StartLinePosition.Line - 1;
+            // 1-based line in the original file.
+            // Wrapped files: Roslyn 0-based line - 1 (accounts for 2 prepended wrapper lines).
+            // Complete files: Roslyn 0-based line + 1 (direct 0-to-1-based conversion).
+            var line0 = mainMethod.GetLocation().GetLineSpan().StartLinePosition.Line;
+            var isCompleteFile = _completeFiles.Contains(mainMethod.SyntaxTree.FilePath);
+            var mainMethodLine = isCompleteFile ? line0 + 1 : line0 - 1;
 
             var visitor = new PassageBodyVisitor(name, _spriteMapper, _report);
             var nodes = mainMethod.Body is not null
@@ -322,7 +404,7 @@ public partial class CradleExtractor
 
             // Stitch fragment methods into expand_link nodes
             if (_fragmentMethods.TryGetValue(idx, out var frags))
-                StitchFragments(name, nodes, frags);
+                StitchFragments(name, nodes, frags, _spriteMapper, _report);
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
@@ -359,7 +441,9 @@ public partial class CradleExtractor
     private static void StitchFragments(
         string passageName,
         List<MwsNode> nodes,
-        Dictionary<int, MethodDeclarationSyntax> frags)
+        Dictionary<int, MethodDeclarationSyntax> frags,
+        SpriteMapper spriteMapper,
+        ExtractionReport report)
     {
         // Walk the node tree and replace pending fragment stubs in ExpandLinkNodes
         for (int i = 0; i < nodes.Count; i++)
@@ -371,39 +455,68 @@ public partial class CradleExtractor
                     expand.ExpandNodes[0] is UnknownNode unk &&
                     unk.Note == "fragment:pending_stitch")
                 {
-                    // Try to find the fragment method index from the ref
-                    var fragIdx = ParseFragmentIndex(unk.OriginalCode, passageName);
+                    var fragIdx = ParseFragmentIndex(unk.OriginalCode);
                     if (fragIdx.HasValue && frags.TryGetValue(fragIdx.Value, out var fragMethod))
                     {
-                        // Re-visit fragment body
-                        var fragVisitor = new PassageBodyVisitor(passageName, SpriteMapper.Empty(),
-                            new ExtractionReport());
+                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report);
                         var fragNodes = fragMethod.Body is not null
                             ? fragVisitor.VisitBlock(fragMethod.Body)
                             : [];
                         expand.ExpandNodes.Clear();
                         expand.ExpandNodes.AddRange(fragNodes);
+                        // Recurse into the stitched content — it may contain nested fragments
+                        StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report);
+                        // If the fragment ends with a goto, this is a navigation link with on-click effects
+                        if (expand.ExpandNodes.Count > 0 && expand.ExpandNodes[^1] is GotoNode termGoto)
+                        {
+                            nodes[i] = new LinkNode
+                            {
+                                Label = expand.Label,
+                                Target = termGoto.Target,
+                                StateAffecting = expand.StateAffecting,
+                                Nodes = expand.ExpandNodes.GetRange(0, expand.ExpandNodes.Count - 1),
+                                SourceLine = expand.SourceLine,
+                            };
+                        }
                     }
+                    else
+                    {
+                        report.AddWarning(passageName,
+                            $"Fragment not stitched: {unk.OriginalCode}",
+                            sourceLine: unk.SourceLine);
+                    }
+                }
+                else
+                {
+                    // Not a stub — still recurse in case there are nested ExpandLinkNodes
+                    StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report);
                 }
             }
             // Recurse into container nodes
             else if (nodes[i] is ConditionalNode cond)
             {
                 foreach (var branch in cond.Branches)
-                    StitchFragments(passageName, branch.Nodes, frags);
+                    StitchFragments(passageName, branch.Nodes, frags, spriteMapper, report);
             }
+            else if (nodes[i] is SwitchNode sw)
+            {
+                foreach (var c in sw.Cases)
+                    StitchFragments(passageName, c.Nodes, frags, spriteMapper, report);
+            }
+            else if (nodes[i] is ForeachNode fe)
+                StitchFragments(passageName, fe.Nodes, frags, spriteMapper, report);
             else if (nodes[i] is SectionBodyNode section)
-                StitchFragments(passageName, section.Nodes, frags);
+                StitchFragments(passageName, section.Nodes, frags, spriteMapper, report);
             else if (nodes[i] is SetupBlockNode setup)
-                StitchFragments(passageName, setup.Nodes, frags);
+                StitchFragments(passageName, setup.Nodes, frags, spriteMapper, report);
         }
     }
 
-    private static int? ParseFragmentIndex(string refCode, string passageName)
+    private static int? ParseFragmentIndex(string refCode)
     {
-        // this.passageN_Fragment_M — extract M
-        var pattern = $"this.passage\\d+_Fragment_(\\d+)";
-        var m = System.Text.RegularExpressions.Regex.Match(refCode, pattern);
+        // Supports both "this.passageN_Fragment_M" and "passageN_Fragment_M" (complete-file format)
+        var m = System.Text.RegularExpressions.Regex.Match(
+            refCode, @"(?:this\.)?passage\d+_Fragment_(\d+)");
         if (m.Success && int.TryParse(m.Groups[1].Value, out var fragIdx))
             return fragIdx;
         return null;
@@ -545,7 +658,76 @@ public partial class CradleExtractor
             }
         }
         FlushGroup();
-        return ConsolidateSwitches(ConsolidateBreaks(result));
+        return MergeInterstitialAssigns(ConsolidateSwitches(ConsolidateBreaks(result)));
+    }
+
+    // Scans for [TextNode+][PureAssignEffect+][TextNode+] runs and, when hoisting the assigns
+    // is safe (the pre-assign texts don't reference the assigned variables), emits the assigns
+    // first and merges all texts into one node. Runs after ConsolidateSwitches so conditional
+    // blocks have already been promoted above the text/assign sequence.
+    private static List<MwsNode> MergeInterstitialAssigns(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>(nodes.Count);
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (nodes[i] is not TextNode) { result.Add(nodes[i++]); continue; }
+
+            // Span of leading text nodes
+            int preEnd = i;
+            while (preEnd < nodes.Count && nodes[preEnd] is TextNode) preEnd++;
+
+            // Span of following pure assigns
+            int assignEnd = preEnd;
+            while (assignEnd < nodes.Count && IsPureAssignEffect(nodes[assignEnd])) assignEnd++;
+
+            // Only merge when assigns are followed by at least one more text node
+            if (assignEnd == preEnd || assignEnd >= nodes.Count || nodes[assignEnd] is not TextNode)
+            {
+                for (int k = i; k < preEnd; k++) result.Add(nodes[k]);
+                i = preEnd;
+                continue;
+            }
+
+            // Safety check: none of the pre-assign texts may reference the assigned variables
+            var assigns = nodes[preEnd..assignEnd].Cast<EffectNode>().ToList();
+            var assignedVars = assigns.SelectMany(a => a.VarSets!.Keys).ToHashSet(StringComparer.Ordinal);
+            var preTexts = nodes[i..preEnd].Cast<TextNode>().ToList();
+
+            if (preTexts.Any(t => TextNodeReferencesAny(t, assignedVars)))
+            {
+                for (int k = i; k < preEnd; k++) result.Add(nodes[k]);
+                i = preEnd;
+                continue;
+            }
+
+            // Gather post-text run
+            int postEnd = assignEnd;
+            while (postEnd < nodes.Count && nodes[postEnd] is TextNode) postEnd++;
+
+            // Emit: assigns, then merged text (pre + post)
+            result.AddRange(assigns);
+            var allRuns = new List<TextRun>();
+            foreach (var t in preTexts.Concat(nodes[assignEnd..postEnd].Cast<TextNode>()))
+            {
+                if (t.Template is not null)
+                    allRuns.Add(new TextRun { Text = t.Template, Style = t.Style });
+                else
+                    allRuns.AddRange(t.Runs);
+            }
+            var dominantStyle = ComputeDominantStyle(allRuns);
+            var mergedTemplate = BuildTemplate(allRuns, dominantStyle);
+            // Collapse adjacent identical markdown markers from seams between pre-built template strings
+            mergedTemplate = mergedTemplate.Replace("****", "").Replace("__", "");
+            result.Add(new TextNode
+            {
+                Template = mergedTemplate,
+                Style = dominantStyle,
+                SourceLine = preTexts.FirstOrDefault()?.SourceLine ?? assigns.FirstOrDefault()?.SourceLine,
+            });
+            i = postEnd;
+        }
+        return result;
     }
 
     // When every branch of a ConditionalNode contains exactly [LetNode(Random), TextNode({var})],
@@ -618,6 +800,27 @@ public partial class CradleExtractor
         return IsRndOnlyEffect(node) || IsPromotableConditional(node);
     }
 
+    private static bool IsPureAssignEffect(MwsNode node) =>
+        node is EffectNode e
+        && e.VarSets is { Count: > 0 }
+        && e.VarMath is null or { Count: 0 }
+        && e.VarRandom is null or { Count: 0 }
+        && e.VarPush is null or { Count: 0 }
+        && e.VarPop is null
+        && e.VarSort is null or { Count: 0 }
+        && e.VarRemove is null or { Count: 0 };
+
+    private static bool TextNodeReferencesAny(TextNode t, IEnumerable<string> varNames)
+    {
+        foreach (var varName in varNames)
+        {
+            var token = $"{{{varName}}}";
+            if (t.Template?.Contains(token) == true) return true;
+            if (t.Runs is not null && t.Runs.Any(r => r.Text?.Contains(token) == true)) return true;
+        }
+        return false;
+    }
+
     private static bool IsRndOnlyEffect(MwsNode node)
     {
         if (node is not EffectNode e) return false;
@@ -652,6 +855,9 @@ public partial class CradleExtractor
                 break;
             case SetupBlockNode setup:
                 setup.Nodes = ConsolidateTextNodes(setup.Nodes);
+                break;
+            case LinkNode link when link.Nodes.Count > 0:
+                link.Nodes = ConsolidateTextNodes(link.Nodes);
                 break;
             case ExpandLinkNode expand:
                 expand.ExpandNodes = ConsolidateTextNodes(expand.ExpandNodes);
@@ -864,6 +1070,9 @@ public partial class CradleExtractor
                 case SetupBlockNode setup:
                     NormalizeAllVarRandoms(setup.Nodes);
                     break;
+                case LinkNode link when link.Nodes.Count > 0:
+                    NormalizeAllVarRandoms(link.Nodes);
+                    break;
                 case ExpandLinkNode expand:
                     NormalizeAllVarRandoms(expand.ExpandNodes);
                     break;
@@ -945,8 +1154,16 @@ public partial class CradleExtractor
 
     public Dictionary<string, VarDef> GetDiscoveredVariables() => _variables;
 
-    // Cradle scripts are partial class members with no class or namespace declaration.
-    // Wrap them so Roslyn can parse method declarations correctly.
+    // Returns the source ready for Roslyn and whether it was already a complete file.
+    // Complete files (Cradle 2.0.2.0+) include class declaration and VarDefs — parse as-is.
+    // Older partial files (method bodies only) are wrapped in a synthetic class declaration.
+    private static (string source, bool isComplete) PrepareSource(string content)
+    {
+        if (content.Contains("public partial class @") || content.Contains("\npublic partial class "))
+            return (content, true);
+        return (WrapPartialClass(content), false);
+    }
+
     private static string WrapPartialClass(string content) =>
         "using System; using System.Collections.Generic;\n" +
         "public partial class CradleStory {\n" +

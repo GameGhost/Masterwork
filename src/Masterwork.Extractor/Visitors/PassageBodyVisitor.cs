@@ -182,8 +182,7 @@ public class PassageBodyVisitor
                 _styleStack.Push(scopeName);
                 var inner = VisitStatements(block.Statements);
                 _styleStack.Pop();
-                var text = CollectText(inner);
-                return [new SectionHeadingNode { Text = text }];
+                return [new SectionHeadingNode { Text = BuildHeadingTemplate(inner) }];
             }
 
             case "hubDetails":
@@ -468,7 +467,14 @@ public class PassageBodyVisitor
     private MwsNode ProcessLink(InvocationExpressionSyntax inv)
     {
         var args = inv.ArgumentList.Arguments;
-        var label = args.Count > 0 ? GetStringValue(args[0].Expression) ?? "" : "";
+        string label = "";
+        if (args.Count > 0)
+        {
+            var labelExpr = args[0].Expression;
+            label = GetStringValue(labelExpr) ?? "";
+            if (string.IsNullOrEmpty(label) && IsVarAccess(labelExpr, out var labelVar) && labelVar is not null)
+                label = $"{{{labelVar}}}";
+        }
         var target = args.Count > 1 ? GetStringValue(args[1].Expression) : null;
         var hasCallback = args.Count > 2 && !IsNullLiteral(args[2].Expression);
 
@@ -630,6 +636,28 @@ public class PassageBodyVisitor
         if (expr is InvocationExpressionSyntax eogInv && TryBuildEogNode(eogInv, out var eogNode))
             return [eogNode!];
 
+        // ViewEndOfGeneration.S_OnEndOfGeneration?.Invoke(msg, N) — null-conditional form in complete-class files
+        if (expr is ConditionalAccessExpressionSyntax condEog &&
+            condEog.Expression.ToString().Contains("S_OnEndOfGeneration") &&
+            condEog.WhenNotNull is InvocationExpressionSyntax condEogInv)
+        {
+            var condArgs = condEogInv.ArgumentList.Arguments;
+            string? condMsg = null;
+            if (condArgs.Count > 0)
+            {
+                var msgExpr = condArgs[0].Expression;
+                if (msgExpr is LiteralExpressionSyntax condLit && condLit.IsKind(SyntaxKind.StringLiteralExpression))
+                    condMsg = condLit.Token.ValueText;
+                else if (msgExpr is IdentifierNameSyntax condId &&
+                         _localVars.TryGetValue(condId.Identifier.Text, out var storedMsg))
+                    condMsg = storedMsg;
+            }
+            int condGen = 0;
+            if (condArgs.Count > 1 && condArgs[1].Expression is LiteralExpressionSyntax condGenLit)
+                int.TryParse(condGenLit.Token.ValueText, out condGen);
+            return [new EndOfGenerationNode { Generation = condGen, Message = condMsg }];
+        }
+
         // ViewEndOfRound.instance.SetEndOfRound(body, round, nextPassage, instruction)
         if (expr is InvocationExpressionSyntax setEorInv &&
             setEorInv.Expression is MemberAccessExpressionSyntax setEorMa &&
@@ -688,7 +716,7 @@ public class PassageBodyVisitor
         // Unknown expression statement
         var code = es.ToString().Trim();
         _report.AddUnhandled(_passageName, code, GetLine(es));
-        return [new UnknownNode { OriginalCode = Truncate(code) }];
+        return [new UnknownNode { OriginalCode = Truncate(code), SourceLine = GetLine(es) }];
     }
 
     private static bool IsComparisonExpression(BinaryExpressionSyntax expr) =>
@@ -1054,7 +1082,7 @@ public class PassageBodyVisitor
 
         // Pattern B: main condition contains ispopup → if-body has OnGenerationBtn, else stores value
         // The OnGenerationBtn may be nested inside an inner conditional (e.g. players == 2 selects prompt text)
-        if (condStr.Contains("this.ispopup"))
+        if (condStr.Contains("ispopup"))
         {
             var ifStmts = ifs.Statement is BlockSyntax bb ? bb.Statements.AsEnumerable() : [ifs.Statement];
             var genBtn = FindFirstOnGenerationBtn(ifStmts);
@@ -1164,9 +1192,9 @@ public class PassageBodyVisitor
     {
         node = null;
 
-        // Setup if must contain this.ispopup in the condition and have no else branch
+        // Setup if must contain ispopup in the condition and have no else branch
         var setupCond = setupIf.Condition.ToString();
-        if (!setupCond.Contains("this.ispopup")) return false;
+        if (!setupCond.Contains("ispopup")) return false;
         if (setupIf.Else is not null) return false;
 
         var setupBody = setupIf.Statement is BlockSyntax sb ? sb.Statements.AsEnumerable() : [setupIf.Statement];
@@ -1357,15 +1385,23 @@ public class PassageBodyVisitor
     private static bool IsVarAccess(ExpressionSyntax expr, out string? varName)
     {
         varName = null;
-        // this.Vars.X
-        if (expr is MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax innerMember } outer)
+        if (expr is not MemberAccessExpressionSyntax outer) return false;
+
+        // this.Vars.X  (old partial-class files)
+        if (outer.Expression is MemberAccessExpressionSyntax innerMember &&
+            innerMember.Name.Identifier.Text == "Vars")
         {
-            if (innerMember.Name.Identifier.Text == "Vars")
-            {
-                varName = outer.Name.Identifier.Text;
-                return true;
-            }
+            varName = outer.Name.Identifier.Text;
+            return true;
         }
+
+        // Vars.X  (complete-class files — no explicit "this." prefix)
+        if (outer.Expression is IdentifierNameSyntax id && id.Identifier.Text == "Vars")
+        {
+            varName = outer.Name.Identifier.Text;
+            return true;
+        }
+
         return false;
     }
 
@@ -1565,6 +1601,8 @@ public class PassageBodyVisitor
             }
             else if (arg.Expression is LiteralExpressionSyntax lit3)
                 result.Add(LiteralValue(lit3));
+            else if (IsVarAccess(arg.Expression, out var vn2))
+                result.Add($"{{{vn2}}}");
         }
         return result;
     }
@@ -1676,21 +1714,20 @@ public class PassageBodyVisitor
 
     private static bool IsIgnorableAssignment(ExpressionStatementSyntax es)
     {
-        // this.ispasscode = ..., this.ispopup = ..., this.iscreationA = ... — Cradle double-trigger guards
-        if (es.Expression is AssignmentExpressionSyntax assign &&
-            assign.Left is MemberAccessExpressionSyntax m &&
-            m.Expression.ToString() == "this")
-        {
-            var field = m.Name.Identifier.Text;
-            return field is "ispasscode" or "ispopup" or "iscreationA";
-        }
+        if (es.Expression is not AssignmentExpressionSyntax assign) return false;
+        // this.ispasscode = ..., this.ispopup = ... — Cradle double-trigger guards (old files: explicit this.)
+        if (assign.Left is MemberAccessExpressionSyntax m && m.Expression.ToString() == "this")
+            return m.Name.Identifier.Text is "ispasscode" or "ispopup" or "iscreationA";
+        // ispasscode = ..., ispopup = ... — same guards without "this." (complete-class files)
+        if (assign.Left is IdentifierNameSyntax id)
+            return id.Identifier.Text is "ispasscode" or "ispopup" or "iscreationA";
         return false;
     }
 
     private string SimplifyCondition(string cond)
     {
-        // Normalize "this.Vars.X" → "X"
-        cond = Regex.Replace(cond, @"this\.Vars\.(\w+)", m => m.Groups[1].Value);
+        // Normalize "this.Vars.X" and "Vars.X" → "X"
+        cond = Regex.Replace(cond, @"(?:this\.)?Vars\.(\w+)", m => m.Groups[1].Value);
         // Normalize "int.Parse(...)" → the inner expression
         cond = Regex.Replace(cond, @"int\.Parse\((\w+)\)", "$1");
         // Normalize compound falsy: "x == 0 || x == """ → "!x"
@@ -1717,15 +1754,27 @@ public class PassageBodyVisitor
         return cond.Trim();
     }
 
-    private static string CollectText(List<MwsNode> nodes)
+    // Builds a heading template string from visitor-emitted TextNodes, preserving
+    // icon references ({icon:slug}) and bold/italic markers (**text** / _text_).
+    private static string BuildHeadingTemplate(List<MwsNode> nodes)
     {
-        var parts = new List<string>();
+        var sb = new System.Text.StringBuilder();
         foreach (var n in nodes)
         {
-            if (n is TextNode tn)
-                parts.AddRange(tn.Runs.Select(r => r.Text ?? ""));
+            if (n is not TextNode tn) continue;
+            foreach (var run in tn.Runs)
+            {
+                if (run.AssetRef is not null)
+                    sb.Append($"{{icon:{run.AssetRef.Replace("icon://", "")}}}");
+                else if (!string.IsNullOrEmpty(run.Text))
+                {
+                    if (run.Style == "bold") sb.Append($"**{run.Text}**");
+                    else if (run.Style == "italic") sb.Append($"_{run.Text}_");
+                    else sb.Append(run.Text);
+                }
+            }
         }
-        return string.Join("", parts).Trim();
+        return sb.ToString().Trim();
     }
 
     private UnknownNode Unknown(SyntaxNode node)
@@ -1921,24 +1970,44 @@ public class PassageBodyVisitor
         if (init is not InvocationExpressionSyntax countInv) return false;
         if (GetSimpleMethodName(countInv) != "Count") return false;
 
-        var receiver = (countInv.Expression as MemberAccessExpressionSyntax)?.Expression;
-        if (receiver is not ParenthesizedExpressionSyntax paren) return false;
-        if (paren.Expression is not QueryExpressionSyntax query) return false;
+        var countReceiver = (countInv.Expression as MemberAccessExpressionSyntax)?.Expression;
 
-        // "from value in <arrayVar>"
-        if (query.FromClause.Expression is not IdentifierNameSyntax fromId) return false;
-        var arrayVarName = fromId.Identifier.Text;
+        // Query syntax: (from value in <arr> where value == <arr>.Max() select value).Count()
+        if (countReceiver is ParenthesizedExpressionSyntax paren &&
+            paren.Expression is QueryExpressionSyntax query)
+        {
+            if (query.FromClause.Expression is not IdentifierNameSyntax fromId) return false;
+            var arrayVarName = fromId.Identifier.Text;
+            var whereClause = query.Body.Clauses.OfType<WhereClauseSyntax>().FirstOrDefault();
+            if (whereClause?.Condition is not BinaryExpressionSyntax whereBin) return false;
+            if (!whereBin.IsKind(SyntaxKind.EqualsExpression)) return false;
+            if (!whereBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal)) return false;
+            var maxVarName = $"max_{arrayVarName}";
+            emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
+            _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
+            return true;
+        }
 
-        // "where value == <arrayVar>.Max()"
-        var whereClause = query.Body.Clauses.OfType<WhereClauseSyntax>().FirstOrDefault();
-        if (whereClause?.Condition is not BinaryExpressionSyntax whereBin) return false;
-        if (!whereBin.IsKind(SyntaxKind.EqualsExpression)) return false;
-        if (!whereBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal)) return false;
+        // Method syntax: <arr>.Where(x => x == <arr>.Max()).Count()
+        if (countReceiver is InvocationExpressionSyntax whereInv &&
+            GetSimpleMethodName(whereInv) == "Where" &&
+            (whereInv.Expression as MemberAccessExpressionSyntax)?.Expression is IdentifierNameSyntax whereArrId)
+        {
+            var arrayVarName = whereArrId.Identifier.Text;
+            var lambdaArg = whereInv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
+            if (lambdaArg is SimpleLambdaExpressionSyntax lambda &&
+                lambda.Body is BinaryExpressionSyntax lambdaBin &&
+                lambdaBin.IsKind(SyntaxKind.EqualsExpression) &&
+                lambdaBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal))
+            {
+                var maxVarName = $"max_{arrayVarName}";
+                emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
+                _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
+                return true;
+            }
+        }
 
-        var maxVarName = $"max_{arrayVarName}";
-        emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
-        _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
-        return true;
+        return false;
     }
 
     // Detects s_OnEndOfGeneration(arg, N) or ViewEndOfGeneration.S_OnEndOfGeneration(arg, N).

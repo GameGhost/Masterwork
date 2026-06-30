@@ -100,19 +100,63 @@ partial class Program
 
         var restext = new RestextCollector();
 
+        // Build passage → relative YAML filename map for navigation target annotations
+        var passageFileMap = new Dictionary<string, string>(passages.Count, StringComparer.Ordinal);
+        foreach (var p in passages)
+        {
+            var pfx = p.PassageIndex.HasValue ? $"{p.PassageIndex.Value:D5}-" : "";
+            passageFileMap[p.PassageId] = $"./{pfx}{SanitizeFileName(p.PassageId)}.mws.yaml";
+        }
+
+        // Filter trailing and non-rendered-sandwiched breaks from all passages.
+        if (opts.Breaks != BreaksMode.Emit)
+            foreach (var p in passages)
+                p.Nodes = BreakFilter.Apply(p.Nodes, opts.Breaks);
+
+        // Phase 1: build all dicts and collect restext entries.
+        // Restext line numbers depend on the complete file content, so collect everything first.
+        var cachedPassages = new List<(MwsPassage Passage, Dictionary<string, object?> Dict, string FileName, string OutPath, string? RelSourcePath)>(passages.Count);
+        var fullOutputDir = Path.GetFullPath(opts.OutputDir);
         foreach (var passage in passages)
         {
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
             var fileName = $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml";
             report.PassageFiles[passage.PassageId] = fileName;
             var outPath = Path.Combine(opts.OutputDir, fileName);
-            var dict = passage.ToDict();
-            // Extract strings → restext://Key and collect for en-US.restext
+            var relSourcePath = passage.SourceFile is not null
+                ? Path.GetRelativePath(fullOutputDir, passage.SourceFile).Replace('\\', '/')
+                : null;
+            var ctx = new SerializationContext(
+                SourceRelativePath: relSourcePath,
+                PassageFileMap: passageFileMap
+            );
+            var dict = V2Serializer.ToDict(passage, ctx);
+            // Mutates dict in-place: replaces string values with restext://Key references
             restext.CollectPassage(passage.PassageId, fileName, dict);
-            var yaml = "---\n" + serializer.Serialize(dict);
-            yaml = InjectSourceComments(yaml, passage);
-            yaml = InjectRestextComments(yaml, restext.BuildCommentMap());
-            File.WriteAllText(outPath, yaml, Encoding.UTF8);
+            cachedPassages.Add((passage, dict, fileName, outPath, relSourcePath));
+        }
+
+        // Rename keys used in 2+ passages to Common_NNN and move them to a Common group.
+        var renameMap = restext.BuildRenameMap();
+        if (renameMap.Count > 0)
+        {
+            foreach (var (_, dict, _, _, _) in cachedPassages)
+                RestextCollector.ApplyRenamesInDict(dict, renameMap);
+            restext.ApplyRenames(renameMap);
+        }
+
+        // Build restext comment map and line number map before writing any YAML files.
+        var commentMap = restext.BuildCommentMap();
+        var keyLineMap = BuildRestextLineMap(restext);
+
+        // Phase 2: serialize and write YAML files using the now-complete restext index.
+        foreach (var (passage, dict, _, outPath, relSourcePath) in cachedPassages)
+        {
+            var yaml = ("---\n" + serializer.Serialize(dict)).Replace("\r\n", "\n").Replace("\r", "\n");
+            yaml = InjectSentinelComments(yaml);
+            yaml = InjectSourceComments(yaml, passage, relSourcePath);
+            yaml = InjectRestextComments(yaml, commentMap, keyLineMap);
+            File.WriteAllText(outPath, yaml.Replace("\n", "\r\n"), Encoding.UTF8);
         }
 
         // Apply hand-authored overrides before writing the report so override info is included
@@ -122,6 +166,7 @@ partial class Program
         report.PrintSummary();
 
         // Write restext locale file
+        restext.ReportDeduplicationStats(report);
         WriteRestextFile(restext, opts.OutputDir);
 
         // Write variables manifest
@@ -191,6 +236,15 @@ partial class Program
                     opts.SeedAnalysis = true; break;
                 case "--overrides" when i + 1 < args.Length:
                     opts.OverridesDir = args[++i]; break;
+                case "--extra-breaks" when i + 1 < args.Length:
+                    opts.Breaks = args[++i].ToLowerInvariant() switch
+                    {
+                        "omit" => BreaksMode.Omit,
+                        "emit" => BreaksMode.Emit,
+                        "emit-commented" => BreaksMode.EmitCommented,
+                        var v => throw new ArgumentException($"Unknown --breaks mode: {v}. Use omit, emit, or emit-commented."),
+                    };
+                    break;
                 default:
                     Console.Error.WriteLine($"Unknown option: {args[i]}");
                     return null;
@@ -276,44 +330,69 @@ partial class Program
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    // Injects YAML comments for passage and node source locations.
-    // Format: "# filename:line-number" before the --- marker and before each top-level node.
-    private static string InjectSourceComments(string yaml, MwsPassage passage)
+    // Injects a "# relpath:line" comment before the YAML document marker (--- line).
+    // All node-level comments are handled by InjectSentinelComments via V2Serializer sentinels.
+    private static string InjectSourceComments(string yaml, MwsPassage passage, string? relSourcePath)
     {
-        if (passage.SourceFile is null && passage.Nodes.All(n => n.SourceLine is null))
+        if (!passage.MainMethodSourceLine.HasValue || relSourcePath is null)
             return yaml;
 
-        var sourceFileName = passage.SourceFile is not null
-            ? Path.GetFileName(passage.SourceFile)
-            : null;
-
         var lines = yaml.Split('\n');
-        var result = new List<string>(lines.Length + passage.Nodes.Count + 2);
-
-        int nodeIndex = 0;
-        bool inNodes = false;
+        var result = new List<string>(lines.Length + 1);
         bool firstLine = true;
 
         foreach (var line in lines)
         {
-            // Prepend passage-level comment before the YAML document marker
-            if (firstLine && line == "---" && passage.MainMethodSourceLine.HasValue && sourceFileName is not null)
-                result.Add($"# {sourceFileName}:{passage.MainMethodSourceLine}");
+            if (firstLine && line == "---")
+                result.Add($"# {relSourcePath}:{passage.MainMethodSourceLine}");
             firstLine = false;
+            result.Add(line);
+        }
 
-            if (!inNodes && line.TrimEnd() == "nodes:")
+        return string.Join('\n', result);
+    }
+
+    // Converts _src sentinel list items and _link hint fields produced by V2Serializer
+    // into YAML comments, then removes the sentinel lines from the output.
+    //
+    // _src sentinel:  "  - _src: path:line"  →  "  # path:line"  (block comment, same indentation)
+    // _link hint:     "  _link: file"         →  appended as " # file" to the preceding line
+    [GeneratedRegex(@"^(\s*)- _src: (.+)$")]
+    private static partial Regex SrcSentinelRegex();
+
+    [GeneratedRegex(@"^\s+_link: (.+)$")]
+    private static partial Regex LinkHintRegex();
+
+    [GeneratedRegex(@"^(\s*)- _commented_break: (.+)$")]
+    private static partial Regex CommentedBreakRegex();
+
+    private static string InjectSentinelComments(string yaml)
+    {
+        var lines = yaml.Split('\n');
+        var result = new List<string>(lines.Length);
+
+        foreach (var line in lines)
+        {
+            var srcMatch = SrcSentinelRegex().Match(line);
+            if (srcMatch.Success)
             {
-                inNodes = true;
-                result.Add(line);
+                result.Add($"{srcMatch.Groups[1].Value}# {srcMatch.Groups[2].Value}");
                 continue;
             }
 
-            // Unindented list item = top-level node entry
-            if (inNodes && line.StartsWith("- ") && nodeIndex < passage.Nodes.Count)
+            var linkMatch = LinkHintRegex().Match(line);
+            if (linkMatch.Success)
             {
-                var node = passage.Nodes[nodeIndex++];
-                if (node.SourceLine.HasValue && sourceFileName is not null)
-                    result.Add($"# {sourceFileName}:{node.SourceLine}");
+                if (result.Count > 0)
+                    result[^1] += $" # {linkMatch.Groups[1].Value}";
+                continue;
+            }
+
+            var cbMatch = CommentedBreakRegex().Match(line);
+            if (cbMatch.Success)
+            {
+                result.Add($"{cbMatch.Groups[1].Value}# - type: {cbMatch.Groups[2].Value}");
+                continue;
             }
 
             result.Add(line);
@@ -322,20 +401,47 @@ partial class Program
         return string.Join('\n', result);
     }
 
-    // Appends " # "preview"" after each restext://Key in the YAML.
-    // Only touches lines that contain a restext:// reference.
+    // Inserts restext comments above each field that contains a restext://Key reference.
+    // Two comment lines are inserted before the field line:
+    //   # en-US.restext:lineNum   (link to the string definition)
+    //   # "preview text"          (truncated string preview)
+    // The field line itself is kept with the restext:// key but no inline comment.
     [GeneratedRegex(@"restext://(\S+)")]
     private static partial Regex RestextKeyRegex();
 
-    private static string InjectRestextComments(string yaml, IReadOnlyDictionary<string, string> commentMap)
+    private static string InjectRestextComments(
+        string yaml,
+        IReadOnlyDictionary<string, string> commentMap,
+        IReadOnlyDictionary<string, int>? keyLineMap = null)
     {
         if (commentMap.Count == 0) return yaml;
-        return RestextKeyRegex().Replace(yaml, m =>
+
+        var lines = yaml.Split('\n');
+        var result = new List<string>(lines.Length + commentMap.Count * 2);
+
+        foreach (var line in lines)
         {
+            var m = RestextKeyRegex().Match(line);
+            if (!m.Success || !commentMap.TryGetValue(m.Groups[1].Value, out var value))
+            {
+                result.Add(line);
+                continue;
+            }
+
             var key = m.Groups[1].Value;
-            if (!commentMap.TryGetValue(key, out var value)) return m.Value;
-            return $"{m.Value} {BuildRestextPreview(value)}";
-        });
+            var indent = new string(' ', line.Length - line.TrimStart().Length);
+
+            // String preview above the field
+            result.Add($"{indent}{BuildRestextPreview(value)}");
+
+            // Field line with restext file link inline
+            if (keyLineMap?.TryGetValue(key, out var restextLine) == true)
+                result.Add($"{line}  # en-US.restext:{restextLine}");
+            else
+                result.Add(line);
+        }
+
+        return string.Join('\n', result);
     }
 
     private static string BuildRestextPreview(string value)
@@ -345,7 +451,32 @@ partial class Program
         return escaped.Length <= 80 ? $"# \"{escaped}\"" : $"# \"{escaped[..77]}...\"";
     }
 
+    // Computes the 1-based line number of each restext key in the en-US.restext file
+    // by simulating the WriteRestextFile output without actually writing it.
+    private static Dictionary<string, int> BuildRestextLineMap(RestextCollector restext)
+    {
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        // WriteRestextFile emits 5 header AppendLine calls + 1 blank AppendLine = 6 lines
+        int line = 7;
+        foreach (var (_, entries) in restext.Passages)
+        {
+            if (entries.Count == 0) continue;
+            line++; // # section comment
+            foreach (var entry in entries)
+            {
+                map[entry.Key] = line;
+                if (entry.Value.Contains('\n'))
+                    line += 2 + entry.Value.Split('\n').Length; // key=""" + N content lines + """
+                else
+                    line++; // key=value
+            }
+            line++; // blank line after each group
+        }
+        return map;
+    }
+
     // Writes en-US.restext: one Key=Value per string, grouped by passage with a comment header.
+    // Common strings (shared across passages) appear first under "# (Common)".
     // Multi-line values use the """...""" block syntax.
     private static void WriteRestextFile(RestextCollector restext, string outputDir)
     {
@@ -361,7 +492,10 @@ partial class Program
         int totalStrings = 0;
         foreach (var (fileName, entries) in restext.Passages)
         {
-            sb.AppendLine($"# {fileName}");
+            if (entries.Count == 0) continue;
+            sb.AppendLine(fileName == "(Common)"
+                ? "# Common strings — shared by multiple passages"
+                : $"# {fileName}");
             foreach (var entry in entries)
             {
                 if (entry.Value.Contains('\n'))
@@ -397,7 +531,10 @@ partial class Program
         {
             switch (node)
             {
-                case LinkNode lk: ids.Add(lk.Target); break;
+                case LinkNode lk:
+                    ids.Add(lk.Target);
+                    if (lk.Nodes.Count > 0) CollectFromNodes(lk.Nodes, ids);
+                    break;
                 case GotoNode go: ids.Add(go.Target); break;
                 case IncludePassageNode inc: ids.Add(inc.Target); break;
                 case SetupNotificationNode sn when sn.NextPassage is not null:
@@ -443,6 +580,8 @@ partial class Program
               --seed-analysis         Emit seed dependency report
               --overrides <dir>       Directory of hand-authored override YAML files;
                                       each must match the generated filename and passage_id
+              --extra-breaks <mode>   How to emit trailing/non-rendered-sandwiched breaks:
+                                      omit (default), emit, emit-commented
             """);
     }
 }

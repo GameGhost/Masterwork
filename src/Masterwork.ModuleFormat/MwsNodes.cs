@@ -147,6 +147,8 @@ public class LinkNode : MwsNode
     public string Target { get; set; } = "";
     public bool StateAffecting { get; set; } = true;
     public string? TimelineLabel { get; set; }
+    // State effects that execute when the link is followed (from stitched enchantHook fragments)
+    public List<MwsNode> Nodes { get; set; } = [];
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -158,6 +160,7 @@ public class LinkNode : MwsNode
             ["state_affecting"] = StateAffecting,
         };
         if (TimelineLabel is not null) d["timeline_label"] = TimelineLabel;
+        if (Nodes.Count > 0) d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
 }
