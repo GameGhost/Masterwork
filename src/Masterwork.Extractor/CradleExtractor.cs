@@ -397,14 +397,14 @@ public partial class CradleExtractor
             var isCompleteFile = _completeFiles.Contains(mainMethod.SyntaxTree.FilePath);
             var mainMethodLine = isCompleteFile ? line0 + 1 : line0 - 1;
 
-            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report);
+            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report, _variables);
             var nodes = mainMethod.Body is not null
                 ? visitor.VisitBlock(mainMethod.Body)
                 : [];
 
             // Stitch fragment methods into expand_link nodes
             if (_fragmentMethods.TryGetValue(idx, out var frags))
-                StitchFragments(name, nodes, frags, _spriteMapper, _report);
+                StitchFragments(name, nodes, frags, _spriteMapper, _report, _variables);
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
@@ -443,7 +443,8 @@ public partial class CradleExtractor
         List<MwsNode> nodes,
         Dictionary<int, MethodDeclarationSyntax> frags,
         SpriteMapper spriteMapper,
-        ExtractionReport report)
+        ExtractionReport report,
+        IReadOnlyDictionary<string, VarDef>? variables = null)
     {
         // Walk the node tree and replace pending fragment stubs in ExpandLinkNodes
         for (int i = 0; i < nodes.Count; i++)
@@ -458,14 +459,14 @@ public partial class CradleExtractor
                     var fragIdx = ParseFragmentIndex(unk.OriginalCode);
                     if (fragIdx.HasValue && frags.TryGetValue(fragIdx.Value, out var fragMethod))
                     {
-                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report);
+                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report, variables);
                         var fragNodes = fragMethod.Body is not null
                             ? fragVisitor.VisitBlock(fragMethod.Body)
                             : [];
                         expand.ExpandNodes.Clear();
                         expand.ExpandNodes.AddRange(fragNodes);
                         // Recurse into the stitched content — it may contain nested fragments
-                        StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report);
+                        StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report, variables);
                         // If the fragment ends with a goto, this is a navigation link with on-click effects
                         if (expand.ExpandNodes.Count > 0 && expand.ExpandNodes[^1] is GotoNode termGoto)
                         {
@@ -489,26 +490,26 @@ public partial class CradleExtractor
                 else
                 {
                     // Not a stub — still recurse in case there are nested ExpandLinkNodes
-                    StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report);
+                    StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report, variables);
                 }
             }
             // Recurse into container nodes
             else if (nodes[i] is ConditionalNode cond)
             {
                 foreach (var branch in cond.Branches)
-                    StitchFragments(passageName, branch.Nodes, frags, spriteMapper, report);
+                    StitchFragments(passageName, branch.Nodes, frags, spriteMapper, report, variables);
             }
             else if (nodes[i] is SwitchNode sw)
             {
                 foreach (var c in sw.Cases)
-                    StitchFragments(passageName, c.Nodes, frags, spriteMapper, report);
+                    StitchFragments(passageName, c.Nodes, frags, spriteMapper, report, variables);
             }
             else if (nodes[i] is ForeachNode fe)
-                StitchFragments(passageName, fe.Nodes, frags, spriteMapper, report);
+                StitchFragments(passageName, fe.Nodes, frags, spriteMapper, report, variables);
             else if (nodes[i] is SectionBodyNode section)
-                StitchFragments(passageName, section.Nodes, frags, spriteMapper, report);
+                StitchFragments(passageName, section.Nodes, frags, spriteMapper, report, variables);
             else if (nodes[i] is SetupBlockNode setup)
-                StitchFragments(passageName, setup.Nodes, frags, spriteMapper, report);
+                StitchFragments(passageName, setup.Nodes, frags, spriteMapper, report, variables);
         }
     }
 

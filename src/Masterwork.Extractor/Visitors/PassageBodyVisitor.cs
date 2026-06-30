@@ -42,11 +42,16 @@ public class PassageBodyVisitor
     // Vars variables set to int arrays in this passage: varName → int values (for localIntList matching)
     private readonly Dictionary<string, List<int>> _passageIntArrayVars = new(StringComparer.Ordinal);
 
-    public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report)
+    // Known variable types — used to validate int.Parse() arithmetic stripping
+    private readonly IReadOnlyDictionary<string, VarDef>? _variables;
+
+    public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report,
+        IReadOnlyDictionary<string, VarDef>? variables = null)
     {
         _passageName = passageName;
         _spriteMapper = spriteMapper;
         _report = report;
+        _variables = variables;
     }
 
     public List<MwsNode> VisitBlock(BlockSyntax block) =>
@@ -869,6 +874,15 @@ public class PassageBodyVisitor
                 if (TryExtractVarAddChain(bin, sumVars) && sumVars.Count >= 3)
                     return new EffectNode { VarSets = new() { [varName!] = string.Join(" + ", sumVars.Select(v => $"{{{v}}}")) } };
             }
+
+            // General arithmetic with int.Parse() stripping.
+            // Handles compound expressions like: int.Parse(Vars.X) + (int.Parse(Vars.Y) * N)
+            // String-type variables inside int.Parse() become parseInt(varName) in the output.
+            {
+                var arithExpr = TryBuildArithExpr(bin);
+                if (arithExpr is not null)
+                    return new EffectNode { VarMath = new() { [varName!] = $"= {arithExpr}" } };
+            }
         }
 
         // macros1.either(values)
@@ -1605,6 +1619,56 @@ public class PassageBodyVisitor
                 result.Add($"{{{vn2}}}");
         }
         return result;
+    }
+
+    // Recursively builds a clean arithmetic expression string by stripping int.Parse() wrappers.
+    // Returns null if the expression contains patterns that can't be reduced (e.g. non-variable
+    // arguments, unknown constructs). For string-type variables inside int.Parse(), emits
+    // parseInt(varName) to preserve the explicit coercion in MWS expression syntax.
+    private string? TryBuildArithExpr(ExpressionSyntax expr)
+    {
+        // Strip outer parentheses
+        while (expr is ParenthesizedExpressionSyntax paren) expr = paren.Expression;
+
+        // int.Parse(Vars.X) — strip when X is int/unknown type; emit parseInt() when string type
+        if (expr is InvocationExpressionSyntax parseInv &&
+            (parseInv.Expression is IdentifierNameSyntax { Identifier.Text: "Parse" } ||
+             (parseInv.Expression is MemberAccessExpressionSyntax parseMa &&
+              parseMa.Name.Identifier.Text == "Parse")) &&
+            parseInv.ArgumentList.Arguments.Count == 1)
+        {
+            var inner = parseInv.ArgumentList.Arguments[0].Expression;
+            if (!IsVarAccess(inner, out var parsedVar) || parsedVar is null) return null;
+            // String-declared variable: keep the coercion using the MWS parseInt() function
+            if (_variables is not null &&
+                _variables.TryGetValue(parsedVar, out var parseDef) &&
+                parseDef.VarType == "string")
+                return $"parseInt({parsedVar})";
+            // Int or unknown type: int.Parse is redundant — discard it
+            return parsedVar;
+        }
+
+        // Bare Vars.X access
+        if (IsVarAccess(expr, out var bareVar) && bareVar is not null)
+            return bareVar;
+
+        // Numeric literal
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.NumericLiteralExpression))
+            return lit.Token.ValueText;
+
+        // Binary arithmetic: recurse into both sides
+        if (expr is BinaryExpressionSyntax bin)
+        {
+            var op = bin.OperatorToken.Text;
+            if (op is not ("+" or "-" or "*" or "/")) return null;
+            var left = TryBuildArithExpr(bin.Left);
+            if (left is null) return null;
+            var right = TryBuildArithExpr(bin.Right);
+            if (right is null) return null;
+            return $"{left} {op} {right}";
+        }
+
+        return null;
     }
 
     private static bool TryExtractVarAddChain(ExpressionSyntax expr, List<string> vars)

@@ -488,6 +488,8 @@ public static partial class V2Serializer
     private static string VarMathToExpr(string varName, string math)
     {
         if (math == "+0") return varName;
+        // Full expression form produced by TryBuildArithExpr (e.g. "= x + y * 2")
+        if (math.StartsWith("= ")) return math[2..];
         var op = math[0];
         var operand = math[1..];
         // Strip {Y} → Y for var operands

@@ -285,6 +285,7 @@ All string operations are **immutable**.
 | `rand_between(min, max, seed_key)` | Random integer in `[min, max]` inclusive |
 | `max(a, b, ...)` | Maximum of a variadic list of integers |
 | `min(a, b, ...)` | Minimum of a variadic list of integers |
+| `parseInt(str)` | Parse a string-typed variable as an integer for use in arithmetic |
 
 `seed_key` is a string literal that uniquely identifies a random call within the module. The engine uses it to derive a stable PRNG offset from the master seed.
 
