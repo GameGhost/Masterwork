@@ -268,9 +268,12 @@ public partial class CradleExtractor
 
     private static string PickBestType(IEnumerable<string> types)
     {
+        // When a variable is assigned conflicting types across passages the engine
+        // hoists int/bool to string at runtime (0 → "0", false → "0", true → "1"),
+        // so string is the safest declaration type for a conflict.
         var set = new HashSet<string>(types);
-        if (set.Contains("array")) return "array";
-        if (set.Contains("int")) return "int";
+        if (set.Count == 1) return set.First();
+        if (set.Contains("array") && !set.Contains("int") && !set.Contains("string")) return "array";
         return "string";
     }
 
