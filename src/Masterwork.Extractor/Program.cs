@@ -69,6 +69,17 @@ partial class Program
         };
         var extractor = new CradleExtractor(opts, spriteMapper, report);
 
+        // Record command-line settings for the extraction report.
+        if (opts.ModuleTitle is { Length: > 0 } mt) report.Settings["Module title"] = mt;
+        if (opts.ModuleId is { Length: > 0 } mid) report.Settings["Module ID"] = mid;
+        if (opts.SpriteMapPath is not null) report.Settings["Sprite map"] = Path.GetFileName(opts.SpriteMapPath);
+        if (opts.RestextExcludeTags.Count > 0)
+            report.Settings["Restext exclude tags"] = string.Join(", ", opts.RestextExcludeTags.Order());
+        if (opts.RestextExcludeIds.Count > 0)
+            report.Settings["Restext exclude IDs"] = string.Join(", ", opts.RestextExcludeIds.Order());
+        if (opts.OverridesDir is not null) report.Settings["Overrides dir"] = opts.OverridesDir;
+        if (opts.Breaks != BreaksMode.Omit) report.Settings["Extra breaks"] = opts.Breaks.ToString().ToLowerInvariant();
+
         Console.WriteLine("Extracting...");
         var passages = extractor.Extract(sourceFiles);
 
@@ -98,7 +109,7 @@ partial class Program
             .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults)
             .Build();
 
-        var restext = new RestextCollector();
+        var restext = new RestextCollector(passages.Select(p => p.PassageId));
 
         // Build passage → relative YAML filename map for navigation target annotations
         var passageFileMap = new Dictionary<string, string>(passages.Count, StringComparer.Ordinal);
@@ -113,6 +124,14 @@ partial class Program
             foreach (var p in passages)
                 p.Nodes = BreakFilter.Apply(p.Nodes, opts.Breaks);
 
+        // Build the set of passage IDs excluded from restext extraction.
+        var excludedFromRestext = new HashSet<string>(StringComparer.Ordinal);
+        if (opts.RestextExcludeTags.Count > 0 || opts.RestextExcludeIds.Count > 0)
+            foreach (var p in passages)
+                if (opts.RestextExcludeIds.Contains(p.PassageId) ||
+                    p.Tags.Any(t => opts.RestextExcludeTags.Contains(t)))
+                    excludedFromRestext.Add(p.PassageId);
+
         // Phase 1: build all dicts and collect restext entries.
         // Restext line numbers depend on the complete file content, so collect everything first.
         var cachedPassages = new List<(MwsPassage Passage, Dictionary<string, object?> Dict, string FileName, string OutPath, string? RelSourcePath)>(passages.Count);
@@ -122,6 +141,7 @@ partial class Program
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
             var fileName = $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml";
             report.PassageFiles[passage.PassageId] = fileName;
+            report.AddTaggedPassage(passage.PassageId, passage.Tags);
             var outPath = Path.Combine(opts.OutputDir, fileName);
             var relSourcePath = passage.SourceFile is not null
                 ? Path.GetRelativePath(fullOutputDir, passage.SourceFile).Replace('\\', '/')
@@ -131,10 +151,25 @@ partial class Program
                 PassageFileMap: passageFileMap
             );
             var dict = V2Serializer.ToDict(passage, ctx);
-            // Mutates dict in-place: replaces string values with restext://Key references
-            restext.CollectPassage(passage.PassageId, fileName, dict);
+            if (!excludedFromRestext.Contains(passage.PassageId))
+                // Mutates dict in-place: replaces string values with restext://Key references
+                restext.CollectPassage(passage.PassageId, fileName, dict);
+            else
+                report.AddRestextExclusion(passage.PassageId);
             cachedPassages.Add((passage, dict, fileName, outPath, relSourcePath));
         }
+
+        // Restore string literals for variables never used in display-text templates.
+        // Strings assigned to variables that only appear in logic (conditions, not {var} text) stay
+        // as raw literals; strings whose variable names appear in any {varName} template stay as restext refs.
+        restext.RestoreNonTemplateAssignments();
+
+        // Scan condition/match string literals across passages before renaming.
+        // This registers cross-passage usage so values that appear in conditions from
+        // multiple passages get promoted to Common_NNN keys along with text-field duplicates.
+        restext.ScanConditionLiterals(cachedPassages
+            .Where(p => !excludedFromRestext.Contains(p.Passage.PassageId))
+            .Select(p => (p.Passage.PassageId, p.Dict)));
 
         // Rename keys used in 2+ passages to Common_NNN and move them to a Common group.
         var renameMap = restext.BuildRenameMap();
@@ -145,7 +180,13 @@ partial class Program
             restext.ApplyRenames(renameMap);
         }
 
-        // Build restext comment map and line number map before writing any YAML files.
+        // Replace string literals in condition/match fields with restext://Key URIs when the
+        // literal exactly matches a restext value. Uses final (post-rename) Common keys.
+        restext.ApplyConditionLiteralReplacements(cachedPassages
+            .Where(p => !excludedFromRestext.Contains(p.Passage.PassageId))
+            .Select(p => p.Dict));
+
+        // Build restext comment map and line-number map before writing any YAML files.
         var commentMap = restext.BuildCommentMap();
         var keyLineMap = BuildRestextLineMap(restext);
 
@@ -236,6 +277,10 @@ partial class Program
                     opts.SeedAnalysis = true; break;
                 case "--overrides" when i + 1 < args.Length:
                     opts.OverridesDir = args[++i]; break;
+                case "--restext-exclude-tag" when i + 1 < args.Length:
+                    opts.RestextExcludeTags.Add(args[++i]); break;
+                case "--restext-exclude-id" when i + 1 < args.Length:
+                    opts.RestextExcludeIds.Add(args[++i]); break;
                 case "--extra-breaks" when i + 1 < args.Length:
                     opts.Breaks = args[++i].ToLowerInvariant() switch
                     {
@@ -401,54 +446,72 @@ partial class Program
         return string.Join('\n', result);
     }
 
-    // Inserts restext comments above each field that contains a restext://Key reference.
-    // Two comment lines are inserted before the field line:
-    //   # en-US.restext:lineNum   (link to the string definition)
-    //   # "preview text"          (truncated string preview)
-    // The field line itself is kept with the restext:// key but no inline comment.
-    [GeneratedRegex(@"restext://(\S+)")]
+    // Inserts restext comments above each YAML line that contains one or more restext://Key refs.
+    //
+    // Single reference on a line:
+    //   # en-US.restext:NNN | "preview"
+    //
+    // Multiple references on a line (one comment per reference, in order):
+    //   # en-US.restext:NNN | KEY | "preview"
+    //   # en-US.restext:NNN | KEY | "preview"
+    //
+    // Preview: ≤30 chars shown in full; >30 truncated to 25 + "...". Multi-line: [multiline].
+    // The field line itself is kept unchanged (no inline comment appended).
+    [GeneratedRegex(@"restext://([A-Za-z0-9_]+)")]
     private static partial Regex RestextKeyRegex();
 
     private static string InjectRestextComments(
         string yaml,
         IReadOnlyDictionary<string, string> commentMap,
-        IReadOnlyDictionary<string, int>? keyLineMap = null)
+        IReadOnlyDictionary<string, int> keyLineMap)
     {
         if (commentMap.Count == 0) return yaml;
 
         var lines = yaml.Split('\n');
-        var result = new List<string>(lines.Length + commentMap.Count * 2);
+        var result = new List<string>(lines.Length + commentMap.Count);
 
         foreach (var line in lines)
         {
-            var m = RestextKeyRegex().Match(line);
-            if (!m.Success || !commentMap.TryGetValue(m.Groups[1].Value, out var value))
+            var matches = RestextKeyRegex().Matches(line);
+            if (matches.Count == 0)
             {
                 result.Add(line);
                 continue;
             }
 
-            var key = m.Groups[1].Value;
             var indent = new string(' ', line.Length - line.TrimStart().Length);
 
-            // String preview above the field
-            result.Add($"{indent}{BuildRestextPreview(value)}");
-
-            // Field line with restext file link inline
-            if (keyLineMap?.TryGetValue(key, out var restextLine) == true)
-                result.Add($"{line}  # en-US.restext:{restextLine}");
+            if (matches.Count == 1)
+            {
+                var key = matches[0].Groups[1].Value;
+                if (commentMap.TryGetValue(key, out var value))
+                {
+                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"en-US.restext:{ln}" : key;
+                    result.Add($"{indent}# {link} | {FormatRestextPreview(value)}");
+                }
+            }
             else
-                result.Add(line);
+            {
+                foreach (Match m in matches)
+                {
+                    var key = m.Groups[1].Value;
+                    if (!commentMap.TryGetValue(key, out var value)) continue;
+                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"en-US.restext:{ln}" : key;
+                    result.Add($"{indent}# {link} | {key} | {FormatRestextPreview(value)}");
+                }
+            }
+
+            result.Add(line);
         }
 
         return string.Join('\n', result);
     }
 
-    private static string BuildRestextPreview(string value)
+    private static string FormatRestextPreview(string value)
     {
-        if (value.Contains('\n')) return "# [multiline]";
+        if (value.Contains('\n')) return "[multiline]";
         var escaped = value.Replace("\"", "\\\"");
-        return escaped.Length <= 80 ? $"# \"{escaped}\"" : $"# \"{escaped[..77]}...\"";
+        return escaped.Length <= 30 ? $"\"{escaped}\"" : $"\"{escaped[..25]}...\"";
     }
 
     // Computes the 1-based line number of each restext key in the en-US.restext file
@@ -580,6 +643,12 @@ partial class Program
               --seed-analysis         Emit seed dependency report
               --overrides <dir>       Directory of hand-authored override YAML files;
                                       each must match the generated filename and passage_id
+              --restext-exclude-tag <tag>
+                                      Exclude passages with this tag from restext extraction;
+                                      may be specified multiple times (e.g. --restext-exclude-tag notext)
+              --restext-exclude-id <id>
+                                      Exclude a specific passage ID from restext extraction;
+                                      may be specified multiple times
               --extra-breaks <mode>   How to emit trailing/non-rendered-sandwiched breaks:
                                       omit (default), emit, emit-commented
             """);

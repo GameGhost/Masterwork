@@ -153,6 +153,9 @@ public static partial class V2Serializer
             case TextNode text:
                 yield return TransformText(text);
                 break;
+            case ImageNode img:
+                yield return TransformImage(img);
+                break;
             case LetNode let:
                 foreach (var d in TransformLet(let, ctx))
                     yield return d;
@@ -165,7 +168,9 @@ public static partial class V2Serializer
                 yield return TransformNavigation(link, ctx);
                 break;
             case ExpandLinkNode expand:
-                yield return TransformPopup(expand, ctx);
+                yield return IsNavigationOnly(expand.ExpandNodes)
+                    ? BuildNavigationFromExpand(expand, ctx)
+                    : TransformPopup(expand, ctx);
                 break;
             case InputPromptNode input:
                 yield return TransformInputAction(input);
@@ -174,8 +179,15 @@ public static partial class V2Serializer
                 yield return TransformGoto(go, ctx);
                 break;
             case SetupBlockNode setup:
-                yield return TransformSection(null, setup.Nodes, "setup", setup.SourceLine, ctx);
+            {
+                // Standalone setupStyle in a main passage → auto-display popup (no label, no onclose).
+                // Inside an expand-link fragment, SetupBlockNode is handled by TransformPopup instead.
+                var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
+                var sNodes = TransformNodeList(setup.Nodes, ctx);
+                if (sNodes.Count > 0) pd["nodes"] = sNodes;
+                yield return pd;
                 break;
+            }
             case ConditionalNode cond:
                 yield return TransformConditional(cond, ctx);
                 break;
@@ -205,8 +217,7 @@ public static partial class V2Serializer
                 yield return TransformCheckpoint(cp);
                 break;
             case EndOfGenerationNode eog:
-                foreach (var d in TransformEndOfGeneration(eog))
-                    yield return d;
+                yield return TransformEndOfGeneration(eog);
                 break;
             case ModalNode modal:
                 foreach (var d in TransformModal(modal, ctx))
@@ -245,11 +256,21 @@ public static partial class V2Serializer
         else
         {
             d["value"] = "";
+            if (text.Align is not null) d["align"] = text.Align;
             return d;
         }
 
         d["value"] = value;
         if (text.Lets is { Count: > 0 }) d["lets"] = text.Lets;
+        if (text.Align is not null) d["align"] = text.Align;
+        return d;
+    }
+
+    private static Dictionary<string, object?> TransformImage(ImageNode img)
+    {
+        var d = new Dictionary<string, object?> { ["type"] = "image", ["asset_ref"] = img.AssetRef };
+        if (img.Size is not null) d["size"] = img.Size;
+        if (img.Align is not null) d["align"] = img.Align;
         return d;
     }
 
@@ -419,7 +440,13 @@ public static partial class V2Serializer
         if (effect.VarRandom is not null)
         {
             foreach (var (varName, vr) in effect.VarRandom)
-                yield return MakeAssign(varName, VarRandomToExpr(vr));
+            {
+                // shuffled_array with no literal values = reshuffle an existing variable in-place.
+                var expr = vr is { RandomType: "shuffled_array", Values.Count: 0 }
+                    ? $"{varName}.shuffled(\"{EscapeStr(vr.SeedKey ?? "?")}\")"
+                    : VarRandomToExpr(vr);
+                yield return MakeAssign(varName, expr);
+            }
         }
         if (effect.VarPush is not null)
         {
@@ -515,6 +542,58 @@ public static partial class V2Serializer
         return d;
     }
 
+    // ── Navigation-only expand-link conversion ─────────────────────────────
+
+    // Returns true when every node is a GotoNode or a ConditionalNode whose branches are also navigation-only.
+    // Used to convert an expand-link that only navigates into proper navigation node(s).
+    private static bool IsNavigationOnly(List<MwsNode> nodes) =>
+        nodes.Count > 0 && nodes.All(n => n switch
+        {
+            GotoNode => true,
+            ConditionalNode cond => cond.Branches.All(b => IsNavigationOnly(b.Nodes)),
+            _ => false,
+        });
+
+    // Converts a navigation-only expand-link to a navigation or conditional dict.
+    private static Dictionary<string, object?> BuildNavigationFromExpand(ExpandLinkNode expand, SerializationContext? ctx) =>
+        BuildNavDictFromNodes(expand.ExpandNodes, expand.Label, expand.StateAffecting, ctx);
+
+    private static Dictionary<string, object?> BuildNavDictFromNodes(
+        List<MwsNode> nodes, string label, bool stateAffecting, SerializationContext? ctx)
+    {
+        if (nodes is [GotoNode singleGoto])
+        {
+            var d = new Dictionary<string, object?>
+            {
+                ["type"] = "navigation",
+                ["label"] = label,
+                ["target"] = singleGoto.Target,
+                ["state_affecting"] = stateAffecting,
+            };
+            AddLinkHint(d, singleGoto.Target, ctx);
+            return d;
+        }
+        if (nodes is [ConditionalNode cond])
+        {
+            return new Dictionary<string, object?>
+            {
+                ["type"] = "conditional",
+                ["branches"] = cond.Branches.Select(b =>
+                {
+                    var bd = new Dictionary<string, object?>();
+                    if (b.Else == true) bd["else"] = true;
+                    else bd["condition"] = b.Condition;
+                    bd["nodes"] = b.Nodes
+                        .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
+                        .ToList();
+                    return bd;
+                }).ToList(),
+            };
+        }
+        // Fallback: shouldn't be reached given IsNavigationOnly precondition
+        return new Dictionary<string, object?> { ["type"] = "navigation", ["label"] = label, ["target"] = "", ["state_affecting"] = stateAffecting };
+    }
+
     // ── Popup ─────────────────────────────────────────────────────────────
 
     // Matches: ViewBiddingSystem.instance.OnShowBidding("PassageId", BiddingSystem.Voting/Bidding)
@@ -523,9 +602,13 @@ public static partial class V2Serializer
 
     private static Dictionary<string, object?> TransformPopup(ExpandLinkNode expand, SerializationContext? ctx = null)
     {
-        // Scan children for a ViewBiddingSystem.OnShowBidding call.
-        // If present: hoist chrome + onclose to the popup dict; remove the unknown node.
-        string? chrome = null, onclose = null;
+        // Scan children for layout markers:
+        //   • UnknownNode with BiddingCallPattern  → layout: voting/bidding + onclose
+        //   • EogSetupMarkerNode                  → layout: end_of_generation + property nodes
+        //   • SetupNotificationNode               → layout: setup + onclose (ViewItemObtain popup)
+        //   • SetupBlockNode                      → unwrap body nodes directly (no section wrapper)
+        string? layout = null, onclose = null;
+        EogSetupMarkerNode? eogMarker = null;
         var childNodes = new List<MwsNode>(expand.ExpandNodes.Count);
         foreach (var child in expand.ExpandNodes)
         {
@@ -535,25 +618,58 @@ public static partial class V2Serializer
                 if (m.Success)
                 {
                     onclose = m.Groups[1].Value;
-                    chrome = m.Groups[2].Value.ToLowerInvariant(); // "Voting" → "voting"
+                    layout = m.Groups[2].Value.ToLowerInvariant();
                     continue;
                 }
+            }
+            if (child is EogSetupMarkerNode eog)
+            {
+                eogMarker = eog;
+                layout = "end_of_generation";
+                if (eog.PassageName is not null)
+                    onclose = eog.PassageName;
+                continue;
+            }
+            // ViewItemObtain setup popup: the SetupNotificationNode carries the onclose passage name.
+            if (child is SetupNotificationNode sn)
+            {
+                layout = "setup";
+                if (sn.NextPassage is not null)
+                    onclose = sn.NextPassage;
+                continue;
+            }
+            // SetupBlockNode wraps the popup body — unwrap into childNodes directly.
+            if (child is SetupBlockNode sb)
+            {
+                childNodes.AddRange(sb.Nodes);
+                continue;
             }
             childNodes.Add(child);
         }
 
-        var d = new Dictionary<string, object?>
+        // Prepend EOG property-binding nodes before any other popup content.
+        if (eogMarker is not null)
         {
-            ["type"] = "popup",
-        };
-        if (chrome is not null) d["chrome"] = chrome;
+            var eogPropNodes = new List<MwsNode>();
+            if (eogMarker.Title is not null)
+                eogPropNodes.Add(new LetNode { Var = "title", Compute = $"\"{EscapeStr(eogMarker.Title)}\"" });
+            eogPropNodes.Add(new LetNode { Var = "completedRound", Compute = eogMarker.CompletedRound.ToString() });
+            if (eogMarker.BodyText is not null)
+                eogPropNodes.Add(new TextNode { Template = eogMarker.BodyText });
+            if (eogMarker.PassageNameNodes is not null)
+                eogPropNodes.AddRange(eogMarker.PassageNameNodes);
+            childNodes.InsertRange(0, eogPropNodes);
+        }
+
+        var d = new Dictionary<string, object?> { ["type"] = "popup" };
+        if (layout is not null) d["layout"] = layout;
         d["label"] = expand.Label;
-        d["state_affecting"] = expand.StateAffecting;
         if (onclose is not null)
         {
             d["onclose"] = onclose;
             AddLinkHint(d, onclose, ctx);
         }
+        d["state_affecting"] = expand.StateAffecting;
 
         var transformed = TransformNodeList(childNodes, ctx);
         if (transformed.Count > 0) d["nodes"] = transformed;
@@ -659,27 +775,22 @@ public static partial class V2Serializer
 
     // ── EndOfGeneration ───────────────────────────────────────────────────
 
-    private static IEnumerable<Dictionary<string, object?>> TransformEndOfGeneration(EndOfGenerationNode eog)
+    // Transforms a top-level S_OnEndOfGeneration call into a layout-driven popup.
+    // The popup has no label — the end_of_generation layout drives auto-display.
+    private static Dictionary<string, object?> TransformEndOfGeneration(EndOfGenerationNode eog)
     {
-        // Transform to section+checkpoint pattern
+        var nodes = new List<Dictionary<string, object?>>();
         if (eog.Message is not null)
+            nodes.Add(new() { ["type"] = "text", ["value"] = eog.Message });
+        nodes.Add(MakeLet("generation", eog.Generation.ToString()));
+
+        var d = new Dictionary<string, object?>
         {
-            yield return new()
-            {
-                ["type"] = "section",
-                ["style"] = "panel",
-                ["nodes"] = new List<Dictionary<string, object?>>
-                {
-                    new() { ["type"] = "text", ["value"] = eog.Message }
-                },
-            };
-        }
-        yield return new()
-        {
-            ["type"] = "checkpoint",
-            ["id"] = $"generation_{eog.Generation}_complete",
-            ["display_label"] = $"Generation {eog.Generation}",
+            ["type"] = "popup",
+            ["layout"] = "end_of_generation",
+            ["nodes"] = nodes,
         };
+        return d;
     }
 
     // ── Modal ─────────────────────────────────────────────────────────────

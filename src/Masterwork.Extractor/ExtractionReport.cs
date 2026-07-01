@@ -41,8 +41,27 @@ public class ExtractionReport
     // passage name → output filename (just the filename, report is in the same dir)
     public Dictionary<string, string> PassageFiles { get; } = new(StringComparer.Ordinal);
 
+    // Tags reported in the Structure Tags section, in display order.
+    public static readonly string[] StructureTags = ["Begins-Here", "INTRO", "HUB", "END"];
+
+    // passage name → subset of StructureTags present on that passage
+    private readonly Dictionary<string, string[]> _taggedPassages = new(StringComparer.Ordinal);
+
+    public void AddTaggedPassage(string passageId, string[] tags)
+    {
+        var relevant = tags.Where(t => StructureTags.Contains(t, StringComparer.Ordinal)).ToArray();
+        if (relevant.Length > 0)
+            _taggedPassages[passageId] = relevant;
+    }
+
     private List<string>? _isolatedPassages;
     public void AddIsolatedPassages(List<string> names) => _isolatedPassages = names;
+
+    // Command-line settings recorded for the report. Populated by the caller before Write().
+    public Dictionary<string, string> Settings { get; } = new(StringComparer.Ordinal);
+
+    private readonly List<string> _restextExclusions = [];
+    public void AddRestextExclusion(string passageId) => _restextExclusions.Add(passageId);
 
     private readonly List<(string PassageId, string FileName, int GeneratedUnknownCount)> _overrides = [];
     public void AddOverrideApplied(string passageId, string fileName)
@@ -106,6 +125,8 @@ public class ExtractionReport
         sb.AppendLine("|---|---|");
         sb.AppendLine($"| Passages extracted | **{PassagesExtracted}** |");
         sb.AppendLine($"| Variables discovered | **{VariablesDiscovered}** |");
+        if (_restextExclusions.Count > 0)
+            sb.AppendLine($"| Restext excluded | **{_restextExclusions.Count}** passages |");
         sb.AppendLine($"| Unknown nodes | **{unknownCount}** |");
         sb.AppendLine($"| Warnings | **{warnCount}** |");
         if (promptCount > 0)
@@ -118,7 +139,10 @@ public class ExtractionReport
             sb.AppendLine($"| Overrides applied | **{overrideCount}** |");
         sb.AppendLine();
 
+        WriteSettingsSection(sb);
+        WriteTaggedPassagesSection(sb);
         WriteOverridesSection(sb);
+        WriteRestextExclusionsSection(sb);
         WriteSection(sb, activeFlags, "unknown_node", "Unknown Nodes",
             "Unrecognized statements — emitted as `type: unknown` in the passage YAML. Each requires manual review.");
         WriteSection(sb, activeFlags, "warning", "Warnings",
@@ -131,6 +155,71 @@ public class ExtractionReport
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"Report written to: {outputPath}");
+    }
+
+    private void WriteSettingsSection(StringBuilder sb)
+    {
+        if (Settings.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("## Settings");
+        sb.AppendLine();
+        sb.AppendLine("| Option | Value |");
+        sb.AppendLine("|---|---|");
+        foreach (var (key, value) in Settings)
+            sb.AppendLine($"| {key} | `{value}` |");
+        sb.AppendLine();
+    }
+
+    private void WriteRestextExclusionsSection(StringBuilder sb)
+    {
+        if (_restextExclusions.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine($"## Restext Excluded Passages ({_restextExclusions.Count})");
+        sb.AppendLine();
+        sb.AppendLine("These passages were not scanned for string resources. Their text is emitted as raw strings in the YAML.");
+        sb.AppendLine();
+        foreach (var passageId in _restextExclusions)
+        {
+            if (PassageFiles.TryGetValue(passageId, out var file))
+                sb.AppendLine($"- [{file}]({file}) (`{passageId}`)");
+            else
+                sb.AppendLine($"- `{passageId}`");
+        }
+        sb.AppendLine();
+    }
+
+    private void WriteTaggedPassagesSection(StringBuilder sb)
+    {
+        if (_taggedPassages.Count == 0) return;
+
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("## Structure Tags");
+        sb.AppendLine();
+
+        foreach (var tag in StructureTags)
+        {
+            var passages = _taggedPassages
+                .Where(kv => kv.Value.Contains(tag, StringComparer.Ordinal))
+                .OrderBy(kv => PassageFiles.TryGetValue(kv.Key, out var f) ? f : kv.Key)
+                .ToList();
+            if (passages.Count == 0) continue;
+
+            sb.AppendLine($"### {tag}");
+            sb.AppendLine();
+            foreach (var (passageId, _) in passages)
+            {
+                if (PassageFiles.TryGetValue(passageId, out var file))
+                    sb.AppendLine($"- [{file}]({file}) (`{passageId}`)");
+                else
+                    sb.AppendLine($"- `{passageId}`");
+            }
+            sb.AppendLine();
+        }
     }
 
     private void WriteInputPromptsSection(StringBuilder sb)
@@ -311,6 +400,8 @@ public class ExtractionReport
     {
         Console.WriteLine($"  Passages: {PassagesExtracted}");
         Console.WriteLine($"  Variables: {VariablesDiscovered}");
+        if (_restextExclusions.Count > 0)
+            Console.WriteLine($"  Restext excluded: {_restextExclusions.Count} passages");
         if (UnknownNodeCount > 0)
             Console.WriteLine($"  Unknown nodes: {UnknownNodeCount} (see report for details)");
         var warnings = _flags.Count(f => f.Kind == "warning");

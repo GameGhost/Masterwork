@@ -162,7 +162,7 @@ Property access chains through array indexing: `{all_players[0].name}`.
 
 ### i18n String References
 
-`restext://Key` — resolved from the locale file loaded at module startup.
+`restext://Key` — a reference to a locale string stored in the module's `.restext` file. All `restext://` URIs are resolved at **module load time** by substring replacement on every string field in every node, applied after YAML parsing. Only the URI token itself is replaced; surrounding expression syntax is preserved.
 
 ```yaml
 - type: text
@@ -170,6 +170,43 @@ Property access chains through array indexing: `{all_players[0].name}`.
 ```
 
 The `# "..."` comment is an inline preview for human readers; the engine ignores it.
+
+`restext://` URIs can appear within expression strings. The URI token is replaced in-place; surrounding expression quotes are untouched:
+
+```yaml
+# After load-time substitution: warwinner == "Separatists"
+- condition: warwinner == "restext://Common_026"  # en-US.restext:33
+# After load-time substitution: Separatists
+- match: restext://Common_026                      # en-US.restext:33
+```
+
+#### Locale Resource File (`.restext`)
+
+Each module ships an `en-US.restext` file (and optionally other locale files) in the same directory as its passage files. Format:
+
+```restext
+# 00072-BattleTime.mws.yaml      — passage comment (informational)
+BattleTime_001=**Glory and Recognition**
+BattleTime_002=I alone deserved recognition for my glorious, bombastic...
+
+# Cross-passage common strings
+Common_026=Separatists
+Common_027=Unified Monarchists
+
+# Multi-line value — open with """ immediately after =, close with """ on its own line
+UniCharity_008="""
+Retrieve a **Charity Memorial** Estate Tile from the scenario box. {charity} III
+may build this in their next available plot.
+
+Return the Heart{icon:s1_hearttoken}token to the scenario box.
+"""
+```
+
+**Rules:**
+- One `Key=Value` entry per line; keys are alphanumeric with underscores (`[A-Za-z0-9_]+`)
+- Lines starting with `#` are comments; blank lines are ignored
+- Multi-line values: the `=` is followed immediately by `"""` and a newline; content continues until a line containing only `"""`; the trailing newline before the closing `"""` is discarded
+- Keys are case-sensitive; no spaces around `=`
 
 ---
 
@@ -186,6 +223,14 @@ Expressions appear in `let / expr`, `assign / expr`, and `conditional / branches
 | Boolean | Keywords | `true`, `false` |
 | Array | `[item, ...]` | `[1, 2, 3]`, `["a", "b"]` |
 | Record | `{ prop: value, ... }` | `{ name: nameA, hearts: 3, vp: 0 }` |
+
+String literals in condition expressions may be `restext://` URIs when the string matches a locale resource value. After load-time substitution the URI is replaced with the locale string before evaluation:
+
+```yaml
+# warwinner holds "Separatists" (assigned from a shuffled restext array)
+# load-time substitution: warwinner == "restext://Common_026" → warwinner == "Separatists"
+- condition: warwinner == "restext://Common_026"  # en-US.restext:33
+```
 
 ### Variable References
 
@@ -334,8 +379,11 @@ The `match:` field on a switch case uses value patterns and can also be:
 |---|---|---|
 | Integer | Exact equality | `match: 2` |
 | String | Exact equality | `match: Biology` |
+| `restext://Key` | String equality via locale key | `match: restext://Common_026` |
 | List | Any of these values | `match: [16, 19]` |
 | Pattern string | Comparison | `match: '>4'` |
+
+When `match:` holds a `restext://` URI, load-time substitution replaces the URI with the locale string before evaluation.
 
 ```yaml
 - type: switch
@@ -360,6 +408,7 @@ Displays human-readable content.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `value` | string | yes | Formatted text (see §3) |
+| `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified`. Omit to use the locale default (RTL-aware) |
 | `lets` | list of strings | no | Names of `let` vars consumed by this value, for editor grouping |
 
 ```yaml
@@ -373,6 +422,29 @@ Displays human-readable content.
   value: '{_rnd_BattleTime_1}'
   lets:
   - _rnd_BattleTime_1
+
+- type: text
+  value: restext://ATOW-Preparations_001
+  align: center
+```
+
+---
+
+### `image`
+
+Displays a standalone image asset with optional size and alignment. Produced when the source script wraps a lone `<sprite>` tag in a `<size=N>` tag — the extractor converts this pattern to an `image` node rather than an inline icon within a text node.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `asset_ref` | string | yes | Asset URI (e.g. `icon://scenariobox3d_war`) |
+| `size` | string | no | Size hint preserved as-is from the source `<size=N>` tag (units unspecified) |
+| `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified` |
+
+```yaml
+- type: image
+  asset_ref: icon://scenariobox3d_war
+  size: '200'
+  align: center
 ```
 
 ---
@@ -471,10 +543,12 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 |---|---|---|---|
 | `label` | string | yes | Link text (string formatting — see §3) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
-| `target` | string | yes | Destination `passage_id` |
+| `target` | string | yes | Destination `passage_id`, or `{varName}` for a runtime-computed target |
 | `state_affecting` | bool | yes | `true` creates a timeline snapshot |
 | `timeline_label` | string | no | Custom label for the timeline scrubber entry |
-| `nodes` | list | no | `let` and `assign` nodes evaluated before navigation |
+| `nodes` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation |
+
+**Execution order when `nodes` is present:** on click, the engine executes all nodes in the `nodes` list first, then evaluates `target`. This matters when `target` contains a variable reference (`{varName}`) and a `nodes` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
 
 ```yaml
 - type: navigation
@@ -482,30 +556,47 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
   target: BattleCompleteReturn
   state_affecting: true
 
-# With inline state change
+# With inline state change — target is a literal passage_id
 - type: navigation
   label: 2 Players
+  target: PlayerNameIntro
   state_affecting: true
   nodes:
   - type: assign
     var: players
     expr: '2'
-  target: PlayerNameIntro
+
+# With dynamic target — nodes may assign the target variable before navigation
+- type: navigation
+  label: '{nameA}'
+  target: '{feverheartnextPsg}'
+  state_affecting: true
+  nodes:
+  - type: assign
+    var: charity
+    expr: nameA
+  - type: conditional
+    branches:
+    - condition: feverheartnextPsg == "" || feverheartnextPsg == 0
+      nodes:
+      - type: assign
+        var: feverheartnextPsg
+        expr: '["S5Fate1", "S5Fate2"].shuffled("?")[0]'
 ```
 
 ---
 
 ### `popup`
 
-A player-clickable label that reveals a modal overlay. Content is evaluated when the passage renders; popup nodes cannot contain `assign` or navigation nodes.
+A modal overlay, either click-triggered (has `label`) or auto-displayed when the passage renders (no `label`, layout controls display). Popup nodes cannot contain `assign` or navigation nodes.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `label` | string | yes | Button/link text (string formatting — see §3) |
+| `label` | string | no | Button/link text that triggers the popup; omit for auto-display (layout-driven only) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
-| `chrome` | string | no | Named chrome definition (see §8) — overrides the popup's default visual treatment |
-| `nodes` | list | no | Content nodes for the popup body; omitted if the chrome fully owns the popup UI |
-| `onclose` | string | no | `passage_id` to navigate to when dismissed or when chrome-driven interaction completes |
+| `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
+| `nodes` | list | no | Content nodes for the popup body; for layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated at open time to bind layout properties |
+| `onclose` | string | no | `passage_id` to navigate to when dismissed or when layout-driven interaction completes |
 | `button` | string | no | Dismiss button label; defaults to `"Close"` (no `onclose`) or `"Next"` (with `onclose`) |
 
 Standard popup with body content:
@@ -519,13 +610,43 @@ Standard popup with body content:
   button: Begin
 ```
 
-Chrome-driven popup (body owned entirely by the chrome; no `nodes`):
+Layout-driven popup — body owned by the layout, no content nodes:
 ```yaml
 - type: popup
-  chrome: voting
+  layout: voting
   label: restext://S4Kill2_006  # "Click to start the vote..."
   state_affecting: false
   onclose: S4Kill3
+```
+
+Layout-driven popup with property bindings — nodes bind values to layout properties at open time:
+```yaml
+- type: popup
+  layout: end_of_generation
+  label: restext://Common_190  # "Click here at the end of the round..."
+  state_affecting: true
+  onclose: ATOWSabotageIntro1
+  nodes:
+  - type: let
+    var: title
+    expr: '"restext://Martial1_022"'
+  - type: let
+    var: completedRound
+    expr: -1
+  - type: text
+    value: restext://Common_069    # body instruction text
+```
+
+Auto-display layout popup — no `label`, shown immediately when the passage renders:
+```yaml
+- type: popup
+  layout: end_of_generation
+  nodes:
+  - type: text
+    value: restext://TowardsWar_002  # EOG instruction text
+  - type: let
+    var: generation
+    expr: 3
 ```
 
 ---
@@ -813,9 +934,9 @@ layout: generation_end
 
 Custom layout/chrome allows module and asset pack authors to style passage types, popups, inputs, and UI elements without changing passage content.
 
-### Popup Chrome Definitions
+### Popup Layout Definitions
 
-A `popup` node's optional `chrome` field names a chrome definition that takes over the popup's entire visual treatment — including its own animations, UI controls, and interaction model. The chrome definition is declared in the module manifest or in a shared asset pack that the module depends on.
+A `popup` node's optional `layout` field names a layout definition that takes over the popup's entire visual treatment — including its own animations, UI controls, and interaction model. The layout definition is declared in the module manifest or in a shared asset pack that the module depends on.
 
 ```yaml
 # In the module manifest or asset pack manifest
@@ -832,20 +953,25 @@ popups:
     mode: bidding
 ```
 
-Chrome-driven popups follow a different lifecycle from content popups:
+Layout-driven popups follow a different lifecycle from content popups:
 
-1. The chrome renders its own body — the passage `nodes` list is unused.
-2. The chrome controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
-3. On completion, the engine navigates to `onclose` (if set) as a state-affecting transition.
+1. The engine evaluates any `let`, `conditional`, and `switch` nodes in the popup's `nodes` list. The resulting variable values are bound to the layout's named properties before display.
+2. The layout renders its own body using those properties. Standard content nodes (`text`, `navigation`, etc.) are not displayed.
+3. The layout controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
+4. On completion, the engine navigates to `onclose` (if set) as a state-affecting transition. When `passageName` is a computed layout property (from a conditional `let: passageName`), the layout uses that value for navigation instead.
 
-**Built-in chrome for MFW modules** (`MFW_Common_Assets`):
+**Built-in popup layouts for MFW modules** (`MFW_Common_Assets`):
 
-| Chrome name | Description |
-|---|---|
-| `voting` | Countdown timer → simultaneous reveal of voting tokens; navigates `onclose` on "Bid Complete" |
-| `bidding` | Countdown timer → simultaneous reveal of bid amounts; navigates `onclose` on "Bid Complete" |
+| Layout name | Display trigger | Properties | Description |
+|---|---|---|---|
+| `voting` | Click (`label` required) | — | Countdown timer → simultaneous reveal of voting tokens; navigates `onclose` on "Bid Complete" |
+| `bidding` | Click (`label` required) | — | Countdown timer → simultaneous reveal of bid amounts; navigates `onclose` on "Bid Complete" |
+| `end_of_generation` | Auto or click | `title`, `completedRound`, `generation`, `passageName` | Full-screen End-of-Generation summary modal; updates progress bar if `completedRound ≥ 0`; navigates `onclose` or `passageName` on confirm |
+| `setup` | Click (`label` required) | `_SetupImage` | Item-obtain setup panel; displays a setup image and instruction text with an ACCEPT button |
 
-Both `voting` and `bidding` display a 3-count countdown (`1, 2, 3, Reveal`), then surface a "Reveal" button. The close/navigate action is hidden until players tap "Reveal". The distinction between modes is the animation and prompt text — the mechanics are identical.
+For `voting` and `bidding`: both display a 3-count countdown (`1, 2, 3, Reveal`), then surface a "Reveal" button. The close/navigate action is hidden until players tap "Reveal". The distinction between modes is the animation and prompt text — the mechanics are identical.
+
+For `end_of_generation`: displays the `title` string and the passage `text` node(s) as the instruction body. The `completedRound` value (≥ 0) updates the app progress bar; `-1` skips the update. The modal can be triggered automatically (no `label`, used for top-level `S_OnEndOfGeneration` calls) or by a click (with `label`, used for `S_OnSetSpecialSetup` in expand-link fragments). Navigation target is `onclose` when set as a literal, or the `passageName` property (bound by conditional nodes in `nodes`) when computed at runtime.
 
 ---
 

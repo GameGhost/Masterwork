@@ -78,6 +78,9 @@ public class TextNode : MwsNode
     // Runs path — kept for mixed asset+text nodes that need separate localization keys.
     public List<TextRun> Runs { get; set; } = [];
 
+    // Optional horizontal alignment from source <align=...> tag.
+    public string? Align { get; set; }
+
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
@@ -91,6 +94,26 @@ public class TextNode : MwsNode
         {
             d["runs"] = Runs.Select(r => r.ToDict()).ToList();
         }
+        if (Align is not null) d["align"] = Align;
+        return d;
+    }
+}
+
+public class ImageNode : MwsNode
+{
+    public override string Type => "image";
+
+    public string AssetRef { get; set; } = "";
+    // Size preserved as-is from the source <size=N> tag.
+    public string? Size { get; set; }
+    // Optional horizontal alignment from source <align=...> tag.
+    public string? Align { get; set; }
+
+    public override Dictionary<string, object?> ToDict()
+    {
+        var d = new Dictionary<string, object?> { ["type"] = Type, ["asset_ref"] = AssetRef };
+        if (Size is not null) d["size"] = Size;
+        if (Align is not null) d["align"] = Align;
         return d;
     }
 }

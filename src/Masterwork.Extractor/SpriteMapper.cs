@@ -120,6 +120,13 @@ public class SpriteMapper
     // Strip HTML-like layout tags from plain text (spaces preserved — caller uses IsNullOrWhiteSpace)
     public string StripLayoutTags(string raw) => HtmlTag.Replace(raw, "");
 
+    // Returns true when raw is entirely an HTML-like layout tag with no other content,
+    // and is not a sprite tag. Used to detect standalone per-call tokens like <align="center">.
+    public bool IsStandaloneLayoutTag(string raw) =>
+        HtmlTag.IsMatch(raw) &&
+        string.IsNullOrWhiteSpace(HtmlTag.Replace(raw, "")) &&
+        !SpriteTag.IsMatch(raw);
+
     private static string SlugifyName(string name) =>
         Regex.Replace(name.ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');
 }

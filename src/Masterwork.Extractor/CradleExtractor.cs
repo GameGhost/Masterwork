@@ -111,6 +111,9 @@ public partial class CradleExtractor
                 case SetupBlockNode setup:
                     AssignSeedKeysInNodes(setup.Nodes, passageId, ref counter);
                     break;
+                case LinkNode link when link.Nodes.Count > 0:
+                    AssignSeedKeysInNodes(link.Nodes, passageId, ref counter);
+                    break;
                 case ExpandLinkNode expand:
                     AssignSeedKeysInNodes(expand.ExpandNodes, passageId, ref counter);
                     break;
@@ -449,14 +452,16 @@ public partial class CradleExtractor
             var isCompleteFile = _completeFiles.Contains(mainMethod.SyntaxTree.FilePath);
             var mainMethodLine = isCompleteFile ? line0 + 1 : line0 - 1;
 
-            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report, _variables);
+            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report, _variables, isCompleteFile);
             var nodes = mainMethod.Body is not null
                 ? visitor.VisitBlock(mainMethod.Body)
                 : [];
 
-            // Stitch fragment methods into expand_link nodes
-            if (_fragmentMethods.TryGetValue(idx, out var frags))
-                StitchFragments(name, nodes, frags, _spriteMapper, _report, _variables);
+            // Stitch fragment methods into expand_link nodes.
+            // Pass the full _fragmentMethods table so cross-passage fragments can be resolved
+            // (e.g. passage35_Fragment_3 called from passage32 — Cradle counter artifact).
+            var localFrags = _fragmentMethods.TryGetValue(idx, out var lf) ? lf : [];
+            StitchFragments(name, nodes, localFrags, _fragmentMethods, _spriteMapper, _report, _variables);
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
@@ -493,7 +498,8 @@ public partial class CradleExtractor
     private static void StitchFragments(
         string passageName,
         List<MwsNode> nodes,
-        Dictionary<int, MethodDeclarationSyntax> frags,
+        Dictionary<int, MethodDeclarationSyntax> localFrags,
+        Dictionary<int, Dictionary<int, MethodDeclarationSyntax>> allFrags,
         SpriteMapper spriteMapper,
         ExtractionReport report,
         IReadOnlyDictionary<string, VarDef>? variables = null)
@@ -508,25 +514,58 @@ public partial class CradleExtractor
                     expand.ExpandNodes[0] is UnknownNode unk &&
                     unk.Note == "fragment:pending_stitch")
                 {
+                    // Look up the fragment method: local first, then cross-passage fallback.
+                    // Cross-passage refs occur when Cradle's global fragment counter produces
+                    // a method name like passage35_Fragment_3 called from passage32_Main.
                     var fragIdx = ParseFragmentIndex(unk.OriginalCode);
-                    if (fragIdx.HasValue && frags.TryGetValue(fragIdx.Value, out var fragMethod))
+                    MethodDeclarationSyntax? fragMethod = null;
+                    if (fragIdx.HasValue)
                     {
-                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report, variables);
+                        if (!localFrags.TryGetValue(fragIdx.Value, out fragMethod))
+                        {
+                            var crossPassageIdx = ParseFragmentPassageIndex(unk.OriginalCode);
+                            if (crossPassageIdx.HasValue &&
+                                allFrags.TryGetValue(crossPassageIdx.Value, out var crossFrags))
+                                crossFrags.TryGetValue(fragIdx.Value, out fragMethod);
+                        }
+                    }
+
+                    if (fragMethod is not null)
+                    {
+                        var fragIsComplete = fragMethod.SyntaxTree.GetRoot() is CompilationUnitSyntax cu2 &&
+                            cu2.Members.OfType<ClassDeclarationSyntax>().Any();
+                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report, variables, fragIsComplete);
                         var fragNodes = fragMethod.Body is not null
                             ? fragVisitor.VisitBlock(fragMethod.Body)
                             : [];
                         expand.ExpandNodes.Clear();
                         expand.ExpandNodes.AddRange(fragNodes);
                         // Recurse into the stitched content — it may contain nested fragments
-                        StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report, variables);
-                        // If the fragment ends with a goto, this is a navigation link with on-click effects
-                        if (expand.ExpandNodes.Count > 0 && expand.ExpandNodes[^1] is GotoNode termGoto)
+                        StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables);
+                        // Navigation terminals: GotoNode or CheckProgressNode at the end
+                        // → convert the expand-link to a plain navigation LinkNode.
+                        // CheckProgress always records state, so force state_affecting = true
+                        // regardless of the enchant command (None vs Replace).
+                        string? termTarget = null;
+                        bool termStateAffecting = expand.StateAffecting;
+                        if (expand.ExpandNodes.Count > 0)
+                        {
+                            if (expand.ExpandNodes[^1] is GotoNode termGoto)
+                                termTarget = termGoto.Target;
+                            else if (expand.ExpandNodes[^1] is CheckProgressNode cpTerm &&
+                                     !string.IsNullOrEmpty(cpTerm.TargetPassage))
+                            {
+                                termTarget = cpTerm.TargetPassage;
+                                termStateAffecting = true;
+                            }
+                        }
+                        if (termTarget is not null)
                         {
                             nodes[i] = new LinkNode
                             {
                                 Label = expand.Label,
-                                Target = termGoto.Target,
-                                StateAffecting = expand.StateAffecting,
+                                Target = termTarget,
+                                StateAffecting = termStateAffecting,
                                 Nodes = expand.ExpandNodes.GetRange(0, expand.ExpandNodes.Count - 1),
                                 SourceLine = expand.SourceLine,
                             };
@@ -542,26 +581,26 @@ public partial class CradleExtractor
                 else
                 {
                     // Not a stub — still recurse in case there are nested ExpandLinkNodes
-                    StitchFragments(passageName, expand.ExpandNodes, frags, spriteMapper, report, variables);
+                    StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables);
                 }
             }
             // Recurse into container nodes
             else if (nodes[i] is ConditionalNode cond)
             {
                 foreach (var branch in cond.Branches)
-                    StitchFragments(passageName, branch.Nodes, frags, spriteMapper, report, variables);
+                    StitchFragments(passageName, branch.Nodes, localFrags, allFrags, spriteMapper, report, variables);
             }
             else if (nodes[i] is SwitchNode sw)
             {
                 foreach (var c in sw.Cases)
-                    StitchFragments(passageName, c.Nodes, frags, spriteMapper, report, variables);
+                    StitchFragments(passageName, c.Nodes, localFrags, allFrags, spriteMapper, report, variables);
             }
             else if (nodes[i] is ForeachNode fe)
-                StitchFragments(passageName, fe.Nodes, frags, spriteMapper, report, variables);
+                StitchFragments(passageName, fe.Nodes, localFrags, allFrags, spriteMapper, report, variables);
             else if (nodes[i] is SectionBodyNode section)
-                StitchFragments(passageName, section.Nodes, frags, spriteMapper, report, variables);
+                StitchFragments(passageName, section.Nodes, localFrags, allFrags, spriteMapper, report, variables);
             else if (nodes[i] is SetupBlockNode setup)
-                StitchFragments(passageName, setup.Nodes, frags, spriteMapper, report, variables);
+                StitchFragments(passageName, setup.Nodes, localFrags, allFrags, spriteMapper, report, variables);
         }
     }
 
@@ -575,6 +614,16 @@ public partial class CradleExtractor
         return null;
     }
 
+    // Extracts the passage index N from "passageN_Fragment_M" for cross-passage lookup.
+    private static int? ParseFragmentPassageIndex(string refCode)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(
+            refCode, @"(?:this\.)?passage(\d+)_Fragment_\d+");
+        if (m.Success && int.TryParse(m.Groups[1].Value, out var idx))
+            return idx;
+        return null;
+    }
+
     private static bool HasDevpageGuard(List<MwsNode> nodes)
     {
         foreach (var node in nodes)
@@ -583,7 +632,13 @@ public partial class CradleExtractor
             {
                 foreach (var branch in cond.Branches)
                 {
-                    if (branch.Condition?.Contains("devpage") == true) return true;
+                    var c = branch.Condition;
+                    if (c is null || !c.Contains("devpage")) continue;
+                    // "!devpage" (normalized from "devpage == 0 || devpage == """) is the
+                    // normal-user guard (show setup on first HUB visit) — not a debug gate.
+                    // Only flag as debug when devpage is checked truthy (e.g. != 0, == 1).
+                    if (c.Contains("!devpage") || c.Contains("devpage == 0") || c.Contains("devpage == \"\"")) continue;
+                    return true;
                 }
             }
         }
@@ -711,7 +766,7 @@ public partial class CradleExtractor
             }
         }
         FlushGroup();
-        return MergeInterstitialAssigns(ConsolidateSwitches(ConsolidateBreaks(result)));
+        return MergeInterstitialAssigns(HoistAndMergeSwitchLets(ConsolidateSwitches(ConsolidateBreaks(result))));
     }
 
     // Scans for [TextNode+][PureAssignEffect+][TextNode+] runs and, when hoisting the assigns
@@ -837,6 +892,128 @@ public partial class CradleExtractor
         return true;
     }
 
+    // When every case of a SwitchNode contains exactly [LetNode(Compute|Random), TextNode({var})]
+    // (or with bold/italic wrapping like **{var}**), the switch is hoistable: normalize all case
+    // let vars to the first case's canonical name, strip the TextNodes from cases (making the switch
+    // promotable), and merge the surrounding text nodes into one with the variable reference inlined.
+    // Runs after ConsolidateSwitches so switch nodes already exist.
+    private static List<MwsNode> HoistAndMergeSwitchLets(List<MwsNode> nodes)
+    {
+        if (!nodes.Any(n => n is SwitchNode sw && IsHoistableSwitchLets(sw)))
+            return nodes;
+
+        var result = new List<MwsNode>(nodes.Count + 1);
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (nodes[i] is not SwitchNode sw || !IsHoistableSwitchLets(sw))
+            {
+                result.Add(nodes[i++]);
+                continue;
+            }
+
+            // Determine canonical name and inline style from the first case.
+            var firstLet = sw.Cases[0].Nodes.OfType<LetNode>().First();
+            var firstTxt = sw.Cases[0].Nodes.OfType<TextNode>().First();
+            var canonical = firstLet.Var;
+            var inlineStyle = GetSingleVarInlineStyle(firstTxt, canonical);
+
+            // Normalize all cases: rename lets to canonical, strip text nodes.
+            foreach (var c in sw.Cases)
+            {
+                foreach (var let in c.Nodes.OfType<LetNode>())
+                    let.Var = canonical;
+                c.Nodes.RemoveAll(n => n is TextNode);
+            }
+
+            // Pop any preceding text nodes from result (they'll be absorbed into the merged text).
+            var preRuns = new List<TextRun>();
+            while (result.Count > 0 && result[^1] is TextNode preT)
+            {
+                result.RemoveAt(result.Count - 1);
+                if (preT.Template is not null)
+                    preRuns.Insert(0, new TextRun { Text = preT.Template, Style = preT.Style });
+                else
+                    preRuns.InsertRange(0, preT.Runs);
+            }
+
+            // Consume following text nodes.
+            i++;
+            var postRuns = new List<TextRun>();
+            while (i < nodes.Count && nodes[i] is TextNode postT)
+            {
+                i++;
+                if (postT.Template is not null)
+                    postRuns.Add(new TextRun { Text = postT.Template, Style = postT.Style });
+                else
+                    postRuns.AddRange(postT.Runs);
+            }
+
+            // Emit: hoisted switch (now all-LetNode cases), then merged text with {canonical} inlined.
+            result.Add(sw);
+            var allRuns = new List<TextRun>(preRuns)
+            {
+                new() { Text = $"{{{canonical}}}", Style = inlineStyle },
+            };
+            allRuns.AddRange(postRuns);
+            if (allRuns.Count > 0)
+            {
+                var dominant = ComputeDominantStyle(allRuns);
+                var template = BuildTemplate(allRuns, dominant);
+                template = template.Replace("****", "").Replace("__", "");
+                result.Add(new TextNode
+                {
+                    Template = template,
+                    Style = dominant,
+                    Lets = [canonical],
+                });
+            }
+        }
+        return result;
+    }
+
+    private static bool IsHoistableSwitchLets(SwitchNode sw)
+    {
+        if (sw.Cases.Count < 2) return false;
+        foreach (var c in sw.Cases)
+        {
+            if (c.Nodes.Count != 2) return false;
+            var let = c.Nodes.OfType<LetNode>().FirstOrDefault();
+            var txt = c.Nodes.OfType<TextNode>().FirstOrDefault();
+            if (let is null || (let.Compute is null && let.Random is null)) return false;
+            if (txt is null) return false;
+            if (!IsSingleVarTemplate(txt, let.Var)) return false;
+        }
+        return true;
+    }
+
+    // Returns true when the text node's content is exactly {varName}, **{varName}**, or _{varName}_.
+    private static bool IsSingleVarTemplate(TextNode txt, string varName)
+    {
+        var expected = $"{{{varName}}}";
+        if (txt.Template is not null)
+            return txt.Template == expected
+                || txt.Template == $"**{expected}**"
+                || txt.Template == $"_{expected}_";
+        if (txt.Runs is { Count: 1 })
+        {
+            var r = txt.Runs[0];
+            return r.AssetRef is null && (r.Text == expected
+                || r.Text == $"**{expected}**"
+                || r.Text == $"_{expected}_");
+        }
+        return false;
+    }
+
+    // Returns the inline style implied by the single-var template (bold, italic, or null).
+    private static string? GetSingleVarInlineStyle(TextNode txt, string varName)
+    {
+        var tmpl = txt.Template ?? txt.Runs?.FirstOrDefault()?.Text;
+        if (tmpl == $"**{{{varName}}}**") return "bold";
+        if (tmpl == $"_{{{varName}}}_") return "italic";
+        return null;
+    }
+
     // Pure-text TextNodes always start or extend a group.
     // Icon-only TextNodes only extend an existing group (never start one).
     // _rnd_*-only EffectNodes, direct LetNodes, and promotable ConditionalNodes only extend an existing group.
@@ -928,11 +1105,15 @@ public partial class CradleExtractor
         int i = 0;
         while (i < nodes.Count)
         {
-            if (nodes[i] is BreakNode)
+            if (nodes[i] is BreakNode firstBreak)
             {
-                int count = 0;
+                var sourceLine = firstBreak.SourceLine;
+                int count = 1;
+                i++;
                 while (i < nodes.Count && nodes[i] is BreakNode) { count++; i++; }
-                result.Add(count >= 2 ? new ParagraphBreakNode() : new BreakNode());
+                result.Add(count >= 2
+                    ? new ParagraphBreakNode { SourceLine = sourceLine }
+                    : new BreakNode { SourceLine = sourceLine });
             }
             else
             {
@@ -992,15 +1173,15 @@ public partial class CradleExtractor
         return result;
     }
 
-    // Converts a single ConditionalNode into a SwitchNode. Handles two forms:
-    //   • Compound OR:  "var == a || var == b" per branch → match: [a, b]
-    //   • Multi-branch comparison: 3+ branches using "var op val" (e.g. players > 4)
-    //     where simple if/else (2 branches) is left as a ConditionalNode.
+    // Converts a single ConditionalNode into a SwitchNode when all branch conditions use
+    // simple equality ("var == a" or compound "var == a || var == b") on the same variable.
+    // Only equality is accepted: comparison operators (>, <, >=, <=) are not safe to
+    // auto-convert because the engine's switch semantics may differ from if-else ordering.
+    // Single-condition branches (no ||) require 3+ total branches to avoid converting
+    // a plain if/else into a switch.
     private static SwitchNode? TryConvertCompoundConditionalToSwitch(ConditionalNode cond)
     {
         if (cond.Branches.Count < 2) return null;
-        // For single-condition branches (no ||), only convert when there are 3+ total branches
-        // to distinguish multi-case "switch" from a simple if/else.
         bool allowSimpleConditions = cond.Branches.Count >= 3;
         string? switchVar = null;
         var cases = new List<SwitchCase>();
@@ -1021,15 +1202,14 @@ public partial class CradleExtractor
             foreach (var part in parts)
             {
                 var m = SwitchCondRegex().Match(part);
-                // Compound OR branches require == only; simple comparison branches allow any op.
                 if (!m.Success) return null;
-                if (parts.Length > 1 && m.Groups[2].Value != "==") return null;
+                if (m.Groups[2].Value != "==") return null;
                 var varName = m.Groups[1].Value;
                 var rawVal = m.Groups[3].Value.Trim();
                 if (rawVal.Contains(' ')) return null;
                 switchVar ??= varName;
                 if (varName != switchVar) return null;
-                matchValues.Add(BuildMatchValue(m.Groups[2].Value, rawVal));
+                matchValues.Add(BuildMatchValue("==", rawVal));
             }
             var matchObj = matchValues.Count == 1 ? matchValues[0] : (object)matchValues;
             cases.Add(new SwitchCase { Match = matchObj, Nodes = branch.Nodes });
@@ -1040,8 +1220,9 @@ public partial class CradleExtractor
     }
 
     // Returns the switch variable name if the conditional has exactly one "if" branch
-    // (plus optional else) whose condition matches a simple "varName op value" pattern,
-    // with a simple (non-compound) value.
+    // (plus optional else) whose condition is a simple equality ("varName == value").
+    // Only equality is accepted: comparison operators (>, <, >=, <=) may not be mutually
+    // exclusive across consecutive if-blocks, so collapsing them to switch is unsafe.
     private static string? TryExtractSwitchVar(ConditionalNode cond)
     {
         if (cond.Branches.Count == 0 || cond.Branches.Count > 2) return null;
@@ -1051,6 +1232,7 @@ public partial class CradleExtractor
 
         var m = SwitchCondRegex().Match(first.Condition);
         if (!m.Success) return null;
+        if (m.Groups[2].Value != "==") return null;
 
         // Reject compound values like "2 || x == 3"
         var rawVal = m.Groups[3].Value.Trim();

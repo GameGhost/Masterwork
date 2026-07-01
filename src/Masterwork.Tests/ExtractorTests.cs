@@ -767,7 +767,7 @@ public class ExtractorTests
 
         var effect = passages[0].Nodes.OfType<EffectNode>().First();
         Assert.NotNull(effect.VarSets);
-        Assert.Equal("effect.first()", effect.VarSets!["tempeffect"]);
+        Assert.Equal("{effect[0]}", effect.VarSets!["tempeffect"]);
     }
 
     [Fact]

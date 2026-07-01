@@ -26,6 +26,14 @@ public class PassageBodyVisitor
     private int? _currentStatementLine;
     // Source line of the first text() call that started the current pending-runs buffer
     private int? _pendingTextStartLine;
+    // Pending alignment value from a surrounding <align=...> tag (cleared at FlushText)
+    private string? _pendingAlign;
+    // Pending size value from a surrounding <size=N> tag (cleared at FlushText)
+    private string? _pendingSize;
+    // Source line of the <size=...> open tag that set _pendingSize
+    private int? _pendingSizeLine;
+    // Layout tags encountered that will not be preserved (e.g. <line-height>), warned at FlushText
+    private List<(string Tag, int? Line)> _pendingUnpreservedTags = [];
     // Monotonically incrementing counter for unique inline-random variable names within a passage
     private int _varRandomSeq = 0;
     // Local string variables declared in this passage method (name → literal value)
@@ -39,19 +47,28 @@ public class PassageBodyVisitor
     private readonly Dictionary<string, string> _localComputedVars = new(StringComparer.Ordinal);
     // Local List<int> variables: name → the Vars array variable they mirror (or null if unknown)
     private readonly Dictionary<string, string?> _localIntLists = new(StringComparer.Ordinal);
+    // Local string variables whose values are computed via string-literal ternaries (passage names).
+    // Key = local var name, Value = ConditionalNode list with LetNode leaves (Var = local name).
+    // Consumed by BuildEogSetupMarker when the var is passed as passageName to S_OnSetSpecialSetup.
+    private readonly Dictionary<string, List<MwsNode>> _localPassageConditionals = new(StringComparer.Ordinal);
     // Vars variables set to int arrays in this passage: varName → int values (for localIntList matching)
     private readonly Dictionary<string, List<int>> _passageIntArrayVars = new(StringComparer.Ordinal);
 
     // Known variable types — used to validate int.Parse() arithmetic stripping
     private readonly IReadOnlyDictionary<string, VarDef>? _variables;
 
+    // Line-number offset applied in GetLine: +1 for complete files (0-indexed Roslyn → 1-indexed),
+    // -1 for partial/wrapped files (Roslyn sees 2 prepended wrapper lines, net offset is -1).
+    private readonly int _lineOffset;
+
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report,
-        IReadOnlyDictionary<string, VarDef>? variables = null)
+        IReadOnlyDictionary<string, VarDef>? variables = null, bool isCompleteFile = false)
     {
         _passageName = passageName;
         _spriteMapper = spriteMapper;
         _report = report;
         _variables = variables;
+        _lineOffset = isCompleteFile ? 1 : -1;
     }
 
     public List<MwsNode> VisitBlock(BlockSyntax block) =>
@@ -86,12 +103,19 @@ public class PassageBodyVisitor
             // using (base.styleScope(...)) { ... }
             if (stmt is UsingStatementSyntax us && IsStyleScopeUsing(us, out var scopeName, out var hookId))
             {
-                var inner = us.Statement is BlockSyntax blk
-                    ? VisitStyleScopeBlock(scopeName!, hookId, blk)
-                    : VisitStyleScopeBlock(scopeName!, hookId,
-                        SyntaxFactory.Block(us.Statement));
-
-                TagNodes(inner, _currentStatementLine);
+                // When the using body is a single statement (no braces), Roslyn red-node positions
+                // are invalidated when that statement is placed into any synthetic collection.
+                // Capture the inner line directly from the node before collection wrapping.
+                var innerLine = us.Statement is BlockSyntax blk2 && blk2.Statements.Count > 0
+                    ? GetLine(blk2.Statements[0])
+                    : GetLine(us.Statement);
+                IEnumerable<StatementSyntax> scopeStmts = us.Statement is BlockSyntax blk
+                    ? blk.Statements
+                    : SyntaxFactory.SingletonList(us.Statement);
+                var savedLine = _currentStatementLine;
+                var inner = VisitStyleScopeBlock(scopeName!, hookId, scopeStmts);
+                _currentStatementLine = savedLine;
+                TagNodes(inner, innerLine ?? _currentStatementLine);
                 result.AddRange(FlushAndAdd(inner));
                 continue;
             }
@@ -120,8 +144,9 @@ public class PassageBodyVisitor
                 }
 
                 result.AddRange(FlushText());
+                var condLine = _currentStatementLine; // capture before BuildConditional mutates _currentStatementLine
                 var cond = BuildConditional(ifs);
-                cond.SourceLine = _currentStatementLine;
+                cond.SourceLine = condLine;
                 result.Add(cond);
                 continue;
             }
@@ -170,14 +195,14 @@ public class PassageBodyVisitor
 
     // ── Style scope handling ───────────────────────────────────────────────
 
-    private List<MwsNode> VisitStyleScopeBlock(string scopeName, string? hookId, BlockSyntax block)
+    private List<MwsNode> VisitStyleScopeBlock(string scopeName, string? hookId, IEnumerable<StatementSyntax> statements)
     {
         switch (scopeName)
         {
             case "bold":
             case "italic":
                 _styleStack.Push(scopeName);
-                var styled = VisitStatements(block.Statements);
+                var styled = VisitStatements(statements);
                 _styleStack.Pop();
                 return styled;
 
@@ -185,32 +210,32 @@ public class PassageBodyVisitor
             case "heading":
             {
                 _styleStack.Push(scopeName);
-                var inner = VisitStatements(block.Statements);
+                var inner = VisitStatements(statements);
                 _styleStack.Pop();
                 return [new SectionHeadingNode { Text = BuildHeadingTemplate(inner) }];
             }
 
             case "hubDetails":
             {
-                var inner = VisitStatements(block.Statements);
+                var inner = VisitStatements(statements);
                 return [new SectionBodyNode { Nodes = inner }];
             }
 
             case "setupStyle":
             case "setupStyleEvnt":
             {
-                var inner = VisitStatements(block.Statements);
+                var inner = VisitStatements(statements);
                 return [new SetupBlockNode { Nodes = inner }];
             }
 
             case "hook":
                 // enchantHook wrapper — the inner link will reference this hookId.
                 // We just pass through the inner content; the link handler stitches the fragment.
-                return VisitStatements(block.Statements);
+                return VisitStatements(statements);
 
             default:
-                _report.AddWarning(_passageName, $"Unknown styleScope: {scopeName}", sourceLine: GetLine(block));
-                return VisitStatements(block.Statements);
+                _report.AddWarning(_passageName, $"Unknown styleScope: {scopeName}");
+                return VisitStatements(statements);
         }
     }
 
@@ -247,6 +272,14 @@ public class PassageBodyVisitor
         if (arg is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
         {
             var raw = lit.Token.ValueText;
+
+            // Standalone HTML-like layout tag (e.g. <align="center">, <size=200>, </align>)
+            // — track state for the pending runs group; do not add a text run.
+            if (_spriteMapper.IsStandaloneLayoutTag(raw))
+            {
+                ProcessLayoutTag(raw.Trim());
+                return [];
+            }
 
             // Check for TextMesh Pro rich text
             var richRuns = _spriteMapper.TryParseRichText(raw);
@@ -498,6 +531,7 @@ public class PassageBodyVisitor
                     OriginalCode = fragmentRef ?? args[2].Expression.ToString(),
                     Note = "fragment:pending_stitch"
                 }],
+                SourceLine = _currentStatementLine,
             };
         }
 
@@ -506,6 +540,7 @@ public class PassageBodyVisitor
             Label = label,
             Target = target ?? "",
             StateAffecting = true,
+            SourceLine = _currentStatementLine,
         };
     }
 
@@ -608,7 +643,21 @@ public class PassageBodyVisitor
 
         // PassageTracker.instance.CheckProgress(current, target)
         if (expr is InvocationExpressionSyntax cpInv && IsCheckProgress(cpInv, out var cp))
+        {
+            // If target was unresolvable (computed local var), check _localVars and _localPassageConditionals.
+            // When resolved, return conditional GotoNodes instead of a CheckProgressNode so that the
+            // enclosing expand-link can be converted to navigation by V2Serializer.
+            if (string.IsNullOrEmpty(cp!.TargetPassage) && cpInv.ArgumentList.Arguments.Count > 1 &&
+                cpInv.ArgumentList.Arguments[1].Expression is IdentifierNameSyntax cpTargetId)
+            {
+                var targetVar = cpTargetId.Identifier.Text;
+                if (_localVars.TryGetValue(targetVar, out var literalTarget) && !string.IsNullOrEmpty(literalTarget))
+                    return [new GotoNode { Target = literalTarget }];
+                if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
+                    return BuildGotoNodesFromLetConditionals(psnNodes);
+            }
             return [cp!];
+        }
 
         // PassageTracker.instance.SetLocationIndicatorIcon(...) — usually paired with
         // locationName/locationIcon assignments; emit as SetLocationNode stub
@@ -661,6 +710,14 @@ public class PassageBodyVisitor
             if (condArgs.Count > 1 && condArgs[1].Expression is LiteralExpressionSyntax condGenLit)
                 int.TryParse(condGenLit.Token.ValueText, out condGen);
             return [new EndOfGenerationNode { Generation = condGen, Message = condMsg }];
+        }
+
+        // ViewEndOfGeneration.S_OnSetSpecialSetup?.Invoke(title, completedRound, passageName, bodyText)
+        if (expr is ConditionalAccessExpressionSyntax condSetup &&
+            condSetup.Expression.ToString().Contains("S_OnSetSpecialSetup") &&
+            condSetup.WhenNotNull is InvocationExpressionSyntax setupInv)
+        {
+            return [BuildEogSetupMarker(setupInv.ArgumentList.Arguments)];
         }
 
         // ViewEndOfRound.instance.SetEndOfRound(body, round, nextPassage, instruction)
@@ -775,12 +832,17 @@ public class PassageBodyVisitor
             };
         }
 
-        // this.Vars.Y["key"] — array index access; "1st" → .first() expression
+        // this.Vars.Y["key"] — array index access with Harlowe ordinal string ("1st", "2nd", …)
+        // All ordinals convert to zero-based numeric indices per the MWS array index format.
         if (right is ElementAccessExpressionSyntax elemAccess && IsVarAccess(elemAccess.Expression, out var srcArray))
         {
             var indexArg = elemAccess.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-            if (GetStringValue(indexArg!) == "1st")
-                return new EffectNode { VarSets = new() { [varName!] = $"{srcArray}.first()" } };
+            var ordinal = GetStringValue(indexArg!);
+            if (ordinal is not null)
+            {
+                var idx = HarloweOrdinalToIndex(ordinal);
+                return new EffectNode { VarSets = new() { [varName!] = $"{{{srcArray}[{idx}]}}" } };
+            }
             var indexStr = indexArg?.ToString() ?? "?";
             return new EffectNode { VarSets = new() { [varName!] = $"{{{srcArray}[{indexStr}]}}" } };
         }
@@ -1342,11 +1404,57 @@ public class PassageBodyVisitor
 
     private List<MwsNode> FlushText()
     {
-        if (_pendingRuns.Count == 0) return [];
-        var node = new TextNode { Runs = _pendingRuns, SourceLine = _pendingTextStartLine };
+        // No runs: nothing to emit. Keep pending layout state (align, size) in place so it
+        // survives the FlushAndAdd([]) calls that happen for each standalone layout tag.
+        // Emit any queued unpreserved-tag warnings now so they fire with the correct source line.
+        if (_pendingRuns.Count == 0)
+        {
+            var emptyTags = _pendingUnpreservedTags;
+            _pendingUnpreservedTags = [];
+            foreach (var (tag, line) in emptyTags)
+                _report.AddWarning(_passageName, $"Unpreserved layout tag: `{tag}`", null, line);
+            return [];
+        }
+
+        // Capture and reset all state now that we have runs to emit.
+        var runs = _pendingRuns;
+        var startLine = _pendingTextStartLine;
+        var align = _pendingAlign;
+        var size = _pendingSize;
+        var sizeLine = _pendingSizeLine;
+        var unpreservedTags = _pendingUnpreservedTags;
+
         _pendingRuns = [];
         _pendingTextStartLine = null;
-        return [node];
+        _pendingAlign = null;
+        _pendingSize = null;
+        _pendingSizeLine = null;
+        _pendingUnpreservedTags = [];
+
+        foreach (var (tag, line) in unpreservedTags)
+            _report.AddWarning(_passageName, $"Unpreserved layout tag: `{tag}`", null, line);
+
+        // Single AssetRef run with a <size=N> wrapper → image node
+        if (size is not null && runs.Count == 1 && runs[0].AssetRef is not null && runs[0].Text is null)
+        {
+            return [new ImageNode
+            {
+                AssetRef = runs[0].AssetRef!,
+                Size = size,
+                Align = align,
+                SourceLine = startLine,
+            }];
+        }
+
+        // <size> surrounds an inline icon in a mixed template — size cannot be preserved
+        if (size is not null && runs.Any(r => r.AssetRef is not null))
+        {
+            _report.AddWarning(_passageName,
+                $"Unpreserved `<size={size}>`: surrounds an inline icon in a mixed text template — size not preserved; cannot convert to image node.",
+                null, sizeLine ?? startLine);
+        }
+
+        return [new TextNode { Runs = runs, SourceLine = startLine, Align = align }];
     }
 
     // Adds a run to the pending buffer; records the source line of the first run in the group.
@@ -1355,6 +1463,48 @@ public class PassageBodyVisitor
         if (_pendingRuns.Count == 0) _pendingTextStartLine = _currentStatementLine;
         _pendingRuns.Add(run);
     }
+
+    // Regex for open <align=...> and <size=...> tags used by ProcessLayoutTag.
+    private static readonly Regex AlignOpenTagRegex = new(
+        @"^<align\s*=\s*""?([^""\s>]+)""?\s*/?>$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SizeOpenTagRegex = new(
+        @"^<size\s*=\s*([^>]+?)\s*/?>$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex AnyClosingTagRegex = new(
+        @"^</\w", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Called for standalone HTML-like layout tags (e.g. <align="center">, <size=200>, </align>).
+    // Sets or records state that is applied when the pending runs are flushed.
+    // Closing tags are no-ops — state is cleared at FlushText regardless.
+    private void ProcessLayoutTag(string raw)
+    {
+        // Closing tag — ignore; state is cleared at FlushText
+        if (AnyClosingTagRegex.IsMatch(raw))
+            return;
+
+        var alignMatch = AlignOpenTagRegex.Match(raw);
+        if (alignMatch.Success)
+        {
+            _pendingAlign = NormalizeAlign(alignMatch.Groups[1].Value);
+            return;
+        }
+
+        var sizeMatch = SizeOpenTagRegex.Match(raw);
+        if (sizeMatch.Success)
+        {
+            _pendingSize = sizeMatch.Groups[1].Value.Trim();
+            _pendingSizeLine = _currentStatementLine;
+            return;
+        }
+
+        // Any other open tag (line-height, color, b, i, etc.) — record for warning at FlushText
+        _pendingUnpreservedTags.Add((raw, _currentStatementLine));
+    }
+
+    private static string NormalizeAlign(string value) => value.ToLowerInvariant() switch
+    {
+        "justify" => "justified",
+        var v => v,
+    };
 
     private List<MwsNode> FlushAndAdd(List<MwsNode> nodes)
     {
@@ -1447,6 +1597,15 @@ public class PassageBodyVisitor
         expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
             ? lit.Token.ValueText
             : null;
+
+    // Converts Harlowe ordinal strings ("1st", "2nd", "3rd", …) to zero-based integers.
+    private static int HarloweOrdinalToIndex(string ordinal)
+    {
+        // Strip the 2-character suffix (st/nd/rd/th) and parse the number.
+        if (ordinal.Length >= 3 && int.TryParse(ordinal[..^2], out var n))
+            return n - 1;
+        return 0;
+    }
 
     private static object LiteralValue(LiteralExpressionSyntax lit)
     {
@@ -1862,9 +2021,14 @@ public class PassageBodyVisitor
 
     // Returns the 1-based line number in the original source file.
     // The wrapped source prepends 2 lines, so Roslyn's 0-based line - 1 = original 1-based line.
-    private static int? GetLine(SyntaxNode node)
+    private int? GetLine(SyntaxNode node)
     {
-        var line = node.GetLocation().GetLineSpan().StartLinePosition.Line - 1;
+        var span = node.GetLocation().GetLineSpan();
+        if (!span.IsValid) return null;
+        var line0 = span.StartLinePosition.Line;
+        // line0 == 0: synthetic/rehomed node (all positions zeroed) — skip.
+        if (line0 == 0) return null;
+        var line = line0 + _lineOffset;
         return line >= 1 ? line : null;
     }
 
@@ -1989,6 +2153,19 @@ public class PassageBodyVisitor
                         continue;
                     }
                 }
+
+                // String-literal ternary (possibly nested): passage name computed via conditions.
+                // Stores conditional LetNode structure; consumed by BuildEogSetupMarker when the
+                // local var is passed as passageName to S_OnSetSpecialSetup.
+                {
+                    var condNodes = TryBuildPassageNameConditional(name, ternaryInit);
+                    if (condNodes is not null)
+                    {
+                        _localPassageConditionals[name] = condNodes;
+                        anyHandled = true;
+                        continue;
+                    }
+                }
             }
 
             // List<int> varName = new List<int> { intLiterals... }
@@ -2085,6 +2262,118 @@ public class PassageBodyVisitor
 
         return false;
     }
+
+    // Builds an EogSetupMarkerNode from S_OnSetSpecialSetup?.Invoke(title, round, passageName, body).
+    // passageName may be a literal, a tracked local var, or a computed conditional.
+    private EogSetupMarkerNode BuildEogSetupMarker(SeparatedSyntaxList<ArgumentSyntax> args)
+    {
+        var title = args.Count > 0 ? GetStringValue(args[0].Expression) : null;
+        int completedRound = -1;
+        if (args.Count > 1 && args[1].Expression is LiteralExpressionSyntax rl &&
+            rl.IsKind(SyntaxKind.NumericLiteralExpression))
+            int.TryParse(rl.Token.ValueText, out completedRound);
+
+        string? passageName = null;
+        List<MwsNode>? passageNameNodes = null;
+        if (args.Count > 2)
+        {
+            var psnExpr = args[2].Expression;
+            if (psnExpr is LiteralExpressionSyntax psnLit && psnLit.IsKind(SyntaxKind.StringLiteralExpression))
+                passageName = psnLit.Token.ValueText;
+            else if (psnExpr is IdentifierNameSyntax psnId)
+            {
+                var localName = psnId.Identifier.Text;
+                if (_localVars.TryGetValue(localName, out var literalPsn))
+                    passageName = literalPsn;
+                else if (_localPassageConditionals.TryGetValue(localName, out var condNodes))
+                    passageNameNodes = RenameLetVarInNodes(condNodes, localName, "passageName");
+            }
+        }
+
+        var bodyText = args.Count > 3 ? GetStringValue(args[3].Expression) : null;
+        return new EogSetupMarkerNode
+        {
+            Title = title,
+            CompletedRound = completedRound,
+            BodyText = BuildEogMessageTemplate(bodyText),
+            PassageName = passageName,
+            PassageNameNodes = passageNameNodes,
+        };
+    }
+
+    // Recursively builds a ConditionalNode tree from a ternary expression where ALL leaves are
+    // string literals. Returns null if any leaf is not a string literal.
+    private List<MwsNode>? TryBuildPassageNameConditional(string varName, ExpressionSyntax expr)
+    {
+        expr = UnwrapParens(expr);
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            return [new LetNode { Var = varName, Compute = $"\"{lit.Token.ValueText.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"" }];
+        if (expr is ConditionalExpressionSyntax cond)
+        {
+            var condStr = SimplifyCondition(UnwrapParens(cond.Condition).ToString());
+            var trueNodes = TryBuildPassageNameConditional(varName, cond.WhenTrue);
+            var falseNodes = TryBuildPassageNameConditional(varName, cond.WhenFalse);
+            if (trueNodes is null || falseNodes is null) return null;
+            return [new ConditionalNode
+            {
+                Branches =
+                [
+                    new ConditionalBranch { Condition = condStr, Nodes = trueNodes },
+                    new ConditionalBranch { Else = true, Nodes = falseNodes },
+                ],
+            }];
+        }
+        return null;
+    }
+
+    // Deep-renames all LetNode.Var occurrences of oldName to newName within a node tree.
+    // Converts a conditional LetNode tree (from _localPassageConditionals) to GotoNodes.
+    // Each LetNode leaf with a quoted-string Compute value becomes a GotoNode with that target.
+    private static List<MwsNode> BuildGotoNodesFromLetConditionals(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>();
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case LetNode let when let.Compute is { Length: >= 3 } c && c[0] == '"' && c[^1] == '"':
+                    result.Add(new GotoNode { Target = c[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\") });
+                    break;
+                case ConditionalNode cond:
+                    result.Add(new ConditionalNode
+                    {
+                        Branches = cond.Branches.Select(b => new ConditionalBranch
+                        {
+                            Condition = b.Condition,
+                            Else = b.Else,
+                            Nodes = BuildGotoNodesFromLetConditionals(b.Nodes),
+                        }).ToList(),
+                        SourceLine = cond.SourceLine,
+                    });
+                    break;
+            }
+        }
+        return result;
+    }
+
+    private static List<MwsNode> RenameLetVarInNodes(List<MwsNode> nodes, string oldName, string newName) =>
+        nodes.Select(n => RenameLetVar(n, oldName, newName)).ToList();
+
+    private static MwsNode RenameLetVar(MwsNode node, string oldName, string newName) => node switch
+    {
+        LetNode let when let.Var == oldName => new LetNode { Var = newName, Compute = let.Compute },
+        ConditionalNode cond => new ConditionalNode
+        {
+            Branches = cond.Branches.Select(b => new ConditionalBranch
+            {
+                Condition = b.Condition,
+                Else = b.Else,
+                Nodes = RenameLetVarInNodes(b.Nodes, oldName, newName),
+            }).ToList(),
+            SourceLine = cond.SourceLine,
+        },
+        _ => node,
+    };
 
     // Detects s_OnEndOfGeneration(arg, N) or ViewEndOfGeneration.S_OnEndOfGeneration(arg, N).
     private bool TryBuildEogNode(InvocationExpressionSyntax inv, out EndOfGenerationNode? node)
