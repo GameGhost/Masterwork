@@ -215,6 +215,8 @@ public partial class CradleExtractor
         }
 
         // Phase C: refine types from assignment RHS for variables not from VarDefs.
+        // Accumulate all definite inferences per variable so mismatches can be detected.
+        var phaseC = new Dictionary<string, List<string>>();
         foreach (var tree in trees)
         {
             var root = tree.GetCompilationUnitRoot();
@@ -233,14 +235,43 @@ public partial class CradleExtractor
                 if (_varDefsVars.Contains(varName)) continue;
 
                 var inferredType = InferTypeFromRhs(assign.Right);
-                if (inferredType != "string" || def.VarType == "string")
-                    def.VarType = inferredType;
+                if (inferredType is not null)
+                {
+                    if (!phaseC.TryGetValue(varName, out var typeList))
+                        phaseC[varName] = typeList = [];
+                    typeList.Add(inferredType);
+                }
 
                 // Capture first assigned literal as default
                 if (def.Default is null && assign.Right is LiteralExpressionSyntax lit)
                     def.Default = GetLiteralValue(lit);
             }
         }
+        // Apply inferred types; warn when the same variable receives conflicting inferences.
+        foreach (var (varName, types) in phaseC)
+        {
+            if (!_variables.TryGetValue(varName, out var def)) continue;
+            var distinct = types.Distinct().ToList();
+            if (distinct.Count == 1)
+            {
+                def.VarType = distinct[0];
+            }
+            else
+            {
+                var chosen = PickBestType(distinct);
+                _report.AddWarning("[variables]",
+                    $"Variable '{varName}' has conflicting assignment types: {string.Join(", ", distinct)}. Using '{chosen}'.");
+                def.VarType = chosen;
+            }
+        }
+    }
+
+    private static string PickBestType(IEnumerable<string> types)
+    {
+        var set = new HashSet<string>(types);
+        if (set.Contains("array")) return "array";
+        if (set.Contains("int")) return "int";
+        return "string";
     }
 
     private static string InferTypeFromContext(MemberAccessExpressionSyntax access)
@@ -255,22 +286,40 @@ public partial class CradleExtractor
         return "string";
     }
 
-    private static string InferTypeFromRhs(ExpressionSyntax rhs)
+    private static string? InferTypeFromRhs(ExpressionSyntax rhs)
     {
+        while (rhs is ParenthesizedExpressionSyntax paren)
+            rhs = paren.Expression;
+
         if (rhs is LiteralExpressionSyntax lit2)
         {
             if (lit2.IsKind(SyntaxKind.NumericLiteralExpression)) return "int";
             if (lit2.IsKind(SyntaxKind.StringLiteralExpression)) return "string";
         }
+        if (rhs is CastExpressionSyntax cast && cast.Type.ToString() == "int")
+            return "int";
         if (rhs is InvocationExpressionSyntax inv2)
         {
             var methodName = (inv2.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text
                 ?? (inv2.Expression as IdentifierNameSyntax)?.Identifier.Text;
             if (methodName == "a" || methodName == "shuffled") return "array";
-            if (methodName == "num" || methodName == "random" || methodName == "PassageValueNumber") return "int";
+            if (methodName is "num" or "random" or "PassageValueNumber" or "Range" or "Parse") return "int";
+            // either(x, y, ...) produces int when all args are numeric literals, string when all are string literals
+            if (methodName == "either")
+            {
+                var args = inv2.ArgumentList.Arguments;
+                if (args.Count > 0 && args.All(a =>
+                        a.Expression is LiteralExpressionSyntax eLit &&
+                        eLit.IsKind(SyntaxKind.NumericLiteralExpression)))
+                    return "int";
+                if (args.Count > 0 && args.All(a =>
+                        a.Expression is LiteralExpressionSyntax eLit &&
+                        eLit.IsKind(SyntaxKind.StringLiteralExpression)))
+                    return "string";
+            }
         }
         if (rhs is ArrayCreationExpressionSyntax) return "array";
-        return "string";
+        return null;
     }
 
     private static object GetLiteralValue(LiteralExpressionSyntax lit)
