@@ -8,7 +8,7 @@ namespace Masterwork.ModuleFormat;
 
 public class MwsPassage
 {
-    public string Format { get; set; } = "mws/0.2";
+    public string Format { get; set; } = "mws/0.3";
     public string PassageId { get; set; } = "";
     public string Title { get; set; } = "";
     public string[] Tags { get; set; } = [];
@@ -25,7 +25,7 @@ public class MwsPassage
     {
         var d = new Dictionary<string, object?>
         {
-            ["format"] = "mws/0.2",
+            ["format"] = "mws/0.3",
             ["passage_id"] = PassageId,
         };
         if (!string.IsNullOrEmpty(Title) && Title != PassageId) d["title"] = Title;
@@ -111,7 +111,7 @@ public class ImageNode : MwsNode
 
     public override Dictionary<string, object?> ToDict()
     {
-        var d = new Dictionary<string, object?> { ["type"] = Type, ["asset_ref"] = AssetRef };
+        var d = new Dictionary<string, object?> { ["type"] = Type, ["asset"] = AssetRef };
         if (Size is not null) d["size"] = Size;
         if (Align is not null) d["align"] = Align;
         return d;
@@ -278,9 +278,8 @@ public class ConditionalBranch
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?>();
-        if (Condition is not null) d["condition"] = Condition;
-        if (Else == true) d["else"] = true;
-        d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
+        if (Condition is not null) d["if"] = Condition;
+        d["then"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
 }
@@ -289,11 +288,19 @@ public class ConditionalNode : MwsNode
 {
     public override string Type => "conditional";
     public List<ConditionalBranch> Branches { get; set; } = [];
-    public override Dictionary<string, object?> ToDict() => new()
+    public override Dictionary<string, object?> ToDict()
     {
-        ["type"] = Type,
-        ["branches"] = Branches.Select(b => b.ToDict()).ToList(),
-    };
+        var ifBranches = Branches.Where(b => b.Else != true).ToList();
+        var elseBranch = Branches.FirstOrDefault(b => b.Else == true);
+        var d = new Dictionary<string, object?>
+        {
+            ["type"] = Type,
+            ["branches"] = ifBranches.Select(b => b.ToDict()).ToList(),
+        };
+        if (elseBranch is not null)
+            d["else"] = elseBranch.Nodes.Select(n => n.ToDict()).ToList();
+        return d;
+    }
 }
 
 public class SwitchCase
@@ -306,7 +313,6 @@ public class SwitchCase
     {
         var d = new Dictionary<string, object?>();
         if (Match is not null) d["match"] = Match;
-        if (Default == true) d["default"] = true;
         d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
@@ -318,12 +324,20 @@ public class SwitchNode : MwsNode
     public string On { get; set; } = "";
     public List<SwitchCase> Cases { get; set; } = [];
 
-    public override Dictionary<string, object?> ToDict() => new()
+    public override Dictionary<string, object?> ToDict()
     {
-        ["type"] = Type,
-        ["on"] = On,
-        ["cases"] = Cases.Select(c => c.ToDict()).ToList(),
-    };
+        var matchCases = Cases.Where(c => c.Default != true).ToList();
+        var defaultCase = Cases.FirstOrDefault(c => c.Default == true);
+        var d = new Dictionary<string, object?>
+        {
+            ["type"] = Type,
+            ["on"] = On,
+            ["cases"] = matchCases.Select(c => c.ToDict()).ToList(),
+        };
+        if (defaultCase is not null)
+            d["default"] = defaultCase.Nodes.Select(n => n.ToDict()).ToList();
+        return d;
+    }
 }
 
 public class VarRandom
@@ -455,7 +469,7 @@ public class ForeachNode : MwsNode
         ["type"] = Type,
         ["var"] = Var,
         ["in"] = In,
-        ["nodes"] = Nodes.Select(n => n.ToDict()).ToList(),
+        ["do"] = Nodes.Select(n => n.ToDict()).ToList(),
     };
 }
 
@@ -477,8 +491,8 @@ public class InputPromptNode : MwsNode
             ["type"] = Type,
             ["prompt_id"] = PromptId,
             ["text"] = Text,
-            ["input_type"] = InputType,
-            ["store_in"] = StoreIn,
+            ["input"] = InputType,
+            ["var"] = StoreIn,
         };
         if (ResumePassage is not null) d["resume_passage"] = ResumePassage;
         return d;
@@ -541,8 +555,8 @@ public class CheckpointNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["id"] = Id };
-        if (DisplayLabel is not null) d["display_label"] = DisplayLabel;
-        if (DiagnosticLabel is not null) d["diagnostic_label"] = DiagnosticLabel;
+        if (DisplayLabel is not null) d["display"] = DisplayLabel;
+        if (DiagnosticLabel is not null) d["diagnostic"] = DiagnosticLabel;
         return d;
     }
 }

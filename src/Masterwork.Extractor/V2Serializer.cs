@@ -16,9 +16,9 @@ public record SerializationContext(
 );
 
 /// <summary>
-/// Serializes a MwsPassage to a v0.2 Dictionary suitable for YAML emission.
+/// Serializes a MwsPassage to a v0.3 Dictionary suitable for YAML emission.
 ///
-/// Most node types delegate to their own ToDict() which already produce v0.2 output.
+/// Most node types delegate to their own ToDict() which already produce v0.3 output.
 /// This class handles the remaining output concerns:
 ///   • Header node hoisting (SetLocationNode → location header, CheckProgressNode)
 ///   • Source sentinel injection (_src comments)
@@ -37,7 +37,7 @@ public static partial class V2Serializer
 
         var d = new Dictionary<string, object?>
         {
-            ["format"] = "mws/0.2",
+            ["format"] = "mws/0.3",
             ["passage_id"] = passage.PassageId,
         };
         if (!string.IsNullOrEmpty(passage.Title) && passage.Title != passage.PassageId)
@@ -246,7 +246,7 @@ public static partial class V2Serializer
 
     private static Dictionary<string, object?> TransformImage(ImageNode img)
     {
-        var d = new Dictionary<string, object?> { ["type"] = "image", ["asset_ref"] = img.AssetRef };
+        var d = new Dictionary<string, object?> { ["type"] = "image", ["asset"] = img.AssetRef };
         if (img.Size is not null) d["size"] = img.Size;
         if (img.Align is not null) d["align"] = img.Align;
         return d;
@@ -338,7 +338,7 @@ public static partial class V2Serializer
         AddLinkHint(d, link.Target, ctx);
         d["state_affecting"] = link.StateAffecting;
         if (link.TimelineLabel is not null) d["timeline_label"] = link.TimelineLabel;
-        if (link.Nodes.Count > 0) d["nodes"] = TransformNodeList(link.Nodes, ctx);
+        if (link.Nodes.Count > 0) d["onclick"] = TransformNodeList(link.Nodes, ctx);
         return d;
     }
 
@@ -375,20 +375,25 @@ public static partial class V2Serializer
         }
         if (nodes is [ConditionalNode cond])
         {
-            return new Dictionary<string, object?>
+            var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
+            var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
+            var cd = new Dictionary<string, object?>
             {
                 ["type"] = "conditional",
-                ["branches"] = cond.Branches.Select(b =>
+                ["branches"] = ifBranches.Select(b =>
                 {
-                    var bd = new Dictionary<string, object?>();
-                    if (b.Else == true) bd["else"] = true;
-                    else bd["condition"] = b.Condition;
-                    bd["nodes"] = b.Nodes
+                    var bd = new Dictionary<string, object?> { ["if"] = b.Condition };
+                    bd["then"] = b.Nodes
                         .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
                         .ToList();
                     return bd;
                 }).ToList(),
             };
+            if (elseBranch is not null)
+                cd["else"] = elseBranch.Nodes
+                    .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
+                    .ToList();
+            return cd;
         }
         // Fallback: shouldn't be reached given IsNavigationOnly precondition
         return new Dictionary<string, object?> { ["type"] = "navigation", ["label"] = label, ["target"] = "", ["state_affecting"] = stateAffecting };
@@ -472,7 +477,7 @@ public static partial class V2Serializer
         d["state_affecting"] = expand.StateAffecting;
 
         var transformed = TransformNodeList(childNodes, ctx);
-        if (transformed.Count > 0) d["nodes"] = transformed;
+        if (transformed.Count > 0) d["content"] = transformed;
         return d;
     }
 
@@ -485,8 +490,8 @@ public static partial class V2Serializer
             ["type"] = "input",
             ["label"] = input.PromptId,
             ["text"] = input.Text,
-            ["input_type"] = input.InputType,
-            ["store_in"] = input.StoreIn,
+            ["input"] = input.InputType,
+            ["var"] = input.StoreIn,
         };
         if (input.ResumePassage is not null) d["onsubmit"] = input.ResumePassage;
         return d;
@@ -509,7 +514,7 @@ public static partial class V2Serializer
         var d = new Dictionary<string, object?> { ["type"] = "section" };
         if (title is not null) d["title"] = title;
         if (style is not null) d["style"] = style;
-        d["nodes"] = TransformNodeList(innerNodes, ctx);
+        d["content"] = TransformNodeList(innerNodes, ctx);
         return d;
     }
 
@@ -517,37 +522,41 @@ public static partial class V2Serializer
 
     private static Dictionary<string, object?> TransformConditional(ConditionalNode cond, SerializationContext? ctx = null)
     {
-        return new()
+        var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
+        var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
+        var d = new Dictionary<string, object?>
         {
             ["type"] = "conditional",
-            ["branches"] = cond.Branches.Select(b =>
+            ["branches"] = ifBranches.Select(b => new Dictionary<string, object?>
             {
-                var bd = new Dictionary<string, object?>();
-                if (b.Condition is not null) bd["condition"] = b.Condition;
-                if (b.Else == true) bd["else"] = true;
-                bd["nodes"] = TransformNodeList(b.Nodes, ctx);
-                return bd;
+                ["if"] = b.Condition,
+                ["then"] = TransformNodeList(b.Nodes, ctx),
             }).ToList(),
         };
+        if (elseBranch is not null)
+            d["else"] = TransformNodeList(elseBranch.Nodes, ctx);
+        return d;
     }
 
     // ── Switch ────────────────────────────────────────────────────────────
 
     private static Dictionary<string, object?> TransformSwitch(SwitchNode sw, SerializationContext? ctx = null)
     {
-        return new()
+        var matchCases = sw.Cases.Where(c => c.Default != true).ToList();
+        var defaultCase = sw.Cases.FirstOrDefault(c => c.Default == true);
+        var d = new Dictionary<string, object?>
         {
             ["type"] = "switch",
             ["on"] = sw.On,
-            ["cases"] = sw.Cases.Select(c =>
+            ["cases"] = matchCases.Select(c => new Dictionary<string, object?>
             {
-                var cd = new Dictionary<string, object?>();
-                if (c.Match is not null) cd["match"] = c.Match;
-                if (c.Default == true) cd["default"] = true;
-                cd["nodes"] = TransformNodeList(c.Nodes, ctx);
-                return cd;
+                ["match"] = c.Match,
+                ["nodes"] = TransformNodeList(c.Nodes, ctx),
             }).ToList(),
         };
+        if (defaultCase is not null)
+            d["default"] = TransformNodeList(defaultCase.Nodes, ctx);
+        return d;
     }
 
     // ── Foreach ───────────────────────────────────────────────────────────
@@ -559,7 +568,7 @@ public static partial class V2Serializer
             ["type"] = "foreach",
             ["var"] = fe.Var,
             ["in"] = fe.In,
-            ["nodes"] = TransformNodeList(fe.Nodes, ctx),
+            ["do"] = TransformNodeList(fe.Nodes, ctx),
         };
     }
 
@@ -568,8 +577,8 @@ public static partial class V2Serializer
     private static Dictionary<string, object?> TransformCheckpoint(CheckpointNode cp)
     {
         var d = new Dictionary<string, object?> { ["type"] = "checkpoint", ["id"] = cp.Id };
-        if (cp.DisplayLabel is not null) d["display_label"] = cp.DisplayLabel;
-        if (cp.DiagnosticLabel is not null) d["diagnostic_label"] = cp.DiagnosticLabel;
+        if (cp.DisplayLabel is not null) d["display"] = cp.DisplayLabel;
+        if (cp.DiagnosticLabel is not null) d["diagnostic"] = cp.DiagnosticLabel;
         return d;
     }
 
@@ -588,7 +597,7 @@ public static partial class V2Serializer
         {
             ["type"] = "popup",
             ["layout"] = "end_of_generation",
-            ["nodes"] = nodes,
+            ["content"] = nodes,
         };
         return d;
     }
@@ -609,18 +618,18 @@ public static partial class V2Serializer
             {
                 ["type"] = "section",
                 ["style"] = "panel",
-                ["nodes"] = nodes,
+                ["content"] = nodes,
             };
             yield return new()
             {
                 ["type"] = "checkpoint",
                 ["id"] = $"round_{modal.Round}_complete",
-                ["display_label"] = $"Round {modal.Round}",
+                ["display"] = $"Round {modal.Round}",
             };
         }
         else if (nodes.Count > 0)
         {
-            yield return new() { ["type"] = "section", ["style"] = "panel", ["nodes"] = nodes };
+            yield return new() { ["type"] = "section", ["style"] = "panel", ["content"] = nodes };
         }
 
         if (modal.Next is not null)
@@ -648,7 +657,7 @@ public static partial class V2Serializer
         if (sn.Text is not null)
             nodes.Add(new() { ["type"] = "text", ["value"] = sn.Text });
 
-        yield return new() { ["type"] = "section", ["style"] = "panel", ["nodes"] = nodes };
+        yield return new() { ["type"] = "section", ["style"] = "panel", ["content"] = nodes };
 
         if (sn.NextPassage is not null)
         {

@@ -254,10 +254,11 @@ public sealed partial class RestextCollector
         {
             foreach (var branch in AsDictList(d.GetValueOrDefault("branches")))
             {
-                if (branch.TryGetValue("condition", out var condObj) && condObj is string cond)
+                if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
                     RegisterStringLiteralsInExpr(cond);
-                ScanConditionLiteralsInNodeList(branch.GetValueOrDefault("nodes"));
+                ScanConditionLiteralsInNodeList(branch.GetValueOrDefault("then"));
             }
+            ScanConditionLiteralsInNodeList(d.GetValueOrDefault("else"));
         }
         else if (type == "switch")
         {
@@ -267,6 +268,7 @@ public sealed partial class RestextCollector
                     TryRegisterConditionLiteral(matchStr);
                 ScanConditionLiteralsInNodeList(c.GetValueOrDefault("nodes"));
             }
+            ScanConditionLiteralsInNodeList(d.GetValueOrDefault("default"));
         }
         else if (type is "assign" or "let")
         {
@@ -280,12 +282,15 @@ public sealed partial class RestextCollector
             TryScanStringField(d, "title");
             TryScanStringField(d, "text");
             TryScanStringField(d, "timeline_label");
-            TryScanStringField(d, "display_label");
+            TryScanStringField(d, "display");
             TryScanStringField(d, "name");
             TryScanStringField(d, "button");
         }
 
-        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("nodes"));
+        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("content"));
+        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("onclick"));
+        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("do"));
+        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("nodes")); // switch case bodies
     }
 
     private void RegisterStringLiteralsInExpr(string expr)
@@ -323,10 +328,11 @@ public sealed partial class RestextCollector
         {
             foreach (var branch in AsDictList(d.GetValueOrDefault("branches")))
             {
-                if (branch.TryGetValue("condition", out var condObj) && condObj is string cond)
-                    branch["condition"] = ReplaceStringLiteralsInCondExpr(cond);
-                ApplyConditionReplacementsInNodeList(branch.GetValueOrDefault("nodes"));
+                if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
+                    branch["if"] = ReplaceStringLiteralsInCondExpr(cond);
+                ApplyConditionReplacementsInNodeList(branch.GetValueOrDefault("then"));
             }
+            ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("else"));
         }
         else if (type == "switch")
         {
@@ -340,6 +346,7 @@ public sealed partial class RestextCollector
                 }
                 ApplyConditionReplacementsInNodeList(c.GetValueOrDefault("nodes"));
             }
+            ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("default"));
         }
         // assign/let exprs are NOT processed here: Phase 1 (WalkExprNode) extracts them, and
         // RestoreNonTemplateAssignments prunes non-template assignments back to raw literals.
@@ -354,12 +361,15 @@ public sealed partial class RestextCollector
             TryReplaceStringField(d, "title");
             TryReplaceStringField(d, "text");
             TryReplaceStringField(d, "timeline_label");
-            TryReplaceStringField(d, "display_label");
+            TryReplaceStringField(d, "display");
             TryReplaceStringField(d, "name");
             TryReplaceStringField(d, "button");
         }
 
-        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("nodes"));
+        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("content"));
+        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("onclick"));
+        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("do"));
+        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("nodes")); // switch case bodies
     }
 
     private void TryReplaceStringField(Dictionary<string, object?> d, string field)
@@ -431,9 +441,13 @@ public sealed partial class RestextCollector
         }
 
         // Recurse into all container children, regardless of type.
-        WalkNodeList(d.GetValueOrDefault("nodes"));
-        WalkBranchOrCaseList(d.GetValueOrDefault("branches"));
-        WalkBranchOrCaseList(d.GetValueOrDefault("cases"));
+        WalkNodeList(d.GetValueOrDefault("content"));   // popup, section
+        WalkNodeList(d.GetValueOrDefault("onclick"));   // navigation
+        WalkNodeList(d.GetValueOrDefault("do"));        // foreach
+        WalkNodeList(d.GetValueOrDefault("else"));      // conditional
+        WalkNodeList(d.GetValueOrDefault("default"));   // switch
+        WalkBranchOrCaseList(d.GetValueOrDefault("branches"), "then");  // conditional branches
+        WalkBranchOrCaseList(d.GetValueOrDefault("cases"), "nodes");    // switch cases
     }
 
     private void WalkTextNode(Dictionary<string, object?> d)
@@ -443,10 +457,10 @@ public sealed partial class RestextCollector
             d["value"] = AllocKey(vs);
     }
 
-    private void WalkBranchOrCaseList(object? listObj)
+    private void WalkBranchOrCaseList(object? listObj, string bodyField = "nodes")
     {
         foreach (var d in AsDictList(listObj))
-            WalkNodeList(d.GetValueOrDefault("nodes"));
+            WalkNodeList(d.GetValueOrDefault(bodyField));
     }
 
     private void ExtractField(Dictionary<string, object?> d, string field)

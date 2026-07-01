@@ -1,4 +1,4 @@
-# Masterwork Script Format — v0.3 Reference
+# Masterwork Script Format — v0.2 Reference
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
 
@@ -9,7 +9,7 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: mws/0.3
+format: mws/0.2
 passage_id: Hospital1
 title: The Hospital
 tags:
@@ -27,7 +27,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/0.3` |
+| `format` | string | yes | Always `mws/0.2` |
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id` |
 | `tags` | list of strings | no | Source tags; drives layout inference |
@@ -175,9 +175,9 @@ The `# "..."` comment is an inline preview for human readers; the engine ignores
 
 ```yaml
 # After load-time substitution: warwinner == "Separatists"
-- if: warwinner == "restext://Common_026"  # en-US.restext:33
+- condition: warwinner == "restext://Common_026"  # en-US.restext:33
 # After load-time substitution: Separatists
-- match: restext://Common_026              # en-US.restext:33
+- match: restext://Common_026                      # en-US.restext:33
 ```
 
 #### Locale Resource File (`.restext`)
@@ -212,7 +212,7 @@ Return the Heart{icon:s1_hearttoken}token to the scenario box.
 
 ## 4. Expression Language
 
-Expressions appear in `let / expr`, `assign / expr`, and `conditional / branches[i] / if`.
+Expressions appear in `let / expr`, `assign / expr`, and `conditional / branches[i] / condition`.
 
 ### Literals
 
@@ -229,7 +229,7 @@ String literals in condition expressions may be `restext://` URIs when the strin
 ```yaml
 # warwinner holds "Separatists" (assigned from a shuffled restext array)
 # load-time substitution: warwinner == "restext://Common_026" → warwinner == "Separatists"
-- if: warwinner == "restext://Common_026"  # en-US.restext:33
+- condition: warwinner == "restext://Common_026"  # en-US.restext:33
 ```
 
 ### Variable References
@@ -393,7 +393,8 @@ When `match:` holds a `restext://` URI, load-time substitution replaces the URI 
     nodes: [...]
   - match: '>3'
     nodes: [...]
-  default: [...]
+  - default: true
+    nodes: [...]
 ```
 
 ---
@@ -435,13 +436,13 @@ Displays a standalone image asset with optional size and alignment. Produced whe
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `asset` | string | yes | Asset URI (e.g. `icon://scenariobox3d_war`) |
+| `asset_ref` | string | yes | Asset URI (e.g. `icon://scenariobox3d_war`) |
 | `size` | string | no | Size hint preserved as-is from the source `<size=N>` tag (units unspecified) |
 | `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified` |
 
 ```yaml
 - type: image
-  asset: icon://scenariobox3d_war
+  asset_ref: icon://scenariobox3d_war
   size: '200'
   align: center
 ```
@@ -474,10 +475,11 @@ Defines a passage-scoped variable by evaluating an expression. Never persisted t
     - type: let
       var: chosen
       expr: '[nameA, nameB, nameC, nameD].shuffled("BattleTime_1")[0]'
-  default:
-  - type: let
-    var: chosen
-    expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
+  - default: true
+    nodes:
+    - type: let
+      var: chosen
+      expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
 - type: text
   value: '{chosen} leads this round.'
   lets: [chosen]
@@ -544,9 +546,9 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 | `target` | string | yes | Destination `passage_id`, or `{varName}` for a runtime-computed target |
 | `state_affecting` | bool | yes | `true` creates a timeline snapshot |
 | `timeline_label` | string | no | Custom label for the timeline scrubber entry |
-| `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation |
+| `nodes` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation |
 
-**Execution order when `onclick` is present:** on click, the engine executes all nodes in the `onclick` list first, then evaluates `target`. This matters when `target` contains a variable reference (`{varName}`) and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
+**Execution order when `nodes` is present:** on click, the engine executes all nodes in the `nodes` list first, then evaluates `target`. This matters when `target` contains a variable reference (`{varName}`) and a `nodes` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
 
 ```yaml
 - type: navigation
@@ -559,24 +561,24 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
   label: 2 Players
   target: PlayerNameIntro
   state_affecting: true
-  onclick:
+  nodes:
   - type: assign
     var: players
     expr: '2'
 
-# With dynamic target — onclick may assign the target variable before navigation
+# With dynamic target — nodes may assign the target variable before navigation
 - type: navigation
   label: '{nameA}'
   target: '{feverheartnextPsg}'
   state_affecting: true
-  onclick:
+  nodes:
   - type: assign
     var: charity
     expr: nameA
   - type: conditional
     branches:
-    - if: feverheartnextPsg == "" || feverheartnextPsg == 0
-      then:
+    - condition: feverheartnextPsg == "" || feverheartnextPsg == 0
+      nodes:
       - type: assign
         var: feverheartnextPsg
         expr: '["S5Fate1", "S5Fate2"].shuffled("?")[0]'
@@ -593,7 +595,7 @@ A modal overlay, either click-triggered (has `label`) or auto-displayed when the
 | `label` | string | no | Button/link text that triggers the popup; omit for auto-display (layout-driven only) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
 | `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
-| `content` | list | no | Content nodes for the popup body; for layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated at open time to bind layout properties |
+| `nodes` | list | no | Content nodes for the popup body; for layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated at open time to bind layout properties |
 | `onclose` | string | no | `passage_id` to navigate to when dismissed or when layout-driven interaction completes |
 | `button` | string | no | Dismiss button label; defaults to `"Close"` (no `onclose`) or `"Next"` (with `onclose`) |
 
@@ -601,7 +603,7 @@ Standard popup with body content:
 ```yaml
 - type: popup
   label: Setup Instructions
-  content:
+  nodes:
   - type: text
     value: Place the hospital token on space 1 of the hospital track.
   onclose: Hospital2
@@ -617,14 +619,14 @@ Layout-driven popup — body owned by the layout, no content nodes:
   onclose: S4Kill3
 ```
 
-Layout-driven popup with property bindings — content nodes bind values to layout properties at open time:
+Layout-driven popup with property bindings — nodes bind values to layout properties at open time:
 ```yaml
 - type: popup
   layout: end_of_generation
   label: restext://Common_190  # "Click here at the end of the round..."
   state_affecting: true
   onclose: ATOWSabotageIntro1
-  content:
+  nodes:
   - type: let
     var: title
     expr: '"restext://Martial1_022"'
@@ -639,7 +641,7 @@ Auto-display layout popup — no `label`, shown immediately when the passage ren
 ```yaml
 - type: popup
   layout: end_of_generation
-  content:
+  nodes:
   - type: text
     value: restext://TowardsWar_002  # EOG instruction text
   - type: let
@@ -658,16 +660,16 @@ A player-clickable form that collects a value and navigates on submit. Can be ca
 | `label` | string | yes | Button/link text shown before the form opens (string formatting — see §3) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
 | `text` | string | yes | Instruction text displayed inside the form (string formatting — see §3) |
-| `input` | string | yes | `string` or `number` |
-| `var` | string | yes | Session variable to receive the submitted value |
+| `input_type` | string | yes | `string` or `number` |
+| `store_in` | string | yes | Session variable to receive the submitted value |
 | `onsubmit` | string | yes | `passage_id` to navigate to after submission |
 
 ```yaml
 - type: input
   label: Enter total hearts collected...
   text: Count up all heart tokens collected by ALL players. Enter the total here.
-  input: number
-  var: charitytotal
+  input_type: number
+  store_in: charitytotal
   onsubmit: Feverheart
 ```
 
@@ -680,14 +682,14 @@ An inline prompt — interrupts passage rendering until the player submits. Cann
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `text` | string | yes | Instruction text (string formatting — see §3) |
-| `input` | string | yes | `string` or `number` |
-| `var` | string | yes | Session variable to receive the submitted value |
+| `input_type` | string | yes | `string` or `number` |
+| `store_in` | string | yes | Session variable to receive the submitted value |
 
 ```yaml
 - type: prompt
   text: Enter player name A.
-  input: string
-  var: nameA
+  input_type: string
+  store_in: nameA
 ```
 
 ---
@@ -713,13 +715,14 @@ For conditional routing, wrap in `conditional`:
 ```yaml
 - type: conditional
   branches:
-  - if: wolves == "evil"
-    then:
+  - condition: wolves == "evil"
+    nodes:
     - type: goto
       target: BonusPath
-  else:
-  - type: goto
-    target: NeutralPath
+  - else: true
+    nodes:
+    - type: goto
+      target: NeutralPath
 ```
 
 ---
@@ -733,22 +736,23 @@ A visually-distinct content container. Optionally titled and collapsible.
 | `title` | string | no | Section heading (string formatting — see §3) |
 | `collapsed` | bool | no | If `true`, renders collapsed; player can expand. Default: `false` |
 | `style` | string | no | One of: `section` (default), `panel`, `well`, `quote`, `setup` |
-| `content` | list | yes | Content nodes |
+| `nodes` | list | yes | Content nodes |
 
 ```yaml
 - type: section
   title: '**Board of Trustees**'
-  content:
+  nodes:
   - type: text
     value: Each player may now purchase one building from the market.
-  - type: navigation
+  - type: action
     label: Continue...
+    type: navigation
     target: BuildPhase2
     state_affecting: true
 
 - type: section
   style: setup
-  content:
+  nodes:
   - type: text
     value: '**SETUP**'
   - type: paragraph_break
@@ -760,30 +764,14 @@ A visually-distinct content container. Optionally titled and collapsible.
 
 ### `conditional`
 
-Evaluates conditions in order; renders the first matching branch, or the `else` list if none match.
+Evaluates conditions in order; renders the first matching branch.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `branches` | list | yes | Ordered list of `if`/`then` branch objects |
-| `branches[i].if` | string | yes | Condition expression (see §4) |
-| `branches[i].then` | list | yes | Nodes rendered when this branch is taken |
-| `else` | list | no | Nodes rendered when no branch matches |
-
-```yaml
-- type: conditional
-  branches:
-  - if: players >= 3
-    then:
-    - type: text
-      value: Three or more players.
-  - if: players == 2
-    then:
-    - type: text
-      value: Two players.
-  else:
-  - type: text
-    value: Solo game.
-```
+| `branches` | list | yes | Ordered list of branch objects |
+| `branches[i].condition` | string | no | Condition expression (see §4) |
+| `branches[i].else` | bool | no | `true` marks the fallback branch |
+| `branches[i].nodes` | list | yes | Nodes rendered when this branch is taken |
 
 ---
 
@@ -794,28 +782,28 @@ Tests a single variable against a set of cases (see §5 for match patterns).
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `on` | string | yes | Variable name to test |
-| `cases` | list | yes | Ordered list of match/nodes case objects |
-| `cases[i].match` | pattern | yes | Value(s) to match (see §5) |
+| `cases` | list | yes | Ordered list of case objects |
+| `cases[i].match` | pattern | no | Value(s) to match (see §5) |
+| `cases[i].default` | bool | no | `true` marks the fallback case |
 | `cases[i].nodes` | list | yes | Nodes rendered when this case is taken |
-| `default` | list | no | Nodes rendered when no case matches |
 
 ---
 
 ### `foreach`
 
-Iterates over an array variable, rendering `do` once per element.
+Iterates over an array variable, rendering `nodes` once per element.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `var` | string | yes | Loop variable name; in scope within `do` |
+| `var` | string | yes | Loop variable name; in scope within `nodes` |
 | `in` | string | yes | Name of the array variable to iterate |
-| `do` | list | yes | Node list rendered for each element |
+| `nodes` | list | yes | Node list rendered for each element |
 
 ```yaml
 - type: foreach
   var: winner
   in: winners
-  do:
+  nodes:
   - type: text
     value: '{winner.name} gains 5VP.'
   - type: break
@@ -881,14 +869,14 @@ A named milestone in the timeline. Creates a labeled marker in the scrubber. Als
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | Stable checkpoint identifier |
-| `display` | string | no | Human-readable label in the timeline scrubber |
-| `diagnostic` | string | no | Machine-readable label for test assertions |
+| `display_label` | string | no | Human-readable label in the timeline scrubber |
+| `diagnostic_label` | string | no | Machine-readable label for test assertions |
 
 ```yaml
 - type: checkpoint
   id: generation_2_complete
-  display: Generation 2 Complete
-  diagnostic: gen2_end
+  display_label: Generation 2 Complete
+  diagnostic_label: gen2_end
 ```
 
 A generation-end sequence uses `section` for the summary and `checkpoint` for the boundary:
@@ -896,7 +884,7 @@ A generation-end sequence uses `section` for the summary and `checkpoint` for th
 ```yaml
 - type: section
   style: panel
-  content:
+  nodes:
   - type: text
     value: '**End of Generation 2**'
   - type: paragraph_break
@@ -904,9 +892,10 @@ A generation-end sequence uses `section` for the summary and `checkpoint` for th
     value: Resolve all pending experiments before continuing.
 - type: checkpoint
   id: generation_2_complete
-  display: Generation 2
-- type: navigation
+  display_label: Generation 2
+- type: action
   label: Continue to Generation 3
+  type: navigation
   target: Gen3Start
   state_affecting: true
 ```
@@ -966,7 +955,7 @@ popups:
 
 Layout-driven popups follow a different lifecycle from content popups:
 
-1. The engine evaluates any `let`, `conditional`, and `switch` nodes in the popup's `content` list. The resulting variable values are bound to the layout's named properties before display.
+1. The engine evaluates any `let`, `conditional`, and `switch` nodes in the popup's `nodes` list. The resulting variable values are bound to the layout's named properties before display.
 2. The layout renders its own body using those properties. Standard content nodes (`text`, `navigation`, etc.) are not displayed.
 3. The layout controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
 4. On completion, the engine navigates to `onclose` (if set) as a state-affecting transition. When `passageName` is a computed layout property (from a conditional `let: passageName`), the layout uses that value for navigation instead.
@@ -1088,7 +1077,7 @@ A passage from *A Time of War*:
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: mws/0.3
+format: mws/0.2
 passage_id: BattleTime
 title: BattleTime
 layout: narration
@@ -1116,10 +1105,11 @@ nodes:
     - type: let
       var: _rnd_BattleTime_0
       expr: '[nameA, nameB, nameC].shuffled("BattleTime_2")[0]'
-  default:
-  - type: let
-    var: _rnd_BattleTime_0
-    expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
+  - default: true
+    nodes:
+    - type: let
+      var: _rnd_BattleTime_0
+      expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
 # ATimeOfWar.cs:9278
 - type: let
   var: _rnd_BattleTime_1
@@ -1140,8 +1130,9 @@ nodes:
   value: restext://BattleTime_006 # "All players take all their {icon:s3_weapontoken} tokens..."
 - type: paragraph_break
 # ATimeOfWar.cs:9320
-- type: navigation
+- type: action
   label: restext://BattleTime_010 # "Click to begin the battle..."
+  type: navigation
   target: BattleCompleteReturn
   state_affecting: true
 - type: break
@@ -1149,4 +1140,4 @@ nodes:
 
 ---
 
-*MWS format v0.3 — Masterwork project.*
+*MWS format v0.2 — Masterwork project.*
