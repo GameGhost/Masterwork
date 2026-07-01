@@ -517,15 +517,46 @@ public static partial class V2Serializer
 
     // ── Popup ─────────────────────────────────────────────────────────────
 
+    // Matches: ViewBiddingSystem.instance.OnShowBidding("PassageId", BiddingSystem.Voting/Bidding)
+    [GeneratedRegex(@"ViewBiddingSystem\.instance\.OnShowBidding\(""([^""]+)"",\s*BiddingSystem\.(\w+)\)")]
+    private static partial Regex BiddingCallPattern();
+
     private static Dictionary<string, object?> TransformPopup(ExpandLinkNode expand, SerializationContext? ctx = null)
     {
+        // Scan children for a ViewBiddingSystem.OnShowBidding call.
+        // If present: hoist chrome + onclose to the popup dict; remove the unknown node.
+        string? chrome = null, onclose = null;
+        var childNodes = new List<MwsNode>(expand.ExpandNodes.Count);
+        foreach (var child in expand.ExpandNodes)
+        {
+            if (child is UnknownNode unk)
+            {
+                var m = BiddingCallPattern().Match(unk.OriginalCode ?? "");
+                if (m.Success)
+                {
+                    onclose = m.Groups[1].Value;
+                    chrome = m.Groups[2].Value.ToLowerInvariant(); // "Voting" → "voting"
+                    continue;
+                }
+            }
+            childNodes.Add(child);
+        }
+
         var d = new Dictionary<string, object?>
         {
             ["type"] = "popup",
-            ["label"] = expand.Label,
-            ["state_affecting"] = expand.StateAffecting,
-            ["nodes"] = TransformNodeList(expand.ExpandNodes, ctx),
         };
+        if (chrome is not null) d["chrome"] = chrome;
+        d["label"] = expand.Label;
+        d["state_affecting"] = expand.StateAffecting;
+        if (onclose is not null)
+        {
+            d["onclose"] = onclose;
+            AddLinkHint(d, onclose, ctx);
+        }
+
+        var transformed = TransformNodeList(childNodes, ctx);
+        if (transformed.Count > 0) d["nodes"] = transformed;
         return d;
     }
 

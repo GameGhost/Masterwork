@@ -503,10 +503,12 @@ A player-clickable label that reveals a modal overlay. Content is evaluated when
 |---|---|---|---|
 | `label` | string | yes | Button/link text (string formatting — see §3) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
-| `nodes` | list | yes | Content nodes for the popup body |
-| `onclose` | string | no | `passage_id` to navigate to when dismissed |
+| `chrome` | string | no | Named chrome definition (see §8) — overrides the popup's default visual treatment |
+| `nodes` | list | no | Content nodes for the popup body; omitted if the chrome fully owns the popup UI |
+| `onclose` | string | no | `passage_id` to navigate to when dismissed or when chrome-driven interaction completes |
 | `button` | string | no | Dismiss button label; defaults to `"Close"` (no `onclose`) or `"Next"` (with `onclose`) |
 
+Standard popup with body content:
 ```yaml
 - type: popup
   label: Setup Instructions
@@ -515,6 +517,15 @@ A player-clickable label that reveals a modal overlay. Content is evaluated when
     value: Place the hospital token on space 1 of the hospital track.
   onclose: Hospital2
   button: Begin
+```
+
+Chrome-driven popup (body owned entirely by the chrome; no `nodes`):
+```yaml
+- type: popup
+  chrome: voting
+  label: restext://S4Kill2_006  # "Click to start the vote..."
+  state_affecting: false
+  onclose: S4Kill3
 ```
 
 ---
@@ -801,6 +812,40 @@ layout: generation_end
 ```
 
 Custom layout/chrome allows module and asset pack authors to style passage types, popups, inputs, and UI elements without changing passage content.
+
+### Popup Chrome Definitions
+
+A `popup` node's optional `chrome` field names a chrome definition that takes over the popup's entire visual treatment — including its own animations, UI controls, and interaction model. The chrome definition is declared in the module manifest or in a shared asset pack that the module depends on.
+
+```yaml
+# In the module manifest or asset pack manifest
+popups:
+  voting:
+    description: Simultaneous-reveal voting popup
+    asset_pack: MFW_Common_Assets
+    interaction: bidding_countdown  # built-in interaction type
+    mode: voting
+  bidding:
+    description: Simultaneous-reveal bidding popup
+    asset_pack: MFW_Common_Assets
+    interaction: bidding_countdown
+    mode: bidding
+```
+
+Chrome-driven popups follow a different lifecycle from content popups:
+
+1. The chrome renders its own body — the passage `nodes` list is unused.
+2. The chrome controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
+3. On completion, the engine navigates to `onclose` (if set) as a state-affecting transition.
+
+**Built-in chrome for MFW modules** (`MFW_Common_Assets`):
+
+| Chrome name | Description |
+|---|---|
+| `voting` | Countdown timer → simultaneous reveal of voting tokens; navigates `onclose` on "Bid Complete" |
+| `bidding` | Countdown timer → simultaneous reveal of bid amounts; navigates `onclose` on "Bid Complete" |
+
+Both `voting` and `bidding` display a 3-count countdown (`1, 2, 3, Reveal`), then surface a "Reveal" button. The close/navigate action is hidden until players tap "Reveal". The distinction between modes is the animation and prompt text — the mechanics are identical.
 
 ---
 

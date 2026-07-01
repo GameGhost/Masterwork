@@ -718,6 +718,18 @@ public class PassageBodyVisitor
                 return [new EffectNode { VarRemove = new() { [listVarsRef] = $"{{{removeVar}}}" } }];
         }
 
+        // ViewBiddingSystem.instance.OnShowBidding("passage", BiddingSystem.Mode)
+        // Handled by V2Serializer as popup chrome — produce the marker node without
+        // logging it as an unknown, since it will be consumed during serialization.
+        if (expr is InvocationExpressionSyntax biddingInv &&
+            biddingInv.Expression is MemberAccessExpressionSyntax biddingMa &&
+            biddingMa.Name.Identifier.Text == "OnShowBidding" &&
+            biddingMa.Expression.ToString().Contains("ViewBiddingSystem"))
+        {
+            var biddingCode = es.ToString().Trim();
+            return [new UnknownNode { OriginalCode = Truncate(biddingCode), SourceLine = GetLine(es) }];
+        }
+
         // Unknown expression statement
         var code = es.ToString().Trim();
         _report.AddUnhandled(_passageName, code, GetLine(es));
