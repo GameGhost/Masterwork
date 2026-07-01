@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
 
@@ -18,11 +16,16 @@ public record SerializationContext(
 );
 
 /// <summary>
-/// Converts a MwsPassage (v0.1 intermediate representation produced by the extractor)
-/// to a v0.2 Dictionary suitable for YAML serialization.
+/// Serializes a MwsPassage to a v0.2 Dictionary suitable for YAML emission.
 ///
-/// This keeps all v0.1 MwsNode subclasses as the internal extraction representation
-/// (so tests and the visitor are unchanged) while producing v0.2-format YAML output.
+/// Most node types delegate to their own ToDict() which already produce v0.2 output.
+/// This class handles the remaining output concerns:
+///   • Header node hoisting (SetLocationNode → location header, CheckProgressNode)
+///   • Source sentinel injection (_src comments)
+///   • Passage-file link hints (_link inline comments)
+///   • Multi-node expansions: EffectNode → assign nodes, LetNode.Pop/Dequeue → 2 nodes
+///   • Complex structural transforms: ExpandLinkNode → popup/navigation,
+///     SectionHeadingNode+SectionBodyNode → section, ModalNode, EndOfGenerationNode, etc.
 /// </summary>
 public static partial class V2Serializer
 {
@@ -151,13 +154,13 @@ public static partial class V2Serializer
         switch (node)
         {
             case TextNode text:
-                yield return TransformText(text);
+                yield return text.ToDict();
                 break;
             case ImageNode img:
                 yield return TransformImage(img);
                 break;
             case LetNode let:
-                foreach (var d in TransformLet(let, ctx))
+                foreach (var d in TransformLetNode(let, ctx))
                     yield return d;
                 break;
             case EffectNode effect:
@@ -239,32 +242,7 @@ public static partial class V2Serializer
     }
 
     // ── Text ──────────────────────────────────────────────────────────────
-
-    private static Dictionary<string, object?> TransformText(TextNode text)
-    {
-        var d = new Dictionary<string, object?> { ["type"] = "text" };
-
-        string value;
-        if (text.Template is not null)
-        {
-            value = ApplyInlineStyle(text.Template, text.Style);
-        }
-        else if (text.Runs.Count > 0)
-        {
-            value = BuildValueFromRuns(text.Runs);
-        }
-        else
-        {
-            d["value"] = "";
-            if (text.Align is not null) d["align"] = text.Align;
-            return d;
-        }
-
-        d["value"] = value;
-        if (text.Lets is { Count: > 0 }) d["lets"] = text.Lets;
-        if (text.Align is not null) d["align"] = text.Align;
-        return d;
-    }
+    // TextNode.ToDict() now produces v0.2 `value:` directly — no transformation needed.
 
     private static Dictionary<string, object?> TransformImage(ImageNode img)
     {
@@ -274,50 +252,11 @@ public static partial class V2Serializer
         return d;
     }
 
-    private static string ApplyInlineStyle(string template, string? style) => style switch
-    {
-        "bold" => $"**{template}**",
-        "italic" => $"_{template}_",
-        _ => template,
-    };
-
-    private static string BuildValueFromRuns(List<TextRun> runs)
-    {
-        var sb = new StringBuilder();
-        bool inBold = false, inItalic = false;
-
-        foreach (var run in runs)
-        {
-            if (run.AssetRef is not null)
-            {
-                if (inBold) { sb.Append("**"); inBold = false; }
-                if (inItalic) { sb.Append("_"); inItalic = false; }
-                var slug = run.AssetRef.StartsWith("icon://") ? run.AssetRef["icon://".Length..] : run.AssetRef;
-                sb.Append($"{{icon:{slug}}}");
-                continue;
-            }
-            if (run.Text is null) continue;
-
-            bool needBold = run.Style == "bold";
-            bool needItalic = run.Style == "italic";
-
-            if (inBold && !needBold) { sb.Append("**"); inBold = false; }
-            if (inItalic && !needItalic) { sb.Append("_"); inItalic = false; }
-            if (!inBold && needBold) { sb.Append("**"); inBold = true; }
-            if (!inItalic && needItalic) { sb.Append("_"); inItalic = true; }
-
-            sb.Append(run.Text);
-        }
-
-        if (inBold) sb.Append("**");
-        if (inItalic) sb.Append("_");
-
-        return sb.ToString();
-    }
-
     // ── Let ───────────────────────────────────────────────────────────────
+    // LetNode.ToDict() now produces v0.2 `expr:` directly.
+    // Pop/Dequeue still require two output nodes, so they are expanded here.
 
-    private static IEnumerable<Dictionary<string, object?>> TransformLet(LetNode let, SerializationContext? ctx = null)
+    private static IEnumerable<Dictionary<string, object?>> TransformLetNode(LetNode let, SerializationContext? ctx = null)
     {
         // Pop/dequeue produce TWO output nodes: let + assign
         if (let.Pop is not null)
@@ -333,94 +272,7 @@ public static partial class V2Serializer
             yield break;
         }
 
-        var d = MakeLet(let.Var, LetToExpr(let));
-        yield return d;
-    }
-
-    private static string LetToExpr(LetNode let)
-    {
-        if (let.Random is not null) return VarRandomToExpr(let.Random);
-        if (let.Replace is not null) return ReplaceToExpr(let.Replace);
-        if (let.PickFrom is not null) return $"{let.PickFrom}.shuffled(\"{let.Var}_0\")[0]";
-        if (let.Array is not null)
-            return "[" + string.Join(", ", let.Array.Select(v => $"{v}")) + "]";
-        if (let.Compute is not null) return let.Compute;
-        if (let.Sort is not null) return SortToExpr(let.Sort.From ?? let.Var, let.Sort);
-        return "null";
-    }
-
-    private static string VarRandomToExpr(VarRandom vr)
-    {
-        var key = vr.SeedKey is not null ? $"\"{EscapeStr(vr.SeedKey)}\"" : "\"?\"";
-        return vr.RandomType switch
-        {
-            "choose-one" => vr.Values.Count == 1
-                ? ValueToExpr(vr.Values[0])
-                : $"[{ValuesToExprList(vr.Values)}].shuffled({key})[0]",
-            "range" => $"rand_between({vr.Min}, {vr.Max}, {key})",
-            "rand-between" => $"rand_between({vr.Min}, {vr.Max}, {key})",
-            "shuffled_array" => $"[{ValuesToExprList(vr.Values)}].shuffled({key})",
-            _ => $"/* unsupported random type: {vr.RandomType} */",
-        };
-    }
-
-    private static string ValuesToExprList(List<object> values) =>
-        string.Join(", ", values.Select(ValueToExpr));
-
-    private static string ValueToExpr(object v) => v switch
-    {
-        int n => n.ToString(),
-        long l => l.ToString(),
-        bool b => b ? "true" : "false",
-        string s => StringValueToExpr(s),
-        _ => $"\"{v}\"",
-    };
-
-    private static string StringValueToExpr(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return "\"\"";
-        // restext:// URI — wrap as string literal
-        if (s.StartsWith("restext://")) return $"\"{s}\"";
-        // Single var ref: {varName} → varName
-        if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
-        {
-            var inner = s[1..^1].Replace(".first()", "[0]");
-            return inner;
-        }
-        // Already-expression forms: ternary, global, input
-        if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
-            return s;
-        // Unhandled fallback marker
-        if (s.StartsWith("?(")) return s;
-        // Plain string (no braces, not an expression)
-        if (!s.Contains('{') && !s.Contains('+'))
-            return $"\"{EscapeStr(s)}\"";
-        // Template/expression with {var} refs — keep as-is
-        return s;
-    }
-
-    private static string ReplaceToExpr(VarReplace r)
-    {
-        var src = r.Source;
-        var with = $"\"{EscapeStr(r.With)}\"";
-        if (r.Find is List<string> finds)
-        {
-            // Chained replaces
-            var result = src;
-            foreach (var find in finds)
-                result = $"{result}.replace(\"{EscapeStr(find)}\", {with})";
-            return result;
-        }
-        var findStr = r.Find?.ToString() ?? "";
-        return $"{src}.replace(\"{EscapeStr(findStr)}\", {with})";
-    }
-
-    private static string SortToExpr(string source, SortSpec sort)
-    {
-        var dir = $"\"{EscapeStr(sort.Direction)}\"";
-        if (sort.Property is not null)
-            return $"{source}.toSorted({dir}, \"{EscapeStr(sort.Property)}\")";
-        return $"{source}.toSorted({dir})";
+        yield return let.ToDict();
     }
 
     // ── Effect → assign nodes ─────────────────────────────────────────────
@@ -430,12 +282,12 @@ public static partial class V2Serializer
         if (effect.VarSets is not null)
         {
             foreach (var (varName, val) in effect.VarSets)
-                yield return MakeAssign(varName, VarSetValueToExpr(varName, val), ctx);
+                yield return MakeAssign(varName, MwsExprHelper.VarSetValueToExpr(val), ctx);
         }
         if (effect.VarMath is not null)
         {
             foreach (var (varName, math) in effect.VarMath)
-                yield return MakeAssign(varName, VarMathToExpr(varName, math));
+                yield return MakeAssign(varName, MwsExprHelper.VarMathToExpr(varName, math));
         }
         if (effect.VarRandom is not null)
         {
@@ -443,8 +295,8 @@ public static partial class V2Serializer
             {
                 // shuffled_array with no literal values = reshuffle an existing variable in-place.
                 var expr = vr is { RandomType: "shuffled_array", Values.Count: 0 }
-                    ? $"{varName}.shuffled(\"{EscapeStr(vr.SeedKey ?? "?")}\")"
-                    : VarRandomToExpr(vr);
+                    ? $"{varName}.shuffled(\"{MwsExprHelper.EscapeStr(vr.SeedKey ?? "?")}\")"
+                    : MwsExprHelper.VarRandomToExpr(vr);
                 yield return MakeAssign(varName, expr);
             }
         }
@@ -452,7 +304,7 @@ public static partial class V2Serializer
         {
             foreach (var (varName, valExpr) in effect.VarPush)
             {
-                var val = StringValueToExpr(valExpr);
+                var val = MwsExprHelper.StringValueToExpr(valExpr);
                 yield return MakeAssign(varName, $"[..{varName}, {val}]");
             }
         }
@@ -461,68 +313,16 @@ public static partial class V2Serializer
         if (effect.VarSort is not null)
         {
             foreach (var (varName, sort) in effect.VarSort)
-                yield return MakeAssign(varName, SortToExpr(varName, sort));
+                yield return MakeAssign(varName, MwsExprHelper.SortToExpr(varName, sort));
         }
         if (effect.VarRemove is not null)
         {
             foreach (var (varName, val) in effect.VarRemove)
             {
-                var valExpr = StringValueToExpr(val);
+                var valExpr = MwsExprHelper.StringValueToExpr(val);
                 yield return MakeAssign(varName, $"{varName}.except({valExpr})");
             }
         }
-    }
-
-    private static string VarSetValueToExpr(string varName, object? val)
-    {
-        return val switch
-        {
-            null => "null",
-            int n => n.ToString(),
-            long l => l.ToString(),
-            bool b => b ? "true" : "false",
-            List<object> list => "[" + string.Join(", ", list.Select(v => ValueToExpr(v))) + "]",
-            string s => VarSetStringToExpr(s),
-            _ => $"\"{val}\"",
-        };
-    }
-
-    private static string VarSetStringToExpr(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return "\"\"";
-        // restext:// URI
-        if (s.StartsWith("restext://")) return $"\"{s}\"";
-        // Single brace-wrapped expression: {expr} → expr (strips outer braces)
-        if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
-        {
-            var inner = s[1..^1].Replace(".first()", "[0]");
-            return inner;
-        }
-        // Already-expression forms
-        if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
-            return s;
-        if (s.StartsWith("?(")) return s;
-        // Method calls on vars that came out as bare string ("arr.shuffle()" etc.)
-        if (s.Contains(".shuffle()")) return s;
-        // Sum of multiple var refs came out as "a + b + c" style (no braces needed)
-        // Plain string with no brace references
-        if (!s.Contains('{'))
-            return $"\"{EscapeStr(s)}\"";
-        // Template / expression with embedded {var} refs — keep as-is
-        return s;
-    }
-
-    private static string VarMathToExpr(string varName, string math)
-    {
-        if (math == "+0") return varName;
-        // Full expression form produced by TryBuildArithExpr (e.g. "= x + y * 2")
-        if (math.StartsWith("= ")) return math[2..];
-        var op = math[0];
-        var operand = math[1..];
-        // Strip {Y} → Y for var operands
-        if (operand.StartsWith("{") && operand.EndsWith("}"))
-            operand = operand[1..^1];
-        return $"{varName} {op} {operand}";
     }
 
     // ── Navigation ────────────────────────────────────────────────────────
@@ -652,7 +452,7 @@ public static partial class V2Serializer
         {
             var eogPropNodes = new List<MwsNode>();
             if (eogMarker.Title is not null)
-                eogPropNodes.Add(new LetNode { Var = "title", Compute = $"\"{EscapeStr(eogMarker.Title)}\"" });
+                eogPropNodes.Add(new LetNode { Var = "title", Compute = $"\"{MwsExprHelper.EscapeStr(eogMarker.Title)}\"" });
             eogPropNodes.Add(new LetNode { Var = "completedRound", Compute = eogMarker.CompletedRound.ToString() });
             if (eogMarker.BodyText is not null)
                 eogPropNodes.Add(new TextNode { Template = eogMarker.BodyText });
@@ -887,6 +687,4 @@ public static partial class V2Serializer
         return d;
     }
 
-    private static string EscapeStr(string s) =>
-        s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }

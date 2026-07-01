@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace Masterwork.ModuleFormat;
 
@@ -7,7 +8,7 @@ namespace Masterwork.ModuleFormat;
 
 public class MwsPassage
 {
-    public string Format { get; set; } = "mws/0.1";
+    public string Format { get; set; } = "mws/0.2";
     public string PassageId { get; set; } = "";
     public string Title { get; set; } = "";
     public string[] Tags { get; set; } = [];
@@ -24,10 +25,10 @@ public class MwsPassage
     {
         var d = new Dictionary<string, object?>
         {
-            ["format"] = Format,
+            ["format"] = "mws/0.2",
             ["passage_id"] = PassageId,
         };
-        if (!string.IsNullOrEmpty(Title)) d["title"] = Title;
+        if (!string.IsNullOrEmpty(Title) && Title != PassageId) d["title"] = Title;
         if (Tags.Length > 0) d["tags"] = Tags;
         d["layout"] = Layout;
         if (Debug) d["debug"] = true;
@@ -84,16 +85,15 @@ public class TextNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
+        string value;
         if (Template is not null)
-        {
-            d["template"] = Template;
-            if (Style is not null) d["style"] = Style;
-            if (Lets is { Count: > 0 }) d["lets"] = Lets;
-        }
+            value = MwsExprHelper.ApplyInlineStyle(Template, Style);
+        else if (Runs.Count > 0)
+            value = MwsExprHelper.BuildValueFromRuns(Runs);
         else
-        {
-            d["runs"] = Runs.Select(r => r.ToDict()).ToList();
-        }
+            value = "";
+        d["value"] = value;
+        if (Lets is { Count: > 0 }) d["lets"] = Lets;
         if (Align is not null) d["align"] = Align;
         return d;
     }
@@ -165,7 +165,7 @@ public class SetupBlockNode : MwsNode
 
 public class LinkNode : MwsNode
 {
-    public override string Type => "link";
+    public override string Type => "navigation";
     public string Label { get; set; } = "";
     public string Target { get; set; } = "";
     public bool StateAffecting { get; set; } = true;
@@ -434,16 +434,12 @@ public class LetNode : MwsNode
 
     public override Dictionary<string, object?> ToDict()
     {
-        var d = new Dictionary<string, object?> { ["type"] = Type, ["var"] = Var };
-        if (Random is not null) d["random"] = Random.ToDict();
-        if (Replace is not null) d["replace"] = Replace.ToDict();
-        if (PickFrom is not null) d["pick_from"] = PickFrom;
-        if (Array is not null) d["array"] = Array;
-        if (Compute is not null) d["compute"] = Compute;
-        if (Pop is not null) d["pop"] = Pop;
-        if (Dequeue is not null) d["dequeue"] = Dequeue;
-        if (Sort is not null) d["sort"] = Sort.ToDict();
-        return d;
+        return new Dictionary<string, object?>
+        {
+            ["type"] = Type,
+            ["var"] = Var,
+            ["expr"] = MwsExprHelper.LetToExpr(this),
+        };
     }
 }
 
@@ -563,5 +559,175 @@ public class UnknownNode : MwsNode
         var d = new Dictionary<string, object?> { ["type"] = Type, ["original_code"] = OriginalCode };
         if (Note is not null) d["note"] = Note;
         return d;
+    }
+}
+
+// ── Expression building helpers ────────────────────────────────────────────
+// Converts intermediate node fields (VarRandom, SortSpec, etc.) into v0.2 expression strings.
+// Used by TextNode.ToDict(), LetNode.ToDict(), and V2Serializer for EffectNode expansion.
+
+public static class MwsExprHelper
+{
+    public static string EscapeStr(string s) =>
+        s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    public static string ApplyInlineStyle(string template, string? style) => style switch
+    {
+        "bold" => $"**{template}**",
+        "italic" => $"_{template}_",
+        _ => template,
+    };
+
+    public static string BuildValueFromRuns(List<TextRun> runs)
+    {
+        var sb = new StringBuilder();
+        bool inBold = false, inItalic = false;
+
+        foreach (var run in runs)
+        {
+            if (run.AssetRef is not null)
+            {
+                if (inBold) { sb.Append("**"); inBold = false; }
+                if (inItalic) { sb.Append("_"); inItalic = false; }
+                var slug = run.AssetRef.StartsWith("icon://") ? run.AssetRef["icon://".Length..] : run.AssetRef;
+                sb.Append($"{{icon:{slug}}}");
+                continue;
+            }
+            if (run.Text is null) continue;
+
+            bool needBold = run.Style == "bold";
+            bool needItalic = run.Style == "italic";
+
+            if (inBold && !needBold) { sb.Append("**"); inBold = false; }
+            if (inItalic && !needItalic) { sb.Append("_"); inItalic = false; }
+            if (!inBold && needBold) { sb.Append("**"); inBold = true; }
+            if (!inItalic && needItalic) { sb.Append("_"); inItalic = true; }
+
+            sb.Append(run.Text);
+        }
+
+        if (inBold) sb.Append("**");
+        if (inItalic) sb.Append("_");
+
+        return sb.ToString();
+    }
+
+    public static string ValueToExpr(object v) => v switch
+    {
+        int n => n.ToString(),
+        long l => l.ToString(),
+        bool b => b ? "true" : "false",
+        string s => StringValueToExpr(s),
+        _ => $"\"{v}\"",
+    };
+
+    public static string StringValueToExpr(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "\"\"";
+        if (s.StartsWith("restext://")) return $"\"{s}\"";
+        if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
+        {
+            var inner = s[1..^1].Replace(".first()", "[0]");
+            return inner;
+        }
+        if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
+            return s;
+        if (s.StartsWith("?(")) return s;
+        if (!s.Contains('{') && !s.Contains('+'))
+            return $"\"{EscapeStr(s)}\"";
+        return s;
+    }
+
+    public static string VarSetStringToExpr(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "\"\"";
+        if (s.StartsWith("restext://")) return $"\"{s}\"";
+        if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
+        {
+            var inner = s[1..^1].Replace(".first()", "[0]");
+            return inner;
+        }
+        if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
+            return s;
+        if (s.StartsWith("?(")) return s;
+        if (s.Contains(".shuffle()")) return s;
+        if (!s.Contains('{'))
+            return $"\"{EscapeStr(s)}\"";
+        return s;
+    }
+
+    public static string VarSetValueToExpr(object? val) => val switch
+    {
+        null => "null",
+        int n => n.ToString(),
+        long l => l.ToString(),
+        bool b => b ? "true" : "false",
+        List<object> list => "[" + string.Join(", ", list.Select(v => ValueToExpr(v))) + "]",
+        string s => VarSetStringToExpr(s),
+        _ => $"\"{val}\"",
+    };
+
+    public static string VarMathToExpr(string varName, string math)
+    {
+        if (math == "+0") return varName;
+        if (math.StartsWith("= ")) return math[2..];
+        var op = math[0];
+        var operand = math[1..];
+        if (operand.StartsWith("{") && operand.EndsWith("}"))
+            operand = operand[1..^1];
+        return $"{varName} {op} {operand}";
+    }
+
+    public static string ValuesToExprList(List<object> values) =>
+        string.Join(", ", values.Select(ValueToExpr));
+
+    public static string VarRandomToExpr(VarRandom vr)
+    {
+        var key = vr.SeedKey is not null ? $"\"{EscapeStr(vr.SeedKey)}\"" : "\"?\"";
+        return vr.RandomType switch
+        {
+            "choose-one" => vr.Values.Count == 1
+                ? ValueToExpr(vr.Values[0])
+                : $"[{ValuesToExprList(vr.Values)}].shuffled({key})[0]",
+            "range" => $"rand_between({vr.Min}, {vr.Max}, {key})",
+            "rand-between" => $"rand_between({vr.Min}, {vr.Max}, {key})",
+            "shuffled_array" => $"[{ValuesToExprList(vr.Values)}].shuffled({key})",
+            _ => $"/* unsupported random type: {vr.RandomType} */",
+        };
+    }
+
+    public static string ReplaceToExpr(VarReplace r)
+    {
+        var with = $"\"{EscapeStr(r.With)}\"";
+        if (r.Find is List<string> finds)
+        {
+            var result = r.Source;
+            foreach (var find in finds)
+                result = $"{result}.replace(\"{EscapeStr(find)}\", {with})";
+            return result;
+        }
+        var findStr = r.Find?.ToString() ?? "";
+        return $"{r.Source}.replace(\"{EscapeStr(findStr)}\", {with})";
+    }
+
+    public static string SortToExpr(string source, SortSpec sort)
+    {
+        var dir = $"\"{EscapeStr(sort.Direction)}\"";
+        if (sort.Property is not null)
+            return $"{source}.toSorted({dir}, \"{EscapeStr(sort.Property)}\")";
+        return $"{source}.toSorted({dir})";
+    }
+
+    public static string LetToExpr(LetNode let)
+    {
+        if (let.Random is not null) return VarRandomToExpr(let.Random);
+        if (let.Replace is not null) return ReplaceToExpr(let.Replace);
+        if (let.PickFrom is not null) return $"{let.PickFrom}.shuffled(\"{EscapeStr(let.Var)}_0\")[0]";
+        if (let.Array is not null) return "[" + string.Join(", ", let.Array) + "]";
+        if (let.Compute is not null) return let.Compute;
+        if (let.Sort is not null) return SortToExpr(let.Sort.From ?? let.Var, let.Sort);
+        if (let.Pop is not null) return $"{let.Pop}[^1]";
+        if (let.Dequeue is not null) return $"{let.Dequeue}[0]";
+        return "null";
     }
 }
