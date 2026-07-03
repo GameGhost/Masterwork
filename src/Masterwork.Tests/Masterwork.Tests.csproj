@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.Extractor\Masterwork.Extractor.csproj" />
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
+    <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
   </ItemGroup>
 
 </Project>
