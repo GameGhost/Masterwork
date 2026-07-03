@@ -1,6 +1,6 @@
 # MasterWork Extractor
 
-`MasterWork.Extractor` is the CLI tool that converts Cradle C# scenario files into MWS v0.2 YAML passages, ready for the game engine.
+`MasterWork.Extractor` is the CLI tool that converts Cradle C# scenario files into MWS v0.3 YAML passages, ready for the game engine.
 
 ---
 
@@ -10,7 +10,7 @@ The three original *My Father's Work* scenarios were built with **Cradle 2.0**, 
 
 The extractor:
 1. Parses the C# source with Roslyn (no regex — full AST)
-2. Converts each passage into MWS v0.2 YAML nodes
+2. Converts each passage into MWS v0.3 YAML nodes
 3. Extracts all human-readable strings into an `en-US.restext` locale file (replacing them with `restext://Key` references in the YAML)
 4. Assigns deterministic PRNG seed keys to all random calls
 5. Writes one `.mws.yaml` file per passage, plus a variables manifest and extraction report
@@ -83,7 +83,7 @@ For each run, the output directory contains:
 
 | File | Description |
 |---|---|
-| `{NNN}-{PassageId}.mws.yaml` | One file per passage in MWS v0.2 format, numbered by source order |
+| `{NNN}-{PassageId}.mws.yaml` | One file per passage in MWS v0.3 format, numbered by source order |
 | `_variables.yaml` | All discovered session variables with inferred types and defaults |
 | `en-US.restext` | All extracted human-readable strings, one `Key=Value` per line |
 | `_extraction-report.md` | Summary table, warnings, unknown nodes, isolated passages, input prompts |
@@ -113,34 +113,36 @@ CradleExtractor
   ├── Pass 1: DiscoverVariables    scan this.Vars.X accesses, infer types
   ├── Pass 2: BuildPassageRegistry passageN_Init() → (name, tags[]) map
   ├── Pass 3: ExtractPassageBodies passageN_Main() → MwsNode list
-  │    └── PassageBodyVisitor   Roslyn statement visitor → v0.1 intermediate nodes
+  │    └── PassageBodyVisitor   Roslyn statement visitor → extractor-internal nodes
   ├── StitchFragments          inline enchantHook fragment stubs into expand links
+  ├── HoistAssignAndSwitchPlayerNames  reorder player-name setup sequences into canonical form
   ├── ConsolidateText          merge text runs, apply inline style markup, promote let nodes
   ├── AssignSeedKeys           DFS passage graph, assign stable "PassageId_N" seed keys
-  └── V2Serializer             convert v0.1 intermediate types → v0.2 YAML dicts
+  └── V2Serializer             convert extractor-internal types → v0.3 YAML dicts
        └── RestextCollector    extract strings to restext URIs while serializing
 ```
 
-### V0.1 intermediate → V0.2 output
+### Extractor-internal nodes → v0.3 output
 
-The extractor internally uses **v0.1 intermediate node types** (`MwsNodes.cs`) produced by `PassageBodyVisitor`. These are converted to v0.2 YAML at serialization time by `V2Serializer.cs`, which runs after all passes complete. This design keeps the test suite (which checks intermediate node types) unaffected by format changes.
+The extractor internally uses a set of **extractor-internal node types** (`MwsNodes.cs`, in the `Masterwork.Extractor` project) produced by `PassageBodyVisitor`. These are converted to v0.3 YAML at serialization time by `V2Serializer.cs`, which runs after all passes complete. This design keeps the test suite (which checks intermediate node types) unaffected by format changes.
 
-Key v0.1 → v0.2 transformations performed by the serializer:
+Key transformations performed by the serializer:
 
-| V0.1 intermediate | V0.2 YAML output |
+| Extractor-internal | v0.3 YAML output |
 |---|---|
 | `TextNode(template, style)` | `{type: text, value: **text**}` with inline markdown |
-| `LinkNode` | `{type: navigation, label, target, state_affecting}` |
-| `ExpandLinkNode` | `{type: popup, label, state_affecting, nodes}` |
-| `InputPromptNode` | `{type: input, label, text, input_type, store_in, onsubmit}` |
-| `SectionHeadingNode + SectionBodyNode` | `{type: section, title, nodes}` (merged pair) |
-| `SetupBlockNode` | `{type: section, style: setup, nodes}` |
+| `LinkNode` | `{type: navigation, label, target, state_affecting, onclick}` |
+| `ExpandLinkNode` | `{type: popup, label, state_affecting, content}` |
+| `InputPromptNode` | `{type: input, label, text, input, var, onsubmit}` |
+| `SectionHeadingNode + SectionBodyNode` | `{type: section, title, content}` (merged pair) |
+| `SetupBlockNode` | `{type: section, style: setup, content}` |
 | `SetLocationNode` | hoisted to passage-level `location:` header |
 | `CheckProgressNode` | hoisted to passage-level `check_progress:` header |
 | `LetNode.Random` | `{type: let, var, expr: rand_between(...) or [...].shuffled(...)[0]}` |
 | `EffectNode` | one `{type: assign, var, expr}` per variable affected |
+| `ForeachNode` | `{type: foreach, var, in, do}` |
 
-See `docs/mws-format-latest.md` for the full v0.2 node type reference.
+See `docs/mws-format-latest.md` for the full v0.3 node type reference.
 
 ---
 
@@ -182,11 +184,9 @@ Expressions (in `let.expr` and `assign.expr`) are not extracted — they contain
 # NNNnn-PassageName.mws.yaml
 PassageId_001=Some human-readable string
 PassageId_002=Another string with {varName} placeholder
-PassageId_003="""
-Multi-line value — opening """ followed by newline.
-Closing """ must appear on its own line.
-"""
 ```
+
+One `Key=Value` per line; no multi-line values. Lines starting with `#` are comments.
 
 ---
 
@@ -215,16 +215,16 @@ The extraction report lists passages with no inbound references from other passa
 - Unreachable dead code or authoring notes
 - Passages referenced from non-passage C# logic the extractor doesn't trace
 
-Isolated passages are flagged but not excluded. Human review is needed to determine which are true entry points vs. dead code. Counts per module: FotU 94, AToW 73, CoD 101.
+Isolated passages are flagged but not excluded. Human review is needed to determine which are true entry points vs. dead code. Counts per module: FotU 80, AToW 62, CoD 84.
 
 ---
 
-## Current Extraction Results (as of 2026-06-29)
+## Current Extraction Results (as of 2026-07-02)
 
 | Module | Source | Passages | Variables | Strings | Warnings | Unknowns |
 |---|---|---|---|---|---|---|
-| Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 254 | 2698 | 0 | 0 |
-| A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 188 | 2093 | 0 | 0 |
-| The Cost of Disease | `TheCostofDisease_Eng_v10.cs` | 359 | 261 | 2732 | 0 | 0 |
+| Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 254 | 2157 | 46 | 0 |
+| A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 188 | 1826 | 44 | 0 |
+| The Cost of Disease | `TheCostofDisease_Eng_v10.cs` | 361 | 261 | 2144 | 60 | 0 |
 
-All 1034 passage files carry `format: mws/0.2`.
+All 1036 passage files carry `format: mws/0.3`. Warnings are all conflicting-type assignments (genuine mixed-use patterns; resolved to `type: string`) — not extraction errors.

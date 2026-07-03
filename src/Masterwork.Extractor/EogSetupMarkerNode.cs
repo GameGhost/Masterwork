@@ -1,7 +1,5 @@
 namespace Masterwork.Extractor;
 
-using Masterwork.ModuleFormat;
-
 // Extractor-internal marker node for ViewEndOfGeneration.S_OnSetSpecialSetup calls.
 // Produced by PassageBodyVisitor; consumed by V2Serializer.TransformPopup.
 // When found in a popup's expand nodes, transforms the popup to layout: end_of_generation.

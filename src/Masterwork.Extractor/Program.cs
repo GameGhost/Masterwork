@@ -519,10 +519,20 @@ partial class Program
         return string.Join('\n', result);
     }
 
+    // Restext values are single-line only. Source text can still contain embedded newlines
+    // (e.g. multi-paragraph input prompts); collapse them to spaces so every value round-trips
+    // as exactly one physical line, both in the .restext file and in inline preview comments.
+    // Values without embedded newlines pass through unchanged (no incidental trimming).
+    private static string NormalizeRestextValue(string value) =>
+        value.Contains('\n') ? RestextNewlineRun().Replace(value, " ").Trim() : value;
+
+    [GeneratedRegex(@"\s*\r?\n\s*")]
+    private static partial Regex RestextNewlineRun();
+
     private static string FormatRestextPreview(string value)
     {
-        if (value.Contains('\n')) return "[multiline]";
-        var escaped = value.Replace("\"", "\\\"");
+        var normalized = NormalizeRestextValue(value);
+        var escaped = normalized.Replace("\"", "\\\"");
         return escaped.Length <= 30 ? $"\"{escaped}\"" : $"\"{escaped[..25]}...\"";
     }
 
@@ -531,8 +541,8 @@ partial class Program
     private static Dictionary<string, int> BuildRestextLineMap(RestextCollector restext)
     {
         var map = new Dictionary<string, int>(StringComparer.Ordinal);
-        // WriteRestextFile emits 5 header AppendLine calls + 1 blank AppendLine = 6 lines
-        int line = 7;
+        // WriteRestextFile emits 2 header AppendLine calls + 1 blank AppendLine = 3 lines
+        int line = 4;
         foreach (var (_, entries) in restext.Passages)
         {
             if (entries.Count == 0) continue;
@@ -540,10 +550,7 @@ partial class Program
             foreach (var entry in entries)
             {
                 map[entry.Key] = line;
-                if (entry.Value.Contains('\n'))
-                    line += 2 + entry.Value.Split('\n').Length; // key=""" + N content lines + """
-                else
-                    line++; // key=value
+                line++; // key=value
             }
             line++; // blank line after each group
         }
@@ -552,16 +559,12 @@ partial class Program
 
     // Writes en-US.restext: one Key=Value per string, grouped by passage with a comment header.
     // Common strings (shared across passages) appear first under "# (Common)".
-    // Multi-line values use the """...""" block syntax.
     private static void WriteRestextFile(RestextCollector restext, string outputDir)
     {
         var outPath = Path.Combine(outputDir, "en-US.restext");
         var sb = new StringBuilder();
         sb.AppendLine("# MasterWork locale file — en-US");
         sb.AppendLine("# Format: Key=Value  (one string per line)");
-        sb.AppendLine("# Multi-line values: Key=\"\"\"");
-        sb.AppendLine("#   line 1");
-        sb.AppendLine("# \"\"\"");
         sb.AppendLine();
 
         int totalStrings = 0;
@@ -573,16 +576,7 @@ partial class Program
                 : $"# {fileName}");
             foreach (var entry in entries)
             {
-                if (entry.Value.Contains('\n'))
-                {
-                    sb.AppendLine($"{entry.Key}=\"\"\"");
-                    sb.AppendLine(entry.Value);
-                    sb.AppendLine("\"\"\"");
-                }
-                else
-                {
-                    sb.AppendLine($"{entry.Key}={entry.Value}");
-                }
+                sb.AppendLine($"{entry.Key}={NormalizeRestextValue(entry.Value)}");
                 totalStrings++;
             }
             sb.AppendLine();

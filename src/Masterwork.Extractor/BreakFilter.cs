@@ -1,5 +1,3 @@
-using Masterwork.ModuleFormat;
-
 namespace Masterwork.Extractor;
 
 // Node used only in emit-commented mode: serialized as a YAML comment "# - type: break"

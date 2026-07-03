@@ -171,13 +171,15 @@ Property access chains through array indexing: `{all_players[0].name}`.
 
 The `# "..."` comment is an inline preview for human readers; the engine ignores it.
 
-`restext://` URIs can appear within expression strings. The URI token is replaced in-place; surrounding expression quotes are untouched:
+`restext://` URIs can appear within expression strings. The URI token is replaced in-place; surrounding expression quotes are untouched. Because the substituted value is spliced into a double-quoted string literal, any `"` character in the resolved value must be escaped as `\"` so the containing expression remains syntactically valid:
 
 ```yaml
 # After load-time substitution: warwinner == "Separatists"
 - if: warwinner == "restext://Common_026"  # en-US.restext:33
 # After load-time substitution: Separatists
 - match: restext://Common_026              # en-US.restext:33
+# If Common_099 resolved to: She said "hello"
+# the substituted expression becomes: notice == "She said \"hello\""
 ```
 
 #### Locale Resource File (`.restext`)
@@ -192,20 +194,11 @@ BattleTime_002=I alone deserved recognition for my glorious, bombastic...
 # Cross-passage common strings
 Common_026=Separatists
 Common_027=Unified Monarchists
-
-# Multi-line value — open with """ immediately after =, close with """ on its own line
-UniCharity_008="""
-Retrieve a **Charity Memorial** Estate Tile from the scenario box. {charity} III
-may build this in their next available plot.
-
-Return the Heart{icon:s1_hearttoken}token to the scenario box.
-"""
 ```
 
 **Rules:**
-- One `Key=Value` entry per line; keys are alphanumeric with underscores (`[A-Za-z0-9_]+`)
+- One `Key=Value` entry per line, single-line values only; keys are alphanumeric with underscores (`[A-Za-z0-9_]+`)
 - Lines starting with `#` are comments; blank lines are ignored
-- Multi-line values: the `=` is followed immediately by `"""` and a newline; content continues until a line containing only `"""`; the trailing newline before the closing `"""` is discarded
 - Keys are case-sensitive; no spaces around `=`
 
 ---

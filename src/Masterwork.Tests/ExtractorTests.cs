@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using Masterwork.Extractor;
-using Masterwork.ModuleFormat;
 using Xunit;
 
 namespace Masterwork.Tests;
