@@ -14,13 +14,15 @@ Solution file: `src/Masterwork.slnx`
 
 ```
 src/Masterwork.slnx
-├── src/MasterWork.Engine/          pure C# — interpreter and game session (Phase 1)
-├── src/MasterWork.ModuleFormat/    VarDef, v0.3 reader types (shared library)
+├── src/MasterWork.Engine/          pure C# — interpreter and game session (Phase 1, implemented)
+├── src/MasterWork.ModuleFormat/    VarDef, v0.3 reader types + YAML loader (shared library)
 ├── src/MasterWork.App/             MAUI Blazor Hybrid player app (Phase 2 placeholder)
 ├── src/MasterWork.Editor/          WPF module designer (Phase 5 placeholder)
 ├── src/MasterWork.Extractor/       CLI tool: Cradle C# → MWS v0.3 YAML (also owns extractor-internal node types, MwsNodes.cs)
 └── src/MasterWork.Tests/           xUnit test suite
 ```
+
+All six projects are registered in `Masterwork.slnx` (previously only `Masterwork.Extractor` was).
 
 ## Build and Test
 
@@ -29,7 +31,7 @@ dotnet build src/Masterwork.slnx
 dotnet test src/Masterwork.Tests/Masterwork.Tests.csproj
 ```
 
-All 37 tests must pass after any change to `ModuleFormat` or `Extractor`.
+All 191 tests must pass after any change to `ModuleFormat`, `Engine`, or `Extractor`.
 
 ---
 
@@ -43,6 +45,13 @@ Walks the v0.3 dict produced by `V2Serializer.ToDict()` and replaces human-reada
 
 ### Test strategy
 Tests in `ExtractorTests.cs` check the extractor-internal node types directly (e.g. `textNode.Template`, `linkNode.Target`). The v0.3 format is an output concern — do not add v0.3 assertions there unless specifically testing the serializer. Add a separate `V2SerializerTests.cs` if serializer tests are needed.
+
+### Engine (Phase 1)
+- `ModuleFormat/PassageYamlParser.cs` parses `.mws.yaml` by hand against YamlDotNet's low-level representation model (`YamlMappingNode` etc.), dispatching on `type:` — not a generic object-graph deserializer, since polymorphic node dispatch is exactly what that API is for.
+- `ModuleFormat/RestextResolver.cs` runs once at load time, before any expression is parsed. It has two resolution modes: display fields (substituted as-is) and expression fields (substituted with embedded `"` escaped, since the value lands inside a string literal).
+- `Engine/SessionPrng.cs` derives each seed_key's draw from `(masterSeed, key, occurrence#)` rather than mutating one shared `Random` per key — this is what makes timeline rewind exact (restoring position is just restoring an integer occurrence count, no need to replay RNG draw history).
+- `Engine/GameSession.cs`: every `SessionSnapshot` captures state from **before** the passage it points to renders. `StepBack`/`StepForward` restore that state and **re-render** the passage (not just redisplay a cached result) — this keeps the live `VariableStore` consistent with what's shown. The one exception is `SnapshotKind.Checkpoint` entries, which capture mid-passage state and can't be reproduced by a fresh top-down render without double-applying earlier assigns; those replay from a cached render instead. See the doc comments on `SessionSnapshot` and `GameSession.RestoreAndRerenderCurrent`.
+- Popup content (`popup.content`) is deliberately left unevaluated by `PassageRenderer` — it's rendered against a sandboxed `VariableStore` clone in `OpenPopupAsync` and only committed to the live store in `ClosePopupAsync`, as a single transaction (assign + `onclose` navigation together).
 
 ---
 
