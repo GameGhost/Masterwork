@@ -465,6 +465,9 @@ public partial class CradleExtractor
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
+            var safeName = name.Replace(" ", "_").Replace("-", "_");
+            var rndSeq = FindNextRndSeq(nodes, safeName);
+            nodes = HoistAssignAndSwitchPlayerNames(nodes, safeName, ref rndSeq);
             NormalizeAllVarRandoms(nodes);
             // Strip decorative breaks from logic-only goto passages (no text, ends in goto)
             if (!HasTextOutput(nodes) && nodes.Any(n => n is GotoNode))
@@ -1012,6 +1015,165 @@ public partial class CradleExtractor
         if (tmpl == $"**{{{varName}}}**") return "bold";
         if (tmpl == $"_{{{varName}}}_") return "italic";
         return null;
+    }
+
+    // If a TextNode's content is exactly {var}, **{var}**, or _{var}_, returns the var name.
+    private static string? TryExtractSingleVarRef(TextNode txt)
+    {
+        var tmpl = txt.Template ?? txt.Runs?.FirstOrDefault()?.Text;
+        if (tmpl is null) return null;
+        string inner;
+        if (tmpl.StartsWith("**{") && tmpl.EndsWith("}**"))
+            inner = tmpl[3..^3];
+        else if (tmpl.StartsWith("_{") && tmpl.EndsWith("}_"))
+            inner = tmpl[2..^2];
+        else if (tmpl.StartsWith("{") && tmpl.EndsWith("}"))
+            inner = tmpl[1..^1];
+        else
+            return null;
+        return inner.Length > 0 && !inner.Contains('{') && !inner.Contains('}') ? inner : null;
+    }
+
+    // True when all non-default cases have exactly [TextNode(**{varRef}**)] and the optional
+    // default has exactly [GotoNode]. Requires at least 2 non-default cases.
+    private static bool IsHoistableVarNameSwitch(SwitchNode sw)
+    {
+        var matchCases = sw.Cases.Where(c => c.Default != true).ToList();
+        if (matchCases.Count < 2) return false;
+        foreach (var c in matchCases)
+        {
+            if (c.Nodes.Count != 1 || c.Nodes[0] is not TextNode txt) return false;
+            if (TryExtractSingleVarRef(txt) is null) return false;
+        }
+        var defaultCase = sw.Cases.FirstOrDefault(c => c.Default == true);
+        if (defaultCase is not null)
+        {
+            if (defaultCase.Nodes.Count != 1 || defaultCase.Nodes[0] is not GotoNode) return false;
+        }
+        return true;
+    }
+
+    private static HashSet<string> GetAllModifiedVars(EffectNode e)
+    {
+        var vars = new HashSet<string>(StringComparer.Ordinal);
+        if (e.VarSets is not null) vars.UnionWith(e.VarSets.Keys);
+        if (e.VarMath is not null) vars.UnionWith(e.VarMath.Keys);
+        if (e.VarRandom is not null) vars.UnionWith(e.VarRandom.Keys);
+        if (e.VarPush is not null) vars.UnionWith(e.VarPush.Keys);
+        if (e.VarPop is not null) vars.Add(e.VarPop);
+        if (e.VarSort is not null) vars.UnionWith(e.VarSort.Keys);
+        if (e.VarRemove is not null) vars.UnionWith(e.VarRemove.Keys);
+        return vars;
+    }
+
+    // Scans nodes recursively for _rnd_{safeName}_N let vars/effects and returns next safe seq.
+    private static int FindNextRndSeq(List<MwsNode> nodes, string safeName)
+    {
+        var prefix = $"_rnd_{safeName}_";
+        int max = -1;
+        ScanRndVarSeqs(nodes, prefix, ref max);
+        return max + 1;
+    }
+
+    private static void ScanRndVarSeqs(List<MwsNode> nodes, string prefix, ref int max)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is LetNode let && let.Var.StartsWith(prefix, StringComparison.Ordinal)
+                && int.TryParse(let.Var[prefix.Length..], out var n))
+                max = Math.Max(max, n);
+            else if (node is EffectNode eff && eff.VarRandom is not null)
+            {
+                foreach (var key in eff.VarRandom.Keys)
+                    if (key.StartsWith(prefix, StringComparison.Ordinal)
+                        && int.TryParse(key[prefix.Length..], out var n2))
+                        max = Math.Max(max, n2);
+            }
+            IEnumerable<MwsNode> children = node switch
+            {
+                SwitchNode sw2 => sw2.Cases.SelectMany(c => c.Nodes),
+                ConditionalNode cond => cond.Branches.SelectMany(b => b.Nodes),
+                SectionBodyNode sec => sec.Nodes,
+                SetupBlockNode setup => setup.Nodes,
+                ForeachNode fe => fe.Nodes,
+                ExpandLinkNode exp => exp.ExpandNodes,
+                LinkNode link => link.Nodes,
+                _ => [],
+            };
+            ScanRndVarSeqs(children.ToList(), prefix, ref max);
+        }
+    }
+
+    // Detects [TextNode(A), EffectNode(→V), SwitchNode(IsHoistableVarNameSwitch)] where A
+    // doesn't reference V. Reorders to [EffectNode, SwitchNode(cases→LetNodes), merged TextNode].
+    private static List<MwsNode> HoistAssignAndSwitchPlayerNames(
+        List<MwsNode> nodes, string safeName, ref int rndSeq)
+    {
+        if (!nodes.Any(n => n is SwitchNode sw && IsHoistableVarNameSwitch(sw)))
+            return nodes;
+
+        var result = new List<MwsNode>(nodes.Count + 1);
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (i + 2 < nodes.Count
+                && nodes[i] is TextNode preTxt
+                && nodes[i + 1] is EffectNode effect
+                && nodes[i + 2] is SwitchNode sw
+                && IsHoistableVarNameSwitch(sw)
+                && !TextNodeReferencesAny(preTxt, GetAllModifiedVars(effect)))
+            {
+                var canonical = $"_rnd_{safeName}_{rndSeq++}";
+
+                // Capture inline style from first case before mutating.
+                // Prefer inline marker style (**{var}**), fall back to node-level Style field.
+                var firstMatchCase = sw.Cases.First(c => c.Default != true);
+                var firstCaseTxt = (TextNode)firstMatchCase.Nodes[0];
+                var inlineStyle = GetSingleVarInlineStyle(firstCaseTxt, TryExtractSingleVarRef(firstCaseTxt)!)
+                    ?? firstCaseTxt.Style;
+
+                // Replace TextNode in each non-default case with LetNode(canonical, varRef)
+                foreach (var c in sw.Cases.Where(c => c.Default != true))
+                {
+                    var caseTxt = (TextNode)c.Nodes[0];
+                    c.Nodes[0] = new LetNode
+                    {
+                        Var = canonical,
+                        Compute = TryExtractSingleVarRef(caseTxt)!,
+                        SourceLine = caseTxt.SourceLine,
+                    };
+                }
+
+                // Build merged template: pre-text runs + {canonical}.
+                // The pre-text naturally ends with a trailing space (from the Cradle source
+                // having separate text() calls for the prefix and the variable), so no leading
+                // space is needed on the canonical run.
+                var preRuns = preTxt.Template is not null
+                    ? [new TextRun { Text = preTxt.Template, Style = preTxt.Style }]
+                    : preTxt.Runs.ToList();
+                var allRuns = new List<TextRun>(preRuns)
+                {
+                    new() { Text = $"{{{canonical}}}", Style = inlineStyle },
+                };
+                var dominant = ComputeDominantStyle(allRuns);
+                var template = BuildTemplate(allRuns, dominant);
+                template = template.Replace("****", "").Replace("__", "");
+
+                result.Add(effect);
+                result.Add(sw);
+                result.Add(new TextNode
+                {
+                    Template = template,
+                    Style = dominant,
+                    Lets = [canonical],
+                    SourceLine = preTxt.SourceLine,
+                });
+                i += 3;
+                continue;
+            }
+            result.Add(nodes[i++]);
+        }
+        return result;
     }
 
     // Pure-text TextNodes always start or extend a group.

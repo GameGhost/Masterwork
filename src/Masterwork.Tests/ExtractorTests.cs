@@ -677,7 +677,7 @@ public class ExtractorTests
             """);
 
         var inc = passages[0].Nodes.OfType<IncludePassageNode>().First();
-        Assert.Equal("{direction}", inc.Target);
+        Assert.Equal("${direction}", inc.Target);
     }
 
     // ── End of generation node ─────────────────────────────────────────────

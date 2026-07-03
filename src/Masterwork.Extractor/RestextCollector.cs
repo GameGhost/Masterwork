@@ -20,6 +20,7 @@ public sealed partial class RestextCollector
     public sealed record Entry(string Key, string Value);
 
     private readonly List<(string FileName, List<Entry> Entries)> _passages = [];
+    private readonly HashSet<string> _nonTemplateFileNames = new(StringComparer.Ordinal);
     private List<Entry> _current = [];
     private readonly Dictionary<string, string> _globalValueToKey = [];  // value → key, global dedup
     private readonly Dictionary<string, HashSet<string>> _keyPassages = [];  // key → passage IDs that use it
@@ -50,7 +51,10 @@ public sealed partial class RestextCollector
 
     // Called once per passage before serialization.
     // Transforms the V2Serializer.ToDict() output in-place; accumulates entries for this passage.
-    public void CollectPassage(string passageId, string fileName, Dictionary<string, object?> passageDict)
+    // isTemplate=false marks the passage as non-display (e.g. tagged notext); its strings are
+    // still extracted so they appear in restext, but they are excluded from BuildTemplateVarNames
+    // so {varName} patterns in documentation text don't prevent RestoreNonTemplateAssignments.
+    public void CollectPassage(string passageId, string fileName, Dictionary<string, object?> passageDict, bool isTemplate = true)
     {
         _passageId = passageId;
         _counter = 1;
@@ -64,7 +68,11 @@ public sealed partial class RestextCollector
             WalkNodeList(nodes);
 
         if (_current.Count > 0)
+        {
             _passages.Add((fileName, _current));
+            if (!isTemplate)
+                _nonTemplateFileNames.Add(fileName);
+        }
     }
 
     // Returns all entries grouped by passage, in passage order.
@@ -225,10 +233,13 @@ public sealed partial class RestextCollector
 
     // Scans all extracted restext values for {varName} placeholders and returns the set of
     // variable names that appear in display-text templates.
+    // Skips non-template passages (e.g. notext developer docs) to avoid false positives.
     private HashSet<string> BuildTemplateVarNames()
     {
         var varNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var (_, entries) in _passages)
+        foreach (var (fileName, entries) in _passages)
+        {
+            if (_nonTemplateFileNames.Contains(fileName)) continue;
             foreach (var entry in entries)
                 foreach (Match m in PlaceholderRegex().Matches(entry.Value))
                 {
@@ -237,6 +248,7 @@ public sealed partial class RestextCollector
                     var split = content.IndexOfAny(['.', '[']);
                     varNames.Add(split >= 0 ? content[..split] : content);
                 }
+        }
         return varNames;
     }
 
@@ -252,7 +264,12 @@ public sealed partial class RestextCollector
 
         if (type == "conditional")
         {
-            foreach (var branch in AsDictList(d.GetValueOrDefault("branches")))
+            // Flat format: single if/then directly on the node
+            if (d.TryGetValue("if", out var flatCondObj) && flatCondObj is string flatCond)
+                RegisterStringLiteralsInExpr(flatCond);
+            ScanConditionLiteralsInNodeList(d.GetValueOrDefault("then"));
+            // Multi-branch format: conditions array
+            foreach (var branch in AsDictList(d.GetValueOrDefault("conditions")))
             {
                 if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
                     RegisterStringLiteralsInExpr(cond);
@@ -326,7 +343,12 @@ public sealed partial class RestextCollector
 
         if (type == "conditional")
         {
-            foreach (var branch in AsDictList(d.GetValueOrDefault("branches")))
+            // Flat format: single if/then directly on the node
+            if (d.TryGetValue("if", out var flatCondObj) && flatCondObj is string flatCond)
+                d["if"] = ReplaceStringLiteralsInCondExpr(flatCond);
+            ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("then"));
+            // Multi-branch format: conditions array
+            foreach (var branch in AsDictList(d.GetValueOrDefault("conditions")))
             {
                 if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
                     branch["if"] = ReplaceStringLiteralsInCondExpr(cond);
@@ -441,13 +463,14 @@ public sealed partial class RestextCollector
         }
 
         // Recurse into all container children, regardless of type.
-        WalkNodeList(d.GetValueOrDefault("content"));   // popup, section
-        WalkNodeList(d.GetValueOrDefault("onclick"));   // navigation
-        WalkNodeList(d.GetValueOrDefault("do"));        // foreach
-        WalkNodeList(d.GetValueOrDefault("else"));      // conditional
-        WalkNodeList(d.GetValueOrDefault("default"));   // switch
-        WalkBranchOrCaseList(d.GetValueOrDefault("branches"), "then");  // conditional branches
-        WalkBranchOrCaseList(d.GetValueOrDefault("cases"), "nodes");    // switch cases
+        WalkNodeList(d.GetValueOrDefault("content"));                       // popup, section
+        WalkNodeList(d.GetValueOrDefault("onclick"));                       // navigation
+        WalkNodeList(d.GetValueOrDefault("do"));                            // foreach
+        WalkNodeList(d.GetValueOrDefault("else"));                          // conditional
+        WalkNodeList(d.GetValueOrDefault("default"));                       // switch
+        WalkNodeList(d.GetValueOrDefault("then"));                          // conditional flat
+        WalkBranchOrCaseList(d.GetValueOrDefault("conditions"), "then");    // conditional multi
+        WalkBranchOrCaseList(d.GetValueOrDefault("cases"), "nodes");        // switch cases
     }
 
     private void WalkTextNode(Dictionary<string, object?> d)

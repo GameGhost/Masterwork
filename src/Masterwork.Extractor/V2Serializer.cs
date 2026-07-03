@@ -142,8 +142,10 @@ public static partial class V2Serializer
 
     // Appends a _link field to a node dict immediately after the "target" key was inserted.
     // InjectSentinelComments converts this to an inline "# file" comment on the target line.
+    // Skipped for expression-valued targets (starting with "${") since the passage is not statically known.
     private static void AddLinkHint(Dictionary<string, object?> d, string target, SerializationContext? ctx)
     {
+        if (target.StartsWith("${", StringComparison.Ordinal)) return;
         if (ctx?.PassageFileMap?.TryGetValue(target, out var file) == true && file is not null)
             d["_link"] = file;
     }
@@ -187,7 +189,7 @@ public static partial class V2Serializer
                 // Inside an expand-link fragment, SetupBlockNode is handled by TransformPopup instead.
                 var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
                 var sNodes = TransformNodeList(setup.Nodes, ctx);
-                if (sNodes.Count > 0) pd["nodes"] = sNodes;
+                if (sNodes.Count > 0) pd["content"] = sNodes;
                 yield return pd;
                 break;
             }
@@ -377,10 +379,25 @@ public static partial class V2Serializer
         {
             var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
             var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
+
+            // Flat format: single if-branch with no else
+            if (ifBranches.Count == 1 && elseBranch is null)
+            {
+                return new Dictionary<string, object?>
+                {
+                    ["type"] = "conditional",
+                    ["if"] = ifBranches[0].Condition,
+                    ["then"] = ifBranches[0].Nodes
+                        .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
+                        .ToList(),
+                };
+            }
+
+            // Multi-branch format
             var cd = new Dictionary<string, object?>
             {
                 ["type"] = "conditional",
-                ["branches"] = ifBranches.Select(b =>
+                ["conditions"] = ifBranches.Select(b =>
                 {
                     var bd = new Dictionary<string, object?> { ["if"] = b.Condition };
                     bd["then"] = b.Nodes
@@ -512,7 +529,7 @@ public static partial class V2Serializer
         string? title, List<MwsNode> innerNodes, string? style = null, int? headingSourceLine = null, SerializationContext? ctx = null)
     {
         var d = new Dictionary<string, object?> { ["type"] = "section" };
-        if (title is not null) d["title"] = title;
+        if (!string.IsNullOrEmpty(title)) d["title"] = title;
         if (style is not null) d["style"] = style;
         d["content"] = TransformNodeList(innerNodes, ctx);
         return d;
@@ -524,10 +541,23 @@ public static partial class V2Serializer
     {
         var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
         var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
+
+        // Flat format: single if-branch with no else
+        if (ifBranches.Count == 1 && elseBranch is null)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["type"] = "conditional",
+                ["if"] = ifBranches[0].Condition,
+                ["then"] = TransformNodeList(ifBranches[0].Nodes, ctx),
+            };
+        }
+
+        // Multi-branch format
         var d = new Dictionary<string, object?>
         {
             ["type"] = "conditional",
-            ["branches"] = ifBranches.Select(b => new Dictionary<string, object?>
+            ["conditions"] = ifBranches.Select(b => new Dictionary<string, object?>
             {
                 ["if"] = b.Condition,
                 ["then"] = TransformNodeList(b.Nodes, ctx),

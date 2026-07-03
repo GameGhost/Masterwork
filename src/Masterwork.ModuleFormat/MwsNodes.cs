@@ -292,10 +292,23 @@ public class ConditionalNode : MwsNode
     {
         var ifBranches = Branches.Where(b => b.Else != true).ToList();
         var elseBranch = Branches.FirstOrDefault(b => b.Else == true);
+
+        // Flat format: single if-branch with no else
+        if (ifBranches.Count == 1 && elseBranch is null)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["type"] = Type,
+                ["if"] = ifBranches[0].Condition,
+                ["then"] = ifBranches[0].Nodes.Select(n => n.ToDict()).ToList(),
+            };
+        }
+
+        // Multi-branch format
         var d = new Dictionary<string, object?>
         {
             ["type"] = Type,
-            ["branches"] = ifBranches.Select(b => b.ToDict()).ToList(),
+            ["conditions"] = ifBranches.Select(b => b.ToDict()).ToList(),
         };
         if (elseBranch is not null)
             d["else"] = elseBranch.Nodes.Select(n => n.ToDict()).ToList();
@@ -647,6 +660,7 @@ public static class MwsExprHelper
         if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
             return s;
         if (s.StartsWith("?(")) return s;
+        if (long.TryParse(s, out _)) return s;
         if (!s.Contains('{') && !s.Contains('+'))
             return $"\"{EscapeStr(s)}\"";
         return s;

@@ -509,9 +509,7 @@ public class PassageBodyVisitor
         if (args.Count > 0)
         {
             var labelExpr = args[0].Expression;
-            label = GetStringValue(labelExpr) ?? "";
-            if (string.IsNullOrEmpty(label) && IsVarAccess(labelExpr, out var labelVar) && labelVar is not null)
-                label = $"{{{labelVar}}}";
+            label = GetStringValue(labelExpr) ?? TryBuildConcatString(labelExpr) ?? "";
         }
         var target = args.Count > 1 ? GetStringValue(args[1].Expression) : null;
         var hasCallback = args.Count > 2 && !IsNullLiteral(args[2].Expression);
@@ -557,10 +555,10 @@ public class PassageBodyVisitor
 
         // base.passage(this.Vars.X, ...) — dynamic inclusion via variable
         if (IsVarAccess(arg, out var targetVar))
-            return [new IncludePassageNode { Target = $"{{{targetVar}}}" }];
+            return [new IncludePassageNode { Target = $"${{{targetVar}}}" }];
 
         // base.passage(macros1.either([list of string passage IDs])) — random passage pick.
-        // Emit: let var = choose-one(ids); include-passage target: '{var}'
+        // Emit: let var = choose-one(ids); include-passage target: '${var}'
         if (arg is InvocationExpressionSyntax macroInv && GetSimpleMethodName(macroInv) == "either")
         {
             var values = ExtractMacroArgs(macroInv);
@@ -574,7 +572,7 @@ public class PassageBodyVisitor
                         Var = tempVar,
                         Random = new VarRandom { RandomType = "choose-one", Values = values },
                     },
-                    new IncludePassageNode { Target = $"{{{tempVar}}}" },
+                    new IncludePassageNode { Target = $"${{{tempVar}}}" },
                 ];
             }
         }
@@ -596,7 +594,7 @@ public class PassageBodyVisitor
 
         // Variable target: abort(this.Vars.tempeffect)
         if (IsVarAccess(arg, out var varName))
-            return [new GotoNode { Target = $"{{{varName}}}" }];
+            return [new GotoNode { Target = $"${{{varName}}}" }];
 
         // abort(either([id1, id2, ...])) — random goto
         if (arg is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
@@ -608,7 +606,7 @@ public class PassageBodyVisitor
                 return
                 [
                     new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } },
-                    new GotoNode { Target = $"{{{tempVar}}}" },
+                    new GotoNode { Target = $"${{{tempVar}}}" },
                 ];
             }
         }
@@ -1330,6 +1328,7 @@ public class PassageBodyVisitor
             return $"{{{v}}}";
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
             return ExtractTemplateString(bin.Left) + ExtractTemplateString(bin.Right);
+        _report.AddWarning(_passageName, "Unhandled template expression", expr.ToString(), GetLine(expr));
         return $"?({Truncate(expr.ToString())})";
     }
 
@@ -1593,10 +1592,14 @@ public class PassageBodyVisitor
         return "";
     }
 
-    private static string? GetStringValue(ExpressionSyntax expr) =>
-        expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
-            ? lit.Token.ValueText
-            : null;
+    private static string? GetStringValue(ExpressionSyntax expr) => expr switch
+    {
+        LiteralExpressionSyntax lit when lit.IsKind(SyntaxKind.StringLiteralExpression)
+            => lit.Token.ValueText,
+        BinaryExpressionSyntax bin when bin.OperatorToken.IsKind(SyntaxKind.PlusToken)
+            => GetStringValue(bin.Left) is { } l && GetStringValue(bin.Right) is { } r ? l + r : null,
+        _ => null,
+    };
 
     // Converts Harlowe ordinal strings ("1st", "2nd", "3rd", …) to zero-based integers.
     private static int HarloweOrdinalToIndex(string ordinal)
@@ -1756,6 +1759,13 @@ public class PassageBodyVisitor
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
             return lit.Token.ValueText;
         if (IsVarAccess(expr, out var v)) return $"{{{v}}}";
+        // Vars.X.ToString() — strip the no-op .ToString() call
+        if (expr is InvocationExpressionSyntax toStringInv
+            && toStringInv.ArgumentList.Arguments.Count == 0
+            && toStringInv.Expression is MemberAccessExpressionSyntax toStringMa2
+            && toStringMa2.Name.Identifier.Text == "ToString"
+            && IsVarAccess(toStringMa2.Expression, out var tsv))
+            return $"{{{tsv}}}";
         if (expr is IdentifierNameSyntax id && _localVars.TryGetValue(id.Identifier.Text, out var lv))
             return lv;
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
@@ -1788,6 +1798,8 @@ public class PassageBodyVisitor
                 result.Add(LiteralValue(lit3));
             else if (IsVarAccess(arg.Expression, out var vn2))
                 result.Add($"{{{vn2}}}");
+            else if (TryBuildConcatString(arg.Expression) is { } sv)
+                result.Add(sv);
         }
         return result;
     }
@@ -1925,18 +1937,25 @@ public class PassageBodyVisitor
     private static bool IsChangeViewMainMenu(InvocationExpressionSyntax inv) =>
         GetSimpleMethodName(inv) == "ChangeView";
 
-    private static bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage)
+    private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage)
     {
         nextPassage = null;
-        if (assign.Left.ToString().Contains("SetupPassagename"))
+        if (!assign.Left.ToString().Contains("SetupPassagename")) return false;
+
+        var literal = GetStringValue(assign.Right);
+        if (literal is not null)
         {
-            nextPassage = GetStringValue(assign.Right) ??
-                (assign.Right is ConditionalExpressionSyntax ct
-                    ? $"?({ct.Condition})"
-                    : assign.Right.ToString());
-            return true;
+            nextPassage = literal;
         }
-        return false;
+        else
+        {
+            // Complex or ternary expression — convert to MWS expression syntax and wrap in ${}.
+            var expr = SimplifyCondition(assign.Right.ToString());
+            nextPassage = $"${{{expr}}}";
+            _report.AddWarning(_passageName, "SetupPassagename uses a computed expression",
+                assign.Right.ToString(), GetLine(assign.Right));
+        }
+        return true;
     }
 
     private static bool IsIgnorableCall(InvocationExpressionSyntax inv)

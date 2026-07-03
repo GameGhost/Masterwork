@@ -9,16 +9,16 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: mws/0.3
-passage_id: Hospital1
-title: The Hospital
+format: 'mws/0.3'
+passage_id: 'Hospital1'
+title: 'The Hospital'
 tags:
-- HUB
-layout: hub
+- 'HUB'
+layout: 'hub'
 location:
-  name: The Hospital
-  icon: icon://hospital_icon
-check_progress: Hospital0
+  name: 'The Hospital'
+  icon: 'icon://hospital_icon'
+check_progress: 'Hospital0'
 nodes:
   - ...
 ```
@@ -120,11 +120,11 @@ The `value` field on `text` nodes, and any field containing user-visible text, s
 | `_..._` | Italic span |
 
 ```yaml
-- type: text
+- type: 'text'
   value: '**Glory and Recognition**'
 
-- type: text
-  value: Turn to **The Cost of Disease** section. _(All tied players gain this bonus.)_
+- type: 'text'
+  value: 'Turn to **The Cost of Disease** section. _(All tied players gain this bonus.)_'
 ```
 
 ### Variable References
@@ -134,7 +134,7 @@ The `value` field on `text` nodes, and any field containing user-visible text, s
 `{varName.property}` — property access on a custom-typed variable.
 
 ```yaml
-- type: text
+- type: 'text'
   value: 'Round {round} — Leader: {all_players[0].name} with {all_players[0].vp} VP'
 ```
 
@@ -156,8 +156,8 @@ Property access chains through array indexing: `{all_players[0].name}`.
 `{icon:slug}` — resolved to the visual asset identified by `icon://slug`.
 
 ```yaml
-- type: text
-  value: All players take all their {icon:s3_weapontoken} tokens into their hands.
+- type: 'text'
+  value: 'All players take all their {icon:s3_weapontoken} tokens into their hands.'
 ```
 
 ### i18n String References
@@ -165,8 +165,8 @@ Property access chains through array indexing: `{all_players[0].name}`.
 `restext://Key` — a reference to a locale string stored in the module's `.restext` file. All `restext://` URIs are resolved at **module load time** by substring replacement on every string field in every node, applied after YAML parsing. Only the URI token itself is replaced; surrounding expression syntax is preserved.
 
 ```yaml
-- type: text
-  value: restext://BattleTime_001 # "**Glory and Recognition**"
+- type: 'text'
+  value: 'restext://BattleTime_001' # "**Glory and Recognition**"
 ```
 
 The `# "..."` comment is an inline preview for human readers; the engine ignores it.
@@ -210,9 +210,61 @@ Return the Heart{icon:s1_hearttoken}token to the scenario box.
 
 ---
 
-## 4. Expression Language
+## 4. String and Expression Encoding
 
-Expressions appear in `let / expr`, `assign / expr`, and `conditional / branches[i] / if`.
+Fields in MWS nodes carry either a **string value** or an **expression value**. The engine determines which by inspecting the field content at load time.
+
+### String values
+
+Any value that does not match the expression rule below is a string. Strings support:
+- Plain text: `PassageId` or `Hello world`
+- `restext://Key` — a locale key replaced at load time (see §3)
+- `{varName}` — template interpolation: the variable's current value is spliced in (see §3)
+- Multiple placeholders in one string: `{first} of {total}`
+
+In YAML, string values should be written with single-quote delimiters so that `{` and `restext://` are never mistaken for YAML special syntax. Use `''` to represent a literal single quote inside a single-quoted YAML string.
+
+```yaml
+value: 'Just a string'
+value: 'A {adjective} template string'
+label: 'String with ''quotes'''
+value: 'restext://Example_Resource'
+```
+
+### Expression values
+
+A field value that is a YAML string starting with `${` and ending with `}` is an **expression**. The engine strips the `${` / `}` wrapper and evaluates the contents using the expression language (§4.1). The result is the field's runtime value.
+
+```yaml
+target: '${nextPassage}'                       # single variable
+target: '${count + 1}'                         # arithmetic
+onclose: '${a == "x" ? "PathA" : "PathB"}'    # conditional
+onclose: '${nomore == 1 ? th < players ? "TownHallS1" : "TakeSides2" : round == 1 ? "TakeSides" : "TakeSides2"}'
+```
+
+String literals *inside* an expression use C#-style double quotes (`"`), not single quotes. A single quote inside an expression string literal is `''` (doubled, because the whole field is YAML single-quoted). A double quote inside an expression string literal uses the standard `\"` escape.
+
+Fields that support expression values: `navigation.target`, `goto.target`, `popup.onclose`, `input.onsubmit`.
+
+### `let` / `assign` expr fields
+
+The `expr:` field on `let` and `assign` nodes is *always* an expression — no `${}` wrapper is used. String literals within `expr:` use C#-style double quotes, and the whole YAML field is single-quoted.
+
+```yaml
+- type: 'assign'
+  var: 'wolves'
+  expr: '"evil"'
+
+- type: 'let'
+  var: 'chosen'
+  expr: '[nameA, nameB].shuffled("BattleTime_4")[0]'
+```
+
+---
+
+## 4.1. Expression Language (reference)
+
+Expressions appear in `let / expr`, `assign / expr`, conditional `if` fields, and any field that accepts `'${expression}'` values (see §4).
 
 ### Literals
 
@@ -386,8 +438,8 @@ The `match:` field on a switch case uses value patterns and can also be:
 When `match:` holds a `restext://` URI, load-time substitution replaces the URI with the locale string before evaluation.
 
 ```yaml
-- type: switch
-  on: players
+- type: 'switch'
+  on: 'players'
   cases:
   - match: '>4'
     nodes: [...]
@@ -411,20 +463,20 @@ Displays human-readable content.
 | `lets` | list of strings | no | Names of `let` vars consumed by this value, for editor grouping |
 
 ```yaml
-- type: text
+- type: 'text'
   value: '**To Battle**'
 
-- type: text
-  value: All players take all their {icon:s3_weapontoken} tokens into their hands.
+- type: 'text'
+  value: 'All players take all their {icon:s3_weapontoken} tokens into their hands.'
 
-- type: text
+- type: 'text'
   value: '{_rnd_BattleTime_1}'
   lets:
-  - _rnd_BattleTime_1
+  - '_rnd_BattleTime_1'
 
-- type: text
-  value: restext://ATOW-Preparations_001
-  align: center
+- type: 'text'
+  value: 'restext://ATOW-Preparations_001'
+  align: 'center'
 ```
 
 ---
@@ -440,10 +492,10 @@ Displays a standalone image asset with optional size and alignment. Produced whe
 | `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified` |
 
 ```yaml
-- type: image
-  asset: icon://scenariobox3d_war
+- type: 'image'
+  asset: 'icon://scenariobox3d_war'
   size: '200'
-  align: center
+  align: 'center'
 ```
 
 ---
@@ -461,41 +513,42 @@ Defines a passage-scoped variable by evaluating an expression. Never persisted t
 
 ```yaml
 # Choose-one random
-- type: let
-  var: _rnd_BattleTime_0
+- type: 'let'
+  var: '_rnd_BattleTime_0'
   expr: '[nameA, nameB, nameC].shuffled("BattleTime_0")[0]'
 
 # Hoisted from switch branches — all cases define chosen, so it's safe to use after
-- type: switch
-  on: players
+- type: 'switch'
+  on: 'players'
   cases:
   - match: '>3'
     nodes:
-    - type: let
-      var: chosen
+    - type: 'let'
+      var: 'chosen'
       expr: '[nameA, nameB, nameC, nameD].shuffled("BattleTime_1")[0]'
   default:
-  - type: let
-    var: chosen
+  - type: 'let'
+    var: 'chosen'
     expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
-- type: text
+- type: 'text'
   value: '{chosen} leads this round.'
-  lets: [chosen]
+  lets:
+  - 'chosen'
 
 # Sort session array into let var (source is not modified)
-- type: let
-  var: ranked
-  expr: all_players.toSorted("descending", "vp")
+- type: 'let'
+  var: 'ranked'
+  expr: 'all_players.toSorted("descending", "vp")'
 
 # Record literal — create a custom type value
-- type: let
-  var: snapshot
+- type: 'let'
+  var: 'snapshot'
   expr: '{ name: current_player.name, hearts: charitytotal, vp: current_player.vp }'
 
 # Aggregate
-- type: let
-  var: topScore
-  expr: max(scoreA, scoreB, scoreC)
+- type: 'let'
+  var: 'topScore'
+  expr: 'max(scoreA, scoreB, scoreC)'
 ```
 
 ---
@@ -510,25 +563,25 @@ Writes a value to a session variable. Persistent; all `assign` nodes encountered
 | `expr` | string | yes | Expression (see §4) |
 
 ```yaml
-- type: assign
-  var: round
-  expr: round + 1
+- type: 'assign'
+  var: 'round'
+  expr: 'round + 1'
 
-- type: assign
-  var: wolves
+- type: 'assign'
+  var: 'wolves'
   expr: '"evil"'
 
-- type: assign
-  var: wolves
+- type: 'assign'
+  var: 'wolves'
   expr: '["evil", "good"].shuffled("WolvesEvent_0")[0]'
 
-- type: assign
-  var: all_players
+- type: 'assign'
+  var: 'all_players'
   expr: '[..all_players, { name: nameA, hearts: 3, vp: 0 }]'
 
-- type: assign
-  var: candidates
-  expr: candidates[..^1]
+- type: 'assign'
+  var: 'candidates'
+  expr: 'candidates[..^1]'
 ```
 
 ---
@@ -541,45 +594,44 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 |---|---|---|---|
 | `label` | string | yes | Link text (string formatting — see §3) |
 | `style` | string | no | Visual style: `link` (default) or `button` |
-| `target` | string | yes | Destination `passage_id`, or `{varName}` for a runtime-computed target |
+| `target` | string | yes | Destination `passage_id`, or `'${expression}'` for a runtime-computed target (see §4) |
 | `state_affecting` | bool | yes | `true` creates a timeline snapshot |
 | `timeline_label` | string | no | Custom label for the timeline scrubber entry |
 | `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation |
 
-**Execution order when `onclick` is present:** on click, the engine executes all nodes in the `onclick` list first, then evaluates `target`. This matters when `target` contains a variable reference (`{varName}`) and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
+**Execution order when `onclick` is present:** on click, the engine executes all nodes in the `onclick` list first, then evaluates `target`. This matters when `target` is an expression referencing a variable and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
 
 ```yaml
-- type: navigation
-  label: restext://BattleTime_010 # "Click to begin the battle..."
-  target: BattleCompleteReturn
+- type: 'navigation'
+  label: 'restext://BattleTime_010' # "Click to begin the battle..."
+  target: 'BattleCompleteReturn'
   state_affecting: true
 
 # With inline state change — target is a literal passage_id
-- type: navigation
-  label: 2 Players
-  target: PlayerNameIntro
+- type: 'navigation'
+  label: '2 Players'
+  target: 'PlayerNameIntro'
   state_affecting: true
   onclick:
-  - type: assign
-    var: players
+  - type: 'assign'
+    var: 'players'
     expr: '2'
 
 # With dynamic target — onclick may assign the target variable before navigation
-- type: navigation
+- type: 'navigation'
   label: '{nameA}'
-  target: '{feverheartnextPsg}'
+  target: '${feverheartnextPsg}'
   state_affecting: true
   onclick:
-  - type: assign
-    var: charity
-    expr: nameA
-  - type: conditional
-    branches:
-    - if: feverheartnextPsg == "" || feverheartnextPsg == 0
-      then:
-      - type: assign
-        var: feverheartnextPsg
-        expr: '["S5Fate1", "S5Fate2"].shuffled("?")[0]'
+  - type: 'assign'
+    var: 'charity'
+    expr: 'nameA'
+  - type: 'conditional'
+    if: 'feverheartnextPsg == "" || feverheartnextPsg == 0'
+    then:
+    - type: 'assign'
+      var: 'feverheartnextPsg'
+      expr: '["S5Fate1", "S5Fate2"].shuffled("?")[0]'
 ```
 
 ---
@@ -594,57 +646,57 @@ A modal overlay, either click-triggered (has `label`) or auto-displayed when the
 | `style` | string | no | Visual style: `link` (default) or `button` |
 | `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
 | `content` | list | no | Content nodes for the popup body; for layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated at open time to bind layout properties |
-| `onclose` | string | no | `passage_id` to navigate to when dismissed or when layout-driven interaction completes |
+| `onclose` | string | no | Destination when dismissed or when layout-driven interaction completes — `passage_id` or `'${expression}'` (see §4) |
 | `button` | string | no | Dismiss button label; defaults to `"Close"` (no `onclose`) or `"Next"` (with `onclose`) |
 
 Standard popup with body content:
 ```yaml
-- type: popup
-  label: Setup Instructions
+- type: 'popup'
+  label: 'Setup Instructions'
   content:
-  - type: text
-    value: Place the hospital token on space 1 of the hospital track.
-  onclose: Hospital2
-  button: Begin
+  - type: 'text'
+    value: 'Place the hospital token on space 1 of the hospital track.'
+  onclose: 'Hospital2'
+  button: 'Begin'
 ```
 
 Layout-driven popup — body owned by the layout, no content nodes:
 ```yaml
-- type: popup
-  layout: voting
-  label: restext://S4Kill2_006  # "Click to start the vote..."
+- type: 'popup'
+  layout: 'voting'
+  label: 'restext://S4Kill2_006'  # "Click to start the vote..."
   state_affecting: false
-  onclose: S4Kill3
+  onclose: 'S4Kill3'
 ```
 
 Layout-driven popup with property bindings — content nodes bind values to layout properties at open time:
 ```yaml
-- type: popup
-  layout: end_of_generation
-  label: restext://Common_190  # "Click here at the end of the round..."
+- type: 'popup'
+  layout: 'end_of_generation'
+  label: 'restext://Common_190'  # "Click here at the end of the round..."
   state_affecting: true
-  onclose: ATOWSabotageIntro1
+  onclose: 'ATOWSabotageIntro1'
   content:
-  - type: let
-    var: title
+  - type: 'let'
+    var: 'title'
     expr: '"restext://Martial1_022"'
-  - type: let
-    var: completedRound
-    expr: -1
-  - type: text
-    value: restext://Common_069    # body instruction text
+  - type: 'let'
+    var: 'completedRound'
+    expr: '-1'
+  - type: 'text'
+    value: 'restext://Common_069'    # body instruction text
 ```
 
 Auto-display layout popup — no `label`, shown immediately when the passage renders:
 ```yaml
-- type: popup
-  layout: end_of_generation
+- type: 'popup'
+  layout: 'end_of_generation'
   content:
-  - type: text
-    value: restext://TowardsWar_002  # EOG instruction text
-  - type: let
-    var: generation
-    expr: 3
+  - type: 'text'
+    value: 'restext://TowardsWar_002'  # EOG instruction text
+  - type: 'let'
+    var: 'generation'
+    expr: '3'
 ```
 
 ---
@@ -660,15 +712,15 @@ A player-clickable form that collects a value and navigates on submit. Can be ca
 | `text` | string | yes | Instruction text displayed inside the form (string formatting — see §3) |
 | `input` | string | yes | `string` or `number` |
 | `var` | string | yes | Session variable to receive the submitted value |
-| `onsubmit` | string | yes | `passage_id` to navigate to after submission |
+| `onsubmit` | string | yes | Destination after submission — `passage_id` or `'${expression}'` (see §4) |
 
 ```yaml
-- type: input
-  label: Enter total hearts collected...
-  text: Count up all heart tokens collected by ALL players. Enter the total here.
-  input: number
-  var: charitytotal
-  onsubmit: Feverheart
+- type: 'input'
+  label: 'Enter total hearts collected...'
+  text: 'Count up all heart tokens collected by ALL players. Enter the total here.'
+  input: 'number'
+  var: 'charitytotal'
+  onsubmit: 'Feverheart'
 ```
 
 ---
@@ -684,10 +736,10 @@ An inline prompt — interrupts passage rendering until the player submits. Cann
 | `var` | string | yes | Session variable to receive the submitted value |
 
 ```yaml
-- type: prompt
-  text: Enter player name A.
-  input: string
-  var: nameA
+- type: 'prompt'
+  text: 'Enter player name A.'
+  input: 'string'
+  var: 'nameA'
 ```
 
 ---
@@ -698,28 +750,28 @@ Unconditional navigation — no player interaction, no timeline snapshot.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `target` | string | yes | Destination `passage_id`, or a `{varName}` expression resolving to one |
+| `target` | string | yes | Destination `passage_id`, or `'${expression}'` resolving to one (see §4) |
 
 ```yaml
-- type: goto
-  target: PlayerNameIntro
+- type: 'goto'
+  target: 'PlayerNameIntro'
 
-- type: goto
-  target: '{endingPassage}'
+- type: 'goto'
+  target: '${endingPassage}'
 ```
 
 For conditional routing, wrap in `conditional`:
 
 ```yaml
-- type: conditional
-  branches:
-  - if: wolves == "evil"
+- type: 'conditional'
+  conditions:
+  - if: 'wolves == "evil"'
     then:
-    - type: goto
-      target: BonusPath
+    - type: 'goto'
+      target: 'BonusPath'
   else:
-  - type: goto
-    target: NeutralPath
+  - type: 'goto'
+    target: 'NeutralPath'
 ```
 
 ---
@@ -736,24 +788,24 @@ A visually-distinct content container. Optionally titled and collapsible.
 | `content` | list | yes | Content nodes |
 
 ```yaml
-- type: section
+- type: 'section'
   title: '**Board of Trustees**'
   content:
-  - type: text
-    value: Each player may now purchase one building from the market.
-  - type: navigation
-    label: Continue...
-    target: BuildPhase2
+  - type: 'text'
+    value: 'Each player may now purchase one building from the market.'
+  - type: 'navigation'
+    label: 'Continue...'
+    target: 'BuildPhase2'
     state_affecting: true
 
-- type: section
-  style: setup
+- type: 'section'
+  style: 'setup'
   content:
-  - type: text
+  - type: 'text'
     value: '**SETUP**'
-  - type: paragraph_break
-  - type: text
-    value: Place the hospital token on space 1 of the hospital track.
+  - type: 'paragraph_break'
+  - type: 'text'
+    value: 'Place the hospital token on space 1 of the hospital track.'
 ```
 
 ---
@@ -762,27 +814,47 @@ A visually-distinct content container. Optionally titled and collapsible.
 
 Evaluates conditions in order; renders the first matching branch, or the `else` list if none match.
 
+Two forms are used depending on the number of branches:
+
+**Flat form** — exactly one if-branch and no else: condition and body sit directly on the node.
+
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `branches` | list | yes | Ordered list of `if`/`then` branch objects |
-| `branches[i].if` | string | yes | Condition expression (see §4) |
-| `branches[i].then` | list | yes | Nodes rendered when this branch is taken |
+| `if` | string | yes | Condition expression (see §4) |
+| `then` | list | yes | Nodes rendered when the condition is true |
+
+```yaml
+- type: 'conditional'
+  if: 'round >= 3'
+  then:
+  - type: 'assign'
+    var: 'phase'
+    expr: '"late"'
+```
+
+**Multi-branch form** — two or more if-branches, or any if-branch with an `else`: branches are in a `conditions` list.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `conditions` | list | yes | Ordered list of `if`/`then` branch objects |
+| `conditions[i].if` | string | yes | Condition expression (see §4) |
+| `conditions[i].then` | list | yes | Nodes rendered when this branch is taken |
 | `else` | list | no | Nodes rendered when no branch matches |
 
 ```yaml
-- type: conditional
-  branches:
-  - if: players >= 3
+- type: 'conditional'
+  conditions:
+  - if: 'players >= 3'
     then:
-    - type: text
-      value: Three or more players.
-  - if: players == 2
+    - type: 'text'
+      value: 'Three or more players.'
+  - if: 'players == 2'
     then:
-    - type: text
-      value: Two players.
+    - type: 'text'
+      value: 'Two players.'
   else:
-  - type: text
-    value: Solo game.
+  - type: 'text'
+    value: 'Solo game.'
 ```
 
 ---
@@ -812,13 +884,13 @@ Iterates over an array variable, rendering `do` once per element.
 | `do` | list | yes | Node list rendered for each element |
 
 ```yaml
-- type: foreach
-  var: winner
-  in: winners
+- type: 'foreach'
+  var: 'winner'
+  in: 'winners'
   do:
-  - type: text
+  - type: 'text'
     value: '{winner.name} gains 5VP.'
-  - type: break
+  - type: 'break'
 ```
 
 ---
@@ -829,7 +901,7 @@ Embeds another passage's content inline.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `target` | string | yes | `passage_id` to include |
+| `target` | string | yes | `passage_id` to include, or `'${expression}'` resolving to one (see §4) |
 
 ---
 
@@ -845,11 +917,11 @@ Records that the player has reached a named milestone. References an achievement
 | `id` | string | yes | Achievement identifier as defined in the module manifest |
 
 ```yaml
-- type: record
-  id: ending_wolves_evil_1
+- type: 'record'
+  id: 'ending_wolves_evil_1'
 
-- type: record
-  id: endings_discovered
+- type: 'record'
+  id: 'endings_discovered'
 ```
 
 ---
@@ -859,7 +931,7 @@ Records that the player has reached a named milestone. References an achievement
 A line break within a content block.
 
 ```yaml
-- type: break
+- type: 'break'
 ```
 
 ---
@@ -869,7 +941,7 @@ A line break within a content block.
 A paragraph separator.
 
 ```yaml
-- type: paragraph_break
+- type: 'paragraph_break'
 ```
 
 ---
@@ -885,29 +957,29 @@ A named milestone in the timeline. Creates a labeled marker in the scrubber. Als
 | `diagnostic` | string | no | Machine-readable label for test assertions |
 
 ```yaml
-- type: checkpoint
-  id: generation_2_complete
-  display: Generation 2 Complete
-  diagnostic: gen2_end
+- type: 'checkpoint'
+  id: 'generation_2_complete'
+  display: 'Generation 2 Complete'
+  diagnostic: 'gen2_end'
 ```
 
 A generation-end sequence uses `section` for the summary and `checkpoint` for the boundary:
 
 ```yaml
-- type: section
-  style: panel
+- type: 'section'
+  style: 'panel'
   content:
-  - type: text
+  - type: 'text'
     value: '**End of Generation 2**'
-  - type: paragraph_break
-  - type: text
-    value: Resolve all pending experiments before continuing.
-- type: checkpoint
-  id: generation_2_complete
-  display: Generation 2
-- type: navigation
-  label: Continue to Generation 3
-  target: Gen3Start
+  - type: 'paragraph_break'
+  - type: 'text'
+    value: 'Resolve all pending experiments before continuing.'
+- type: 'checkpoint'
+  id: 'generation_2_complete'
+  display: 'Generation 2'
+- type: 'navigation'
+  label: 'Continue to Generation 3'
+  target: 'Gen3Start'
   state_affecting: true
 ```
 
@@ -919,8 +991,8 @@ Extracted passage files include YAML comments injected by the extractor. These a
 
 ```yaml
 # TheCostofDisease.cs:29543
-- type: text
-  value: restext://Expedition3_001 # "**The Expedition Uncovers...**"
+- type: 'text'
+  value: 'restext://Expedition3_001' # "**The Expedition Uncovers...**"
 ```
 
 ---
@@ -1065,10 +1137,10 @@ achievements:
 A passage that ends the module places both a specific achievement record and increments the collection counter:
 
 ```yaml
-- type: record
-  id: ending_wolves_evil_1
-- type: record
-  id: endings_discovered
+- type: 'record'
+  id: 'ending_wolves_evil_1'
+- type: 'record'
+  id: 'endings_discovered'
 ```
 
 ### Town Records
@@ -1088,63 +1160,61 @@ A passage from *A Time of War*:
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: mws/0.3
-passage_id: BattleTime
-title: BattleTime
-layout: narration
+format: 'mws/0.3'
+passage_id: 'BattleTime'
+title: 'BattleTime'
+layout: 'narration'
 nodes:
 # ATimeOfWar.cs:9251
-- type: text
-  value: restext://BattleTime_001 # "**Glory and Recognition**"
-- type: break
+- type: 'text'
+  value: 'restext://BattleTime_001' # "**Glory and Recognition**"
+- type: 'break'
 # ATimeOfWar.cs:9255
-- type: switch
-  on: players
+- type: 'switch'
+  on: 'players'
   cases:
   - match: '>4'
     nodes:
-    - type: let
-      var: _rnd_BattleTime_0
+    - type: 'let'
+      var: '_rnd_BattleTime_0'
       expr: '[nameA, nameB, nameC, nameD, nameE].shuffled("BattleTime_0")[0]'
   - match: '>3'
     nodes:
-    - type: let
-      var: _rnd_BattleTime_0
+    - type: 'let'
+      var: '_rnd_BattleTime_0'
       expr: '[nameA, nameB, nameC, nameD].shuffled("BattleTime_1")[0]'
   - match: '>2'
     nodes:
-    - type: let
-      var: _rnd_BattleTime_0
+    - type: 'let'
+      var: '_rnd_BattleTime_0'
       expr: '[nameA, nameB, nameC].shuffled("BattleTime_2")[0]'
   default:
-  - type: let
-    var: _rnd_BattleTime_0
+  - type: 'let'
+    var: '_rnd_BattleTime_0'
     expr: '[nameA, nameB].shuffled("BattleTime_3")[0]'
 # ATimeOfWar.cs:9278
-- type: let
-  var: _rnd_BattleTime_1
-  expr: >-
-    [restext://BattleTime_002, restext://BattleTime_003, restext://BattleTime_004]
-    .shuffled("BattleTime_4")[0]
-- type: text
+- type: 'let'
+  var: '_rnd_BattleTime_1'
+  expr: '[restext://BattleTime_002, restext://BattleTime_003, restext://BattleTime_004].shuffled("BattleTime_4")[0]'
+- type: 'text'
   value: '{_rnd_BattleTime_1}'
   lets:
-  - _rnd_BattleTime_1
-- type: paragraph_break
+  - '_rnd_BattleTime_1'
+- type: 'paragraph_break'
 # ATimeOfWar.cs:9288
-- type: text
-  value: restext://BattleTime_005 # "**To Battle**"
-- type: break
+- type: 'text'
+  value: 'restext://BattleTime_005' # "**To Battle**"
+- type: 'break'
 # ATimeOfWar.cs:9292
-- type: text
-  value: restext://BattleTime_006 # "All players take all their {icon:s3_weapontoken} tokens..."
-- type: paragraph_break
+- type: 'text'
+  value: 'restext://BattleTime_006' # "All players take all their {icon:s3_weapontoken} tokens..."
+- type: 'paragraph_break'
 # ATimeOfWar.cs:9320
-- type: navigation
-  label: restext://BattleTime_010 # "Click to begin the battle..."
-  target: BattleCompleteReturn
+- type: 'navigation'
+  label: 'restext://BattleTime_010' # "Click to begin the battle..."
+  target: 'BattleCompleteReturn'
   state_affecting: true
-- type: break
+- type: 'break'
 ```
 
 ---

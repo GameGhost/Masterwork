@@ -5,7 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.EventEmitters;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace Masterwork.Extractor;
@@ -107,6 +109,7 @@ partial class Program
         var serializer = new SerializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull | DefaultValuesHandling.OmitDefaults)
+            .WithEventEmitter(next => new SingleQuotedStringValueEmitter(next))
             .Build();
 
         var restext = new RestextCollector(passages.Select(p => p.PassageId));
@@ -153,7 +156,8 @@ partial class Program
             var dict = V2Serializer.ToDict(passage, ctx);
             if (!excludedFromRestext.Contains(passage.PassageId))
                 // Mutates dict in-place: replaces string values with restext://Key references
-                restext.CollectPassage(passage.PassageId, fileName, dict);
+                restext.CollectPassage(passage.PassageId, fileName, dict,
+                    isTemplate: !passage.Tags.Contains("notext", StringComparer.Ordinal));
             else
                 report.AddRestextExclusion(passage.PassageId);
             cachedPassages.Add((passage, dict, fileName, outPath, relSourcePath));
@@ -372,7 +376,9 @@ partial class Program
     private static string? ExtractPassageId(string content)
     {
         var m = PassageIdRegex().Match(content);
-        return m.Success ? m.Groups[1].Value : null;
+        if (!m.Success) return null;
+        var val = m.Groups[1].Value;
+        return val.Length >= 2 && val[0] == '\'' && val[^1] == '\'' ? val[1..^1] : val;
     }
 
     // Injects a "# relpath:line" comment before the YAML document marker (--- line).
@@ -421,7 +427,7 @@ partial class Program
             var srcMatch = SrcSentinelRegex().Match(line);
             if (srcMatch.Success)
             {
-                result.Add($"{srcMatch.Groups[1].Value}# {srcMatch.Groups[2].Value}");
+                result.Add($"{srcMatch.Groups[1].Value}# {UnquoteYamlSingleScalar(srcMatch.Groups[2].Value)}");
                 continue;
             }
 
@@ -429,14 +435,14 @@ partial class Program
             if (linkMatch.Success)
             {
                 if (result.Count > 0)
-                    result[^1] += $" # {linkMatch.Groups[1].Value}";
+                    result[^1] += $" # {UnquoteYamlSingleScalar(linkMatch.Groups[1].Value)}";
                 continue;
             }
 
             var cbMatch = CommentedBreakRegex().Match(line);
             if (cbMatch.Success)
             {
-                result.Add($"{cbMatch.Groups[1].Value}# - type: {cbMatch.Groups[2].Value}");
+                result.Add($"{cbMatch.Groups[1].Value}# - type: {UnquoteYamlSingleScalar(cbMatch.Groups[2].Value)}");
                 continue;
             }
 
@@ -445,6 +451,12 @@ partial class Program
 
         return string.Join('\n', result);
     }
+
+    // Strips YAML single-quote wrapping (e.g. "'foo bar'" → "foo bar", "'it''s'" → "it's").
+    private static string UnquoteYamlSingleScalar(string s) =>
+        s.Length >= 2 && s[0] == '\'' && s[^1] == '\''
+            ? s[1..^1].Replace("''", "'")
+            : s;
 
     // Inserts restext comments above each YAML line that contains one or more restext://Key refs.
     //
@@ -598,10 +610,13 @@ partial class Program
                     ids.Add(lk.Target);
                     if (lk.Nodes.Count > 0) CollectFromNodes(lk.Nodes, ids);
                     break;
-                case GotoNode go: ids.Add(go.Target); break;
-                case IncludePassageNode inc: ids.Add(inc.Target); break;
-                case SetupNotificationNode sn when sn.NextPassage is not null:
-                    ids.Add(sn.NextPassage); break;
+                case GotoNode go when !go.Target.StartsWith("${", StringComparison.Ordinal):
+                    ids.Add(go.Target); break;
+                case IncludePassageNode inc when !inc.Target.StartsWith("${", StringComparison.Ordinal):
+                    ids.Add(inc.Target); break;
+                case SetupNotificationNode sn when sn.NextPassage is { Length: > 0 } np
+                    && !np.StartsWith("${", StringComparison.Ordinal):
+                    ids.Add(np); break;
                 case CheckProgressNode cp:
                     ids.Add(cp.CurrentPassage); ids.Add(cp.TargetPassage); break;
                 case ModalNode mo when mo.Next is not null:
@@ -621,6 +636,70 @@ partial class Program
                     foreach (var v in let.Random.Values.OfType<string>()) ids.Add(v);
                     break;
             }
+        }
+    }
+
+    // Forces single-quote style for all string VALUES in the emitted YAML.
+    // Tracks mapping key/value alternation so keys remain unquoted plain scalars.
+    private sealed class SingleQuotedStringValueEmitter(IEventEmitter nextEmitter)
+        : ChainedEventEmitter(nextEmitter)
+    {
+        // Stack entry: null = inside a sequence (all scalars are values);
+        //              false = mapping — next scalar is a KEY;
+        //              true  = mapping — next scalar is a VALUE.
+        private readonly Stack<bool?> _ctx = [];
+
+        // When a nested mapping or sequence starts as a VALUE, consume the parent's
+        // value slot so the next sibling key is correctly treated as a key.
+        private void ConsumeValueSlot()
+        {
+            if (_ctx.TryPeek(out var ctx) && ctx == true)
+            {
+                _ctx.TryPop(out _);
+                _ctx.Push(false);
+            }
+        }
+
+        public override void Emit(MappingStartEventInfo eventInfo, IEmitter emitter)
+        {
+            ConsumeValueSlot();
+            _ctx.Push(false);
+            base.Emit(eventInfo, emitter);
+        }
+
+        public override void Emit(MappingEndEventInfo eventInfo, IEmitter emitter)
+        {
+            _ctx.TryPop(out _);
+            base.Emit(eventInfo, emitter);
+        }
+
+        public override void Emit(SequenceStartEventInfo eventInfo, IEmitter emitter)
+        {
+            ConsumeValueSlot();
+            _ctx.Push(null);
+            base.Emit(eventInfo, emitter);
+        }
+
+        public override void Emit(SequenceEndEventInfo eventInfo, IEmitter emitter)
+        {
+            _ctx.TryPop(out _);
+            base.Emit(eventInfo, emitter);
+        }
+
+        public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
+        {
+            if (_ctx.TryPeek(out var top))
+            {
+                bool isValue = top is null || top == true;
+                if (top is not null)
+                {
+                    _ctx.TryPop(out _);
+                    _ctx.Push(!top); // toggle key ↔ value
+                }
+                if (isValue && eventInfo.Source.Type == typeof(string))
+                    eventInfo.Style = ScalarStyle.SingleQuoted;
+            }
+            base.Emit(eventInfo, emitter);
         }
     }
 
