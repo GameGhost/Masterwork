@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-
 namespace Masterwork.ModuleFormat;
 
 public sealed class LoadedModule
@@ -85,7 +81,7 @@ public static class ModuleLoader
             {
                 case V3NavigationNode n:
                     CheckTarget(passageId, n.Target, passages, warnings);
-                    CheckNodeListReferences(passageId, n.Onclick, passages, warnings);
+                    CheckNodeListReferences(passageId, n.OnClick, passages, warnings);
                     break;
                 case V3GotoNode g:
                     CheckTarget(passageId, g.Target, passages, warnings);
@@ -94,11 +90,11 @@ public static class ModuleLoader
                     CheckTarget(passageId, ip.Target, passages, warnings);
                     break;
                 case V3PopupNode p:
-                    if (p.Onclose is not null) CheckTarget(passageId, p.Onclose, passages, warnings);
+                    if (p.OnClose is not null) CheckTarget(passageId, p.OnClose, passages, warnings);
                     CheckNodeListReferences(passageId, p.Content, passages, warnings);
                     break;
                 case V3InputNode i:
-                    CheckTarget(passageId, i.Onsubmit, passages, warnings);
+                    CheckTarget(passageId, i.OnSubmit, passages, warnings);
                     break;
                 case V3SectionNode s:
                     CheckNodeListReferences(passageId, s.Content, passages, warnings);
@@ -113,7 +109,7 @@ public static class ModuleLoader
                         CheckNodeListReferences(passageId, sc.Nodes, passages, warnings);
                     if (sw.Default is not null) CheckNodeListReferences(passageId, sw.Default, passages, warnings);
                     break;
-                case V3ForeachNode f:
+                case V3ForEachNode f:
                     CheckNodeListReferences(passageId, f.Do, passages, warnings);
                     break;
             }
@@ -123,7 +119,7 @@ public static class ModuleLoader
     private static void CheckTarget(string fromPassageId, string target,
         IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)
     {
-        if (target.StartsWith("${", System.StringComparison.Ordinal)) return; // dynamic — can't validate statically
+        if (target.StartsWith("${", StringComparison.Ordinal)) return; // dynamic — can't validate statically
         if (!passages.ContainsKey(target))
             warnings.Add("unresolved_passage_ref", $"{fromPassageId}: target '{target}' does not exist");
     }

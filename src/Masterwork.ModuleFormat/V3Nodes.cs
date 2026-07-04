@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Masterwork.ModuleFormat;
 
 // ── Passage ────────────────────────────────────────────────────────────────
@@ -95,7 +93,7 @@ public sealed record V3NavigationNode : V3Node
     public required string Target { get; init; }
     public required bool StateAffecting { get; init; }
     public string? TimelineLabel { get; init; }
-    public IReadOnlyList<V3Node> Onclick { get; init; } = [];
+    public IReadOnlyList<V3Node> OnClick { get; init; } = [];
 }
 
 public sealed record V3PopupNode : V3Node
@@ -106,7 +104,7 @@ public sealed record V3PopupNode : V3Node
     public string? Layout { get; init; }
     public IReadOnlyList<V3Node> Content { get; init; } = [];
     // Passage_id, or "${expr}" for a dynamic target.
-    public string? Onclose { get; init; }
+    public string? OnClose { get; init; }
     public string? Button { get; init; }
     public bool StateAffecting { get; init; }
 }
@@ -137,7 +135,7 @@ public sealed record V3InputNode : V3Node
     public required string InputType { get; init; }
     public required string Var { get; init; }
     // Passage_id, or "${expr}" for a dynamic target.
-    public required string Onsubmit { get; init; }
+    public required string OnSubmit { get; init; }
 }
 
 public sealed record V3PromptNode : V3Node
@@ -179,7 +177,7 @@ public sealed record V3SwitchNode : V3Node
     public IReadOnlyList<V3Node>? Default { get; init; }
 }
 
-public sealed record V3ForeachNode : V3Node
+public sealed record V3ForEachNode : V3Node
 {
     public override string Type => "foreach";
     public required string Var { get; init; }

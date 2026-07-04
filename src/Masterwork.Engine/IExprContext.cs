@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Masterwork.Engine;
 
 // Decouples the expression evaluator from VariableStore/SessionPrng so the evaluator can be

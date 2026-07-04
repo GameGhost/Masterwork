@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Masterwork.ModuleFormat;
@@ -28,7 +26,7 @@ public static partial class RestextResolver
         };
 
     private static List<V3Node> ResolveNodeList(IReadOnlyList<V3Node> nodes, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
-        nodes.Select(n => ResolveNode(n, locale, warnings)).ToList();
+        [.. nodes.Select(n => ResolveNode(n, locale, warnings))];
 
     private static V3Node ResolveNode(V3Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
     {
@@ -44,19 +42,19 @@ public static partial class RestextResolver
         {
             Label = ResolveDisplay(n.Label, locale, warnings)!,
             Target = ResolveExpr(n.Target, locale, warnings),
-            Onclick = ResolveNodeList(n.Onclick, locale, warnings),
+            OnClick = ResolveNodeList(n.OnClick, locale, warnings),
         },
         V3PopupNode p => p with
         {
             Label = ResolveDisplay(p.Label, locale, warnings),
             Content = ResolveNodeList(p.Content, locale, warnings),
-            Onclose = ResolveExpr(p.Onclose, locale, warnings),
+            OnClose = ResolveExpr(p.OnClose, locale, warnings),
         },
         V3InputNode i => i with
         {
             Label = ResolveDisplay(i.Label, locale, warnings)!,
             Text = ResolveDisplay(i.Text, locale, warnings)!,
-            Onsubmit = ResolveExpr(i.Onsubmit, locale, warnings),
+            OnSubmit = ResolveExpr(i.OnSubmit, locale, warnings),
         },
         V3PromptNode pr => pr with { Text = ResolveDisplay(pr.Text, locale, warnings)! },
         V3GotoNode g => g with { Target = ResolveExpr(g.Target, locale, warnings) },
@@ -79,7 +77,7 @@ public static partial class RestextResolver
             }).ToList(),
             Default = sw.Default is null ? null : ResolveNodeList(sw.Default, locale, warnings),
         },
-        V3ForeachNode f => f with { Do = ResolveNodeList(f.Do, locale, warnings) },
+        V3ForEachNode f => f with { Do = ResolveNodeList(f.Do, locale, warnings) },
         V3CheckpointNode cp => cp with
         {
             Display = ResolveDisplay(cp.Display, locale, warnings),

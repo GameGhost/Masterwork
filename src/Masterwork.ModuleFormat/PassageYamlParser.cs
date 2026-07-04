@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
@@ -40,7 +36,7 @@ public static class PassageYamlParser
     internal static List<V3Node> BuildNodeList(YamlNode? node)
     {
         if (node is not YamlSequenceNode seq) return [];
-        return seq.Children.Cast<YamlMappingNode>().Select(BuildNode).ToList();
+        return [.. seq.Children.Cast<YamlMappingNode>().Select(BuildNode)];
     }
 
     internal static V3Node BuildNode(YamlMappingNode map)
@@ -86,7 +82,7 @@ public static class PassageYamlParser
                 Target = map.GetRequiredString("target"),
                 StateAffecting = map.GetBool("state_affecting", defaultValue: true),
                 TimelineLabel = map.GetString("timeline_label"),
-                Onclick = BuildNodeList(map.TryGet("onclick")),
+                OnClick = BuildNodeList(map.TryGet("onclick")),
             },
             "popup" => new V3PopupNode
             {
@@ -94,7 +90,7 @@ public static class PassageYamlParser
                 Style = map.GetString("style"),
                 Layout = map.GetString("layout"),
                 Content = BuildNodeList(map.TryGet("content")),
-                Onclose = map.GetString("onclose"),
+                OnClose = map.GetString("onclose"),
                 Button = map.GetString("button"),
                 StateAffecting = map.GetBool("state_affecting"),
             },
@@ -105,7 +101,7 @@ public static class PassageYamlParser
                 Text = map.GetRequiredString("text"),
                 InputType = map.GetRequiredString("input"),
                 Var = map.GetRequiredString("var"),
-                Onsubmit = map.GetRequiredString("onsubmit"),
+                OnSubmit = map.GetRequiredString("onsubmit"),
             },
             "prompt" => new V3PromptNode
             {
@@ -117,7 +113,7 @@ public static class PassageYamlParser
             "include_passage" => new V3IncludePassageNode { Target = map.GetRequiredString("target") },
             "conditional" => BuildConditional(map),
             "switch" => BuildSwitch(map),
-            "foreach" => new V3ForeachNode
+            "foreach" => new V3ForEachNode
             {
                 Var = map.GetRequiredString("var"),
                 In = map.GetRequiredString("in"),

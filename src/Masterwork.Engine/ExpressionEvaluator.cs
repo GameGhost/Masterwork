@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 namespace Masterwork.Engine;
 
 // Evaluates a parsed Expr AST against an IExprContext. Expressions are parsed once (see
@@ -10,7 +6,7 @@ namespace Masterwork.Engine;
 public static class ExpressionEvaluator
 {
     private static readonly Dictionary<string, Expr> Cache = new(StringComparer.Ordinal);
-    private static readonly object CacheLock = new();
+    private static readonly Lock CacheLock = new();
 
     public static Expr GetOrParse(string source)
     {

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Masterwork.ModuleFormat;
 
 public sealed record ModuleWarning(string Kind, string Message);

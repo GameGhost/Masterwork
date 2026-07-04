@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Masterwork.Engine;
 
 // Parsed, immutable AST for the MWS expression language (see docs/mws-format-latest.md §4).

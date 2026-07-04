@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace Masterwork.ModuleFormat;
 
 // Parses an en-US.restext locale file: one `Key=Value` per line, single-line values only.

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
@@ -19,6 +15,11 @@ public static class VariableManifest
 
         var result = new Dictionary<string, VarDef>(StringComparer.Ordinal);
 
+        // TODO: Determine what defines these, do the need to be in _variables.yaml?
+        // Note: It looks like an early version of the original modules provided the
+        //   module and player initialization. At some point it seem that was moved
+        //   to the App itself, and theses variables became "standard" pre-initialized
+        //   variables available to the modules.
         foreach (var name in root.GetStringList("standard_variables"))
         {
             var isPlayers = name == "players";
@@ -58,7 +59,7 @@ public static class VariableManifest
         {
             return node is YamlSequenceNode seq
                 ? seq.Children.OfType<YamlScalarNode>().Select(s => (object)(s.Value ?? "")).ToList()
-                : new List<object>();
+                : [];
         }
         if (node is YamlScalarNode s)
         {

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Masterwork.Engine;
 
 public enum SnapshotKind { GameStart, Choice, InputReceived, Checkpoint }

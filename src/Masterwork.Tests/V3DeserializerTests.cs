@@ -201,7 +201,7 @@ public class V3DeserializerTests
                 value: '{entry.name}'
             """);
 
-        var fe = Assert.IsType<V3ForeachNode>(passage.Nodes.Single());
+        var fe = Assert.IsType<V3ForEachNode>(passage.Nodes.Single());
         Assert.Equal("entry", fe.Var);
         Assert.Equal("players_ranked", fe.In);
         Assert.Single(fe.Do);
@@ -266,8 +266,8 @@ public class V3DeserializerTests
             """);
 
         var nav = Assert.IsType<V3NavigationNode>(passage.Nodes.Single());
-        Assert.Single(nav.Onclick);
-        Assert.IsType<V3AssignNode>(nav.Onclick[0]);
+        Assert.Single(nav.OnClick);
+        Assert.IsType<V3AssignNode>(nav.OnClick[0]);
     }
 
     [Fact]

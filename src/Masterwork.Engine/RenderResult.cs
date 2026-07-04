@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Masterwork.ModuleFormat;
 
 namespace Masterwork.Engine;
@@ -43,7 +42,7 @@ public sealed record RenderedNavigation : RenderedAction
     public required bool StateAffecting { get; init; }
     public string? TimelineLabel { get; init; }
     // Unevaluated — GameSession runs these on FollowLinkAsync, before resolving a dynamic target.
-    public required IReadOnlyList<V3Node> OnclickRaw { get; init; }
+    public required IReadOnlyList<V3Node> OnClickRaw { get; init; }
 }
 
 public sealed record RenderedPopup : RenderedAction
@@ -55,7 +54,7 @@ public sealed record RenderedPopup : RenderedAction
     // Unevaluated — content is only rendered when GameSession.OpenPopupAsync is called (see the
     // popup transaction model: content evaluation is deferred until the player opens the popup).
     public required IReadOnlyList<V3Node> RawContent { get; init; }
-    public string? Onclose { get; init; }
+    public string? OnClose { get; init; }
     public string? Button { get; init; }
     public required bool StateAffecting { get; init; }
 }
@@ -67,7 +66,7 @@ public sealed record RenderedInput : RenderedAction
     public required string Text { get; init; }
     public required string InputType { get; init; }
     public required string Var { get; init; }
-    public required string Onsubmit { get; init; }
+    public required string OnSubmit { get; init; }
 }
 
 // Result of opening a popup: its content, rendered against the pending (not-yet-committed) state

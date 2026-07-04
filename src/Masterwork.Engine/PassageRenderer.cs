@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Masterwork.ModuleFormat;
 
 namespace Masterwork.Engine;
@@ -115,8 +112,8 @@ public static class PassageRenderer
                 var switchCase = SelectSwitchCase(sw, ctx.Store);
                 if (switchCase is not null) output.AddRange(RenderNodes(switchCase, ctx));
                 break;
-            case V3ForeachNode fe:
-                RenderForeach(fe, ctx, output);
+            case V3ForEachNode fe:
+                RenderForEach(fe, ctx, output);
                 break;
             case V3CheckpointNode cp:
                 ctx.Checkpoints.Add(new RenderedCheckpoint(cp.Id, cp.Display, cp.Diagnostic));
@@ -140,7 +137,7 @@ public static class PassageRenderer
             Target = nav.Target,
             StateAffecting = nav.StateAffecting,
             TimelineLabel = nav.TimelineLabel,
-            OnclickRaw = nav.Onclick,
+            OnClickRaw = nav.OnClick,
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -156,7 +153,7 @@ public static class PassageRenderer
             Layout = popup.Layout,
             AutoDisplay = popup.Label is null,
             RawContent = popup.Content,
-            Onclose = popup.Onclose,
+            OnClose = popup.OnClose,
             Button = popup.Button,
             StateAffecting = popup.StateAffecting,
         };
@@ -174,13 +171,13 @@ public static class PassageRenderer
             Text = ctx.Store.ExpandTemplate(input.Text),
             InputType = input.InputType,
             Var = input.Var,
-            Onsubmit = input.Onsubmit,
+            OnSubmit = input.OnSubmit,
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderForeach(V3ForeachNode fe, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderForEach(V3ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
     {
         var items = ctx.Store.GetVariable(fe.In).AsArray();
         foreach (var item in items)

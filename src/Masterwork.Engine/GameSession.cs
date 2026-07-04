@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Masterwork.ModuleFormat;
 
 namespace Masterwork.Engine;
@@ -20,7 +16,7 @@ public sealed class GameSession
     private HashSet<string> _visitedPassageIds = [];
     private PendingPopup? _pendingPopup;
 
-    private sealed record PendingPopup(string ActionId, VariableStore Sandbox, string? Onclose, bool StateAffecting);
+    private sealed record PendingPopup(string ActionId, VariableStore Sandbox, string? OnClose, bool StateAffecting);
 
     public IReadOnlyList<SessionSnapshot> Timeline => _timeline;
     public int HistoryIndex { get; private set; }
@@ -74,7 +70,7 @@ public sealed class GameSession
 
     public static GameSession Restore(LoadedModule module, SessionSave save) => new(module, save);
 
-    public SessionSave Serialize() => new(_masterSeed, _timeline.ToList(), HistoryIndex);
+    public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex);
 
     // ── Player actions ───────────────────────────────────────────────────────
 
@@ -82,8 +78,8 @@ public sealed class GameSession
     {
         var nav = FindAction<RenderedNavigation>(actionId);
 
-        if (nav.OnclickRaw.Count > 0)
-            PassageRenderer.RenderNodeList(nav.OnclickRaw, _store, _module);
+        if (nav.OnClickRaw.Count > 0)
+            PassageRenderer.RenderNodeList(nav.OnClickRaw, _store, _module);
 
         var targetId = ResolveTarget(nav.Target);
 
@@ -102,7 +98,7 @@ public sealed class GameSession
             : ExprValue.Of(value.ToString() ?? "");
         _store.SetSessionVariable(input.Var, exprValue);
 
-        var targetId = ResolveTarget(input.Onsubmit);
+        var targetId = ResolveTarget(input.OnSubmit);
         var result = PushAndRender(targetId, SnapshotKind.InputReceived, exprValue, displayLabel: null, diagnosticLabel: null);
         return Task.FromResult(result);
     }
@@ -116,7 +112,7 @@ public sealed class GameSession
 
         var sandbox = _store.Clone();
         var content = PassageRenderer.RenderNodeList(popup.RawContent, sandbox, _module);
-        _pendingPopup = new PendingPopup(actionId, sandbox, popup.Onclose, popup.StateAffecting);
+        _pendingPopup = new PendingPopup(actionId, sandbox, popup.OnClose, popup.StateAffecting);
 
         return Task.FromResult(new PopupRenderResult(content));
     }
@@ -130,7 +126,7 @@ public sealed class GameSession
         _pendingPopup = null;
         ViewState.ExpandedPopups.Remove(actionId);
 
-        var targetId = pending.Onclose is null ? Current.PassageId : ResolveTarget(pending.Onclose);
+        var targetId = pending.OnClose is null ? Current.PassageId : ResolveTarget(pending.OnClose);
 
         var result = pending.StateAffecting
             ? PushAndRender(targetId, SnapshotKind.Choice, submittedInput: null, displayLabel: null, diagnosticLabel: null)
@@ -275,7 +271,7 @@ public sealed class GameSession
     }
 
     private void RecomputeVisitedFromTimeline() =>
-        _visitedPassageIds = _timeline.Take(HistoryIndex + 1).Select(s => s.PassageId).ToHashSet();
+        _visitedPassageIds = [.. _timeline.Take(HistoryIndex + 1).Select(s => s.PassageId)];
 
     private T FindAction<T>(string actionId) where T : RenderedAction
     {
