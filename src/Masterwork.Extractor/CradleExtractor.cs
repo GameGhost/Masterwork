@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Masterwork.ModuleFormat;
+using VarDef = Masterwork.ModuleFormat.VarDef;
 using Masterwork.Extractor.Visitors;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;

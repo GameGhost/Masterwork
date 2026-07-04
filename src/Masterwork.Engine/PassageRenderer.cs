@@ -36,7 +36,7 @@ public static class PassageRenderer
 
     // Renders a raw node list in isolation — used for popup content on open, and internally for
     // `include_passage` inlining.
-    public static IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<V3Node> nodes, VariableStore store, LoadedModule module) =>
+    public static IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module) =>
         RenderNodes(nodes, new RenderContext(store, module));
 
     private sealed class RenderContext(VariableStore store, LoadedModule module)
@@ -51,7 +51,7 @@ public static class PassageRenderer
         public string NextActionId(string prefix) => $"{prefix}_{_actionCounter++}";
     }
 
-    private static List<RenderedNode> RenderNodes(IReadOnlyList<V3Node> nodes, RenderContext ctx)
+    private static List<RenderedNode> RenderNodes(IReadOnlyList<Node> nodes, RenderContext ctx)
     {
         var output = new List<RenderedNode>();
         foreach (var node in nodes)
@@ -62,72 +62,72 @@ public static class PassageRenderer
         return output;
     }
 
-    private static void RenderNode(V3Node node, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderNode(Node node, RenderContext ctx, List<RenderedNode> output)
     {
         switch (node)
         {
-            case V3TextNode t:
+            case TextNode t:
                 output.Add(new RenderedText(ctx.Store.ExpandTemplate(t.Value), t.Align));
                 break;
-            case V3BreakNode:
+            case BreakNode:
                 output.Add(new RenderedBreak());
                 break;
-            case V3ParagraphBreakNode:
+            case ParagraphBreakNode:
                 output.Add(new RenderedParagraphBreak());
                 break;
-            case V3ImageNode img:
+            case ImageNode img:
                 output.Add(new RenderedImage(img.Asset, img.Size, img.Align));
                 break;
-            case V3SectionNode s:
+            case SectionNode s:
                 output.Add(new RenderedSection(ExpandOrNull(s.Title, ctx.Store), s.Style, s.Collapsed, RenderNodes(s.Content, ctx)));
                 break;
-            case V3LetNode let:
+            case LetNode let:
                 ctx.Store.SetLetVariable(let.Var, ExpressionEvaluator.Evaluate(let.Expr, ctx.Store));
                 break;
-            case V3AssignNode assign:
+            case AssignNode assign:
                 ctx.Store.SetSessionVariable(assign.Var, ExpressionEvaluator.Evaluate(assign.Expr, ctx.Store));
                 break;
-            case V3NavigationNode nav:
+            case NavigationNode nav:
                 RenderNavigation(nav, ctx, output);
                 break;
-            case V3PopupNode popup:
+            case PopupNode popup:
                 RenderPopup(popup, ctx, output);
                 break;
-            case V3InputNode input:
+            case InputNode input:
                 RenderInput(input, ctx, output);
                 break;
-            case V3GotoNode go:
+            case GotoNode go:
                 ctx.PendingGoto = ResolveTargetNow(go.Target, ctx.Store);
                 break;
-            case V3IncludePassageNode inc:
+            case IncludePassageNode inc:
                 var targetId = ResolveTargetNow(inc.Target, ctx.Store);
                 if (ctx.Module.Passages.TryGetValue(targetId, out var includedPassage))
                     output.AddRange(RenderNodes(includedPassage.Nodes, ctx));
                 break;
-            case V3ConditionalNode cond:
+            case ConditionalNode cond:
                 var condBranch = SelectConditionalBranch(cond, ctx.Store);
                 if (condBranch is not null) output.AddRange(RenderNodes(condBranch, ctx));
                 break;
-            case V3SwitchNode sw:
+            case SwitchNode sw:
                 var switchCase = SelectSwitchCase(sw, ctx.Store);
                 if (switchCase is not null) output.AddRange(RenderNodes(switchCase, ctx));
                 break;
-            case V3ForEachNode fe:
+            case ForEachNode fe:
                 RenderForEach(fe, ctx, output);
                 break;
-            case V3CheckpointNode cp:
+            case CheckpointNode cp:
                 ctx.Checkpoints.Add(new RenderedCheckpoint(cp.Id, cp.Display, cp.Diagnostic));
                 break;
-            case V3RecordNode:
+            case RecordNode:
                 // Achievement triggers are deferred to Phase 3; no-op at runtime.
                 break;
-            case V3PromptNode:
+            case PromptNode:
                 // Spec'd but not yet emitted by the extractor; no real passages exercise this path.
                 break;
         }
     }
 
-    private static void RenderNavigation(V3NavigationNode nav, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderNavigation(NavigationNode nav, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedNavigation
         {
@@ -143,7 +143,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderPopup(V3PopupNode popup, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderPopup(PopupNode popup, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedPopup
         {
@@ -161,7 +161,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderInput(V3InputNode input, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderInput(InputNode input, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedInput
         {
@@ -177,7 +177,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderForEach(V3ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
+    private static void RenderForEach(ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
     {
         var items = ctx.Store.GetVariable(fe.In).AsArray();
         foreach (var item in items)
@@ -188,7 +188,7 @@ public static class PassageRenderer
         }
     }
 
-    private static IReadOnlyList<V3Node>? SelectConditionalBranch(V3ConditionalNode cond, VariableStore store)
+    private static IReadOnlyList<Node>? SelectConditionalBranch(ConditionalNode cond, VariableStore store)
     {
         foreach (var branch in cond.Conditions)
             if (ExpressionEvaluator.Evaluate(branch.If, store).AsBool())
@@ -196,7 +196,7 @@ public static class PassageRenderer
         return cond.Else;
     }
 
-    private static IReadOnlyList<V3Node>? SelectSwitchCase(V3SwitchNode sw, VariableStore store)
+    private static IReadOnlyList<Node>? SelectSwitchCase(SwitchNode sw, VariableStore store)
     {
         var onValue = store.GetVariable(sw.On);
         foreach (var c in sw.Cases)

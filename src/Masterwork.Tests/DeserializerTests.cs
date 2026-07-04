@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Masterwork.Tests;
 
-public class V3DeserializerTests
+public class DeserializerTests
 {
     private static MwsPassageDoc ParseOne(string yaml) =>
         ModuleLoader.LoadFromSources([yaml]).Passages.Values.Single();
@@ -21,7 +21,7 @@ public class V3DeserializerTests
               value: 'Hello world'
             """);
 
-        var text = Assert.IsType<V3TextNode>(passage.Nodes.Single());
+        var text = Assert.IsType<TextNode>(passage.Nodes.Single());
         Assert.Equal("Hello world", text.Value);
     }
 
@@ -104,11 +104,11 @@ public class V3DeserializerTests
                 value: 'first round'
             """);
 
-        var cond = Assert.IsType<V3ConditionalNode>(passage.Nodes.Single());
+        var cond = Assert.IsType<ConditionalNode>(passage.Nodes.Single());
         Assert.Single(cond.Conditions);
         Assert.Equal("round == 1", cond.Conditions[0].If);
         Assert.Null(cond.Else);
-        var text = Assert.IsType<V3TextNode>(cond.Conditions[0].Then.Single());
+        var text = Assert.IsType<TextNode>(cond.Conditions[0].Then.Single());
         Assert.Equal("first round", text.Value);
     }
 
@@ -135,10 +135,10 @@ public class V3DeserializerTests
                 value: 'other'
             """);
 
-        var cond = Assert.IsType<V3ConditionalNode>(passage.Nodes.Single());
+        var cond = Assert.IsType<ConditionalNode>(passage.Nodes.Single());
         Assert.Equal(2, cond.Conditions.Count);
         Assert.NotNull(cond.Else);
-        Assert.Equal("other", Assert.IsType<V3TextNode>(cond.Else!.Single()).Value);
+        Assert.Equal("other", Assert.IsType<TextNode>(cond.Else!.Single()).Value);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class V3DeserializerTests
                 value: 'other'
             """);
 
-        var sw = Assert.IsType<V3SwitchNode>(passage.Nodes.Single());
+        var sw = Assert.IsType<SwitchNode>(passage.Nodes.Single());
         Assert.Single(sw.Cases);
         Assert.NotNull(sw.Default);
     }
@@ -181,7 +181,7 @@ public class V3DeserializerTests
                 nodes: []
             """);
 
-        var sw = Assert.IsType<V3SwitchNode>(passage.Nodes.Single());
+        var sw = Assert.IsType<SwitchNode>(passage.Nodes.Single());
         Assert.Equal(">3", sw.Cases[0].Match);
     }
 
@@ -201,7 +201,7 @@ public class V3DeserializerTests
                 value: '{entry.name}'
             """);
 
-        var fe = Assert.IsType<V3ForEachNode>(passage.Nodes.Single());
+        var fe = Assert.IsType<ForEachNode>(passage.Nodes.Single());
         Assert.Equal("entry", fe.Var);
         Assert.Equal("players_ranked", fe.In);
         Assert.Single(fe.Do);
@@ -222,7 +222,7 @@ public class V3DeserializerTests
                 value: 'body'
             """);
 
-        var section = Assert.IsType<V3SectionNode>(passage.Nodes.Single());
+        var section = Assert.IsType<SectionNode>(passage.Nodes.Single());
         Assert.Equal("My Section", section.Title);
         Assert.Single(section.Content);
     }
@@ -243,7 +243,7 @@ public class V3DeserializerTests
                 value: 'popup body'
             """);
 
-        var popup = Assert.IsType<V3PopupNode>(passage.Nodes.Single());
+        var popup = Assert.IsType<PopupNode>(passage.Nodes.Single());
         Assert.Single(popup.Content);
     }
 
@@ -265,9 +265,9 @@ public class V3DeserializerTests
                 expr: '1'
             """);
 
-        var nav = Assert.IsType<V3NavigationNode>(passage.Nodes.Single());
+        var nav = Assert.IsType<NavigationNode>(passage.Nodes.Single());
         Assert.Single(nav.OnClick);
-        Assert.IsType<V3AssignNode>(nav.OnClick[0]);
+        Assert.IsType<AssignNode>(nav.OnClick[0]);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public class V3DeserializerTests
               state_affecting: true
             """);
 
-        var nav = Assert.IsType<V3NavigationNode>(passage.Nodes.Single());
+        var nav = Assert.IsType<NavigationNode>(passage.Nodes.Single());
         Assert.Contains("${", nav.Target);
     }
 
@@ -306,7 +306,7 @@ public class V3DeserializerTests
             restextText: "Greeting_001=Hello there\n");
 
         var passage = module.Passages.Values.Single();
-        var text = Assert.IsType<V3TextNode>(passage.Nodes.Single());
+        var text = Assert.IsType<TextNode>(passage.Nodes.Single());
         Assert.Equal("Hello there", text.Value);
     }
 
@@ -329,7 +329,7 @@ public class V3DeserializerTests
             restextText: "Quoted_001=She said \"hello\"\n");
 
         var passage = module.Passages.Values.Single();
-        var cond = Assert.IsType<V3ConditionalNode>(passage.Nodes.Single());
+        var cond = Assert.IsType<ConditionalNode>(passage.Nodes.Single());
         Assert.Equal("notice == \"She said \\\"hello\\\"\"", cond.Conditions[0].If);
     }
 

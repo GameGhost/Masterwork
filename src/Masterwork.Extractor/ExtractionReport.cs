@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Masterwork.ModuleFormat;
+using VarDef = Masterwork.ModuleFormat.VarDef;
 
 namespace Masterwork.Extractor;
 

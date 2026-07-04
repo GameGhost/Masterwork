@@ -15,10 +15,10 @@ public static class PassageYamlParser
             throw new FormatException("Empty YAML document");
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
 
-        V3Location? location = null;
+        Location? location = null;
         var locMap = root.GetMapping("location");
         if (locMap is not null)
-            location = new V3Location { Name = locMap.GetString("name"), Icon = locMap.GetString("icon") };
+            location = new Location { Name = locMap.GetString("name"), Icon = locMap.GetString("icon") };
 
         return new MwsPassageDoc
         {
@@ -33,49 +33,49 @@ public static class PassageYamlParser
         };
     }
 
-    internal static List<V3Node> BuildNodeList(YamlNode? node)
+    internal static List<Node> BuildNodeList(YamlNode? node)
     {
         if (node is not YamlSequenceNode seq) return [];
         return [.. seq.Children.Cast<YamlMappingNode>().Select(BuildNode)];
     }
 
-    internal static V3Node BuildNode(YamlMappingNode map)
+    internal static Node BuildNode(YamlMappingNode map)
     {
         var type = map.GetRequiredString("type");
         return type switch
         {
-            "text" => new V3TextNode
+            "text" => new TextNode
             {
                 Value = map.GetRequiredString("value"),
                 Align = map.GetString("align"),
                 Lets = map.GetStringList("lets"),
             },
-            "image" => new V3ImageNode
+            "image" => new ImageNode
             {
                 Asset = map.GetRequiredString("asset"),
                 Size = map.GetString("size"),
                 Align = map.GetString("align"),
             },
-            "break" => new V3BreakNode(),
-            "paragraph_break" => new V3ParagraphBreakNode(),
-            "section" => new V3SectionNode
+            "break" => new BreakNode(),
+            "paragraph_break" => new ParagraphBreakNode(),
+            "section" => new SectionNode
             {
                 Title = map.GetString("title"),
                 Style = map.GetString("style"),
                 Collapsed = map.GetBool("collapsed"),
                 Content = BuildNodeList(map.TryGet("content")),
             },
-            "let" => new V3LetNode
+            "let" => new LetNode
             {
                 Var = map.GetRequiredString("var"),
                 Expr = map.GetRequiredString("expr"),
             },
-            "assign" => new V3AssignNode
+            "assign" => new AssignNode
             {
                 Var = map.GetRequiredString("var"),
                 Expr = map.GetRequiredString("expr"),
             },
-            "navigation" => new V3NavigationNode
+            "navigation" => new NavigationNode
             {
                 Label = map.GetRequiredString("label"),
                 Style = map.GetString("style"),
@@ -84,7 +84,7 @@ public static class PassageYamlParser
                 TimelineLabel = map.GetString("timeline_label"),
                 OnClick = BuildNodeList(map.TryGet("onclick")),
             },
-            "popup" => new V3PopupNode
+            "popup" => new PopupNode
             {
                 Label = map.GetString("label"),
                 Style = map.GetString("style"),
@@ -94,7 +94,7 @@ public static class PassageYamlParser
                 Button = map.GetString("button"),
                 StateAffecting = map.GetBool("state_affecting"),
             },
-            "input" => new V3InputNode
+            "input" => new InputNode
             {
                 Label = map.GetRequiredString("label"),
                 Style = map.GetString("style"),
@@ -103,53 +103,53 @@ public static class PassageYamlParser
                 Var = map.GetRequiredString("var"),
                 OnSubmit = map.GetRequiredString("onsubmit"),
             },
-            "prompt" => new V3PromptNode
+            "prompt" => new PromptNode
             {
                 Text = map.GetRequiredString("text"),
                 InputType = map.GetRequiredString("input"),
                 Var = map.GetRequiredString("var"),
             },
-            "goto" => new V3GotoNode { Target = map.GetRequiredString("target") },
-            "include_passage" => new V3IncludePassageNode { Target = map.GetRequiredString("target") },
+            "goto" => new GotoNode { Target = map.GetRequiredString("target") },
+            "include_passage" => new IncludePassageNode { Target = map.GetRequiredString("target") },
             "conditional" => BuildConditional(map),
             "switch" => BuildSwitch(map),
-            "foreach" => new V3ForEachNode
+            "foreach" => new ForEachNode
             {
                 Var = map.GetRequiredString("var"),
                 In = map.GetRequiredString("in"),
                 Do = BuildNodeList(map.TryGet("do")),
             },
-            "checkpoint" => new V3CheckpointNode
+            "checkpoint" => new CheckpointNode
             {
                 Id = map.GetRequiredString("id"),
                 Display = map.GetString("display"),
                 Diagnostic = map.GetString("diagnostic"),
             },
-            "record" => new V3RecordNode { Id = map.GetRequiredString("id") },
-            _ => new V3UnknownNode(type),
+            "record" => new RecordNode { Id = map.GetRequiredString("id") },
+            _ => new UnknownNode(type),
         };
     }
 
-    private static V3ConditionalNode BuildConditional(YamlMappingNode map)
+    private static ConditionalNode BuildConditional(YamlMappingNode map)
     {
         // Flat form: if: + then: directly on the node.
         var flatIf = map.GetString("if");
         if (flatIf is not null)
         {
-            return new V3ConditionalNode
+            return new ConditionalNode
             {
-                Conditions = [new V3ConditionalBranch { If = flatIf, Then = BuildNodeList(map.TryGet("then")) }],
+                Conditions = [new ConditionalBranch { If = flatIf, Then = BuildNodeList(map.TryGet("then")) }],
                 Else = null,
             };
         }
 
         // Multi-branch form: conditions: [{if, then}] + optional else:.
-        var conditions = new List<V3ConditionalBranch>();
+        var conditions = new List<ConditionalBranch>();
         if (map.GetSequence("conditions") is { } seq)
         {
             foreach (var branchNode in seq.Children.Cast<YamlMappingNode>())
             {
-                conditions.Add(new V3ConditionalBranch
+                conditions.Add(new ConditionalBranch
                 {
                     If = branchNode.GetRequiredString("if"),
                     Then = BuildNodeList(branchNode.TryGet("then")),
@@ -157,23 +157,23 @@ public static class PassageYamlParser
             }
         }
         var elseNode = map.TryGet("else");
-        return new V3ConditionalNode
+        return new ConditionalNode
         {
             Conditions = conditions,
             Else = elseNode is null ? null : BuildNodeList(elseNode),
         };
     }
 
-    private static V3SwitchNode BuildSwitch(YamlMappingNode map)
+    private static SwitchNode BuildSwitch(YamlMappingNode map)
     {
-        var cases = new List<V3SwitchCase>();
+        var cases = new List<SwitchCase>();
         if (map.GetSequence("cases") is { } seq)
         {
             foreach (var caseNode in seq.Children.Cast<YamlMappingNode>())
             {
                 var matchNode = caseNode.TryGet("match")
                     ?? throw new FormatException("switch case missing 'match'");
-                cases.Add(new V3SwitchCase
+                cases.Add(new SwitchCase
                 {
                     Match = matchNode.ToNaturalValue(),
                     Nodes = BuildNodeList(caseNode.TryGet("nodes")),
@@ -181,7 +181,7 @@ public static class PassageYamlParser
             }
         }
         var defaultNode = map.TryGet("default");
-        return new V3SwitchNode
+        return new SwitchNode
         {
             On = map.GetRequiredString("on"),
             Cases = cases,

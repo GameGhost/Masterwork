@@ -72,44 +72,44 @@ public static class ModuleLoader
             CheckNodeListReferences(passage.PassageId, passage.Nodes, passages, warnings);
     }
 
-    private static void CheckNodeListReferences(string passageId, IReadOnlyList<V3Node> nodes,
+    private static void CheckNodeListReferences(string passageId, IReadOnlyList<Node> nodes,
         IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)
     {
         foreach (var node in nodes)
         {
             switch (node)
             {
-                case V3NavigationNode n:
+                case NavigationNode n:
                     CheckTarget(passageId, n.Target, passages, warnings);
                     CheckNodeListReferences(passageId, n.OnClick, passages, warnings);
                     break;
-                case V3GotoNode g:
+                case GotoNode g:
                     CheckTarget(passageId, g.Target, passages, warnings);
                     break;
-                case V3IncludePassageNode ip:
+                case IncludePassageNode ip:
                     CheckTarget(passageId, ip.Target, passages, warnings);
                     break;
-                case V3PopupNode p:
+                case PopupNode p:
                     if (p.OnClose is not null) CheckTarget(passageId, p.OnClose, passages, warnings);
                     CheckNodeListReferences(passageId, p.Content, passages, warnings);
                     break;
-                case V3InputNode i:
+                case InputNode i:
                     CheckTarget(passageId, i.OnSubmit, passages, warnings);
                     break;
-                case V3SectionNode s:
+                case SectionNode s:
                     CheckNodeListReferences(passageId, s.Content, passages, warnings);
                     break;
-                case V3ConditionalNode c:
+                case ConditionalNode c:
                     foreach (var branch in c.Conditions)
                         CheckNodeListReferences(passageId, branch.Then, passages, warnings);
                     if (c.Else is not null) CheckNodeListReferences(passageId, c.Else, passages, warnings);
                     break;
-                case V3SwitchNode sw:
+                case SwitchNode sw:
                     foreach (var sc in sw.Cases)
                         CheckNodeListReferences(passageId, sc.Nodes, passages, warnings);
                     if (sw.Default is not null) CheckNodeListReferences(passageId, sw.Default, passages, warnings);
                     break;
-                case V3ForEachNode f:
+                case ForEachNode f:
                     CheckNodeListReferences(passageId, f.Do, passages, warnings);
                     break;
             }

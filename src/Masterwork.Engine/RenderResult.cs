@@ -42,7 +42,7 @@ public sealed record RenderedNavigation : RenderedAction
     public required bool StateAffecting { get; init; }
     public string? TimelineLabel { get; init; }
     // Unevaluated — GameSession runs these on FollowLinkAsync, before resolving a dynamic target.
-    public required IReadOnlyList<V3Node> OnClickRaw { get; init; }
+    public required IReadOnlyList<Node> OnClickRaw { get; init; }
 }
 
 public sealed record RenderedPopup : RenderedAction
@@ -53,7 +53,7 @@ public sealed record RenderedPopup : RenderedAction
     public bool AutoDisplay { get; init; }
     // Unevaluated — content is only rendered when GameSession.OpenPopupAsync is called (see the
     // popup transaction model: content evaluation is deferred until the player opens the popup).
-    public required IReadOnlyList<V3Node> RawContent { get; init; }
+    public required IReadOnlyList<Node> RawContent { get; init; }
     public string? OnClose { get; init; }
     public string? Button { get; init; }
     public required bool StateAffecting { get; init; }

@@ -25,41 +25,41 @@ public static partial class RestextResolver
             Nodes = ResolveNodeList(passage.Nodes, locale, warnings),
         };
 
-    private static List<V3Node> ResolveNodeList(IReadOnlyList<V3Node> nodes, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
+    private static List<Node> ResolveNodeList(IReadOnlyList<Node> nodes, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
         [.. nodes.Select(n => ResolveNode(n, locale, warnings))];
 
-    private static V3Node ResolveNode(V3Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
+    private static Node ResolveNode(Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
     {
-        V3TextNode t => t with { Value = ResolveDisplay(t.Value, locale, warnings)! },
-        V3SectionNode s => s with
+        TextNode t => t with { Value = ResolveDisplay(t.Value, locale, warnings)! },
+        SectionNode s => s with
         {
             Title = ResolveDisplay(s.Title, locale, warnings),
             Content = ResolveNodeList(s.Content, locale, warnings),
         },
-        V3LetNode l => l with { Expr = ResolveExpr(l.Expr, locale, warnings) },
-        V3AssignNode a => a with { Expr = ResolveExpr(a.Expr, locale, warnings) },
-        V3NavigationNode n => n with
+        LetNode l => l with { Expr = ResolveExpr(l.Expr, locale, warnings) },
+        AssignNode a => a with { Expr = ResolveExpr(a.Expr, locale, warnings) },
+        NavigationNode n => n with
         {
             Label = ResolveDisplay(n.Label, locale, warnings)!,
             Target = ResolveExpr(n.Target, locale, warnings),
             OnClick = ResolveNodeList(n.OnClick, locale, warnings),
         },
-        V3PopupNode p => p with
+        PopupNode p => p with
         {
             Label = ResolveDisplay(p.Label, locale, warnings),
             Content = ResolveNodeList(p.Content, locale, warnings),
             OnClose = ResolveExpr(p.OnClose, locale, warnings),
         },
-        V3InputNode i => i with
+        InputNode i => i with
         {
             Label = ResolveDisplay(i.Label, locale, warnings)!,
             Text = ResolveDisplay(i.Text, locale, warnings)!,
             OnSubmit = ResolveExpr(i.OnSubmit, locale, warnings),
         },
-        V3PromptNode pr => pr with { Text = ResolveDisplay(pr.Text, locale, warnings)! },
-        V3GotoNode g => g with { Target = ResolveExpr(g.Target, locale, warnings) },
-        V3IncludePassageNode ip => ip with { Target = ResolveExpr(ip.Target, locale, warnings) },
-        V3ConditionalNode c => c with
+        PromptNode pr => pr with { Text = ResolveDisplay(pr.Text, locale, warnings)! },
+        GotoNode g => g with { Target = ResolveExpr(g.Target, locale, warnings) },
+        IncludePassageNode ip => ip with { Target = ResolveExpr(ip.Target, locale, warnings) },
+        ConditionalNode c => c with
         {
             Conditions = c.Conditions.Select(b => b with
             {
@@ -68,7 +68,7 @@ public static partial class RestextResolver
             }).ToList(),
             Else = c.Else is null ? null : ResolveNodeList(c.Else, locale, warnings),
         },
-        V3SwitchNode sw => sw with
+        SwitchNode sw => sw with
         {
             Cases = sw.Cases.Select(cs => cs with
             {
@@ -77,8 +77,8 @@ public static partial class RestextResolver
             }).ToList(),
             Default = sw.Default is null ? null : ResolveNodeList(sw.Default, locale, warnings),
         },
-        V3ForEachNode f => f with { Do = ResolveNodeList(f.Do, locale, warnings) },
-        V3CheckpointNode cp => cp with
+        ForEachNode f => f with { Do = ResolveNodeList(f.Do, locale, warnings) },
+        CheckpointNode cp => cp with
         {
             Display = ResolveDisplay(cp.Display, locale, warnings),
             Diagnostic = ResolveDisplay(cp.Diagnostic, locale, warnings),
