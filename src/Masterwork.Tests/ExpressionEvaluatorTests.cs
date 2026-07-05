@@ -37,7 +37,7 @@ public class ExpressionEvaluatorTests
     }
 
     private static ExprValue Eval(string expr, Dictionary<string, ExprValue>? vars = null) =>
-        ExpressionEvaluator.Evaluate(expr, new FakeExprContext(vars));
+        new ExpressionEvaluator().Evaluate(expr, new FakeExprContext(vars));
 
     private static Dictionary<string, ExprValue> Vars(params (string name, ExprValue value)[] entries) =>
         entries.ToDictionary(e => e.name, e => e.value);

@@ -1,36 +1,47 @@
 namespace Masterwork.Engine;
 
 /// <summary>
-/// Evaluates a parsed <see cref="Expr"/> AST against an <see cref="IExprContext"/>. Expressions
-/// are parsed once (see <see cref="GetOrParse"/>) and cached by source text, so repeated
-/// evaluation is a pure AST walk with no re-parsing cost.
+/// <inheritdoc cref="IExpressionEvaluator"/> Expressions are parsed once (see <see cref="GetOrParse"/>)
+/// and cached by source text, so repeated evaluation is a pure AST walk with no re-parsing cost.
 /// </summary>
-public static class ExpressionEvaluator
+public sealed class ExpressionEvaluator : IExpressionEvaluator
 {
-    private static readonly Dictionary<string, Expr> Cache = new(StringComparer.Ordinal);
-    private static readonly Lock CacheLock = new();
+    private readonly IExpressionParser _parser;
+    private readonly Dictionary<string, Expr> _cache = new(StringComparer.Ordinal);
+    private readonly Lock _cacheLock = new();
+
+    /// <summary>Creates an evaluator wired to the default <see cref="ExpressionParser"/>.</summary>
+    public ExpressionEvaluator() : this(new ExpressionParser())
+    {
+    }
+
+    /// <summary>Creates an evaluator with an explicit parser dependency, e.g. for testing with mocks.</summary>
+    public ExpressionEvaluator(IExpressionParser parser)
+    {
+        _parser = parser;
+    }
 
     /// <summary>Parses <paramref name="source"/> into an <see cref="Expr"/> AST, or returns the cached AST from a prior call with the same source text.</summary>
-    public static Expr GetOrParse(string source)
+    public Expr GetOrParse(string source)
     {
-        lock (CacheLock)
+        lock (_cacheLock)
         {
-            if (Cache.TryGetValue(source, out var cached))
+            if (_cache.TryGetValue(source, out var cached))
             {
                 return cached;
             }
 
-            var expr = ExpressionParser.Parse(source);
-            Cache[source] = expr;
+            var expr = _parser.Parse(source);
+            _cache[source] = expr;
             return expr;
         }
     }
 
-    /// <summary>Parses (or retrieves from cache) and evaluates an expression string against <paramref name="ctx"/>.</summary>
-    public static ExprValue Evaluate(string source, IExprContext ctx) => Evaluate(GetOrParse(source), ctx);
+    /// <inheritdoc/>
+    public ExprValue Evaluate(string source, IExprContext ctx) => Evaluate(GetOrParse(source), ctx);
 
-    /// <summary>Evaluates a parsed <see cref="Expr"/> AST against <paramref name="ctx"/>.</summary>
-    public static ExprValue Evaluate(Expr expr, IExprContext ctx) => expr switch
+    /// <inheritdoc/>
+    public ExprValue Evaluate(Expr expr, IExprContext ctx) => expr switch
     {
         Expr.IntLiteral n => ExprValue.Of(n.Value),
         Expr.StringLiteral s => ExprValue.Of(s.Value),
@@ -47,7 +58,7 @@ public static class ExpressionEvaluator
         _ => throw new ExprEvalException($"Unhandled expression node: {expr.GetType().Name}"),
     };
 
-    private static ExprValue EvalProperty(Expr.PropertyAccess p, IExprContext ctx)
+    private ExprValue EvalProperty(Expr.PropertyAccess p, IExprContext ctx)
     {
         var target = Evaluate(p.Target, ctx);
         var record = target.AsRecord();
@@ -61,7 +72,7 @@ public static class ExpressionEvaluator
 
     // ── Indexing ─────────────────────────────────────────────────────────────
 
-    private static ExprValue EvalIndex(Expr.IndexAccess ix, IExprContext ctx)
+    private ExprValue EvalIndex(Expr.IndexAccess ix, IExprContext ctx)
     {
         var target = Evaluate(ix.Target, ctx);
         return target switch
@@ -72,7 +83,7 @@ public static class ExpressionEvaluator
         };
     }
 
-    private static ExprValue EvalArrayIndex(IReadOnlyList<ExprValue> items, IndexArg arg, IExprContext ctx)
+    private ExprValue EvalArrayIndex(IReadOnlyList<ExprValue> items, IndexArg arg, IExprContext ctx)
     {
         if (arg is IndexArg.Single single)
         {
@@ -88,7 +99,7 @@ public static class ExpressionEvaluator
         return ExprValue.Of(items.Skip(start).Take(len).ToList());
     }
 
-    private static ExprValue EvalStringIndex(string s, IndexArg arg, IExprContext ctx)
+    private ExprValue EvalStringIndex(string s, IndexArg arg, IExprContext ctx)
     {
         if (arg is IndexArg.Single single)
         {
@@ -104,13 +115,13 @@ public static class ExpressionEvaluator
         return ExprValue.Of(s.Substring(start, len));
     }
 
-    private static int ResolveIndex(IndexArg.Single single, IExprContext ctx, int length)
+    private int ResolveIndex(IndexArg.Single single, IExprContext ctx, int length)
     {
         var raw = (int)Evaluate(single.Value, ctx).AsInt();
         return single.FromEnd ? length - raw : raw;
     }
 
-    private static (int start, int len) ResolveRange(IndexArg.Range range, IExprContext ctx, int length)
+    private (int start, int len) ResolveRange(IndexArg.Range range, IExprContext ctx, int length)
     {
         int start = range.Start is null ? 0
             : range.StartFromEnd ? length - (int)Evaluate(range.Start, ctx).AsInt()
@@ -125,7 +136,7 @@ public static class ExpressionEvaluator
 
     // ── Operators ────────────────────────────────────────────────────────────
 
-    private static ExprValue EvalUnary(Expr.Unary u, IExprContext ctx)
+    private ExprValue EvalUnary(Expr.Unary u, IExprContext ctx)
     {
         var v = Evaluate(u.Operand, ctx);
         return u.Op switch
@@ -136,7 +147,7 @@ public static class ExpressionEvaluator
         };
     }
 
-    private static ExprValue EvalBinary(Expr.Binary b, IExprContext ctx)
+    private ExprValue EvalBinary(Expr.Binary b, IExprContext ctx)
     {
         // Logical operators short-circuit.
         if (b.Op == "&&")
@@ -179,7 +190,7 @@ public static class ExpressionEvaluator
 
     // ── Method calls (string / array operations) ────────────────────────────
 
-    private static ExprValue EvalMethod(Expr.MethodCall m, IExprContext ctx)
+    private ExprValue EvalMethod(Expr.MethodCall m, IExprContext ctx)
     {
         var target = Evaluate(m.Target, ctx);
         var args = m.Args.Select(a => Evaluate(a, ctx)).ToList();
@@ -204,7 +215,7 @@ public static class ExpressionEvaluator
         _ => throw new ExprEvalException($"Unknown string method '{method}'"),
     };
 
-    private static ExprValue EvalArrayMethod(IReadOnlyList<ExprValue> items, string method, List<ExprValue> args, IExprContext ctx) => method switch
+    private ExprValue EvalArrayMethod(IReadOnlyList<ExprValue> items, string method, List<ExprValue> args, IExprContext ctx) => method switch
     {
         "count" => ExprValue.Of((long)items.Count),
         "shuffled" => ExprValue.Of(ctx.Shuffled(items, args[0].AsString())),
@@ -248,14 +259,8 @@ public static class ExpressionEvaluator
         return ExprValue.Of(items.Where(v => !ExprValue.ValueEquals(v, arg)).ToList());
     }
 
-    /// <summary>
-    /// Matches a value against a pattern string used by <c>switch.cases[i].match</c> and
-    /// <c>arr.countif(pattern)</c>: a bare value (equality), or <c>=value</c>, <c>&gt;value</c>,
-    /// <c>&gt;=value</c>, <c>&lt;value</c>, <c>&lt;=value</c>, <c>!=value</c>. Property patterns
-    /// for arrays of custom types use <c>"property: pattern"</c>. Also used by
-    /// <see cref="PassageRenderer"/> for <c>switch.cases[i].match</c> dispatch.
-    /// </summary>
-    internal static bool MatchesPattern(ExprValue value, string pattern)
+    /// <inheritdoc/>
+    public bool MatchesPattern(ExprValue value, string pattern)
     {
         var colonIdx = pattern.IndexOf(':');
         if (colonIdx > 0 && value is ExprValue.RecordVal rv)
@@ -305,7 +310,7 @@ public static class ExpressionEvaluator
 
     // ── Functions ────────────────────────────────────────────────────────────
 
-    private static ExprValue EvalFunction(Expr.FunctionCall f, IExprContext ctx)
+    private ExprValue EvalFunction(Expr.FunctionCall f, IExprContext ctx)
     {
         var args = f.Args.Select(a => Evaluate(a, ctx)).ToList();
         return f.Name switch
@@ -320,7 +325,7 @@ public static class ExpressionEvaluator
 
     // ── Literals ─────────────────────────────────────────────────────────────
 
-    private static ExprValue EvalArrayLiteral(Expr.ArrayLiteral a, IExprContext ctx)
+    private ExprValue EvalArrayLiteral(Expr.ArrayLiteral a, IExprContext ctx)
     {
         var items = new List<ExprValue>();
         foreach (var el in a.Elements)
@@ -337,7 +342,7 @@ public static class ExpressionEvaluator
         return ExprValue.Of(items);
     }
 
-    private static ExprValue EvalRecordLiteral(Expr.RecordLiteral r, IExprContext ctx)
+    private ExprValue EvalRecordLiteral(Expr.RecordLiteral r, IExprContext ctx)
     {
         var props = r.Properties.ToDictionary(kv => kv.Key, kv => Evaluate(kv.Value, ctx));
         return new ExprValue.RecordVal(props);

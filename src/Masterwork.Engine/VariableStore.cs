@@ -13,11 +13,16 @@ public sealed partial class VariableStore : IExprContext
     private readonly Dictionary<string, ExprValue> _session = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ExprValue> _let = new(StringComparer.Ordinal);
     private readonly SessionPrng _prng;
+    private readonly IExpressionEvaluator _evaluator;
 
     /// <summary>Creates a store with session variables initialized from the manifest's declared defaults.</summary>
-    public VariableStore(IReadOnlyDictionary<string, VarDef> manifest, SessionPrng prng)
+    /// <param name="manifest">Variable declarations used to seed session defaults.</param>
+    /// <param name="prng">Seeded PRNG backing <see cref="RandBetween"/>/<see cref="Shuffled"/>.</param>
+    /// <param name="evaluator">Evaluator used by <see cref="ExpandTemplate"/>. Defaults to a new <see cref="ExpressionEvaluator"/> if omitted.</param>
+    public VariableStore(IReadOnlyDictionary<string, VarDef> manifest, SessionPrng prng, IExpressionEvaluator? evaluator = null)
     {
         _prng = prng;
+        _evaluator = evaluator ?? new ExpressionEvaluator();
         foreach (var (name, def) in manifest)
         {
             _session[name] = DefaultValueFor(def);
@@ -75,7 +80,7 @@ public sealed partial class VariableStore : IExprContext
     /// </summary>
     public VariableStore Clone()
     {
-        var clone = new VariableStore(new Dictionary<string, VarDef>(), _prng);
+        var clone = new VariableStore(new Dictionary<string, VarDef>(), _prng, _evaluator);
         clone.RestoreSession(SessionSnapshot());
         return clone;
     }
@@ -94,7 +99,7 @@ public sealed partial class VariableStore : IExprContext
                 return m.Value;
             }
 
-            return ExpressionEvaluator.Evaluate(content, this).AsString();
+            return _evaluator.Evaluate(content, this).AsString();
         });
 
     private static ExprValue DefaultValueFor(VarDef def) => def.VarType switch

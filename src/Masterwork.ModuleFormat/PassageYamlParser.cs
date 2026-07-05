@@ -3,27 +3,16 @@ using YamlDotNet.RepresentationModel;
 namespace Masterwork.ModuleFormat;
 
 /// <summary>
-/// Parses a single <c>.mws.yaml</c> passage file (MWS v0.3) into an <see cref="MwsPassageDoc"/>
-/// tree. Dispatches on each node's <c>type:</c> field against the low-level YAML representation
-/// model — see <see cref="YamlNodeExtensions"/> for why this bypasses YamlDotNet's generic
-/// object-graph deserializer.
+/// <inheritdoc cref="IPassageYamlParser"/> Dispatches on each node's <c>type:</c> field against
+/// the low-level YAML representation model — see <see cref="YamlNodeExtensions"/> for why this
+/// bypasses YamlDotNet's generic object-graph deserializer.
 /// </summary>
-public static class PassageYamlParser
+public sealed class PassageYamlParser : IPassageYamlParser
 {
     private const string ExpectedFormat = "mws/0.3";
 
-    /// <summary>
-    /// Parses a passage document from raw YAML text.
-    /// </summary>
-    /// <param name="yamlText">The full contents of a <c>.mws.yaml</c> file.</param>
-    /// <param name="warnings">
-    /// Collector for non-fatal issues (unmatched fields, wrong-shaped fields, unknown node types,
-    /// stale format versions). Pass <see langword="null"/> to discard warnings.
-    /// </param>
-    /// <exception cref="MwsParseException">
-    /// The document is empty, or a required field is missing/malformed with no safe fallback.
-    /// </exception>
-    public static MwsPassageDoc ParsePassage(string yamlText, ModuleWarnings? warnings = null)
+    /// <inheritdoc/>
+    public MwsPassageDoc ParsePassage(string yamlText, ModuleWarnings? warnings = null)
     {
         var ctx = new YamlParseContext(warnings);
 
@@ -89,7 +78,7 @@ public static class PassageYamlParser
         }
     }
 
-    internal static List<Node> BuildNodeList(YamlNode? node, YamlParseContext ctx, string label = "node list")
+    private static List<Node> BuildNodeList(YamlNode? node, YamlParseContext ctx, string label = "node list")
     {
         if (node is null)
         {
@@ -104,7 +93,7 @@ public static class PassageYamlParser
         return [.. AsNodeMappings(seq, ctx, label).Select(m => BuildNode(m, ctx))];
     }
 
-    internal static Node BuildNode(YamlMappingNode map, YamlParseContext ctx)
+    private static Node BuildNode(YamlMappingNode map, YamlParseContext ctx)
     {
         var type = map.GetRequiredString("type", ctx);
         switch (type)

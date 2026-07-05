@@ -1,17 +1,30 @@
 namespace Masterwork.ModuleFormat;
 
-/// <summary>
-/// Assembles a <see cref="LoadedModule"/> from either a directory of extractor output or
-/// in-memory YAML/restext text (the latter used by tests, to avoid filesystem round-trips).
-/// </summary>
-public static class ModuleLoader
+/// <inheritdoc cref="IModuleLoader"/>
+public sealed class ModuleLoader : IModuleLoader
 {
-    /// <summary>
-    /// Loads a module from an extractor output directory: every <c>*.mws.yaml</c> passage file,
-    /// plus <c>_variables.yaml</c> and <c>en-US.restext</c> if present.
-    /// </summary>
-    /// <param name="directoryPath">Path to the extractor output directory.</param>
-    public static LoadedModule LoadFromDirectory(string directoryPath)
+    private readonly IPassageYamlParser _passageParser;
+    private readonly IVariableManifest _variableManifest;
+    private readonly IRestextFile _restextFile;
+    private readonly IRestextResolver _restextResolver;
+
+    /// <summary>Creates a loader wired to the default parser/resolver implementations.</summary>
+    public ModuleLoader() : this(new PassageYamlParser(), new VariableManifest(), new RestextFile(), new RestextResolver())
+    {
+    }
+
+    /// <summary>Creates a loader with explicit dependencies, e.g. for testing with mocks.</summary>
+    public ModuleLoader(IPassageYamlParser passageParser, IVariableManifest variableManifest,
+        IRestextFile restextFile, IRestextResolver restextResolver)
+    {
+        _passageParser = passageParser;
+        _variableManifest = variableManifest;
+        _restextFile = restextFile;
+        _restextResolver = restextResolver;
+    }
+
+    /// <inheritdoc/>
+    public LoadedModule LoadFromDirectory(string directoryPath)
     {
         var variablesPath = Path.Combine(directoryPath, "_variables.yaml");
         var variablesYaml = File.Exists(variablesPath) ? File.ReadAllText(variablesPath) : null;
@@ -24,31 +37,25 @@ public static class ModuleLoader
         return LoadFromSources(passageYamls, variablesYaml, restextText);
     }
 
-    /// <summary>
-    /// Builds a module directly from in-memory YAML/restext text — the filesystem-free load path
-    /// used by tests.
-    /// </summary>
-    /// <param name="passageYamls">Raw <c>.mws.yaml</c> text, one entry per passage.</param>
-    /// <param name="variablesYaml">Raw <c>_variables.yaml</c> text, if any.</param>
-    /// <param name="restextText">Raw <c>en-US.restext</c> text, if any.</param>
-    public static LoadedModule LoadFromSources(
+    /// <inheritdoc/>
+    public LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null)
     {
         var warnings = new ModuleWarnings();
 
         var variables = variablesYaml is null
             ? new Dictionary<string, VarDef>()
-            : VariableManifest.Parse(variablesYaml, warnings);
+            : _variableManifest.Parse(variablesYaml, warnings);
 
         var locale = restextText is null
             ? new Dictionary<string, string>()
-            : RestextFile.Parse(restextText);
+            : _restextFile.Parse(restextText);
 
         var passages = new Dictionary<string, MwsPassageDoc>();
         foreach (var yaml in passageYamls)
         {
-            var raw = PassageYamlParser.ParsePassage(yaml, warnings);
-            var resolved = RestextResolver.Resolve(raw, locale, warnings);
+            var raw = _passageParser.ParsePassage(yaml, warnings);
+            var resolved = _restextResolver.Resolve(raw, locale, warnings);
             passages[resolved.PassageId] = resolved;
         }
 

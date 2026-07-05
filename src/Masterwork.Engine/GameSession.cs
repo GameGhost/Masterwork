@@ -15,6 +15,8 @@ public sealed class GameSession
     private readonly long _masterSeed;
     private readonly VariableStore _store;
     private readonly SessionPrng _prng;
+    private readonly IPassageRenderer _passageRenderer;
+    private readonly IExpressionEvaluator _expressionEvaluator;
     private readonly List<SessionSnapshot> _timeline = [];
     private readonly List<PassageRenderResult> _cachedRenders = [];
     private HashSet<string> _visitedPassageIds = [];
@@ -53,14 +55,19 @@ public sealed class GameSession
     /// <param name="masterSeed">Seed for all deterministic randomness in this session — see <see cref="SessionPrng"/>.</param>
     /// <param name="standardVars">Initial values for standard variables (e.g. player names), applied before the first render.</param>
     /// <param name="startPassageIdOverride">Overrides the module's <c>Begins-Here</c> passage as the starting point, mainly for tests.</param>
+    /// <param name="passageRenderer">Renderer dependency, e.g. for testing with mocks. Defaults to a new <see cref="PassageRenderer"/> if omitted.</param>
+    /// <param name="expressionEvaluator">Evaluator dependency, e.g. for testing with mocks. Defaults to a new <see cref="ExpressionEvaluator"/> if omitted.</param>
     /// <exception cref="InvalidOperationException">No override was given and the module has no <c>Begins-Here</c> passage.</exception>
     public GameSession(LoadedModule module, long masterSeed,
-        IReadOnlyDictionary<string, ExprValue>? standardVars = null, string? startPassageIdOverride = null)
+        IReadOnlyDictionary<string, ExprValue>? standardVars = null, string? startPassageIdOverride = null,
+        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null)
     {
         _module = module;
         _masterSeed = masterSeed;
+        _expressionEvaluator = expressionEvaluator ?? new ExpressionEvaluator();
+        _passageRenderer = passageRenderer ?? new PassageRenderer(_expressionEvaluator);
         _prng = new SessionPrng(masterSeed);
-        _store = new VariableStore(module.Variables, _prng);
+        _store = new VariableStore(module.Variables, _prng, _expressionEvaluator);
         if (standardVars is not null)
         {
             foreach (var (k, v) in standardVars)
@@ -78,12 +85,14 @@ public sealed class GameSession
     // Restores a session from a save. Fully correct for ordinary snapshots (whose captured state
     // always precedes the passage they point to); Checkpoint snapshots capture mid-passage state,
     // so replaying them by re-rendering from scratch is a best-effort approximation, not exact.
-    private GameSession(LoadedModule module, SessionSave save)
+    private GameSession(LoadedModule module, SessionSave save, IPassageRenderer? passageRenderer, IExpressionEvaluator? expressionEvaluator)
     {
         _module = module;
         _masterSeed = save.MasterSeed;
+        _expressionEvaluator = expressionEvaluator ?? new ExpressionEvaluator();
+        _passageRenderer = passageRenderer ?? new PassageRenderer(_expressionEvaluator);
         _prng = new SessionPrng(_masterSeed);
-        _store = new VariableStore(module.Variables, _prng);
+        _store = new VariableStore(module.Variables, _prng, _expressionEvaluator);
         ViewState = new SessionViewState();
 
         foreach (var snapshot in save.Timeline)
@@ -101,7 +110,13 @@ public sealed class GameSession
     }
 
     /// <summary>Reconstructs a session from a previously <see cref="Serialize"/>d save, without re-executing any player actions.</summary>
-    public static GameSession Restore(LoadedModule module, SessionSave save) => new(module, save);
+    /// <param name="module">The loaded module the save belongs to.</param>
+    /// <param name="save">A prior <see cref="Serialize"/> capture.</param>
+    /// <param name="passageRenderer">Renderer dependency, e.g. for testing with mocks. Defaults to a new <see cref="PassageRenderer"/> if omitted.</param>
+    /// <param name="expressionEvaluator">Evaluator dependency, e.g. for testing with mocks. Defaults to a new <see cref="ExpressionEvaluator"/> if omitted.</param>
+    public static GameSession Restore(LoadedModule module, SessionSave save,
+        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null) =>
+        new(module, save, passageRenderer, expressionEvaluator);
 
     /// <summary>Captures the full timeline and current position as a serializable save.</summary>
     public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex);
@@ -115,7 +130,7 @@ public sealed class GameSession
 
         if (nav.OnClickRaw.Count > 0)
         {
-            PassageRenderer.RenderNodeList(nav.OnClickRaw, _store, _module);
+            _passageRenderer.RenderNodeList(nav.OnClickRaw, _store, _module);
         }
 
         var targetId = ResolveTarget(nav.Target);
@@ -152,7 +167,7 @@ public sealed class GameSession
         ViewState.ExpandedPopups.Add(actionId);
 
         var sandbox = _store.Clone();
-        var content = PassageRenderer.RenderNodeList(popup.RawContent, sandbox, _module);
+        var content = _passageRenderer.RenderNodeList(popup.RawContent, sandbox, _module);
         _pendingPopup = new PendingPopup(actionId, sandbox, popup.OnClose, popup.StateAffecting);
 
         return Task.FromResult(new PopupRenderResult(content));
@@ -266,12 +281,12 @@ public sealed class GameSession
     private PassageRenderResult RenderChainFrom(string passageId)
     {
         _visitedPassageIds.Add(passageId);
-        var result = PassageRenderer.Render(_module.Passages[passageId], _store, _module, _visitedPassageIds);
+        var result = _passageRenderer.Render(_module.Passages[passageId], _store, _module, _visitedPassageIds);
         while (result.PendingGoto is not null)
         {
             var nextId = result.PendingGoto;
             _visitedPassageIds.Add(nextId);
-            result = PassageRenderer.Render(_module.Passages[nextId], _store, _module, _visitedPassageIds);
+            result = _passageRenderer.Render(_module.Passages[nextId], _store, _module, _visitedPassageIds);
         }
         return result;
     }
@@ -348,6 +363,6 @@ public sealed class GameSession
 
     private string ResolveTarget(string raw) =>
         raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}')
-            ? ExpressionEvaluator.Evaluate(raw[2..^1], _store).AsString()
+            ? _expressionEvaluator.Evaluate(raw[2..^1], _store).AsString()
             : raw;
 }

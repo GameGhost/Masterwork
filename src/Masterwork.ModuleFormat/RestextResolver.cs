@@ -4,10 +4,9 @@ using System.Text.RegularExpressions;
 namespace Masterwork.ModuleFormat;
 
 /// <summary>
-/// Resolves <c>restext://Key</c> references against a loaded locale dictionary. Runs once at
-/// module load time, before any expression is parsed or cached, since expressions can themselves
-/// contain restext:// references inside string literals (e.g.
-/// <c>if: warwinner == "restext://Common_026"</c>).
+/// <inheritdoc cref="IRestextResolver"/> Runs once at module load time, before any expression is
+/// parsed or cached, since expressions can themselves contain restext:// references inside string
+/// literals (e.g. <c>if: warwinner == "restext://Common_026"</c>).
 /// </summary>
 /// <remarks>
 /// Two resolution modes:
@@ -20,13 +19,10 @@ namespace Masterwork.ModuleFormat;
 /// </item>
 /// </list>
 /// </remarks>
-public static partial class RestextResolver
+public sealed partial class RestextResolver : IRestextResolver
 {
-    /// <summary>Returns a copy of <paramref name="passage"/> with every restext reference resolved.</summary>
-    /// <param name="passage">The passage to resolve.</param>
-    /// <param name="locale">Locale dictionary from <see cref="RestextFile.Parse"/>.</param>
-    /// <param name="warnings">Collector for missing-key warnings. Pass <see langword="null"/> to discard them.</param>
-    public static MwsPassageDoc Resolve(MwsPassageDoc passage, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null) =>
+    /// <inheritdoc/>
+    public MwsPassageDoc Resolve(MwsPassageDoc passage, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null) =>
         passage with
         {
             Title = ResolveDisplay(passage.Title, locale, warnings),

@@ -11,7 +11,7 @@ public class DeserializerWarningsTests
     private static (MwsPassageDoc passage, ModuleWarnings warnings) LoadOne(
         string yaml, string? variablesYaml = null)
     {
-        var module = ModuleLoader.LoadFromSources([yaml], variablesYaml);
+        var module = new ModuleLoader().LoadFromSources([yaml], variablesYaml);
         return (module.Passages.Values.Single(), module.Warnings);
     }
 
@@ -20,7 +20,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void MissingPassageId_Throws()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             layout: 'narration'
@@ -33,7 +33,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void MissingLayout_Throws()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -46,7 +46,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void MissingNodeType_Throws()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -61,7 +61,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void MissingRequiredNodeField_Throws()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -78,7 +78,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void RequiredField_WrongShape_ThrowsWithClearMessage()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -231,7 +231,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void MalformedBoolField_ThrowsFriendlyError()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -342,7 +342,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void InvalidInputType_Throws()
     {
-        var ex = Assert.Throws<MwsParseException>(() => ModuleLoader.LoadFromSources([
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'P1'
@@ -365,7 +365,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void UnmatchedVariablesYamlField_LogsWarning()
     {
-        var module = ModuleLoader.LoadFromSources([], variablesYaml: """
+        var module = new ModuleLoader().LoadFromSources([], variablesYaml: """
             standard_variables: []
             variables: {}
             extra_top_level: 'oops'
@@ -377,7 +377,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void WrongShapedVariableDef_LogsWarningAndSkips()
     {
-        var module = ModuleLoader.LoadFromSources([], variablesYaml: """
+        var module = new ModuleLoader().LoadFromSources([], variablesYaml: """
             standard_variables: []
             variables:
               round: 'not a mapping'
@@ -390,7 +390,7 @@ public class DeserializerWarningsTests
     [Fact]
     public void UnmatchedVariableDefField_LogsWarning()
     {
-        var module = ModuleLoader.LoadFromSources([], variablesYaml: """
+        var module = new ModuleLoader().LoadFromSources([], variablesYaml: """
             standard_variables: []
             variables:
               round:

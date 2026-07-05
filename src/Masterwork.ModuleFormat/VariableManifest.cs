@@ -3,17 +3,14 @@ using YamlDotNet.RepresentationModel;
 namespace Masterwork.ModuleFormat;
 
 /// <summary>
-/// Parses <c>_variables.yaml</c> into a flat name-&gt;<see cref="VarDef"/> map. Standard variables
-/// (nameA-E, townname, players, playerCount, currentPassage) carry no type/default in the
-/// extracted file; the engine applies a fixed typing rule here: <c>players</c> is <c>int</c>,
-/// every other standard variable is <c>string</c>.
+/// <inheritdoc cref="IVariableManifest"/> Standard variables (nameA-E, townname, players,
+/// playerCount, currentPassage) carry no type/default in the extracted file; the engine applies a
+/// fixed typing rule here: <c>players</c> is <c>int</c>, every other standard variable is <c>string</c>.
 /// </summary>
-public static class VariableManifest
+public sealed class VariableManifest : IVariableManifest
 {
-    /// <summary>Parses a variable manifest from raw YAML text.</summary>
-    /// <param name="yamlText">The full contents of a <c>_variables.yaml</c> file.</param>
-    /// <param name="warnings">Collector for unmatched/wrong-shaped field warnings. Pass <see langword="null"/> to discard them.</param>
-    public static IReadOnlyDictionary<string, VarDef> Parse(string yamlText, ModuleWarnings? warnings = null)
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, VarDef> Parse(string yamlText, ModuleWarnings? warnings = null)
     {
         var ctx = new YamlParseContext(warnings, "_variables.yaml");
 

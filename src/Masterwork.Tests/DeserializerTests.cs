@@ -7,7 +7,7 @@ namespace Masterwork.Tests;
 public class DeserializerTests
 {
     private static MwsPassageDoc ParseOne(string yaml) =>
-        ModuleLoader.LoadFromSources([yaml]).Passages.Values.Single();
+        new ModuleLoader().LoadFromSources([yaml]).Passages.Values.Single();
 
     [Fact]
     public void TextPassage_Deserializes()
@@ -291,7 +291,7 @@ public class DeserializerTests
     [Fact]
     public void RestextResolution_SubstitutesAllFields()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             passageYamls:
             [
                 """
@@ -313,7 +313,7 @@ public class DeserializerTests
     [Fact]
     public void RestextInExpression_QuotesEscaped()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             passageYamls:
             [
                 """
@@ -336,7 +336,7 @@ public class DeserializerTests
     [Fact]
     public void VariableManifest_LoadsTypesAndDefaults()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             passageYamls: [],
             variablesYaml: """
                 standard_variables: []
@@ -357,7 +357,7 @@ public class DeserializerTests
     [Fact]
     public void VariableManifest_StandardVarsAreNotInTypedDict()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             passageYamls: [],
             variablesYaml: """
                 standard_variables:
@@ -375,7 +375,7 @@ public class DeserializerTests
     [Fact]
     public void VariableManifest_PlayersIsInt_OthersAreString()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             passageYamls: [],
             variablesYaml: """
                 standard_variables:
@@ -391,7 +391,7 @@ public class DeserializerTests
     [Fact]
     public void StartPassageId_FromBeginsHereTag()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
             [
                 """
                 format: 'mws/0.3'

@@ -13,7 +13,7 @@ public class GameSessionTests
 {
     private static (GameSession session, LoadedModule module) MakeSimpleSession()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -43,7 +43,7 @@ public class GameSessionTests
 
     private static async Task<(GameSession session, LoadedModule module)> MakeThreeStepSessionAsync()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -94,7 +94,7 @@ public class GameSessionTests
 
     private static GameSession MakeInputSession()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -124,7 +124,7 @@ public class GameSessionTests
 
     private static GameSession MakePopupSession()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -204,7 +204,7 @@ public class GameSessionTests
     [Fact]
     public async Task FollowLink_NonStateAffecting_NoSnapshot()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -246,7 +246,7 @@ public class GameSessionTests
     [Fact]
     public async Task FollowLink_Onclick_ExecutedBeforeNavigation()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -284,7 +284,7 @@ public class GameSessionTests
     [Fact]
     public async Task FollowLink_AssignsBeforeLink_BundledIntoSameSnapshot()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -326,7 +326,7 @@ public class GameSessionTests
 
     private static GameSession MakeGotoSession()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -453,7 +453,7 @@ public class GameSessionTests
 
     private static GameSession MakeCheckpointSession()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'
@@ -504,7 +504,7 @@ public class GameSessionTests
     [Fact]
     public void CheckpointNode_InMiddleOfPassage_CapturesCurrentState()
     {
-        var module = ModuleLoader.LoadFromSources(
+        var module = new ModuleLoader().LoadFromSources(
         [
             """
             format: 'mws/0.3'

@@ -1,0 +1,24 @@
+using Masterwork.ModuleFormat;
+
+namespace Masterwork.Engine;
+
+/// <summary>
+/// Walks a passage's node tree, applying assign/let mutations to a <see cref="VariableStore"/> as
+/// it goes (in document order) and producing a flat rendered-node tree for the UI.
+/// </summary>
+public interface IPassageRenderer
+{
+    /// <summary>Renders a passage to a flat node/action tree.</summary>
+    /// <param name="passage">The passage to render.</param>
+    /// <param name="store">Variable store to read from and mutate via <c>assign</c>/<c>let</c> nodes.</param>
+    /// <param name="module">The loaded module, used to resolve <c>include_passage</c> targets.</param>
+    /// <param name="visitedPassageIds">Passages considered "visited" for <c>check_progress</c> validation.</param>
+    /// <exception cref="CheckProgressViolationException">The passage's <c>check_progress</c> prerequisite hasn't been visited.</exception>
+    PassageRenderResult Render(MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds);
+
+    /// <summary>
+    /// Renders a raw node list in isolation — used for popup content on open, and internally for
+    /// <c>include_passage</c> inlining.
+    /// </summary>
+    IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module);
+}

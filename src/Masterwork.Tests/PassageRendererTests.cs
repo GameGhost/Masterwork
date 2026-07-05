@@ -17,14 +17,14 @@ public class PassageRendererTests
             yamls.AddRange(others);
         }
 
-        var module = ModuleLoader.LoadFromSources(yamls, variablesYaml);
+        var module = new ModuleLoader().LoadFromSources(yamls, variablesYaml);
         var store = new VariableStore(module.Variables, new SessionPrng(1));
         return (module.Passages[mainId], module, store);
     }
 
     private static PassageRenderResult Render(
         MwsPassageDoc passage, LoadedModule module, VariableStore store, ISet<string>? visited = null) =>
-        PassageRenderer.Render(passage, store, module, (IReadOnlySet<string>)(visited ?? new HashSet<string>()));
+        new PassageRenderer().Render(passage, store, module, (IReadOnlySet<string>)(visited ?? new HashSet<string>()));
 
     // ── Text and structure ──────────────────────────────────────────────────
 

@@ -3,21 +3,27 @@ using Masterwork.ModuleFormat;
 namespace Masterwork.Engine;
 
 /// <summary>
-/// Walks a passage's node tree, applying assign/let mutations to the <see cref="VariableStore"/>
-/// as it goes (in document order) and producing a flat rendered-node tree for the UI. Popup
-/// content is left unevaluated (see the popup transaction model — content is only rendered when
-/// the popup opens); <see cref="RenderNodeList"/> is the entry point used for that deferred
-/// render, and for <c>include_passage</c>.
+/// <inheritdoc cref="IPassageRenderer"/> Popup content is left unevaluated (see the popup
+/// transaction model — content is only rendered when the popup opens); <see cref="RenderNodeList"/>
+/// is the entry point used for that deferred render, and for <c>include_passage</c>.
 /// </summary>
-public static class PassageRenderer
+public sealed class PassageRenderer : IPassageRenderer
 {
-    /// <summary>Renders a passage to a flat node/action tree.</summary>
-    /// <param name="passage">The passage to render.</param>
-    /// <param name="store">Variable store to read from and mutate via <c>assign</c>/<c>let</c> nodes.</param>
-    /// <param name="module">The loaded module, used to resolve <c>include_passage</c> targets.</param>
-    /// <param name="visitedPassageIds">Passages considered "visited" for <c>check_progress</c> validation.</param>
-    /// <exception cref="CheckProgressViolationException">The passage's <c>check_progress</c> prerequisite hasn't been visited.</exception>
-    public static PassageRenderResult Render(
+    private readonly IExpressionEvaluator _evaluator;
+
+    /// <summary>Creates a renderer wired to the default <see cref="ExpressionEvaluator"/>.</summary>
+    public PassageRenderer() : this(new ExpressionEvaluator())
+    {
+    }
+
+    /// <summary>Creates a renderer with an explicit evaluator dependency, e.g. for testing with mocks.</summary>
+    public PassageRenderer(IExpressionEvaluator evaluator)
+    {
+        _evaluator = evaluator;
+    }
+
+    /// <inheritdoc/>
+    public PassageRenderResult Render(
         MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds)
     {
         if (passage.CheckProgress is not null && !visitedPassageIds.Contains(passage.CheckProgress))
@@ -38,11 +44,8 @@ public static class PassageRenderer
             PendingGoto: ctx.PendingGoto);
     }
 
-    /// <summary>
-    /// Renders a raw node list in isolation — used for popup content on open, and internally for
-    /// <c>include_passage</c> inlining.
-    /// </summary>
-    public static IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module) =>
+    /// <inheritdoc/>
+    public IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module) =>
         RenderNodes(nodes, new RenderContext(store, module));
 
     private sealed class RenderContext(VariableStore store, LoadedModule module)
@@ -57,7 +60,7 @@ public static class PassageRenderer
         public string NextActionId(string prefix) => $"{prefix}_{_actionCounter++}";
     }
 
-    private static List<RenderedNode> RenderNodes(IReadOnlyList<Node> nodes, RenderContext ctx)
+    private List<RenderedNode> RenderNodes(IReadOnlyList<Node> nodes, RenderContext ctx)
     {
         var output = new List<RenderedNode>();
         foreach (var node in nodes)
@@ -71,7 +74,7 @@ public static class PassageRenderer
         return output;
     }
 
-    private static void RenderNode(Node node, RenderContext ctx, List<RenderedNode> output)
+    private void RenderNode(Node node, RenderContext ctx, List<RenderedNode> output)
     {
         switch (node)
         {
@@ -91,10 +94,10 @@ public static class PassageRenderer
                 output.Add(new RenderedSection(ExpandOrNull(s.Title, ctx.Store), s.Style, s.Collapsed, RenderNodes(s.Content, ctx)));
                 break;
             case LetNode let:
-                ctx.Store.SetLetVariable(let.Var, ExpressionEvaluator.Evaluate(let.Expr, ctx.Store));
+                ctx.Store.SetLetVariable(let.Var, _evaluator.Evaluate(let.Expr, ctx.Store));
                 break;
             case AssignNode assign:
-                ctx.Store.SetSessionVariable(assign.Var, ExpressionEvaluator.Evaluate(assign.Expr, ctx.Store));
+                ctx.Store.SetSessionVariable(assign.Var, _evaluator.Evaluate(assign.Expr, ctx.Store));
                 break;
             case NavigationNode nav:
                 RenderNavigation(nav, ctx, output);
@@ -147,7 +150,7 @@ public static class PassageRenderer
         }
     }
 
-    private static void RenderNavigation(NavigationNode nav, RenderContext ctx, List<RenderedNode> output)
+    private void RenderNavigation(NavigationNode nav, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedNavigation
         {
@@ -163,7 +166,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderPopup(PopupNode popup, RenderContext ctx, List<RenderedNode> output)
+    private void RenderPopup(PopupNode popup, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedPopup
         {
@@ -181,7 +184,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderInput(InputNode input, RenderContext ctx, List<RenderedNode> output)
+    private void RenderInput(InputNode input, RenderContext ctx, List<RenderedNode> output)
     {
         var rendered = new RenderedInput
         {
@@ -197,7 +200,7 @@ public static class PassageRenderer
         ctx.Actions.Add(rendered);
     }
 
-    private static void RenderForEach(ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
+    private void RenderForEach(ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
     {
         var items = ctx.Store.GetVariable(fe.In).AsArray();
         foreach (var item in items)
@@ -211,11 +214,11 @@ public static class PassageRenderer
         }
     }
 
-    private static IReadOnlyList<Node>? SelectConditionalBranch(ConditionalNode cond, VariableStore store)
+    private IReadOnlyList<Node>? SelectConditionalBranch(ConditionalNode cond, VariableStore store)
     {
         foreach (var branch in cond.Conditions)
         {
-            if (ExpressionEvaluator.Evaluate(branch.If, store).AsBool())
+            if (_evaluator.Evaluate(branch.If, store).AsBool())
             {
                 return branch.Then;
             }
@@ -224,7 +227,7 @@ public static class PassageRenderer
         return cond.Else;
     }
 
-    private static IReadOnlyList<Node>? SelectSwitchCase(SwitchNode sw, VariableStore store)
+    private IReadOnlyList<Node>? SelectSwitchCase(SwitchNode sw, VariableStore store)
     {
         var onValue = store.GetVariable(sw.On);
         foreach (var c in sw.Cases)
@@ -238,7 +241,7 @@ public static class PassageRenderer
         return sw.Default;
     }
 
-    private static bool SwitchCaseMatches(ExprValue value, object match)
+    private bool SwitchCaseMatches(ExprValue value, object match)
     {
         if (match is List<object> list)
         {
@@ -252,7 +255,7 @@ public static class PassageRenderer
             string s => s,
             _ => match.ToString() ?? "",
         };
-        return ExpressionEvaluator.MatchesPattern(value, patternStr);
+        return _evaluator.MatchesPattern(value, patternStr);
     }
 
     // Resolves a target/onclose/onsubmit field immediately: strips the "${...}" wrapper and
@@ -260,9 +263,9 @@ public static class PassageRenderer
     // `include_passage`, which must resolve at render time. navigation.Target, input.Onsubmit and
     // popup.Onclose stay raw in the rendered output — the App resolves them at follow/submit/close
     // time (see RenderedNavigation.Target and friends).
-    private static string ResolveTargetNow(string raw, VariableStore store) =>
+    private string ResolveTargetNow(string raw, VariableStore store) =>
         raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}')
-            ? ExpressionEvaluator.Evaluate(raw[2..^1], store).AsString()
+            ? _evaluator.Evaluate(raw[2..^1], store).AsString()
             : raw;
 
     private static string? ExpandOrNull(string? template, VariableStore store) =>
