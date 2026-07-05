@@ -1,7 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
 using Masterwork.Engine;
-using Xunit;
+using Masterwork.Engine.Session;
 
 namespace Masterwork.Tests;
 
@@ -39,7 +37,7 @@ public class PrngTests
     public void Shuffled_ProducesPermutation()
     {
         var prng = new SessionPrng(1);
-        var input = new List<ExprValue> { ExprValue.Of("a"), ExprValue.Of("b"), ExprValue.Of("c"), ExprValue.Of("d") };
+        var input = new List<StoryValue> { StoryValue.Of("a"), StoryValue.Of("b"), StoryValue.Of("c"), StoryValue.Of("d") };
         var result = prng.Shuffled(input, "shuffle_key");
 
         Assert.Equal(input.Count, result.Count);
@@ -51,7 +49,7 @@ public class PrngTests
     [Fact]
     public void Shuffled_SameSeedSameOrder()
     {
-        var input = new List<ExprValue> { ExprValue.Of("a"), ExprValue.Of("b"), ExprValue.Of("c"), ExprValue.Of("d"), ExprValue.Of("e") };
+        var input = new List<StoryValue> { StoryValue.Of("a"), StoryValue.Of("b"), StoryValue.Of("c"), StoryValue.Of("d"), StoryValue.Of("e") };
 
         var a = new SessionPrng(99).Shuffled(input, "k");
         var b = new SessionPrng(99).Shuffled(input, "k");

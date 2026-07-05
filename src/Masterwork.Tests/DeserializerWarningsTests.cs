@@ -1,6 +1,4 @@
-using System.Linq;
 using Masterwork.ModuleFormat;
-using Xunit;
 
 namespace Masterwork.Tests;
 

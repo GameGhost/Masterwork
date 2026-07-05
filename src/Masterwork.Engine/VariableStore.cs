@@ -1,17 +1,19 @@
 using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
+using Masterwork.Engine.Expressions;
+using Masterwork.Engine.Session;
 
 namespace Masterwork.Engine;
 
 /// <summary>
 /// Two-tier variable storage: session variables (persistent, saved in timeline snapshots) and let
-/// variables (passage-scoped, cleared before each render). Implements <see cref="IExprContext"/>
+/// variables (passage-scoped, cleared before each render). Implements <see cref="IStoryEvalContext"/>
 /// directly so it can be handed straight to <see cref="ExpressionEvaluator"/>.
 /// </summary>
-public sealed partial class VariableStore : IExprContext
+public sealed partial class VariableStore : IStoryEvalContext
 {
-    private readonly Dictionary<string, ExprValue> _session = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ExprValue> _let = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, StoryValue> _session = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, StoryValue> _let = new(StringComparer.Ordinal);
     private readonly SessionPrng _prng;
     private readonly IExpressionEvaluator _evaluator;
 
@@ -30,7 +32,7 @@ public sealed partial class VariableStore : IExprContext
     }
 
     /// <inheritdoc/>
-    public ExprValue GetVariable(string name)
+    public StoryValue GetVariable(string name)
     {
         if (_let.TryGetValue(name, out var letVal))
         {
@@ -42,14 +44,14 @@ public sealed partial class VariableStore : IExprContext
             return sessVal;
         }
 
-        throw new ExprEvalException($"Unknown variable '{name}'");
+        throw new StoryEvalException($"Unknown variable '{name}'");
     }
 
     /// <summary>Sets a persistent session variable.</summary>
-    public void SetSessionVariable(string name, ExprValue value) => _session[name] = value;
+    public void SetSessionVariable(string name, StoryValue value) => _session[name] = value;
 
     /// <summary>Sets a passage-scoped let variable.</summary>
-    public void SetLetVariable(string name, ExprValue value) => _let[name] = value;
+    public void SetLetVariable(string name, StoryValue value) => _let[name] = value;
 
     /// <summary>Clears all let variables, e.g. before rendering a new passage.</summary>
     public void ClearLetScope() => _let.Clear();
@@ -58,13 +60,13 @@ public sealed partial class VariableStore : IExprContext
     public long RandBetween(long min, long max, string seedKey) => _prng.RandBetween(min, max, seedKey);
 
     /// <inheritdoc/>
-    public IReadOnlyList<ExprValue> Shuffled(IReadOnlyList<ExprValue> items, string seedKey) => _prng.Shuffled(items, seedKey);
+    public IReadOnlyList<StoryValue> Shuffled(IReadOnlyList<StoryValue> items, string seedKey) => _prng.Shuffled(items, seedKey);
 
     /// <summary>Full point-in-time copy of session state, for timeline snapshots.</summary>
-    public IReadOnlyDictionary<string, ExprValue> SessionSnapshot() => new Dictionary<string, ExprValue>(_session, StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, StoryValue> SessionSnapshot() => new Dictionary<string, StoryValue>(_session, StringComparer.Ordinal);
 
     /// <summary>Replaces all session state with a prior <see cref="SessionSnapshot"/> capture.</summary>
-    public void RestoreSession(IReadOnlyDictionary<string, ExprValue> snapshot)
+    public void RestoreSession(IReadOnlyDictionary<string, StoryValue> snapshot)
     {
         _session.Clear();
         foreach (var (k, v) in snapshot)
@@ -102,11 +104,11 @@ public sealed partial class VariableStore : IExprContext
             return _evaluator.Evaluate(content, this).AsString();
         });
 
-    private static ExprValue DefaultValueFor(VarDef def) => def.VarType switch
+    private static StoryValue DefaultValueFor(VarDef def) => def.VarType switch
     {
-        "int" => ExprValue.Of(def.Default is long l ? l : Convert.ToInt64(def.Default ?? 0L)),
-        "array" => ExprValue.Of(new List<ExprValue>()),
-        _ => ExprValue.Of(def.Default as string ?? ""),
+        "int" => StoryValue.Of(def.Default is long l ? l : Convert.ToInt64(def.Default ?? 0L)),
+        "array" => StoryValue.Of(new List<StoryValue>()),
+        _ => StoryValue.Of(def.Default as string ?? ""),
     };
 
     [GeneratedRegex(@"\{([^{}]*)\}")]

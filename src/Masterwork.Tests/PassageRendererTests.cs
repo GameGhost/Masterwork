@@ -1,8 +1,8 @@
-using System.Collections.Generic;
-using System.Linq;
 using Masterwork.Engine;
+using Masterwork.Engine.Expressions;
+using Masterwork.Engine.Rendering;
+using Masterwork.Engine.Session;
 using Masterwork.ModuleFormat;
-using Xunit;
 
 namespace Masterwork.Tests;
 
@@ -56,7 +56,7 @@ public class PassageRendererTests
             - type: 'text'
               value: 'Hello {nameA}'
             """);
-        store.SetSessionVariable("nameA", ExprValue.Of("Alice"));
+        store.SetSessionVariable("nameA", StoryValue.Of("Alice"));
 
         var result = Render(passage, module, store);
         Assert.Equal("Hello Alice", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -161,7 +161,7 @@ public class PassageRendererTests
               var: 'round'
               expr: 'round + 1'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(2L));
+        store.SetSessionVariable("round", StoryValue.Of(2L));
 
         Render(passage, module, store);
         Assert.Equal(3L, store.GetVariable("round").AsInt());
@@ -289,7 +289,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: 'first round'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(1L));
+        store.SetSessionVariable("round", StoryValue.Of(1L));
 
         var result = Render(passage, module, store);
         Assert.Equal("first round", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -309,7 +309,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: 'first round'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(2L));
+        store.SetSessionVariable("round", StoryValue.Of(2L));
 
         var result = Render(passage, module, store);
         Assert.Empty(result.Nodes);
@@ -334,7 +334,7 @@ public class PassageRendererTests
                 - type: 'text'
                   value: 'two'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(2L));
+        store.SetSessionVariable("round", StoryValue.Of(2L));
 
         var result = Render(passage, module, store);
         Assert.Equal("two", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -358,7 +358,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: 'other'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(9L));
+        store.SetSessionVariable("round", StoryValue.Of(9L));
 
         var result = Render(passage, module, store);
         Assert.Equal("other", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -381,8 +381,8 @@ public class PassageRendererTests
                 - type: 'text'
                   value: 'inner'
             """);
-        store.SetSessionVariable("a", ExprValue.Of(1L));
-        store.SetSessionVariable("b", ExprValue.Of(1L));
+        store.SetSessionVariable("a", StoryValue.Of(1L));
+        store.SetSessionVariable("b", StoryValue.Of(1L));
 
         var result = Render(passage, module, store);
         Assert.Equal("inner", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -406,7 +406,7 @@ public class PassageRendererTests
                 - type: 'text'
                   value: 'three players'
             """);
-        store.SetSessionVariable("players", ExprValue.Of(3L));
+        store.SetSessionVariable("players", StoryValue.Of(3L));
 
         var result = Render(passage, module, store);
         Assert.Equal("three players", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -431,7 +431,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: 'other'
             """);
-        store.SetSessionVariable("players", ExprValue.Of(99L));
+        store.SetSessionVariable("players", StoryValue.Of(99L));
 
         var result = Render(passage, module, store);
         Assert.Equal("other", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -453,7 +453,7 @@ public class PassageRendererTests
                 - type: 'text'
                   value: 'many'
             """);
-        store.SetSessionVariable("players", ExprValue.Of(4L));
+        store.SetSessionVariable("players", StoryValue.Of(4L));
 
         var result = Render(passage, module, store);
         Assert.Equal("many", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -475,7 +475,7 @@ public class PassageRendererTests
                 - type: 'text'
                   value: 'three'
             """);
-        store.SetSessionVariable("players", ExprValue.Of(99L));
+        store.SetSessionVariable("players", StoryValue.Of(99L));
 
         var result = Render(passage, module, store);
         Assert.Empty(result.Nodes);
@@ -498,7 +498,7 @@ public class PassageRendererTests
                   var: 'tracker'
                   expr: '6'
             """);
-        store.SetSessionVariable("players", ExprValue.Of(2L));
+        store.SetSessionVariable("players", StoryValue.Of(2L));
 
         Render(passage, module, store);
         Assert.Equal(6L, store.GetVariable("tracker").AsInt());
@@ -521,7 +521,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: '{entry}'
             """);
-        store.SetSessionVariable("names", ExprValue.Of(new List<ExprValue> { ExprValue.Of("a"), ExprValue.Of("b"), ExprValue.Of("c") }));
+        store.SetSessionVariable("names", StoryValue.Of(new List<StoryValue> { StoryValue.Of("a"), StoryValue.Of("b"), StoryValue.Of("c") }));
 
         var result = Render(passage, module, store);
         Assert.Equal(["a", "b", "c"], result.Nodes.Cast<RenderedText>().Select(t => t.Value));
@@ -542,8 +542,8 @@ public class PassageRendererTests
               - type: 'text'
                 value: '{entry.player_name}'
             """);
-        var record = new ExprValue.RecordVal(new Dictionary<string, ExprValue> { ["player_name"] = ExprValue.Of("Alice") });
-        store.SetSessionVariable("players_ranked", ExprValue.Of(new List<ExprValue> { record }));
+        var record = new StoryValue.RecordVal(new Dictionary<string, StoryValue> { ["player_name"] = StoryValue.Of("Alice") });
+        store.SetSessionVariable("players_ranked", StoryValue.Of(new List<StoryValue> { record }));
 
         var result = Render(passage, module, store);
         Assert.Equal("Alice", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
@@ -564,7 +564,7 @@ public class PassageRendererTests
               - type: 'text'
                 value: '{entry}'
             """);
-        store.SetSessionVariable("names", ExprValue.Of(new List<ExprValue>()));
+        store.SetSessionVariable("names", StoryValue.Of(new List<StoryValue>()));
 
         var result = Render(passage, module, store);
         Assert.Empty(result.Nodes);
@@ -606,7 +606,7 @@ public class PassageRendererTests
               target: '${nextPsg}'
               state_affecting: true
             """);
-        store.SetSessionVariable("nextPsg", ExprValue.Of("SomeOtherPassage"));
+        store.SetSessionVariable("nextPsg", StoryValue.Of("SomeOtherPassage"));
 
         var result = Render(passage, module, store);
         var nav = Assert.IsType<RenderedNavigation>(result.Nodes.Single());
@@ -689,7 +689,7 @@ public class PassageRendererTests
                 var: 'round'
                 expr: '99'
             """);
-        store.SetSessionVariable("round", ExprValue.Of(1L));
+        store.SetSessionVariable("round", StoryValue.Of(1L));
 
         Render(passage, module, store);
         Assert.Equal(1L, store.GetVariable("round").AsInt());

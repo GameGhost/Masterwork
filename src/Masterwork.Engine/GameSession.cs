@@ -1,4 +1,7 @@
 using Masterwork.ModuleFormat;
+using Masterwork.Engine.Expressions;
+using Masterwork.Engine.Rendering;
+using Masterwork.Engine.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -63,7 +66,7 @@ public sealed class GameSession
     /// <param name="logger">Logger dependency. Defaults to discarding log output if omitted.</param>
     /// <exception cref="InvalidOperationException">No override was given and the module has no <c>Begins-Here</c> passage.</exception>
     public GameSession(LoadedModule module, long masterSeed,
-        IReadOnlyDictionary<string, ExprValue>? standardVars = null, string? startPassageIdOverride = null,
+        IReadOnlyDictionary<string, StoryValue>? standardVars = null, string? startPassageIdOverride = null,
         IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null,
         ILogger<GameSession>? logger = null)
     {
@@ -162,8 +165,8 @@ public sealed class GameSession
         _logger.LogDebug("Submitting input '{ActionId}'", actionId);
         var input = FindAction<RenderedInput>(actionId);
         var exprValue = input.InputType == InputValueType.Number
-            ? ExprValue.Of(Convert.ToInt64(value))
-            : ExprValue.Of(value.ToString() ?? "");
+            ? StoryValue.Of(Convert.ToInt64(value))
+            : StoryValue.Of(value.ToString() ?? "");
         _store.SetSessionVariable(input.Var, exprValue);
 
         var targetId = ResolveTarget(input.OnSubmit);
@@ -258,7 +261,7 @@ public sealed class GameSession
     // ── Internals ────────────────────────────────────────────────────────────
 
     private PassageRenderResult PushAndRender(string passageId, SnapshotKind kind,
-        ExprValue? submittedInput, string? displayLabel, string? diagnosticLabel)
+        StoryValue? submittedInput, string? displayLabel, string? diagnosticLabel)
     {
         TruncateFuture();
 

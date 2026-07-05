@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using Masterwork.Extractor;
-using Xunit;
+﻿using Masterwork.Extractor;
 
 namespace Masterwork.Tests;
 

@@ -1,7 +1,7 @@
-using System.Collections.Generic;
 using Masterwork.Engine;
+using Masterwork.Engine.Expressions;
+using Masterwork.Engine.Session;
 using Masterwork.ModuleFormat;
-using Xunit;
 
 namespace Masterwork.Tests;
 
@@ -14,7 +14,7 @@ public class VariableStoreTests
     public void SetGet_Int()
     {
         var store = MakeStore();
-        store.SetSessionVariable("round", ExprValue.Of(3L));
+        store.SetSessionVariable("round", StoryValue.Of(3L));
         Assert.Equal(3L, store.GetVariable("round").AsInt());
     }
 
@@ -22,7 +22,7 @@ public class VariableStoreTests
     public void SetGet_String()
     {
         var store = MakeStore();
-        store.SetSessionVariable("wolves", ExprValue.Of("evil"));
+        store.SetSessionVariable("wolves", StoryValue.Of("evil"));
         Assert.Equal("evil", store.GetVariable("wolves").AsString());
     }
 
@@ -41,7 +41,7 @@ public class VariableStoreTests
     public void TemplateExpansion_IntVar()
     {
         var store = MakeStore();
-        store.SetSessionVariable("round", ExprValue.Of(3L));
+        store.SetSessionVariable("round", StoryValue.Of(3L));
         Assert.Equal("3", store.ExpandTemplate("{round}"));
     }
 
@@ -49,7 +49,7 @@ public class VariableStoreTests
     public void TemplateExpansion_StringVar()
     {
         var store = MakeStore();
-        store.SetSessionVariable("wolves", ExprValue.Of("evil"));
+        store.SetSessionVariable("wolves", StoryValue.Of("evil"));
         Assert.Equal("evil", store.ExpandTemplate("{wolves}"));
     }
 
@@ -64,7 +64,7 @@ public class VariableStoreTests
     public void TemplateExpansion_ArrayIndex()
     {
         var store = MakeStore();
-        store.SetSessionVariable("elim", ExprValue.Of(new List<ExprValue> { ExprValue.Of("a"), ExprValue.Of("b") }));
+        store.SetSessionVariable("elim", StoryValue.Of(new List<StoryValue> { StoryValue.Of("a"), StoryValue.Of("b") }));
         Assert.Equal("a", store.ExpandTemplate("{elim[0]}"));
     }
 
@@ -72,7 +72,7 @@ public class VariableStoreTests
     public void TemplateExpansion_DotProperty()
     {
         var store = MakeStore();
-        var entry = new ExprValue.RecordVal(new Dictionary<string, ExprValue> { ["player_name"] = ExprValue.Of("Alice") });
+        var entry = new StoryValue.RecordVal(new Dictionary<string, StoryValue> { ["player_name"] = StoryValue.Of("Alice") });
         store.SetLetVariable("entry", entry);
         Assert.Equal("Alice", store.ExpandTemplate("{entry.player_name}"));
     }
@@ -81,7 +81,7 @@ public class VariableStoreTests
     public void LetVar_Isolated_FromSession()
     {
         var store = MakeStore();
-        store.SetLetVariable("tempVal", ExprValue.Of(5L));
+        store.SetLetVariable("tempVal", StoryValue.Of(5L));
         Assert.DoesNotContain("tempVal", store.SessionSnapshot().Keys);
     }
 
@@ -89,7 +89,7 @@ public class VariableStoreTests
     public void LetVar_VisibleDuringRender()
     {
         var store = MakeStore();
-        store.SetLetVariable("tempVal", ExprValue.Of(5L));
+        store.SetLetVariable("tempVal", StoryValue.Of(5L));
         Assert.Equal(5L, store.GetVariable("tempVal").AsInt());
     }
 
@@ -97,8 +97,8 @@ public class VariableStoreTests
     public void LetVar_DiscardedAfterRender()
     {
         var store = MakeStore();
-        store.SetLetVariable("tempVal", ExprValue.Of(5L));
+        store.SetLetVariable("tempVal", StoryValue.Of(5L));
         store.ClearLetScope();
-        Assert.Throws<ExprEvalException>(() => store.GetVariable("tempVal"));
+        Assert.Throws<StoryEvalException>(() => store.GetVariable("tempVal"));
     }
 }
