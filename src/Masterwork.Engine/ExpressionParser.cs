@@ -2,12 +2,15 @@ using System.Text;
 
 namespace Masterwork.Engine;
 
-public sealed class ExprParseException(string message) : Exception(message);
-
-// Recursive-descent parser for the MWS expression language. Whitelist grammar only — no arbitrary
-// code execution. See docs/mws-format-latest.md §4 for the full operator/function reference.
+/// <summary>
+/// Recursive-descent parser for the MWS expression language. Whitelist grammar only — no
+/// arbitrary code execution. See <c>docs/mws-format-latest.md</c> §4 for the full operator/function
+/// reference.
+/// </summary>
 public static class ExpressionParser
 {
+    /// <summary>Parses an MWS expression string into an <see cref="Expr"/> AST.</summary>
+    /// <exception cref="ExprParseException">The expression text is syntactically invalid.</exception>
     public static Expr Parse(string source)
     {
         var tokens = Lexer.Tokenize(source);

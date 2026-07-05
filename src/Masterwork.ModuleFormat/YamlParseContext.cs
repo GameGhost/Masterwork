@@ -1,12 +1,21 @@
 namespace Masterwork.ModuleFormat;
 
-// Threaded through YAML parsing (passage files and _variables.yaml) to attribute warnings to
-// their source. Warnings is never null internally, even if the caller didn't supply one, so call
-// sites never need a null-conditional just to record a warning.
+/// <summary>
+/// Threaded through YAML parsing (passage files and <c>_variables.yaml</c>) to attribute warnings
+/// to their source. <see cref="Warnings"/> is never null internally, even if the caller didn't
+/// supply one, so call sites never need a null-conditional just to record a warning.
+/// </summary>
 internal sealed class YamlParseContext(ModuleWarnings? warnings, string source = "(unknown source)")
 {
+    /// <summary>The warnings collector this context reports into.</summary>
     public ModuleWarnings Warnings { get; } = warnings ?? new ModuleWarnings();
+
+    /// <summary>The current source label (e.g. a passage ID, or "_variables.yaml") used to prefix warning messages.</summary>
     public string Source { get; set; } = source;
 
-    public void Warn(string kind, string message) => Warnings.Add(kind, $"{Source}: {message}");
+    /// <summary>Records a warning, prefixed with the current <see cref="Source"/>.</summary>
+    public void Warn(string kind, string message)
+    {
+        Warnings.Add(kind, $"{Source}: {message}");
+    }
 }

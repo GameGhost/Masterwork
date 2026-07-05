@@ -2,9 +2,13 @@ using Masterwork.ModuleFormat;
 
 namespace Masterwork.Engine;
 
-// The engine is pull-based: the App calls FollowLinkAsync / SubmitInputAsync / Open-ClosePopupAsync
-// and gets back typed render results. Timeline state is the only durable state; passage-scoped let
-// variables and SessionViewState are transient and never persisted.
+/// <summary>
+/// The main entry point for playing a loaded module. The engine is pull-based: the App calls
+/// <see cref="FollowLinkAsync"/> / <see cref="SubmitInputAsync"/> / <see cref="OpenPopupAsync"/> /
+/// <see cref="ClosePopupAsync"/> and gets back typed render results. Timeline state is the only
+/// durable state; passage-scoped let variables and <see cref="SessionViewState"/> are transient
+/// and never persisted.
+/// </summary>
 public sealed class GameSession
 {
     private readonly LoadedModule _module;
@@ -18,15 +22,38 @@ public sealed class GameSession
 
     private sealed record PendingPopup(string ActionId, VariableStore Sandbox, string? OnClose, bool StateAffecting);
 
+    /// <summary>The full history of snapshots recorded so far, including any rewound-past future.</summary>
     public IReadOnlyList<SessionSnapshot> Timeline => _timeline;
+
+    /// <summary>Index of the current position within <see cref="Timeline"/>.</summary>
     public int HistoryIndex { get; private set; }
+
+    /// <summary>The snapshot at <see cref="HistoryIndex"/>.</summary>
     public SessionSnapshot Current => _timeline[HistoryIndex];
+
+    /// <summary>The cached render corresponding to <see cref="Current"/>.</summary>
     public PassageRenderResult CurrentRender => _cachedRenders[HistoryIndex];
+
+    /// <summary>True when <see cref="HistoryIndex"/> is not at the end of <see cref="Timeline"/> (i.e. the player has stepped back).</summary>
     public bool IsRewound => HistoryIndex < _timeline.Count - 1;
+
+    /// <summary>True when <see cref="StepBack"/> can be called.</summary>
     public bool CanStepBack => HistoryIndex > 0;
+
+    /// <summary>True when <see cref="StepForward"/> can be called.</summary>
     public bool CanStepForward => IsRewound;
+
+    /// <summary>Transient, non-persisted UI state for the current position.</summary>
     public SessionViewState ViewState { get; } = new();
 
+    /// <summary>
+    /// Starts a new session at the module's start passage (or <paramref name="startPassageIdOverride"/> if given).
+    /// </summary>
+    /// <param name="module">The loaded module to play.</param>
+    /// <param name="masterSeed">Seed for all deterministic randomness in this session — see <see cref="SessionPrng"/>.</param>
+    /// <param name="standardVars">Initial values for standard variables (e.g. player names), applied before the first render.</param>
+    /// <param name="startPassageIdOverride">Overrides the module's <c>Begins-Here</c> passage as the starting point, mainly for tests.</param>
+    /// <exception cref="InvalidOperationException">No override was given and the module has no <c>Begins-Here</c> passage.</exception>
     public GameSession(LoadedModule module, long masterSeed,
         IReadOnlyDictionary<string, ExprValue>? standardVars = null, string? startPassageIdOverride = null)
     {
@@ -73,12 +100,15 @@ public sealed class GameSession
         _prng.RestoreOccurrences(_timeline[HistoryIndex].SeedOccurrences);
     }
 
+    /// <summary>Reconstructs a session from a previously <see cref="Serialize"/>d save, without re-executing any player actions.</summary>
     public static GameSession Restore(LoadedModule module, SessionSave save) => new(module, save);
 
+    /// <summary>Captures the full timeline and current position as a serializable save.</summary>
     public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex);
 
     // ── Player actions ───────────────────────────────────────────────────────
 
+    /// <summary>Follows a <see cref="RenderedNavigation"/> action: runs its <c>onclick</c> nodes, resolves its target, and navigates (creating a timeline snapshot if the navigation is state-affecting).</summary>
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
     {
         var nav = FindAction<RenderedNavigation>(actionId);
@@ -97,6 +127,7 @@ public sealed class GameSession
         return Task.FromResult(result);
     }
 
+    /// <summary>Stores the submitted value into a <see cref="RenderedInput"/> action's variable, creates an <see cref="SnapshotKind.InputReceived"/> snapshot, and navigates to its <c>onsubmit</c> target.</summary>
     public Task<PassageRenderResult> SubmitInputAsync(string actionId, object value)
     {
         var input = FindAction<RenderedInput>(actionId);
@@ -110,8 +141,11 @@ public sealed class GameSession
         return Task.FromResult(result);
     }
 
-    // Evaluates the popup's content against a sandbox copy of the store — state changes stay
-    // pending until ClosePopupAsync commits them, per the popup transaction model.
+    /// <summary>
+    /// Opens a <see cref="RenderedPopup"/> action. Evaluates the popup's content against a sandbox
+    /// copy of the store — state changes stay pending until <see cref="ClosePopupAsync"/> commits
+    /// them, per the popup transaction model.
+    /// </summary>
     public Task<PopupRenderResult> OpenPopupAsync(string actionId)
     {
         var popup = FindAction<RenderedPopup>(actionId);
@@ -124,6 +158,8 @@ public sealed class GameSession
         return Task.FromResult(new PopupRenderResult(content));
     }
 
+    /// <summary>Closes the currently open popup, committing its pending state changes and navigating to its <c>onclose</c> target as a single transaction.</summary>
+    /// <exception cref="InvalidOperationException">No popup with <paramref name="actionId"/> is currently open.</exception>
     public Task<PassageRenderResult> ClosePopupAsync(string actionId)
     {
         if (_pendingPopup is not { } pending || pending.ActionId != actionId)
@@ -143,11 +179,16 @@ public sealed class GameSession
         return Task.FromResult(result);
     }
 
+    /// <summary>Marks a private gate as confirmed in <see cref="ViewState"/>.</summary>
     public void ConfirmPrivateGate(string gateId) => ViewState.ConfirmedGates.Add(gateId);
+
+    /// <summary>Records an in-progress (not yet submitted) input value in <see cref="ViewState"/>.</summary>
     public void UpdateInputDraft(string actionId, object draft) => ViewState.InputDrafts[actionId] = draft;
 
     // ── Timeline navigation ──────────────────────────────────────────────────
 
+    /// <summary>Moves one step back in the timeline and re-renders from the restored snapshot.</summary>
+    /// <exception cref="InvalidOperationException"><see cref="CanStepBack"/> is false.</exception>
     public PassageRenderResult StepBack()
     {
         if (!CanStepBack)
@@ -159,6 +200,8 @@ public sealed class GameSession
         return RestoreAndRerenderCurrent();
     }
 
+    /// <summary>Moves one step forward in the timeline and re-renders from the restored snapshot.</summary>
+    /// <exception cref="InvalidOperationException"><see cref="CanStepForward"/> is false.</exception>
     public PassageRenderResult StepForward()
     {
         if (!CanStepForward)
@@ -170,7 +213,7 @@ public sealed class GameSession
         return RestoreAndRerenderCurrent();
     }
 
-    // Discards any rewound future, unlocking live play again from the current position.
+    /// <summary>Discards any rewound future, unlocking live play again from the current position.</summary>
     public void ResumeFromHere()
     {
         TruncateFuture();

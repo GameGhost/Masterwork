@@ -3,17 +3,29 @@ using System.Text.RegularExpressions;
 
 namespace Masterwork.ModuleFormat;
 
-// Resolves `restext://Key` references against a loaded locale dictionary. Runs once at module
-// load time, before any expression is parsed or cached, since expressions can themselves contain
-// restext:// references inside string literals (e.g. `if: warwinner == "restext://Common_026"`).
-//
-// Two resolution modes:
-//   - Display fields (text.value, navigation.label, section.title, ...): substituted as-is.
-//   - Expression fields (let/assign.expr, conditional.if, navigation.target when dynamic, ...):
-//     the resolved value is spliced into a double-quoted string literal, so embedded `"` must be
-//     escaped as `\"` to keep the expression syntactically valid.
+/// <summary>
+/// Resolves <c>restext://Key</c> references against a loaded locale dictionary. Runs once at
+/// module load time, before any expression is parsed or cached, since expressions can themselves
+/// contain restext:// references inside string literals (e.g.
+/// <c>if: warwinner == "restext://Common_026"</c>).
+/// </summary>
+/// <remarks>
+/// Two resolution modes:
+/// <list type="bullet">
+/// <item>Display fields (<c>text.value</c>, <c>navigation.label</c>, <c>section.title</c>, ...): substituted as-is.</item>
+/// <item>
+/// Expression fields (<c>let</c>/<c>assign.expr</c>, <c>conditional.if</c>, <c>navigation.target</c>
+/// when dynamic, ...): the resolved value is spliced into a double-quoted string literal, so
+/// embedded <c>"</c> must be escaped as <c>\"</c> to keep the expression syntactically valid.
+/// </item>
+/// </list>
+/// </remarks>
 public static partial class RestextResolver
 {
+    /// <summary>Returns a copy of <paramref name="passage"/> with every restext reference resolved.</summary>
+    /// <param name="passage">The passage to resolve.</param>
+    /// <param name="locale">Locale dictionary from <see cref="RestextFile.Parse"/>.</param>
+    /// <param name="warnings">Collector for missing-key warnings. Pass <see langword="null"/> to discard them.</param>
     public static MwsPassageDoc Resolve(MwsPassageDoc passage, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null) =>
         passage with
         {

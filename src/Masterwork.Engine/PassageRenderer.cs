@@ -2,19 +2,21 @@ using Masterwork.ModuleFormat;
 
 namespace Masterwork.Engine;
 
-public sealed class CheckProgressViolationException(string passageId, string requiredPassageId)
-    : Exception($"Passage '{passageId}' requires '{requiredPassageId}' to have been visited first.")
-{
-    public string PassageId { get; } = passageId;
-    public string RequiredPassageId { get; } = requiredPassageId;
-}
-
-// Walks a passage's node tree, applying assign/let mutations to the VariableStore as it goes (in
-// document order) and producing a flat rendered-node tree for the UI. Popup content is left
-// unevaluated (see the popup transaction model — content is only rendered when the popup opens);
-// RenderNodeList is the entry point used for that deferred render, and for `include_passage`.
+/// <summary>
+/// Walks a passage's node tree, applying assign/let mutations to the <see cref="VariableStore"/>
+/// as it goes (in document order) and producing a flat rendered-node tree for the UI. Popup
+/// content is left unevaluated (see the popup transaction model — content is only rendered when
+/// the popup opens); <see cref="RenderNodeList"/> is the entry point used for that deferred
+/// render, and for <c>include_passage</c>.
+/// </summary>
 public static class PassageRenderer
 {
+    /// <summary>Renders a passage to a flat node/action tree.</summary>
+    /// <param name="passage">The passage to render.</param>
+    /// <param name="store">Variable store to read from and mutate via <c>assign</c>/<c>let</c> nodes.</param>
+    /// <param name="module">The loaded module, used to resolve <c>include_passage</c> targets.</param>
+    /// <param name="visitedPassageIds">Passages considered "visited" for <c>check_progress</c> validation.</param>
+    /// <exception cref="CheckProgressViolationException">The passage's <c>check_progress</c> prerequisite hasn't been visited.</exception>
     public static PassageRenderResult Render(
         MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds)
     {
@@ -36,8 +38,10 @@ public static class PassageRenderer
             PendingGoto: ctx.PendingGoto);
     }
 
-    // Renders a raw node list in isolation — used for popup content on open, and internally for
-    // `include_passage` inlining.
+    /// <summary>
+    /// Renders a raw node list in isolation — used for popup content on open, and internally for
+    /// <c>include_passage</c> inlining.
+    /// </summary>
     public static IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module) =>
         RenderNodes(nodes, new RenderContext(store, module));
 

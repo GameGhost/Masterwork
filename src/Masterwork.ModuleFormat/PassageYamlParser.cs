@@ -2,13 +2,27 @@ using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
 
-// Parses a single .mws.yaml passage file (MWS v0.3) into a MwsPassageDoc tree.
-// Dispatches on each node's `type:` field against the low-level YAML representation model —
-// see YamlNodeExtensions for why this bypasses YamlDotNet's generic object-graph deserializer.
+/// <summary>
+/// Parses a single <c>.mws.yaml</c> passage file (MWS v0.3) into an <see cref="MwsPassageDoc"/>
+/// tree. Dispatches on each node's <c>type:</c> field against the low-level YAML representation
+/// model — see <see cref="YamlNodeExtensions"/> for why this bypasses YamlDotNet's generic
+/// object-graph deserializer.
+/// </summary>
 public static class PassageYamlParser
 {
     private const string ExpectedFormat = "mws/0.3";
 
+    /// <summary>
+    /// Parses a passage document from raw YAML text.
+    /// </summary>
+    /// <param name="yamlText">The full contents of a <c>.mws.yaml</c> file.</param>
+    /// <param name="warnings">
+    /// Collector for non-fatal issues (unmatched fields, wrong-shaped fields, unknown node types,
+    /// stale format versions). Pass <see langword="null"/> to discard warnings.
+    /// </param>
+    /// <exception cref="MwsParseException">
+    /// The document is empty, or a required field is missing/malformed with no safe fallback.
+    /// </exception>
     public static MwsPassageDoc ParsePassage(string yamlText, ModuleWarnings? warnings = null)
     {
         var ctx = new YamlParseContext(warnings);

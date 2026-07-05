@@ -2,10 +2,12 @@ using System.Text.Json.Serialization;
 
 namespace Masterwork.Engine;
 
-// Runtime value produced by evaluating an expression. Mirrors the MWS type system: int, string,
-// bool, array, and record (immutable, named-property value type). Polymorphic JSON attributes let
-// SessionSave (which embeds ExprValue in every snapshot's Variables dict) round-trip through
-// System.Text.Json for save/load.
+/// <summary>
+/// Runtime value produced by evaluating an expression. Mirrors the MWS type system: int, string,
+/// bool, array, and record (immutable, named-property value type). Polymorphic JSON attributes let
+/// <see cref="SessionSave"/> (which embeds <see cref="ExprValue"/> in every snapshot's Variables
+/// dict) round-trip through <c>System.Text.Json</c> for save/load.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(IntVal), "int")]
 [JsonDerivedType(typeof(StringVal), "string")]
@@ -14,26 +16,45 @@ namespace Masterwork.Engine;
 [JsonDerivedType(typeof(RecordVal), "record")]
 public abstract record ExprValue
 {
+    /// <summary>An integer value.</summary>
     public sealed record IntVal(long Value) : ExprValue;
+
+    /// <summary>A string value.</summary>
     public sealed record StringVal(string Value) : ExprValue;
+
+    /// <summary>A boolean value.</summary>
     public sealed record BoolVal(bool Value) : ExprValue;
+
+    /// <summary>An array value.</summary>
     public sealed record ArrayVal(IReadOnlyList<ExprValue> Items) : ExprValue;
+
+    /// <summary>A record (named-property) value.</summary>
     public sealed record RecordVal(IReadOnlyDictionary<string, ExprValue> Properties) : ExprValue;
 
+    /// <summary>Wraps a <see cref="long"/> as an <see cref="IntVal"/>.</summary>
     public static ExprValue Of(long v) => new IntVal(v);
+
+    /// <summary>Wraps a <see cref="string"/> as a <see cref="StringVal"/>.</summary>
     public static ExprValue Of(string v) => new StringVal(v);
+
+    /// <summary>Wraps a <see cref="bool"/> as a <see cref="BoolVal"/>.</summary>
     public static ExprValue Of(bool v) => new BoolVal(v);
+
+    /// <summary>Wraps a list as an <see cref="ArrayVal"/>.</summary>
     public static ExprValue Of(IReadOnlyList<ExprValue> v) => new ArrayVal(v);
 
+    /// <summary>Converts this value to an <see cref="long"/>, parsing a string value if needed (Cradle stores everything as strings at runtime).</summary>
+    /// <exception cref="ExprEvalException">The value can't be converted (an array or record).</exception>
     public long AsInt() => this switch
     {
         IntVal i => i.Value,
-        // Cradle stores everything as strings at runtime; arithmetic on a string var parses it.
         StringVal s when long.TryParse(s.Value, out var l) => l,
         BoolVal b => b.Value ? 1 : 0,
         _ => throw new ExprEvalException($"Cannot convert {Describe()} to int"),
     };
 
+    /// <summary>Converts this value to a <see cref="string"/>.</summary>
+    /// <exception cref="ExprEvalException">The value can't be converted (an array or record).</exception>
     public string AsString() => this switch
     {
         StringVal s => s.Value,
@@ -42,6 +63,8 @@ public abstract record ExprValue
         _ => throw new ExprEvalException($"Cannot convert {Describe()} to string"),
     };
 
+    /// <summary>Converts this value to a <see cref="bool"/> (0/empty-string/false are falsy).</summary>
+    /// <exception cref="ExprEvalException">The value can't be converted (an array or record).</exception>
     public bool AsBool() => this switch
     {
         BoolVal b => b.Value,
@@ -50,12 +73,16 @@ public abstract record ExprValue
         _ => throw new ExprEvalException($"Cannot convert {Describe()} to bool"),
     };
 
+    /// <summary>Returns this value's items.</summary>
+    /// <exception cref="ExprEvalException">This isn't an <see cref="ArrayVal"/>.</exception>
     public IReadOnlyList<ExprValue> AsArray() => this switch
     {
         ArrayVal a => a.Items,
         _ => throw new ExprEvalException($"Cannot convert {Describe()} to array"),
     };
 
+    /// <summary>Returns this value's properties.</summary>
+    /// <exception cref="ExprEvalException">This isn't a <see cref="RecordVal"/>.</exception>
     public IReadOnlyDictionary<string, ExprValue> AsRecord() => this switch
     {
         RecordVal r => r.Properties,
@@ -72,8 +99,10 @@ public abstract record ExprValue
         _ => GetType().Name,
     };
 
-    // Value equality per the MWS spec: custom-typed (record) values compare by member equality;
-    // everything else compares after normalizing int/string/bool per the coercion rules.
+    /// <summary>
+    /// Value equality per the MWS spec: record values compare by member equality; everything else
+    /// compares after normalizing int/string/bool per the coercion rules.
+    /// </summary>
     public static bool ValueEquals(ExprValue a, ExprValue b)
     {
         if (a is RecordVal ra && b is RecordVal rb)
@@ -116,5 +145,3 @@ public abstract record ExprValue
         }
     }
 }
-
-public sealed class ExprEvalException(string message) : Exception(message);

@@ -2,25 +2,41 @@ using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
 
-// Small helper surface over YamlDotNet's representation model (YamlMappingNode / YamlSequenceNode /
-// YamlScalarNode). The MWS v0.3 schema is small and fully known, so passages are parsed by hand
-// against this low-level API rather than fighting a generic object-graph deserializer over a
-// polymorphic (type:-dispatched) node list.
-//
-// Error/warning policy:
-//   - A required field that's absent, or present with the wrong shape, throws MwsParseException —
-//     there's no sensible fallback value.
-//   - An optional field present with the wrong shape (e.g. a mapping where a plain string was
-//     expected) logs a "wrong_field_type" warning to ModuleWarnings and falls back to the same
-//     default as if the field were simply absent.
-//   - `state_affecting`/`debug`/`collapsed` etc. that hold non-boolean text also throw
-//     MwsParseException — a silently-wrong default here would corrupt navigation/timeline
-//     semantics, so this is treated as a hard error rather than a warning.
+/// <summary>
+/// Small helper surface over YamlDotNet's representation model (<see cref="YamlMappingNode"/>,
+/// <see cref="YamlSequenceNode"/>, <see cref="YamlScalarNode"/>). The MWS v0.3 schema is small and
+/// fully known, so passages are parsed by hand against this low-level API rather than fighting a
+/// generic object-graph deserializer over a polymorphic (<c>type:</c>-dispatched) node list.
+/// </summary>
+/// <remarks>
+/// Error/warning policy:
+/// <list type="bullet">
+/// <item>
+/// A required field that's absent, or present with the wrong shape, throws
+/// <see cref="MwsParseException"/> — there's no sensible fallback value.
+/// </item>
+/// <item>
+/// An optional field present with the wrong shape (e.g. a mapping where a plain string was
+/// expected) logs a "wrong_field_type" warning to <see cref="ModuleWarnings"/> and falls back to
+/// the same default as if the field were simply absent.
+/// </item>
+/// <item>
+/// <c>state_affecting</c>/<c>debug</c>/<c>collapsed</c> etc. that hold non-boolean text also
+/// throw <see cref="MwsParseException"/> — a silently-wrong default here would corrupt
+/// navigation/timeline semantics, so this is treated as a hard error rather than a warning.
+/// </item>
+/// </list>
+/// </remarks>
 internal static class YamlNodeExtensions
 {
+    /// <summary>Looks up a key on a mapping node, or <see langword="null"/> if absent.</summary>
     public static YamlNode? TryGet(this YamlMappingNode map, string key) =>
         map.Children.TryGetValue(new YamlScalarNode(key), out var value) ? value : null;
 
+    /// <summary>
+    /// Reads an optional string field. Logs a "wrong_field_type" warning and returns
+    /// <see langword="null"/> if the field is present but not a scalar.
+    /// </summary>
     public static string? GetString(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
@@ -38,6 +54,10 @@ internal static class YamlNodeExtensions
         return null;
     }
 
+    /// <summary>
+    /// Reads a required string field.
+    /// </summary>
+    /// <exception cref="MwsParseException">The field is missing, or present with the wrong shape.</exception>
     public static string GetRequiredString(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
@@ -54,6 +74,10 @@ internal static class YamlNodeExtensions
         throw new MwsParseException($"{ctx.Source}: field '{key}' must be a text value but found a {DescribeKind(node)}");
     }
 
+    /// <summary>
+    /// Reads a boolean field, returning <paramref name="defaultValue"/> if absent.
+    /// </summary>
+    /// <exception cref="MwsParseException">The field is present but not literally "true"/"false".</exception>
     public static bool GetBool(this YamlMappingNode map, string key, YamlParseContext ctx, bool defaultValue = false)
     {
         var raw = map.GetString(key, ctx);
@@ -70,6 +94,10 @@ internal static class YamlNodeExtensions
         throw new MwsParseException($"{ctx.Source}: field '{key}' must be 'true' or 'false' but found '{raw}'");
     }
 
+    /// <summary>
+    /// Reads a list-of-strings field. Logs "wrong_field_type" and returns an empty list if the
+    /// field isn't a sequence; individual non-scalar elements are skipped with their own warning.
+    /// </summary>
     public static IReadOnlyList<string> GetStringList(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
@@ -98,6 +126,10 @@ internal static class YamlNodeExtensions
         return result;
     }
 
+    /// <summary>
+    /// Reads an optional mapping field. Logs "wrong_field_type" and returns <see langword="null"/>
+    /// if the field is present but not a mapping.
+    /// </summary>
     public static YamlMappingNode? GetMapping(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
@@ -115,6 +147,10 @@ internal static class YamlNodeExtensions
         return null;
     }
 
+    /// <summary>
+    /// Reads an optional sequence field. Logs "wrong_field_type" and returns <see langword="null"/>
+    /// if the field is present but not a sequence.
+    /// </summary>
     public static YamlSequenceNode? GetSequence(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
@@ -132,9 +168,12 @@ internal static class YamlNodeExtensions
         return null;
     }
 
-    // Warns about any keys present on `map` that weren't consumed while building whatever `label`
-    // describes (e.g. "'text' node", "passage header") — catches typos and stale/unknown fields
-    // left over from hand-written YAML or an older extractor version.
+    /// <summary>
+    /// Warns about any keys present on <paramref name="map"/> that weren't consumed while building
+    /// whatever <paramref name="label"/> describes (e.g. "'text' node", "passage header") —
+    /// catches typos and stale/unknown fields left over from hand-written YAML or an older
+    /// extractor version.
+    /// </summary>
     public static void WarnUnmatchedFields(this YamlMappingNode map, YamlParseContext ctx, string label, params string[] expectedKeys)
     {
         foreach (var keyNode in map.Children.Keys)
@@ -146,8 +185,12 @@ internal static class YamlNodeExtensions
         }
     }
 
-    // Converts a scalar YAML node to its natural CLR type: bool, long, or string.
-    // Used for switch-case `match:` values, which may be an int, string, or pattern string.
+    /// <summary>
+    /// Converts a scalar YAML node to its natural CLR type: <see cref="bool"/>, <see cref="long"/>,
+    /// or <see cref="string"/> (or a <see cref="List{T}"/> of those for a sequence). Used for
+    /// switch-case <c>match:</c> values, which may be an int, string, or pattern string.
+    /// </summary>
+    /// <exception cref="MwsParseException">The node is neither a scalar nor a sequence.</exception>
     public static object ToNaturalValue(this YamlNode node, YamlParseContext ctx)
     {
         if (node is YamlScalarNode s)
@@ -175,6 +218,7 @@ internal static class YamlNodeExtensions
         throw new MwsParseException($"{ctx.Source}: switch case 'match' has an unsupported value shape ({DescribeKind(node)})");
     }
 
+    /// <summary>Describes a YAML node's shape for use in warning/error messages.</summary>
     internal static string DescribeKind(YamlNode node) => node switch
     {
         YamlMappingNode => "mapping",

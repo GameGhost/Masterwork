@@ -1,13 +1,16 @@
 namespace Masterwork.Engine;
 
-// Evaluates a parsed Expr AST against an IExprContext. Expressions are parsed once (see
-// GetOrParse) and cached by source text, so repeated evaluation is a pure AST walk with no
-// re-parsing cost.
+/// <summary>
+/// Evaluates a parsed <see cref="Expr"/> AST against an <see cref="IExprContext"/>. Expressions
+/// are parsed once (see <see cref="GetOrParse"/>) and cached by source text, so repeated
+/// evaluation is a pure AST walk with no re-parsing cost.
+/// </summary>
 public static class ExpressionEvaluator
 {
     private static readonly Dictionary<string, Expr> Cache = new(StringComparer.Ordinal);
     private static readonly Lock CacheLock = new();
 
+    /// <summary>Parses <paramref name="source"/> into an <see cref="Expr"/> AST, or returns the cached AST from a prior call with the same source text.</summary>
     public static Expr GetOrParse(string source)
     {
         lock (CacheLock)
@@ -23,8 +26,10 @@ public static class ExpressionEvaluator
         }
     }
 
+    /// <summary>Parses (or retrieves from cache) and evaluates an expression string against <paramref name="ctx"/>.</summary>
     public static ExprValue Evaluate(string source, IExprContext ctx) => Evaluate(GetOrParse(source), ctx);
 
+    /// <summary>Evaluates a parsed <see cref="Expr"/> AST against <paramref name="ctx"/>.</summary>
     public static ExprValue Evaluate(Expr expr, IExprContext ctx) => expr switch
     {
         Expr.IntLiteral n => ExprValue.Of(n.Value),
@@ -243,10 +248,13 @@ public static class ExpressionEvaluator
         return ExprValue.Of(items.Where(v => !ExprValue.ValueEquals(v, arg)).ToList());
     }
 
-    // Pattern strings for switch.cases[i].match and arr.countif(pattern):
-    // bare value (equality), =value, >value, >=value, <value, <=value, !=value.
-    // Property patterns for arrays of custom types: "property: pattern".
-    // Internal: also used by PassageRenderer for switch.cases[i].match dispatch.
+    /// <summary>
+    /// Matches a value against a pattern string used by <c>switch.cases[i].match</c> and
+    /// <c>arr.countif(pattern)</c>: a bare value (equality), or <c>=value</c>, <c>&gt;value</c>,
+    /// <c>&gt;=value</c>, <c>&lt;value</c>, <c>&lt;=value</c>, <c>!=value</c>. Property patterns
+    /// for arrays of custom types use <c>"property: pattern"</c>. Also used by
+    /// <see cref="PassageRenderer"/> for <c>switch.cases[i].match</c> dispatch.
+    /// </summary>
     internal static bool MatchesPattern(ExprValue value, string pattern)
     {
         var colonIdx = pattern.IndexOf(':');

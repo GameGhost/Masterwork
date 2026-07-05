@@ -3,20 +3,24 @@ using System.Text;
 
 namespace Masterwork.Engine;
 
-// Model B (seeded lazy) PRNG: each seed_key maps to a fixed, deterministic value derived from
-// (masterSeed, seedKey, occurrence#) rather than a mutated shared Random instance. This makes
-// timeline rewind trivial — restoring position is just restoring an integer occurrence count per
-// key, with no need to replay internal RNG state draw-for-draw.
+/// <summary>
+/// Model B (seeded lazy) PRNG: each seed_key maps to a fixed, deterministic value derived from
+/// <c>(masterSeed, seedKey, occurrence#)</c> rather than a mutated shared <see cref="Random"/>
+/// instance. This makes timeline rewind trivial — restoring position is just restoring an integer
+/// occurrence count per key, with no need to replay internal RNG state draw-for-draw.
+/// </summary>
 public sealed class SessionPrng(long masterSeed)
 {
     private readonly Dictionary<string, int> _occurrences = new(StringComparer.Ordinal);
 
+    /// <summary>Returns a deterministic random integer in <c>[min, max]</c> for the given seed key.</summary>
     public long RandBetween(long min, long max, string seedKey)
     {
         var rng = CreateRandom(seedKey);
         return min + rng.NextInt64(max - min + 1);
     }
 
+    /// <summary>Returns a deterministic Fisher-Yates permutation of <paramref name="items"/> for the given seed key.</summary>
     public IReadOnlyList<ExprValue> Shuffled(IReadOnlyList<ExprValue> items, string seedKey)
     {
         var rng = CreateRandom(seedKey);
@@ -37,9 +41,10 @@ public sealed class SessionPrng(long masterSeed)
         return new Random(BitConverter.ToInt32(bytes, 0));
     }
 
-    // Per-key occurrence counters, for timeline snapshotting.
+    /// <summary>Captures per-key occurrence counters, for timeline snapshotting.</summary>
     public IReadOnlyDictionary<string, int> SnapshotOccurrences() => new Dictionary<string, int>(_occurrences, StringComparer.Ordinal);
 
+    /// <summary>Restores per-key occurrence counters from a prior <see cref="SnapshotOccurrences"/> capture.</summary>
     public void RestoreOccurrences(IReadOnlyDictionary<string, int> occurrences)
     {
         _occurrences.Clear();
