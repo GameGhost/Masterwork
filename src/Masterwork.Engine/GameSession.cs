@@ -1,4 +1,6 @@
 using Masterwork.ModuleFormat;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Masterwork.Engine;
 
@@ -17,6 +19,7 @@ public sealed class GameSession
     private readonly SessionPrng _prng;
     private readonly IPassageRenderer _passageRenderer;
     private readonly IExpressionEvaluator _expressionEvaluator;
+    private readonly ILogger<GameSession> _logger;
     private readonly List<SessionSnapshot> _timeline = [];
     private readonly List<PassageRenderResult> _cachedRenders = [];
     private HashSet<string> _visitedPassageIds = [];
@@ -57,13 +60,16 @@ public sealed class GameSession
     /// <param name="startPassageIdOverride">Overrides the module's <c>Begins-Here</c> passage as the starting point, mainly for tests.</param>
     /// <param name="passageRenderer">Renderer dependency, e.g. for testing with mocks. Defaults to a new <see cref="PassageRenderer"/> if omitted.</param>
     /// <param name="expressionEvaluator">Evaluator dependency, e.g. for testing with mocks. Defaults to a new <see cref="ExpressionEvaluator"/> if omitted.</param>
+    /// <param name="logger">Logger dependency. Defaults to discarding log output if omitted.</param>
     /// <exception cref="InvalidOperationException">No override was given and the module has no <c>Begins-Here</c> passage.</exception>
     public GameSession(LoadedModule module, long masterSeed,
         IReadOnlyDictionary<string, ExprValue>? standardVars = null, string? startPassageIdOverride = null,
-        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null)
+        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null,
+        ILogger<GameSession>? logger = null)
     {
         _module = module;
         _masterSeed = masterSeed;
+        _logger = logger ?? NullLogger<GameSession>.Instance;
         _expressionEvaluator = expressionEvaluator ?? new ExpressionEvaluator();
         _passageRenderer = passageRenderer ?? new PassageRenderer(_expressionEvaluator);
         _prng = new SessionPrng(masterSeed);
@@ -79,21 +85,26 @@ public sealed class GameSession
         var startId = startPassageIdOverride ?? module.StartPassageId
             ?? throw new InvalidOperationException("No start passage specified and the module has no 'Begins-Here' passage.");
 
+        _logger.LogDebug("Starting session at passage '{StartPassageId}' with master seed {MasterSeed}", startId, masterSeed);
         PushAndRender(startId, SnapshotKind.GameStart, submittedInput: null, displayLabel: null, diagnosticLabel: null);
     }
 
     // Restores a session from a save. Fully correct for ordinary snapshots (whose captured state
     // always precedes the passage they point to); Checkpoint snapshots capture mid-passage state,
     // so replaying them by re-rendering from scratch is a best-effort approximation, not exact.
-    private GameSession(LoadedModule module, SessionSave save, IPassageRenderer? passageRenderer, IExpressionEvaluator? expressionEvaluator)
+    private GameSession(LoadedModule module, SessionSave save, IPassageRenderer? passageRenderer,
+        IExpressionEvaluator? expressionEvaluator, ILogger<GameSession>? logger)
     {
         _module = module;
         _masterSeed = save.MasterSeed;
+        _logger = logger ?? NullLogger<GameSession>.Instance;
         _expressionEvaluator = expressionEvaluator ?? new ExpressionEvaluator();
         _passageRenderer = passageRenderer ?? new PassageRenderer(_expressionEvaluator);
         _prng = new SessionPrng(_masterSeed);
         _store = new VariableStore(module.Variables, _prng, _expressionEvaluator);
         ViewState = new SessionViewState();
+
+        _logger.LogDebug("Restoring session: {SnapshotCount} snapshots, history index {HistoryIndex}", save.Timeline.Count, save.HistoryIndex);
 
         foreach (var snapshot in save.Timeline)
         {
@@ -114,9 +125,11 @@ public sealed class GameSession
     /// <param name="save">A prior <see cref="Serialize"/> capture.</param>
     /// <param name="passageRenderer">Renderer dependency, e.g. for testing with mocks. Defaults to a new <see cref="PassageRenderer"/> if omitted.</param>
     /// <param name="expressionEvaluator">Evaluator dependency, e.g. for testing with mocks. Defaults to a new <see cref="ExpressionEvaluator"/> if omitted.</param>
+    /// <param name="logger">Logger dependency. Defaults to discarding log output if omitted.</param>
     public static GameSession Restore(LoadedModule module, SessionSave save,
-        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null) =>
-        new(module, save, passageRenderer, expressionEvaluator);
+        IPassageRenderer? passageRenderer = null, IExpressionEvaluator? expressionEvaluator = null,
+        ILogger<GameSession>? logger = null) =>
+        new(module, save, passageRenderer, expressionEvaluator, logger);
 
     /// <summary>Captures the full timeline and current position as a serializable save.</summary>
     public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex);
@@ -126,6 +139,7 @@ public sealed class GameSession
     /// <summary>Follows a <see cref="RenderedNavigation"/> action: runs its <c>onclick</c> nodes, resolves its target, and navigates (creating a timeline snapshot if the navigation is state-affecting).</summary>
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
     {
+        _logger.LogDebug("Following link '{ActionId}'", actionId);
         var nav = FindAction<RenderedNavigation>(actionId);
 
         if (nav.OnClickRaw.Count > 0)
@@ -145,6 +159,7 @@ public sealed class GameSession
     /// <summary>Stores the submitted value into a <see cref="RenderedInput"/> action's variable, creates an <see cref="SnapshotKind.InputReceived"/> snapshot, and navigates to its <c>onsubmit</c> target.</summary>
     public Task<PassageRenderResult> SubmitInputAsync(string actionId, object value)
     {
+        _logger.LogDebug("Submitting input '{ActionId}'", actionId);
         var input = FindAction<RenderedInput>(actionId);
         var exprValue = input.InputType == InputValueType.Number
             ? ExprValue.Of(Convert.ToInt64(value))
@@ -163,6 +178,7 @@ public sealed class GameSession
     /// </summary>
     public Task<PopupRenderResult> OpenPopupAsync(string actionId)
     {
+        _logger.LogDebug("Opening popup '{ActionId}'", actionId);
         var popup = FindAction<RenderedPopup>(actionId);
         ViewState.ExpandedPopups.Add(actionId);
 
@@ -177,6 +193,7 @@ public sealed class GameSession
     /// <exception cref="InvalidOperationException">No popup with <paramref name="actionId"/> is currently open.</exception>
     public Task<PassageRenderResult> ClosePopupAsync(string actionId)
     {
+        _logger.LogDebug("Closing popup '{ActionId}'", actionId);
         if (_pendingPopup is not { } pending || pending.ActionId != actionId)
         {
             throw new InvalidOperationException($"Popup '{actionId}' is not open.");
@@ -212,6 +229,7 @@ public sealed class GameSession
         }
 
         HistoryIndex--;
+        _logger.LogDebug("Stepped back to history index {HistoryIndex}", HistoryIndex);
         return RestoreAndRerenderCurrent();
     }
 
@@ -225,12 +243,14 @@ public sealed class GameSession
         }
 
         HistoryIndex++;
+        _logger.LogDebug("Stepped forward to history index {HistoryIndex}", HistoryIndex);
         return RestoreAndRerenderCurrent();
     }
 
     /// <summary>Discards any rewound future, unlocking live play again from the current position.</summary>
     public void ResumeFromHere()
     {
+        _logger.LogDebug("Resuming from history index {HistoryIndex}, discarding rewound future", HistoryIndex);
         TruncateFuture();
         ViewState.Reset();
     }

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
@@ -9,10 +11,23 @@ namespace Masterwork.ModuleFormat;
 /// </summary>
 public sealed class VariableManifest : IVariableManifest
 {
+    private readonly ILogger<VariableManifest> _logger;
+
+    /// <summary>Creates a manifest parser that discards log output.</summary>
+    public VariableManifest() : this(NullLogger<VariableManifest>.Instance)
+    {
+    }
+
+    /// <summary>Creates a manifest parser that logs through <paramref name="logger"/>.</summary>
+    public VariableManifest(ILogger<VariableManifest> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, VarDef> Parse(string yamlText, ModuleWarnings? warnings = null)
     {
-        var ctx = new YamlParseContext(warnings, "_variables.yaml");
+        var ctx = new YamlParseContext(warnings, "_variables.yaml", _logger);
 
         var stream = new YamlStream();
         stream.Load(new StringReader(yamlText));
@@ -62,6 +77,7 @@ public sealed class VariableManifest : IVariableManifest
 
         root.WarnUnmatchedFields(ctx, "_variables.yaml", "standard_variables", "variables");
 
+        _logger.LogDebug("Parsed variable manifest: {Count} variables", result.Count);
         return result;
     }
 

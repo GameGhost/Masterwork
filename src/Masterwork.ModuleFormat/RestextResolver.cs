@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Masterwork.ModuleFormat;
 
@@ -21,9 +23,24 @@ namespace Masterwork.ModuleFormat;
 /// </remarks>
 public sealed partial class RestextResolver : IRestextResolver
 {
+    private readonly ILogger<RestextResolver> _logger;
+
+    /// <summary>Creates a resolver that discards log output.</summary>
+    public RestextResolver() : this(NullLogger<RestextResolver>.Instance)
+    {
+    }
+
+    /// <summary>Creates a resolver that logs through <paramref name="logger"/>.</summary>
+    public RestextResolver(ILogger<RestextResolver> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
-    public MwsPassageDoc Resolve(MwsPassageDoc passage, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null) =>
-        passage with
+    public MwsPassageDoc Resolve(MwsPassageDoc passage, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null)
+    {
+        _logger.LogDebug("Resolving restext references for passage '{PassageId}'", passage.PassageId);
+        return passage with
         {
             Title = ResolveDisplay(passage.Title, locale, warnings),
             Location = passage.Location is null ? null : passage.Location with
@@ -32,11 +49,12 @@ public sealed partial class RestextResolver : IRestextResolver
             },
             Nodes = ResolveNodeList(passage.Nodes, locale, warnings),
         };
+    }
 
-    private static List<Node> ResolveNodeList(IReadOnlyList<Node> nodes, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
+    private List<Node> ResolveNodeList(IReadOnlyList<Node> nodes, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
         [.. nodes.Select(n => ResolveNode(n, locale, warnings))];
 
-    private static Node ResolveNode(Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
+    private Node ResolveNode(Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
     {
         TextNode t => t with { Value = ResolveDisplay(t.Value, locale, warnings)! },
         SectionNode s => s with
@@ -94,7 +112,7 @@ public sealed partial class RestextResolver : IRestextResolver
         _ => node,
     };
 
-    private static object ResolveMatch(object match, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => match switch
+    private object ResolveMatch(object match, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => match switch
     {
         string s => ResolveExpr(s, locale, warnings),
         List<object> list => list.Select(v => ResolveMatch(v, locale, warnings)).ToList(),
@@ -102,14 +120,14 @@ public sealed partial class RestextResolver : IRestextResolver
     };
 
     [return: NotNullIfNotNull(nameof(value))]
-    private static string? ResolveDisplay(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
+    private string? ResolveDisplay(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
         value is null ? null : RestextRefRegex().Replace(value, m => Lookup(m.Groups[1].Value, locale, warnings));
 
     [return: NotNullIfNotNull(nameof(value))]
-    private static string? ResolveExpr(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
+    private string? ResolveExpr(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
         value is null ? null : RestextRefRegex().Replace(value, m => EscapeForExpr(Lookup(m.Groups[1].Value, locale, warnings)));
 
-    private static string Lookup(string key, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings)
+    private string Lookup(string key, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings)
     {
         if (locale.TryGetValue(key, out var v))
         {
@@ -117,6 +135,7 @@ public sealed partial class RestextResolver : IRestextResolver
         }
 
         warnings?.Add("missing_restext_key", $"restext key not found: {key}");
+        _logger.LogWarning("Restext key not found: {Key}", key);
         return $"restext://{key}";
     }
 

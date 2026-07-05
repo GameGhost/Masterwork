@@ -1,13 +1,29 @@
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Masterwork.Engine;
 
 /// <inheritdoc cref="IExpressionParser"/>
 public sealed class ExpressionParser : IExpressionParser
 {
+    private readonly ILogger<ExpressionParser> _logger;
+
+    /// <summary>Creates a parser that discards log output.</summary>
+    public ExpressionParser() : this(NullLogger<ExpressionParser>.Instance)
+    {
+    }
+
+    /// <summary>Creates a parser that logs through <paramref name="logger"/>.</summary>
+    public ExpressionParser(ILogger<ExpressionParser> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
     public Expr Parse(string source)
     {
+        _logger.LogDebug("Parsing expression: {Source}", source);
         var tokens = Lexer.Tokenize(source);
         var parser = new Parser(tokens);
         var expr = parser.ParseOr();

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
@@ -11,10 +13,23 @@ public sealed class PassageYamlParser : IPassageYamlParser
 {
     private const string ExpectedFormat = "mws/0.3";
 
+    private readonly ILogger<PassageYamlParser> _logger;
+
+    /// <summary>Creates a parser that discards log output.</summary>
+    public PassageYamlParser() : this(NullLogger<PassageYamlParser>.Instance)
+    {
+    }
+
+    /// <summary>Creates a parser that logs through <paramref name="logger"/>.</summary>
+    public PassageYamlParser(ILogger<PassageYamlParser> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
     public MwsPassageDoc ParsePassage(string yamlText, ModuleWarnings? warnings = null)
     {
-        var ctx = new YamlParseContext(warnings);
+        var ctx = new YamlParseContext(warnings, logger: _logger);
 
         var stream = new YamlStream();
         stream.Load(new StringReader(yamlText));
@@ -28,6 +43,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
         // Grab passage_id up front (best-effort) purely so subsequent warnings/errors can be
         // attributed to it; GetRequiredString below still performs the real presence check.
         ctx.Source = root.GetString("passage_id", ctx) is { Length: > 0 } id ? id : "(unknown passage)";
+        _logger.LogDebug("Parsing passage '{PassageId}'", ctx.Source);
 
         var format = root.GetRequiredString("format", ctx);
         if (format != ExpectedFormat)
@@ -58,6 +74,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
         root.WarnUnmatchedFields(ctx, "passage header",
             "format", "passage_id", "title", "tags", "layout", "debug", "location", "check_progress", "nodes");
 
+        _logger.LogDebug("Parsed passage '{PassageId}' with {NodeCount} top-level nodes", passage.PassageId, passage.Nodes.Count);
         return passage;
     }
 

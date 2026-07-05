@@ -1,4 +1,6 @@
 using Masterwork.ModuleFormat;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Masterwork.Engine;
 
@@ -10,22 +12,26 @@ namespace Masterwork.Engine;
 public sealed class PassageRenderer : IPassageRenderer
 {
     private readonly IExpressionEvaluator _evaluator;
+    private readonly ILogger<PassageRenderer> _logger;
 
-    /// <summary>Creates a renderer wired to the default <see cref="ExpressionEvaluator"/>.</summary>
-    public PassageRenderer() : this(new ExpressionEvaluator())
+    /// <summary>Creates a renderer wired to the default <see cref="ExpressionEvaluator"/>, discarding log output.</summary>
+    public PassageRenderer() : this(new ExpressionEvaluator(), NullLogger<PassageRenderer>.Instance)
     {
     }
 
     /// <summary>Creates a renderer with an explicit evaluator dependency, e.g. for testing with mocks.</summary>
-    public PassageRenderer(IExpressionEvaluator evaluator)
+    public PassageRenderer(IExpressionEvaluator evaluator, ILogger<PassageRenderer>? logger = null)
     {
         _evaluator = evaluator;
+        _logger = logger ?? NullLogger<PassageRenderer>.Instance;
     }
 
     /// <inheritdoc/>
     public PassageRenderResult Render(
         MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds)
     {
+        _logger.LogDebug("Rendering passage '{PassageId}'", passage.PassageId);
+
         if (passage.CheckProgress is not null && !visitedPassageIds.Contains(passage.CheckProgress))
         {
             throw new CheckProgressViolationException(passage.PassageId, passage.CheckProgress);
@@ -117,6 +123,10 @@ public sealed class PassageRenderer : IPassageRenderer
                 {
                     output.AddRange(RenderNodes(includedPassage.Nodes, ctx));
                 }
+                else
+                {
+                    _logger.LogWarning("include_passage target '{TargetId}' does not exist; nothing was inlined", targetId);
+                }
 
                 break;
             case ConditionalNode cond:
@@ -141,11 +151,13 @@ public sealed class PassageRenderer : IPassageRenderer
             case CheckpointNode cp:
                 ctx.Checkpoints.Add(new RenderedCheckpoint(cp.Id, cp.Display, cp.Diagnostic));
                 break;
-            case RecordNode:
+            case RecordNode rec:
                 // Achievement triggers are deferred to Phase 3; no-op at runtime.
+                _logger.LogDebug("Skipping 'record' node (achievement triggers deferred to Phase 3): {Id}", rec.Id);
                 break;
             case PromptNode:
                 // Spec'd but not yet emitted by the extractor; no real passages exercise this path.
+                _logger.LogDebug("Skipping 'prompt' node (not yet implemented)");
                 break;
         }
     }

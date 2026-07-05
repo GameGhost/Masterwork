@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Masterwork.Engine;
 
 /// <summary>
@@ -7,18 +10,20 @@ namespace Masterwork.Engine;
 public sealed class ExpressionEvaluator : IExpressionEvaluator
 {
     private readonly IExpressionParser _parser;
+    private readonly ILogger<ExpressionEvaluator> _logger;
     private readonly Dictionary<string, Expr> _cache = new(StringComparer.Ordinal);
     private readonly Lock _cacheLock = new();
 
-    /// <summary>Creates an evaluator wired to the default <see cref="ExpressionParser"/>.</summary>
-    public ExpressionEvaluator() : this(new ExpressionParser())
+    /// <summary>Creates an evaluator wired to the default <see cref="ExpressionParser"/>, discarding log output.</summary>
+    public ExpressionEvaluator() : this(new ExpressionParser(), NullLogger<ExpressionEvaluator>.Instance)
     {
     }
 
     /// <summary>Creates an evaluator with an explicit parser dependency, e.g. for testing with mocks.</summary>
-    public ExpressionEvaluator(IExpressionParser parser)
+    public ExpressionEvaluator(IExpressionParser parser, ILogger<ExpressionEvaluator>? logger = null)
     {
         _parser = parser;
+        _logger = logger ?? NullLogger<ExpressionEvaluator>.Instance;
     }
 
     /// <summary>Parses <paramref name="source"/> into an <see cref="Expr"/> AST, or returns the cached AST from a prior call with the same source text.</summary>
@@ -31,6 +36,7 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
                 return cached;
             }
 
+            _logger.LogDebug("Expression cache miss, parsing: {Source}", source);
             var expr = _parser.Parse(source);
             _cache[source] = expr;
             return expr;
