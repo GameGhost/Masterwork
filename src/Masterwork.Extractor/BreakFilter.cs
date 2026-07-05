@@ -34,8 +34,16 @@ internal static class BreakFilter
             { next = nodes[j]; break; }
         }
 
-        if (next is null) return true;   // trailing
-        if (prev is null) return true;   // leading
+        if (next is null)
+        {
+            return true;   // trailing
+        }
+
+        if (prev is null)
+        {
+            return true;   // leading
+        }
+
         return IsNonRendered(prev) || IsNonRendered(next);
     }
 
@@ -46,11 +54,17 @@ internal static class BreakFilter
         {
             case ConditionalNode cond:
                 foreach (var b in cond.Branches)
+                {
                     b.Nodes = Apply(b.Nodes, mode);
+                }
+
                 break;
             case SwitchNode sw:
                 foreach (var c in sw.Cases)
+                {
                     c.Nodes = Apply(c.Nodes, mode);
+                }
+
                 break;
             case SectionBodyNode section:
                 section.Nodes = Apply(section.Nodes, mode);
@@ -73,7 +87,10 @@ internal static class BreakFilter
 
     public static List<MwsNode> Apply(List<MwsNode> nodes, BreaksMode mode)
     {
-        if (mode == BreaksMode.Emit) return nodes;
+        if (mode == BreaksMode.Emit)
+        {
+            return nodes;
+        }
 
         var result = new List<MwsNode>(nodes.Count);
         for (int i = 0; i < nodes.Count; i++)
@@ -84,7 +101,9 @@ internal static class BreakFilter
             if (node is BreakNode or ParagraphBreakNode && IsExtraBreak(nodes, i))
             {
                 if (mode == BreaksMode.EmitCommented)
+                {
                     result.Add(new CommentedBreakNode { IsParagraph = node is ParagraphBreakNode, SourceLine = node.SourceLine });
+                }
                 // else omit
             }
             else

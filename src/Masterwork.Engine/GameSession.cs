@@ -35,7 +35,12 @@ public sealed class GameSession
         _prng = new SessionPrng(masterSeed);
         _store = new VariableStore(module.Variables, _prng);
         if (standardVars is not null)
-            foreach (var (k, v) in standardVars) _store.SetSessionVariable(k, v);
+        {
+            foreach (var (k, v) in standardVars)
+            {
+                _store.SetSessionVariable(k, v);
+            }
+        }
 
         var startId = startPassageIdOverride ?? module.StartPassageId
             ?? throw new InvalidOperationException("No start passage specified and the module has no 'Begins-Here' passage.");
@@ -79,7 +84,9 @@ public sealed class GameSession
         var nav = FindAction<RenderedNavigation>(actionId);
 
         if (nav.OnClickRaw.Count > 0)
+        {
             PassageRenderer.RenderNodeList(nav.OnClickRaw, _store, _module);
+        }
 
         var targetId = ResolveTarget(nav.Target);
 
@@ -120,7 +127,9 @@ public sealed class GameSession
     public Task<PassageRenderResult> ClosePopupAsync(string actionId)
     {
         if (_pendingPopup is not { } pending || pending.ActionId != actionId)
+        {
             throw new InvalidOperationException($"Popup '{actionId}' is not open.");
+        }
 
         _store.RestoreSession(pending.Sandbox.SessionSnapshot());
         _pendingPopup = null;
@@ -141,14 +150,22 @@ public sealed class GameSession
 
     public PassageRenderResult StepBack()
     {
-        if (!CanStepBack) throw new InvalidOperationException("Cannot step back past the start of the timeline.");
+        if (!CanStepBack)
+        {
+            throw new InvalidOperationException("Cannot step back past the start of the timeline.");
+        }
+
         HistoryIndex--;
         return RestoreAndRerenderCurrent();
     }
 
     public PassageRenderResult StepForward()
     {
-        if (!CanStepForward) throw new InvalidOperationException("Cannot step forward at the head of the timeline.");
+        if (!CanStepForward)
+        {
+            throw new InvalidOperationException("Cannot step forward at the head of the timeline.");
+        }
+
         HistoryIndex++;
         return RestoreAndRerenderCurrent();
     }
@@ -239,7 +256,11 @@ public sealed class GameSession
 
     private void TruncateFuture()
     {
-        if (_timeline.Count == 0) return;
+        if (_timeline.Count == 0)
+        {
+            return;
+        }
+
         var keep = HistoryIndex + 1;
         if (_timeline.Count > keep)
         {
@@ -263,7 +284,9 @@ public sealed class GameSession
         _pendingPopup = null;
 
         if (snapshot.Kind == SnapshotKind.Checkpoint)
+        {
             return _cachedRenders[HistoryIndex];
+        }
 
         var result = RenderChainFrom(snapshot.PassageId);
         _cachedRenders[HistoryIndex] = result;

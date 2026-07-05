@@ -12,7 +12,11 @@ public class PassageRendererTests
         string mainYaml, string? variablesYaml = null, IEnumerable<string>? others = null, string mainId = "P1")
     {
         var yamls = new List<string> { mainYaml };
-        if (others is not null) yamls.AddRange(others);
+        if (others is not null)
+        {
+            yamls.AddRange(others);
+        }
+
         var module = ModuleLoader.LoadFromSources(yamls, variablesYaml);
         var store = new VariableStore(module.Variables, new SessionPrng(1));
         return (module.Passages[mainId], module, store);

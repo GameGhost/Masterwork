@@ -103,7 +103,11 @@ public static partial class RestextResolver
 
     private static string Lookup(string key, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings)
     {
-        if (locale.TryGetValue(key, out var v)) return v;
+        if (locale.TryGetValue(key, out var v))
+        {
+            return v;
+        }
+
         warnings?.Add("missing_restext_key", $"restext key not found: {key}");
         return $"restext://{key}";
     }

@@ -54,7 +54,11 @@ public partial class CradleExtractor
         {
             var content = File.ReadAllText(f);
             var (prepared, isComplete) = PrepareSource(content);
-            if (isComplete) _completeFiles.Add(f);
+            if (isComplete)
+            {
+                _completeFiles.Add(f);
+            }
+
             return CSharpSyntaxTree.ParseText(prepared, path: f);
         }).ToList();
 
@@ -92,18 +96,27 @@ public partial class CradleExtractor
             {
                 case EffectNode effect when effect.VarRandom is not null:
                     foreach (var kv in effect.VarRandom)
+                    {
                         kv.Value.SeedKey ??= $"{passageId}_{counter++}";
+                    }
+
                     break;
                 case LetNode let when let.Random is not null:
                     let.Random.SeedKey ??= $"{passageId}_{counter++}";
                     break;
                 case ConditionalNode cond:
                     foreach (var branch in cond.Branches)
+                    {
                         AssignSeedKeysInNodes(branch.Nodes, passageId, ref counter);
+                    }
+
                     break;
                 case SwitchNode sw:
                     foreach (var cas in sw.Cases)
+                    {
                         AssignSeedKeysInNodes(cas.Nodes, passageId, ref counter);
+                    }
+
                     break;
                 case SectionBodyNode sec:
                     AssignSeedKeysInNodes(sec.Nodes, passageId, ref counter);
@@ -135,18 +148,33 @@ public partial class CradleExtractor
         // These are authoritative; usage-based inference below will not override them.
         foreach (var tree in trees)
         {
-            if (!_completeFiles.Contains(tree.FilePath)) continue;
+            if (!_completeFiles.Contains(tree.FilePath))
+            {
+                continue;
+            }
+
             var root = tree.GetCompilationUnitRoot();
             foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
-                if (cls.Identifier.Text != "VarDefs") continue;
+                if (cls.Identifier.Text != "VarDefs")
+                {
+                    continue;
+                }
+
                 foreach (var field in cls.Members.OfType<FieldDeclarationSyntax>())
                 {
-                    if (field.Declaration.Type.ToString() != "StoryVar") continue;
+                    if (field.Declaration.Type.ToString() != "StoryVar")
+                    {
+                        continue;
+                    }
+
                     foreach (var declarator in field.Declaration.Variables)
                     {
                         var varName = declarator.Identifier.Text.TrimStart('@');
-                        if (string.IsNullOrEmpty(varName)) continue;
+                        if (string.IsNullOrEmpty(varName))
+                        {
+                            continue;
+                        }
 
                         string varType;
                         object? defaultVal;
@@ -180,7 +208,9 @@ public partial class CradleExtractor
                         // Vars declared as "public StoryVar @x;" (no initializer) remain
                         // refinable by usage-based inference in Phase C.
                         if (declarator.Initializer is not null)
+                        {
                             _varDefsVars.Add(varName);
+                        }
                     }
                 }
             }
@@ -200,10 +230,16 @@ public partial class CradleExtractor
                     (access.Expression is IdentifierNameSyntax idName &&
                      idName.Identifier.Text == "Vars");
 
-                if (!isVarsAccess) continue;
+                if (!isVarsAccess)
+                {
+                    continue;
+                }
 
                 var varName = access.Name.Identifier.Text;
-                if (string.IsNullOrEmpty(varName) || varName == "Vars") continue;
+                if (string.IsNullOrEmpty(varName) || varName == "Vars")
+                {
+                    continue;
+                }
 
                 if (!_variables.ContainsKey(varName))
                 {
@@ -225,35 +261,58 @@ public partial class CradleExtractor
             var root = tree.GetCompilationUnitRoot();
             foreach (var assign in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
             {
-                if (assign.Left is not MemberAccessExpressionSyntax leftAccess) continue;
+                if (assign.Left is not MemberAccessExpressionSyntax leftAccess)
+                {
+                    continue;
+                }
+
                 bool isVarsLeft =
                     (leftAccess.Expression is MemberAccessExpressionSyntax innerLeft2 &&
                      innerLeft2.Name.Identifier.Text == "Vars") ||
                     (leftAccess.Expression is IdentifierNameSyntax leftId &&
                      leftId.Identifier.Text == "Vars");
-                if (!isVarsLeft) continue;
+                if (!isVarsLeft)
+                {
+                    continue;
+                }
 
                 var varName = leftAccess.Name.Identifier.Text;
-                if (!_variables.TryGetValue(varName, out var def)) continue;
-                if (_varDefsVars.Contains(varName)) continue;
+                if (!_variables.TryGetValue(varName, out var def))
+                {
+                    continue;
+                }
+
+                if (_varDefsVars.Contains(varName))
+                {
+                    continue;
+                }
 
                 var inferredType = InferTypeFromRhs(assign.Right);
                 if (inferredType is not null)
                 {
                     if (!phaseC.TryGetValue(varName, out var typeList))
+                    {
                         phaseC[varName] = typeList = [];
+                    }
+
                     typeList.Add(inferredType);
                 }
 
                 // Capture first assigned literal as default
                 if (def.Default is null && assign.Right is LiteralExpressionSyntax lit)
+                {
                     def.Default = GetLiteralValue(lit);
+                }
             }
         }
         // Apply inferred types; warn when the same variable receives conflicting inferences.
         foreach (var (varName, types) in phaseC)
         {
-            if (!_variables.TryGetValue(varName, out var def)) continue;
+            if (!_variables.TryGetValue(varName, out var def))
+            {
+                continue;
+            }
+
             var distinct = types.Distinct().ToList();
             if (distinct.Count == 1)
             {
@@ -275,8 +334,16 @@ public partial class CradleExtractor
         // hoists int/bool to string at runtime (0 → "0", false → "0", true → "1"),
         // so string is the safest declaration type for a conflict.
         var set = new HashSet<string>(types);
-        if (set.Count == 1) return set.First();
-        if (set.Contains("array") && !set.Contains("int") && !set.Contains("string")) return "array";
+        if (set.Count == 1)
+        {
+            return set.First();
+        }
+
+        if (set.Contains("array") && !set.Contains("int") && !set.Contains("string"))
+        {
+            return "array";
+        }
+
         return "string";
     }
 
@@ -287,7 +354,10 @@ public partial class CradleExtractor
         if (parent is ArgumentSyntax arg && arg.Parent?.Parent is InvocationExpressionSyntax inv)
         {
             var methodName = (inv.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text;
-            if (methodName == "Parse") return "int";
+            if (methodName == "Parse")
+            {
+                return "int";
+            }
         }
         return "string";
     }
@@ -295,21 +365,40 @@ public partial class CradleExtractor
     private static string? InferTypeFromRhs(ExpressionSyntax rhs)
     {
         while (rhs is ParenthesizedExpressionSyntax paren)
+        {
             rhs = paren.Expression;
+        }
 
         if (rhs is LiteralExpressionSyntax lit2)
         {
-            if (lit2.IsKind(SyntaxKind.NumericLiteralExpression)) return "int";
-            if (lit2.IsKind(SyntaxKind.StringLiteralExpression)) return "string";
+            if (lit2.IsKind(SyntaxKind.NumericLiteralExpression))
+            {
+                return "int";
+            }
+
+            if (lit2.IsKind(SyntaxKind.StringLiteralExpression))
+            {
+                return "string";
+            }
         }
         if (rhs is CastExpressionSyntax cast && cast.Type.ToString() == "int")
+        {
             return "int";
+        }
+
         if (rhs is InvocationExpressionSyntax inv2)
         {
             var methodName = (inv2.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text
                 ?? (inv2.Expression as IdentifierNameSyntax)?.Identifier.Text;
-            if (methodName == "a" || methodName == "shuffled") return "array";
-            if (methodName is "num" or "random" or "PassageValueNumber" or "Range" or "Parse") return "int";
+            if (methodName == "a" || methodName == "shuffled")
+            {
+                return "array";
+            }
+
+            if (methodName is "num" or "random" or "PassageValueNumber" or "Range" or "Parse")
+            {
+                return "int";
+            }
             // either(x, y, ...) produces int when all args are numeric literals, string when all are string literals
             if (methodName == "either")
             {
@@ -317,20 +406,33 @@ public partial class CradleExtractor
                 if (args.Count > 0 && args.All(a =>
                         a.Expression is LiteralExpressionSyntax eLit &&
                         eLit.IsKind(SyntaxKind.NumericLiteralExpression)))
+                {
                     return "int";
+                }
+
                 if (args.Count > 0 && args.All(a =>
                         a.Expression is LiteralExpressionSyntax eLit &&
                         eLit.IsKind(SyntaxKind.StringLiteralExpression)))
+                {
                     return "string";
+                }
             }
         }
-        if (rhs is ArrayCreationExpressionSyntax) return "array";
+        if (rhs is ArrayCreationExpressionSyntax)
+        {
+            return "array";
+        }
+
         return null;
     }
 
     private static object GetLiteralValue(LiteralExpressionSyntax lit)
     {
-        if (lit.IsKind(SyntaxKind.NumericLiteralExpression)) return lit.Token.Value ?? 0;
+        if (lit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
+            return lit.Token.Value ?? 0;
+        }
+
         return lit.Token.ValueText;
     }
 
@@ -344,7 +446,10 @@ public partial class CradleExtractor
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 var name = method.Identifier.Text;
-                if (!TryParsePassageMethod(name, out int idx, out string kind)) continue;
+                if (!TryParsePassageMethod(name, out int idx, out string kind))
+                {
+                    continue;
+                }
 
                 if (kind == "Init")
                 {
@@ -372,29 +477,53 @@ public partial class CradleExtractor
     {
         idx = 0; kind = "";
         // passageN_Init, passageN_Main, passageN_Fragment_M
-        if (!name.StartsWith("passage")) return false;
+        if (!name.StartsWith("passage"))
+        {
+            return false;
+        }
+
         var rest = name["passage".Length..];
         var underscore = rest.IndexOf('_');
-        if (underscore < 0) return false;
+        if (underscore < 0)
+        {
+            return false;
+        }
 
-        if (!int.TryParse(rest[..underscore], out idx)) return false;
+        if (!int.TryParse(rest[..underscore], out idx))
+        {
+            return false;
+        }
+
         kind = rest[(underscore + 1)..];
         return true;
     }
 
     private void ExtractRegistration(int idx, MethodDeclarationSyntax initMethod)
     {
-        if (initMethod.Body is null) return;
+        if (initMethod.Body is null)
+        {
+            return;
+        }
 
         // base.Passages["Name"] = new StoryPassage("Name", new string[] { "tag1", ... }, delegate)
         foreach (var assign in initMethod.Body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            if (assign.Right is not ObjectCreationExpressionSyntax ctor) continue;
+            if (assign.Right is not ObjectCreationExpressionSyntax ctor)
+            {
+                continue;
+            }
+
             var ctorArgs = ctor.ArgumentList?.Arguments;
-            if (ctorArgs is null || ctorArgs.Value.Count < 2) continue;
+            if (ctorArgs is null || ctorArgs.Value.Count < 2)
+            {
+                continue;
+            }
 
             var passageName = GetStringArgument(ctorArgs.Value[0].Expression);
-            if (passageName is null) continue;
+            if (passageName is null)
+            {
+                continue;
+            }
 
             var tags = ExtractStringArray(ctorArgs.Value[1].Expression);
             var sourceFile = initMethod.SyntaxTree.FilePath;
@@ -406,7 +535,10 @@ public partial class CradleExtractor
     private static string? GetStringArgument(ExpressionSyntax expr)
     {
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
             return lit.Token.ValueText;
+        }
+
         return null;
     }
 
@@ -471,7 +603,9 @@ public partial class CradleExtractor
             NormalizeAllVarRandoms(nodes);
             // Strip decorative breaks from logic-only goto passages (no text, ends in goto)
             if (!HasTextOutput(nodes) && nodes.Any(n => n is GotoNode))
+            {
                 nodes = nodes.Where(n => n is not BreakNode and not ParagraphBreakNode).ToList();
+            }
 
             // Filter debug passages if requested
             var isDebug = tags.Contains("devpage") || HasDevpageGuard(nodes);
@@ -529,7 +663,9 @@ public partial class CradleExtractor
                             var crossPassageIdx = ParseFragmentPassageIndex(unk.OriginalCode);
                             if (crossPassageIdx.HasValue &&
                                 allFrags.TryGetValue(crossPassageIdx.Value, out var crossFrags))
+                            {
                                 crossFrags.TryGetValue(fragIdx.Value, out fragMethod);
+                            }
                         }
                     }
 
@@ -554,7 +690,9 @@ public partial class CradleExtractor
                         if (expand.ExpandNodes.Count > 0)
                         {
                             if (expand.ExpandNodes[^1] is GotoNode termGoto)
+                            {
                                 termTarget = termGoto.Target;
+                            }
                             else if (expand.ExpandNodes[^1] is CheckProgressNode cpTerm &&
                                      !string.IsNullOrEmpty(cpTerm.TargetPassage))
                             {
@@ -591,19 +729,29 @@ public partial class CradleExtractor
             else if (nodes[i] is ConditionalNode cond)
             {
                 foreach (var branch in cond.Branches)
+                {
                     StitchFragments(passageName, branch.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                }
             }
             else if (nodes[i] is SwitchNode sw)
             {
                 foreach (var c in sw.Cases)
+                {
                     StitchFragments(passageName, c.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                }
             }
             else if (nodes[i] is ForeachNode fe)
+            {
                 StitchFragments(passageName, fe.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+            }
             else if (nodes[i] is SectionBodyNode section)
+            {
                 StitchFragments(passageName, section.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+            }
             else if (nodes[i] is SetupBlockNode setup)
+            {
                 StitchFragments(passageName, setup.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+            }
         }
     }
 
@@ -613,7 +761,10 @@ public partial class CradleExtractor
         var m = System.Text.RegularExpressions.Regex.Match(
             refCode, @"(?:this\.)?passage\d+_Fragment_(\d+)");
         if (m.Success && int.TryParse(m.Groups[1].Value, out var fragIdx))
+        {
             return fragIdx;
+        }
+
         return null;
     }
 
@@ -623,7 +774,10 @@ public partial class CradleExtractor
         var m = System.Text.RegularExpressions.Regex.Match(
             refCode, @"(?:this\.)?passage(\d+)_Fragment_\d+");
         if (m.Success && int.TryParse(m.Groups[1].Value, out var idx))
+        {
             return idx;
+        }
+
         return null;
     }
 
@@ -636,11 +790,18 @@ public partial class CradleExtractor
                 foreach (var branch in cond.Branches)
                 {
                     var c = branch.Condition;
-                    if (c is null || !c.Contains("devpage")) continue;
+                    if (c is null || !c.Contains("devpage"))
+                    {
+                        continue;
+                    }
                     // "!devpage" (normalized from "devpage == 0 || devpage == """) is the
                     // normal-user guard (show setup on first HUB visit) — not a debug gate.
                     // Only flag as debug when devpage is checked truthy (e.g. != 0, == 1).
-                    if (c.Contains("!devpage") || c.Contains("devpage == 0") || c.Contains("devpage == \"\"")) continue;
+                    if (c.Contains("!devpage") || c.Contains("devpage == 0") || c.Contains("devpage == \"\""))
+                    {
+                        continue;
+                    }
+
                     return true;
                 }
             }
@@ -656,19 +817,39 @@ public partial class CradleExtractor
             {
                 case TextNode: case SectionHeadingNode: return true;
                 case ConditionalNode cond:
-                    if (cond.Branches.Any(b => HasTextOutput(b.Nodes))) return true;
+                    if (cond.Branches.Any(b => HasTextOutput(b.Nodes)))
+                    {
+                        return true;
+                    }
+
                     break;
                 case SwitchNode sw:
-                    if (sw.Cases.Any(c => HasTextOutput(c.Nodes))) return true;
+                    if (sw.Cases.Any(c => HasTextOutput(c.Nodes)))
+                    {
+                        return true;
+                    }
+
                     break;
                 case SectionBodyNode sec:
-                    if (HasTextOutput(sec.Nodes)) return true;
+                    if (HasTextOutput(sec.Nodes))
+                    {
+                        return true;
+                    }
+
                     break;
                 case SetupBlockNode sb:
-                    if (HasTextOutput(sb.Nodes)) return true;
+                    if (HasTextOutput(sb.Nodes))
+                    {
+                        return true;
+                    }
+
                     break;
                 case ForeachNode fe:
-                    if (HasTextOutput(fe.Nodes)) return true;
+                    if (HasTextOutput(fe.Nodes))
+                    {
+                        return true;
+                    }
+
                     break;
             }
         }
@@ -680,9 +861,15 @@ public partial class CradleExtractor
         // Cradle tags: "ck" → hub, "ck2" → event; original scripts also use "HUB"
         if (tags.Any(t => t.Equals("ck", StringComparison.OrdinalIgnoreCase) ||
                           t.Equals("hub", StringComparison.OrdinalIgnoreCase)))
+        {
             return "hub";
+        }
+
         if (tags.Any(t => t.Equals("ck2", StringComparison.OrdinalIgnoreCase)))
+        {
             return "event";
+        }
+
         return "narration";
     }
 
@@ -701,7 +888,10 @@ public partial class CradleExtractor
 
         void FlushGroup()
         {
-            if (group.Count == 0) return;
+            if (group.Count == 0)
+            {
+                return;
+            }
 
             var preambleNodes = new List<MwsNode>();
             var letNodes = new List<LetNode>();
@@ -715,16 +905,23 @@ public partial class CradleExtractor
                 {
                     firstLine ??= t.SourceLine;
                     if (t.Template is not null)
+                    {
                         allRuns.Add(new TextRun { Text = t.Template, Style = t.Style });
+                    }
                     else
+                    {
                         allRuns.AddRange(t.Runs);
+                    }
                 }
                 else if (IsRndOnlyEffect(n))
                 {
                     var e = (EffectNode)n;
                     firstLine ??= e.SourceLine;
                     foreach (var kv in e.VarRandom!)
+                    {
                         letNodes.Add(new LetNode { Var = kv.Key, Random = kv.Value, SourceLine = e.SourceLine });
+                    }
+
                     letVarNames.AddRange(e.VarRandom.Keys);
                 }
                 else if (n is LetNode ln)
@@ -761,7 +958,9 @@ public partial class CradleExtractor
         foreach (var node in nodes)
         {
             if (CanJoinGroup(node, group))
+            {
                 group.Add(node);
+            }
             else
             {
                 FlushGroup();
@@ -786,16 +985,26 @@ public partial class CradleExtractor
 
             // Span of leading text nodes
             int preEnd = i;
-            while (preEnd < nodes.Count && nodes[preEnd] is TextNode) preEnd++;
+            while (preEnd < nodes.Count && nodes[preEnd] is TextNode)
+            {
+                preEnd++;
+            }
 
             // Span of following pure assigns
             int assignEnd = preEnd;
-            while (assignEnd < nodes.Count && IsPureAssignEffect(nodes[assignEnd])) assignEnd++;
+            while (assignEnd < nodes.Count && IsPureAssignEffect(nodes[assignEnd]))
+            {
+                assignEnd++;
+            }
 
             // Only merge when assigns are followed by at least one more text node
             if (assignEnd == preEnd || assignEnd >= nodes.Count || nodes[assignEnd] is not TextNode)
             {
-                for (int k = i; k < preEnd; k++) result.Add(nodes[k]);
+                for (int k = i; k < preEnd; k++)
+                {
+                    result.Add(nodes[k]);
+                }
+
                 i = preEnd;
                 continue;
             }
@@ -807,14 +1016,21 @@ public partial class CradleExtractor
 
             if (preTexts.Any(t => TextNodeReferencesAny(t, assignedVars)))
             {
-                for (int k = i; k < preEnd; k++) result.Add(nodes[k]);
+                for (int k = i; k < preEnd; k++)
+                {
+                    result.Add(nodes[k]);
+                }
+
                 i = preEnd;
                 continue;
             }
 
             // Gather post-text run
             int postEnd = assignEnd;
-            while (postEnd < nodes.Count && nodes[postEnd] is TextNode) postEnd++;
+            while (postEnd < nodes.Count && nodes[postEnd] is TextNode)
+            {
+                postEnd++;
+            }
 
             // Emit: assigns, then merged text (pre + post)
             result.AddRange(assigns);
@@ -822,9 +1038,13 @@ public partial class CradleExtractor
             foreach (var t in preTexts.Concat(nodes[assignEnd..postEnd].Cast<TextNode>()))
             {
                 if (t.Template is not null)
+                {
                     allRuns.Add(new TextRun { Text = t.Template, Style = t.Style });
+                }
                 else
+                {
                     allRuns.AddRange(t.Runs);
+                }
             }
             var dominantStyle = ComputeDominantStyle(allRuns);
             var mergedTemplate = BuildTemplate(allRuns, dominantStyle);
@@ -850,7 +1070,9 @@ public partial class CradleExtractor
     private static List<MwsNode> HoistConditionalLets(List<MwsNode> nodes)
     {
         if (!nodes.Any(n => n is ConditionalNode c && IsHoistableConditionalLets(c)))
+        {
             return nodes;
+        }
 
         var result = new List<MwsNode>(nodes.Count + 2);
         foreach (var node in nodes)
@@ -870,27 +1092,47 @@ public partial class CradleExtractor
                 result.Add(new TextNode { Template = $"{{{canonical}}}", Style = style });
             }
             else
+            {
                 result.Add(node);
+            }
         }
         return result;
     }
 
     private static bool IsHoistableConditionalLets(ConditionalNode cond)
     {
-        if (cond.Branches.Count < 2) return false;
+        if (cond.Branches.Count < 2)
+        {
+            return false;
+        }
+
         foreach (var branch in cond.Branches)
         {
-            if (branch.Nodes.Count != 2) return false;
+            if (branch.Nodes.Count != 2)
+            {
+                return false;
+            }
             // Accept both [LetNode, TextNode] and [TextNode, LetNode] orderings
             var let = branch.Nodes.OfType<LetNode>().FirstOrDefault();
             var txt = branch.Nodes.OfType<TextNode>().FirstOrDefault();
-            if (let is null || let.Random is null) return false;
-            if (txt is null) return false;
+            if (let is null || let.Random is null)
+            {
+                return false;
+            }
+
+            if (txt is null)
+            {
+                return false;
+            }
+
             var expected = $"{{{let.Var}}}";
             bool match = txt.Template == expected
                 || (txt.Template is null && txt.Runs is { Count: 1 }
                     && txt.Runs[0].Text == expected && txt.Runs[0].AssetRef is null);
-            if (!match) return false;
+            if (!match)
+            {
+                return false;
+            }
         }
         return true;
     }
@@ -903,7 +1145,9 @@ public partial class CradleExtractor
     private static List<MwsNode> HoistAndMergeSwitchLets(List<MwsNode> nodes)
     {
         if (!nodes.Any(n => n is SwitchNode sw && IsHoistableSwitchLets(sw)))
+        {
             return nodes;
+        }
 
         var result = new List<MwsNode>(nodes.Count + 1);
         int i = 0;
@@ -925,7 +1169,10 @@ public partial class CradleExtractor
             foreach (var c in sw.Cases)
             {
                 foreach (var let in c.Nodes.OfType<LetNode>())
+                {
                     let.Var = canonical;
+                }
+
                 c.Nodes.RemoveAll(n => n is TextNode);
             }
 
@@ -935,9 +1182,13 @@ public partial class CradleExtractor
             {
                 result.RemoveAt(result.Count - 1);
                 if (preT.Template is not null)
+                {
                     preRuns.Insert(0, new TextRun { Text = preT.Template, Style = preT.Style });
+                }
                 else
+                {
                     preRuns.InsertRange(0, preT.Runs);
+                }
             }
 
             // Consume following text nodes.
@@ -947,9 +1198,13 @@ public partial class CradleExtractor
             {
                 i++;
                 if (postT.Template is not null)
+                {
                     postRuns.Add(new TextRun { Text = postT.Template, Style = postT.Style });
+                }
                 else
+                {
                     postRuns.AddRange(postT.Runs);
+                }
             }
 
             // Emit: hoisted switch (now all-LetNode cases), then merged text with {canonical} inlined.
@@ -977,15 +1232,34 @@ public partial class CradleExtractor
 
     private static bool IsHoistableSwitchLets(SwitchNode sw)
     {
-        if (sw.Cases.Count < 2) return false;
+        if (sw.Cases.Count < 2)
+        {
+            return false;
+        }
+
         foreach (var c in sw.Cases)
         {
-            if (c.Nodes.Count != 2) return false;
+            if (c.Nodes.Count != 2)
+            {
+                return false;
+            }
+
             var let = c.Nodes.OfType<LetNode>().FirstOrDefault();
             var txt = c.Nodes.OfType<TextNode>().FirstOrDefault();
-            if (let is null || (let.Compute is null && let.Random is null)) return false;
-            if (txt is null) return false;
-            if (!IsSingleVarTemplate(txt, let.Var)) return false;
+            if (let is null || (let.Compute is null && let.Random is null))
+            {
+                return false;
+            }
+
+            if (txt is null)
+            {
+                return false;
+            }
+
+            if (!IsSingleVarTemplate(txt, let.Var))
+            {
+                return false;
+            }
         }
         return true;
     }
@@ -995,9 +1269,12 @@ public partial class CradleExtractor
     {
         var expected = $"{{{varName}}}";
         if (txt.Template is not null)
+        {
             return txt.Template == expected
                 || txt.Template == $"**{expected}**"
                 || txt.Template == $"_{expected}_";
+        }
+
         if (txt.Runs is { Count: 1 })
         {
             var r = txt.Runs[0];
@@ -1012,8 +1289,16 @@ public partial class CradleExtractor
     private static string? GetSingleVarInlineStyle(TextNode txt, string varName)
     {
         var tmpl = txt.Template ?? txt.Runs?.FirstOrDefault()?.Text;
-        if (tmpl == $"**{{{varName}}}**") return "bold";
-        if (tmpl == $"_{{{varName}}}_") return "italic";
+        if (tmpl == $"**{{{varName}}}**")
+        {
+            return "bold";
+        }
+
+        if (tmpl == $"_{{{varName}}}_")
+        {
+            return "italic";
+        }
+
         return null;
     }
 
@@ -1021,16 +1306,29 @@ public partial class CradleExtractor
     private static string? TryExtractSingleVarRef(TextNode txt)
     {
         var tmpl = txt.Template ?? txt.Runs?.FirstOrDefault()?.Text;
-        if (tmpl is null) return null;
+        if (tmpl is null)
+        {
+            return null;
+        }
+
         string inner;
         if (tmpl.StartsWith("**{") && tmpl.EndsWith("}**"))
+        {
             inner = tmpl[3..^3];
+        }
         else if (tmpl.StartsWith("_{") && tmpl.EndsWith("}_"))
+        {
             inner = tmpl[2..^2];
+        }
         else if (tmpl.StartsWith("{") && tmpl.EndsWith("}"))
+        {
             inner = tmpl[1..^1];
+        }
         else
+        {
             return null;
+        }
+
         return inner.Length > 0 && !inner.Contains('{') && !inner.Contains('}') ? inner : null;
     }
 
@@ -1039,16 +1337,30 @@ public partial class CradleExtractor
     private static bool IsHoistableVarNameSwitch(SwitchNode sw)
     {
         var matchCases = sw.Cases.Where(c => c.Default != true).ToList();
-        if (matchCases.Count < 2) return false;
+        if (matchCases.Count < 2)
+        {
+            return false;
+        }
+
         foreach (var c in matchCases)
         {
-            if (c.Nodes.Count != 1 || c.Nodes[0] is not TextNode txt) return false;
-            if (TryExtractSingleVarRef(txt) is null) return false;
+            if (c.Nodes.Count != 1 || c.Nodes[0] is not TextNode txt)
+            {
+                return false;
+            }
+
+            if (TryExtractSingleVarRef(txt) is null)
+            {
+                return false;
+            }
         }
         var defaultCase = sw.Cases.FirstOrDefault(c => c.Default == true);
         if (defaultCase is not null)
         {
-            if (defaultCase.Nodes.Count != 1 || defaultCase.Nodes[0] is not GotoNode) return false;
+            if (defaultCase.Nodes.Count != 1 || defaultCase.Nodes[0] is not GotoNode)
+            {
+                return false;
+            }
         }
         return true;
     }
@@ -1056,13 +1368,41 @@ public partial class CradleExtractor
     private static HashSet<string> GetAllModifiedVars(EffectNode e)
     {
         var vars = new HashSet<string>(StringComparer.Ordinal);
-        if (e.VarSets is not null) vars.UnionWith(e.VarSets.Keys);
-        if (e.VarMath is not null) vars.UnionWith(e.VarMath.Keys);
-        if (e.VarRandom is not null) vars.UnionWith(e.VarRandom.Keys);
-        if (e.VarPush is not null) vars.UnionWith(e.VarPush.Keys);
-        if (e.VarPop is not null) vars.Add(e.VarPop);
-        if (e.VarSort is not null) vars.UnionWith(e.VarSort.Keys);
-        if (e.VarRemove is not null) vars.UnionWith(e.VarRemove.Keys);
+        if (e.VarSets is not null)
+        {
+            vars.UnionWith(e.VarSets.Keys);
+        }
+
+        if (e.VarMath is not null)
+        {
+            vars.UnionWith(e.VarMath.Keys);
+        }
+
+        if (e.VarRandom is not null)
+        {
+            vars.UnionWith(e.VarRandom.Keys);
+        }
+
+        if (e.VarPush is not null)
+        {
+            vars.UnionWith(e.VarPush.Keys);
+        }
+
+        if (e.VarPop is not null)
+        {
+            vars.Add(e.VarPop);
+        }
+
+        if (e.VarSort is not null)
+        {
+            vars.UnionWith(e.VarSort.Keys);
+        }
+
+        if (e.VarRemove is not null)
+        {
+            vars.UnionWith(e.VarRemove.Keys);
+        }
+
         return vars;
     }
 
@@ -1081,13 +1421,19 @@ public partial class CradleExtractor
         {
             if (node is LetNode let && let.Var.StartsWith(prefix, StringComparison.Ordinal)
                 && int.TryParse(let.Var[prefix.Length..], out var n))
+            {
                 max = Math.Max(max, n);
+            }
             else if (node is EffectNode eff && eff.VarRandom is not null)
             {
                 foreach (var key in eff.VarRandom.Keys)
+                {
                     if (key.StartsWith(prefix, StringComparison.Ordinal)
                         && int.TryParse(key[prefix.Length..], out var n2))
+                    {
                         max = Math.Max(max, n2);
+                    }
+                }
             }
             IEnumerable<MwsNode> children = node switch
             {
@@ -1110,7 +1456,9 @@ public partial class CradleExtractor
         List<MwsNode> nodes, string safeName, ref int rndSeq)
     {
         if (!nodes.Any(n => n is SwitchNode sw && IsHoistableVarNameSwitch(sw)))
+        {
             return nodes;
+        }
 
         var result = new List<MwsNode>(nodes.Count + 1);
         int i = 0;
@@ -1183,12 +1531,28 @@ public partial class CradleExtractor
     {
         if (node is TextNode t)
         {
-            if (t.Template is not null) return true;
-            if (t.Runs.All(r => r.AssetRef is null)) return true;
+            if (t.Template is not null)
+            {
+                return true;
+            }
+
+            if (t.Runs.All(r => r.AssetRef is null))
+            {
+                return true;
+            }
+
             return group.Count > 0; // icon-only: only extends existing group
         }
-        if (group.Count == 0) return false;
-        if (node is LetNode) return true;
+        if (group.Count == 0)
+        {
+            return false;
+        }
+
+        if (node is LetNode)
+        {
+            return true;
+        }
+
         return IsRndOnlyEffect(node) || IsPromotableConditional(node);
     }
 
@@ -1207,26 +1571,56 @@ public partial class CradleExtractor
         foreach (var varName in varNames)
         {
             var token = $"{{{varName}}}";
-            if (t.Template?.Contains(token) == true) return true;
-            if (t.Runs is not null && t.Runs.Any(r => r.Text?.Contains(token) == true)) return true;
+            if (t.Template?.Contains(token) == true)
+            {
+                return true;
+            }
+
+            if (t.Runs is not null && t.Runs.Any(r => r.Text?.Contains(token) == true))
+            {
+                return true;
+            }
         }
         return false;
     }
 
     private static bool IsRndOnlyEffect(MwsNode node)
     {
-        if (node is not EffectNode e) return false;
-        if (e.VarSets is { Count: > 0 }) return false;
-        if (e.VarMath is { Count: > 0 }) return false;
-        if (e.VarRandom is null || e.VarRandom.Count == 0) return false;
+        if (node is not EffectNode e)
+        {
+            return false;
+        }
+
+        if (e.VarSets is { Count: > 0 })
+        {
+            return false;
+        }
+
+        if (e.VarMath is { Count: > 0 })
+        {
+            return false;
+        }
+
+        if (e.VarRandom is null || e.VarRandom.Count == 0)
+        {
+            return false;
+        }
+
         return e.VarRandom.Keys.All(k => k.StartsWith("_rnd_"));
     }
 
     private static bool IsPromotableConditional(MwsNode node)
     {
-        if (node is not ConditionalNode cond) return false;
+        if (node is not ConditionalNode cond)
+        {
+            return false;
+        }
         // Vacuously-empty branches are not promotable (they have no effect to move)
-        if (cond.Branches.All(b => b.Nodes.Count == 0)) return false;
+        if (cond.Branches.All(b => b.Nodes.Count == 0))
+        {
+            return false;
+        }
+
         return cond.Branches.All(b => b.Nodes.All(n => n is EffectNode or LetNode));
     }
 
@@ -1236,11 +1630,17 @@ public partial class CradleExtractor
         {
             case ConditionalNode cond:
                 foreach (var b in cond.Branches)
+                {
                     b.Nodes = ConsolidateTextNodes(b.Nodes);
+                }
+
                 break;
             case SwitchNode sw:
                 foreach (var c in sw.Cases)
+                {
                     c.Nodes = ConsolidateTextNodes(c.Nodes);
+                }
+
                 break;
             case SectionBodyNode section:
                 section.Nodes = ConsolidateTextNodes(section.Nodes);
@@ -1343,7 +1743,11 @@ public partial class CradleExtractor
     // a plain if/else into a switch.
     private static SwitchNode? TryConvertCompoundConditionalToSwitch(ConditionalNode cond)
     {
-        if (cond.Branches.Count < 2) return null;
+        if (cond.Branches.Count < 2)
+        {
+            return null;
+        }
+
         bool allowSimpleConditions = cond.Branches.Count >= 3;
         string? switchVar = null;
         var cases = new List<SwitchCase>();
@@ -1355,29 +1759,55 @@ public partial class CradleExtractor
                 cases.Add(new SwitchCase { Default = true, Nodes = branch.Nodes });
                 continue;
             }
-            if (branch.Condition is null) return null;
+            if (branch.Condition is null)
+            {
+                return null;
+            }
 
             var parts = branch.Condition.Split("||", StringSplitOptions.TrimEntries);
-            if (parts.Length < 2 && !allowSimpleConditions) return null;
+            if (parts.Length < 2 && !allowSimpleConditions)
+            {
+                return null;
+            }
 
             var matchValues = new List<object>();
             foreach (var part in parts)
             {
                 var m = SwitchCondRegex().Match(part);
-                if (!m.Success) return null;
-                if (m.Groups[2].Value != "==") return null;
+                if (!m.Success)
+                {
+                    return null;
+                }
+
+                if (m.Groups[2].Value != "==")
+                {
+                    return null;
+                }
+
                 var varName = m.Groups[1].Value;
                 var rawVal = m.Groups[3].Value.Trim();
-                if (rawVal.Contains(' ')) return null;
+                if (rawVal.Contains(' '))
+                {
+                    return null;
+                }
+
                 switchVar ??= varName;
-                if (varName != switchVar) return null;
+                if (varName != switchVar)
+                {
+                    return null;
+                }
+
                 matchValues.Add(BuildMatchValue("==", rawVal));
             }
             var matchObj = matchValues.Count == 1 ? matchValues[0] : (object)matchValues;
             cases.Add(new SwitchCase { Match = matchObj, Nodes = branch.Nodes });
         }
 
-        if (switchVar is null) return null;
+        if (switchVar is null)
+        {
+            return null;
+        }
+
         return new SwitchNode { On = switchVar, Cases = cases, SourceLine = cond.SourceLine };
     }
 
@@ -1387,19 +1817,40 @@ public partial class CradleExtractor
     // exclusive across consecutive if-blocks, so collapsing them to switch is unsafe.
     private static string? TryExtractSwitchVar(ConditionalNode cond)
     {
-        if (cond.Branches.Count == 0 || cond.Branches.Count > 2) return null;
+        if (cond.Branches.Count == 0 || cond.Branches.Count > 2)
+        {
+            return null;
+        }
+
         var first = cond.Branches[0];
-        if (first.Condition is null || first.Else == true) return null;
-        if (cond.Branches.Count == 2 && cond.Branches[1].Else != true) return null;
+        if (first.Condition is null || first.Else == true)
+        {
+            return null;
+        }
+
+        if (cond.Branches.Count == 2 && cond.Branches[1].Else != true)
+        {
+            return null;
+        }
 
         var m = SwitchCondRegex().Match(first.Condition);
-        if (!m.Success) return null;
-        if (m.Groups[2].Value != "==") return null;
+        if (!m.Success)
+        {
+            return null;
+        }
+
+        if (m.Groups[2].Value != "==")
+        {
+            return null;
+        }
 
         // Reject compound values like "2 || x == 3"
         var rawVal = m.Groups[3].Value.Trim();
         bool isQuoted = rawVal.StartsWith('"') && rawVal.EndsWith('"');
-        if (!isQuoted && rawVal.Contains(' ')) return null;
+        if (!isQuoted && rawVal.Contains(' '))
+        {
+            return null;
+        }
 
         return m.Groups[1].Value;
     }
@@ -1421,7 +1872,9 @@ public partial class CradleExtractor
                 Nodes = first.Nodes,
             });
             if (k == run.Count - 1 && HasElseBranch(cond))
+            {
                 cases.Add(new SwitchCase { Default = true, Nodes = cond.Branches[^1].Nodes });
+            }
         }
         return new SwitchNode { On = varName, Cases = cases, SourceLine = run[0].SourceLine };
     }
@@ -1431,8 +1884,15 @@ public partial class CradleExtractor
         if (op == "==")
         {
             if (rawVal.StartsWith('"') && rawVal.EndsWith('"'))
+            {
                 return rawVal[1..^1];
-            if (int.TryParse(rawVal, out var n)) return n;
+            }
+
+            if (int.TryParse(rawVal, out var n))
+            {
+                return n;
+            }
+
             return rawVal;
         }
         return $"{op}{rawVal}";
@@ -1450,16 +1910,27 @@ public partial class CradleExtractor
             {
                 case EffectNode e when e.VarRandom is not null:
                     foreach (var key in e.VarRandom.Keys.ToList())
+                    {
                         e.VarRandom[key] = NormalizeVarRandom(e.VarRandom[key]);
+                    }
+
                     break;
                 case LetNode let when let.Random is not null:
                     let.Random = NormalizeVarRandom(let.Random);
                     break;
                 case ConditionalNode cond:
-                    foreach (var b in cond.Branches) NormalizeAllVarRandoms(b.Nodes);
+                    foreach (var b in cond.Branches)
+                    {
+                        NormalizeAllVarRandoms(b.Nodes);
+                    }
+
                     break;
                 case SwitchNode sw:
-                    foreach (var c in sw.Cases) NormalizeAllVarRandoms(c.Nodes);
+                    foreach (var c in sw.Cases)
+                    {
+                        NormalizeAllVarRandoms(c.Nodes);
+                    }
+
                     break;
                 case SectionBodyNode section:
                     NormalizeAllVarRandoms(section.Nodes);
@@ -1482,8 +1953,16 @@ public partial class CradleExtractor
 
     private static VarRandom NormalizeVarRandom(VarRandom vr)
     {
-        if (vr.RandomType != "choose-one" || vr.Values.Count < 2) return vr;
-        if (!IsContiguousIntegerList(vr.Values, out var min, out var max)) return vr;
+        if (vr.RandomType != "choose-one" || vr.Values.Count < 2)
+        {
+            return vr;
+        }
+
+        if (!IsContiguousIntegerList(vr.Values, out var min, out var max))
+        {
+            return vr;
+        }
+
         return new VarRandom { RandomType = "rand-between", Min = min, Max = max };
     }
 
@@ -1493,22 +1972,45 @@ public partial class CradleExtractor
         var ints = new List<int>(values.Count);
         foreach (var v in values)
         {
-            if (v is int i) ints.Add(i);
-            else if (v is long l) ints.Add((int)l);
-            else return false;
+            if (v is int i)
+            {
+                ints.Add(i);
+            }
+            else if (v is long l)
+            {
+                ints.Add((int)l);
+            }
+            else
+            {
+                return false;
+            }
         }
-        if (ints.Count < 2) return false;
+        if (ints.Count < 2)
+        {
+            return false;
+        }
+
         ints.Sort();
         min = ints[0]; max = ints[^1];
         for (int k = 1; k < ints.Count; k++)
-            if (ints[k] != ints[k - 1] + 1) return false;
+        {
+            if (ints[k] != ints[k - 1] + 1)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
     private static string? ComputeDominantStyle(List<TextRun> runs)
     {
         var significant = runs.Where(r => r.Text?.Trim().Length > 0).ToList();
-        if (significant.Count == 0) return null;
+        if (significant.Count == 0)
+        {
+            return null;
+        }
+
         var first = significant[0].Style;
         return significant.All(r => r.Style == first) ? first : null;
     }
@@ -1528,7 +2030,10 @@ public partial class CradleExtractor
                 sb.Append($"{{icon:{slug}}}");
                 continue;
             }
-            if (run.Text is null) continue;
+            if (run.Text is null)
+            {
+                continue;
+            }
 
             // Dominant style is already expressed at the node level — don't repeat it inline
             var effective = run.Style == dominantStyle ? null : run.Style;
@@ -1543,8 +2048,15 @@ public partial class CradleExtractor
             sb.Append(run.Text);
         }
 
-        if (inBold) sb.Append("**");
-        if (inItalic) sb.Append("_");
+        if (inBold)
+        {
+            sb.Append("**");
+        }
+
+        if (inItalic)
+        {
+            sb.Append("_");
+        }
 
         return sb.ToString();
     }
@@ -1557,7 +2069,10 @@ public partial class CradleExtractor
     private static (string source, bool isComplete) PrepareSource(string content)
     {
         if (content.Contains("public partial class @") || content.Contains("\npublic partial class "))
+        {
             return (content, true);
+        }
+
         return (WrapPartialClass(content), false);
     }
 

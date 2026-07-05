@@ -85,11 +85,16 @@ public class PassageBodyVisitor
             _currentStatementLine = GetLine(stmt);
 
             // Skip Cradle cleanup artifacts: StyleScope styleScope = null;
-            if (IsCradleCleanupStatement(stmt)) continue;
+            if (IsCradleCleanupStatement(stmt))
+            {
+                continue;
+            }
 
             // yield break — end of iterator
             if (stmt is YieldStatementSyntax { RawKind: (int)SyntaxKind.YieldBreakStatement })
+            {
                 break;
+            }
 
             // yield return <expr>
             if (stmt is YieldStatementSyntax { RawKind: (int)SyntaxKind.YieldReturnStatement } ys)
@@ -154,7 +159,11 @@ public class PassageBodyVisitor
             // Expression statements: assignments, Unity API calls
             if (stmt is ExpressionStatementSyntax es)
             {
-                if (IsIgnorableAssignment(es)) continue;
+                if (IsIgnorableAssignment(es))
+                {
+                    continue;
+                }
+
                 var nodes = ProcessExpressionStatement(es);
                 TagNodes(nodes, _currentStatementLine);
                 result.AddRange(FlushAndAdd(nodes));
@@ -190,7 +199,12 @@ public class PassageBodyVisitor
     private static void TagNodes(List<MwsNode> nodes, int? line)
     {
         foreach (var n in nodes)
-            if (n.SourceLine is null) n.SourceLine = line;
+        {
+            if (n.SourceLine is null)
+            {
+                n.SourceLine = line;
+            }
+        }
     }
 
     // ── Style scope handling ───────────────────────────────────────────────
@@ -243,7 +257,10 @@ public class PassageBodyVisitor
 
     private List<MwsNode> ProcessYieldExpression(ExpressionSyntax expr)
     {
-        if (expr is not InvocationExpressionSyntax inv) return [Unknown(expr)];
+        if (expr is not InvocationExpressionSyntax inv)
+        {
+            return [Unknown(expr)];
+        }
 
         var methodName = GetSimpleMethodName(inv);
 
@@ -263,10 +280,16 @@ public class PassageBodyVisitor
     private List<MwsNode> ProcessTextInvocation(InvocationExpressionSyntax inv)
     {
         var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-        if (arg is null) return [];
+        if (arg is null)
+        {
+            return [];
+        }
 
         var currentStyle = _styleStack.Count > 0 ? _styleStack.Peek() : null;
-        if (currentStyle == "hubTitle") currentStyle = null; // handled by scope
+        if (currentStyle == "hubTitle")
+        {
+            currentStyle = null; // handled by scope
+        }
 
         // string literal
         if (arg is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
@@ -288,16 +311,22 @@ public class PassageBodyVisitor
                 foreach (var (t, assetRef) in richRuns)
                 {
                     if (assetRef is not null)
+                    {
                         AddRun(new TextRun { AssetRef = assetRef });
+                    }
                     else if (!string.IsNullOrEmpty(t))
+                    {
                         AddRun(new TextRun { Text = t, Style = currentStyle });
+                    }
                 }
             }
             else
             {
                 var cleaned = _spriteMapper.StripLayoutTags(raw);
                 if (!string.IsNullOrEmpty(cleaned))
+                {
                     AddRun(new TextRun { Text = cleaned, Style = currentStyle });
+                }
             }
             return [];
         }
@@ -456,16 +485,22 @@ public class PassageBodyVisitor
                 foreach (var (t2, assetRef2) in richRuns2)
                 {
                     if (assetRef2 is not null)
+                    {
                         AddRun(new TextRun { AssetRef = assetRef2 });
+                    }
                     else if (!string.IsNullOrEmpty(t2))
+                    {
                         AddRun(new TextRun { Text = t2, Style = style });
+                    }
                 }
             }
             else
             {
                 var cleaned2 = _spriteMapper.StripLayoutTags(raw2);
                 if (!string.IsNullOrEmpty(cleaned2))
+                {
                     AddRun(new TextRun { Text = cleaned2, Style = style });
+                }
             }
             return [];
         }
@@ -547,15 +582,22 @@ public class PassageBodyVisitor
     private List<MwsNode> ProcessPassageInclusionNodes(InvocationExpressionSyntax inv)
     {
         var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-        if (arg is null) return [Unknown(inv)];
+        if (arg is null)
+        {
+            return [Unknown(inv)];
+        }
 
         var passageName = GetStringValue(arg);
         if (passageName is not null)
+        {
             return [new IncludePassageNode { Target = passageName }];
+        }
 
         // base.passage(this.Vars.X, ...) — dynamic inclusion via variable
         if (IsVarAccess(arg, out var targetVar))
+        {
             return [new IncludePassageNode { Target = $"${{{targetVar}}}" }];
+        }
 
         // base.passage(macros1.either([list of string passage IDs])) — random passage pick.
         // Emit: let var = choose-one(ids); include-passage target: '${var}'
@@ -586,15 +628,22 @@ public class PassageBodyVisitor
     {
         // abort(goToPassage: "Name") or abort("Name") or abort(this.Vars.X)
         var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-        if (arg is null) return [Unknown(inv)];
+        if (arg is null)
+        {
+            return [Unknown(inv)];
+        }
 
         var target = GetStringValue(arg);
         if (target is not null)
+        {
             return [new GotoNode { Target = target }];
+        }
 
         // Variable target: abort(this.Vars.tempeffect)
         if (IsVarAccess(arg, out var varName))
+        {
             return [new GotoNode { Target = $"${{{varName}}}" }];
+        }
 
         // abort(either([id1, id2, ...])) — random goto
         if (arg is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
@@ -625,7 +674,9 @@ public class PassageBodyVisitor
         {
             var effect = ProcessAssignment(assign, out var preamble);
             if (effect is not null)
+            {
                 return preamble is not null ? [..preamble, effect] : [effect];
+            }
         }
 
         // ViewItemObtain.SetupPassagename = "X"
@@ -637,7 +688,9 @@ public class PassageBodyVisitor
 
         // ViewController.instance.ChangeView(...)
         if (expr is InvocationExpressionSyntax cvi && IsChangeViewMainMenu(cvi))
+        {
             return [new GotoMenuNode { Target = "main_menu" }];
+        }
 
         // PassageTracker.instance.CheckProgress(current, target)
         if (expr is InvocationExpressionSyntax cpInv && IsCheckProgress(cpInv, out var cp))
@@ -650,9 +703,14 @@ public class PassageBodyVisitor
             {
                 var targetVar = cpTargetId.Identifier.Text;
                 if (_localVars.TryGetValue(targetVar, out var literalTarget) && !string.IsNullOrEmpty(literalTarget))
+                {
                     return [new GotoNode { Target = literalTarget }];
+                }
+
                 if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
+                {
                     return BuildGotoNodesFromLetConditionals(psnNodes);
+                }
             }
             return [cp!];
         }
@@ -667,7 +725,9 @@ public class PassageBodyVisitor
 
         // ViewGenerationEnding, ViewPopupPanel utility calls — skip
         if (expr is InvocationExpressionSyntax utilInv && IsIgnorableCall(utilInv))
+        {
             return [];
+        }
 
         // Noop comparison: "this.Vars.X op value;" with no assignment.
         // Cradle emits these for conditional blocks that existed in the original
@@ -686,7 +746,9 @@ public class PassageBodyVisitor
 
         // EOG delegate invocation: s_OnEndOfGeneration(arg, N) or direct ViewEndOfGeneration.S_OnEndOfGeneration(...)
         if (expr is InvocationExpressionSyntax eogInv && TryBuildEogNode(eogInv, out var eogNode))
+        {
             return [eogNode!];
+        }
 
         // ViewEndOfGeneration.S_OnEndOfGeneration?.Invoke(msg, N) — null-conditional form in complete-class files
         if (expr is ConditionalAccessExpressionSyntax condEog &&
@@ -699,14 +761,21 @@ public class PassageBodyVisitor
             {
                 var msgExpr = condArgs[0].Expression;
                 if (msgExpr is LiteralExpressionSyntax condLit && condLit.IsKind(SyntaxKind.StringLiteralExpression))
+                {
                     condMsg = condLit.Token.ValueText;
+                }
                 else if (msgExpr is IdentifierNameSyntax condId &&
                          _localVars.TryGetValue(condId.Identifier.Text, out var storedMsg))
+                {
                     condMsg = storedMsg;
+                }
             }
             int condGen = 0;
             if (condArgs.Count > 1 && condArgs[1].Expression is LiteralExpressionSyntax condGenLit)
+            {
                 int.TryParse(condGenLit.Token.ValueText, out condGen);
+            }
+
             return [new EndOfGenerationNode { Generation = condGen, Message = condMsg }];
         }
 
@@ -742,7 +811,9 @@ public class PassageBodyVisitor
             var rhs2 = localAppend.Right;
             string addition;
             if (rhs2 is LiteralExpressionSyntax appLit && appLit.IsKind(SyntaxKind.StringLiteralExpression))
+            {
                 addition = _spriteMapper.StripLayoutTags(appLit.Token.ValueText) ?? appLit.Token.ValueText;
+            }
             else if (IsTemplateConcatExpr(rhs2) && ContainsStringOrEither(rhs2))
             {
                 var appendLets = new List<LetNode>();
@@ -751,7 +822,9 @@ public class PassageBodyVisitor
                 addition = appendTmpl.ToString();
             }
             else
+            {
                 addition = $"{{?{Truncate(rhs2.ToString())}}}";
+            }
 
             _localVars[localAppendId.Identifier.Text] = existingVal + addition;
             return [];
@@ -767,10 +840,15 @@ public class PassageBodyVisitor
         {
             var listArg = listRemoveInv.ArgumentList.Arguments[0].Expression;
             // Remove(intLiteral) — already covered by var_remove on the Vars array; suppress
-            if (listArg is LiteralExpressionSyntax) return [];
+            if (listArg is LiteralExpressionSyntax)
+            {
+                return [];
+            }
             // Remove(Vars.X) — emit var_remove on the mirrored Vars array
             if (IsVarAccess(listArg, out var removeVar) && listVarsRef is not null)
+            {
                 return [new EffectNode { VarRemove = new() { [listVarsRef] = $"{{{removeVar}}}" } }];
+            }
         }
 
         // ViewBiddingSystem.instance.OnShowBidding("passage", BiddingSystem.Mode)
@@ -806,10 +884,16 @@ public class PassageBodyVisitor
     {
         preamble = null;
         // Must be this.Vars.X = ...
-        if (!IsVarAccess(assign.Left, out var varName)) return null;
+        if (!IsVarAccess(assign.Left, out var varName))
+        {
+            return null;
+        }
         // Unwrap outer parentheses so patterns like ((cond) ? a : b) are handled correctly
         ExpressionSyntax right = assign.Right;
-        while (right is ParenthesizedExpressionSyntax outerParen) right = outerParen.Expression;
+        while (right is ParenthesizedExpressionSyntax outerParen)
+        {
+            right = outerParen.Expression;
+        }
 
         // Direct literal assignment
         if (right is LiteralExpressionSyntax lit2)
@@ -878,7 +962,9 @@ public class PassageBodyVisitor
         {
             var mathExpr = ExtractVarMath(bin, varName!);
             if (mathExpr is not null)
+            {
                 return new EffectNode { VarMath = new() { [varName!] = mathExpr } };
+            }
 
             if (bin.OperatorToken.Text == "-")
             {
@@ -892,7 +978,9 @@ public class PassageBodyVisitor
                 {
                     var removeValues = ExtractMacroArgs(removeInv);
                     if (removeValues.Count == 1)
+                    {
                         return new EffectNode { VarRemove = new() { [varName!] = removeValues[0].ToString()! } };
+                    }
                 }
 
                 // var - either([vals]) / var - int.Parse(either([vals]))
@@ -944,7 +1032,9 @@ public class PassageBodyVisitor
                 // Sum of 3+ variable references: VarA + VarB + VarC + ...
                 var sumVars = new List<string>();
                 if (TryExtractVarAddChain(bin, sumVars) && sumVars.Count >= 3)
+                {
                     return new EffectNode { VarSets = new() { [varName!] = string.Join(" + ", sumVars.Select(v => $"{{{v}}}")) } };
+                }
             }
 
             // General arithmetic with int.Parse() stripping.
@@ -953,7 +1043,9 @@ public class PassageBodyVisitor
             {
                 var arithExpr = TryBuildArithExpr(bin);
                 if (arithExpr is not null)
+                {
                     return new EffectNode { VarMath = new() { [varName!] = $"= {arithExpr}" } };
+                }
             }
         }
 
@@ -1019,8 +1111,11 @@ public class PassageBodyVisitor
                     var values = ExtractMacroArgs(macroInv);
                     // Track int arrays so localList initializers can find the mirror
                     if (varName is not null && values.All(v => v is int or long))
-                        _passageIntArrayVars[varName] = values.Select(v => Convert.ToInt32(v)).ToList();
-                    return new EffectNode
+                        {
+                            _passageIntArrayVars[varName] = values.Select(v => Convert.ToInt32(v)).ToList();
+                        }
+
+                        return new EffectNode
                     {
                         VarSets = new() { [varName!] = values }
                     };
@@ -1060,8 +1155,11 @@ public class PassageBodyVisitor
 
             // Simple string ternary — warn if either branch can't be cleanly expressed
             if (!IsSimpleValue(whenTrue) || !IsSimpleValue(whenFalse))
+            {
                 _report.AddWarning(_passageName, $"Unresolved ternary branch for {varName}",
                     ternary.ToString(), GetLine(ternary));
+            }
+
             return new EffectNode
             {
                 VarSets = new() { [varName!] = $"({condStr}) ? {GetStringOrLiteral(whenTrue)} : {GetStringOrLiteral(whenFalse)}" }
@@ -1097,14 +1195,21 @@ public class PassageBodyVisitor
         while (current is IfStatementSyntax currentIf)
         {
             if (HasUnresolvableApiCall(currentIf.Condition))
+            {
                 _report.AddWarning(_passageName, "Unresolved API call in condition",
                     currentIf.Condition.ToString(), GetLine(currentIf));
+            }
 
             var condStr = SimplifyCondition(currentIf.Condition.ToString());
             // Translate localIntList.Count references to count(varsArrayRef)
             foreach (var (listName, varsRef) in _localIntLists)
+            {
                 if (varsRef is not null)
+                {
                     condStr = condStr.Replace($"{listName}.Count", $"count({varsRef})");
+                }
+            }
+
             var bodyNodes = currentIf.Statement is BlockSyntax blk
                 ? VisitStatements(blk.Statements)
                 : VisitStatements([currentIf.Statement]);
@@ -1134,7 +1239,10 @@ public class PassageBodyVisitor
         node = null;
         var condStr = ifs.Condition.ToString();
         var elseStmt = ifs.Else?.Statement;
-        if (elseStmt is null) return false;
+        if (elseStmt is null)
+        {
+            return false;
+        }
 
         // Pattern A: main condition contains PassageValueNumber → else has OnGenerationBtn
         if (condStr.Contains("PassageValueNumber"))
@@ -1207,17 +1315,27 @@ public class PassageBodyVisitor
         {
             if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax inv }
                 && GetSimpleMethodName(inv) == "OnGenerationBtn")
+            {
                 return inv;
+            }
+
             if (s is IfStatementSyntax innerIf)
             {
                 var thenStmts = innerIf.Statement is BlockSyntax bt ? bt.Statements.AsEnumerable() : [innerIf.Statement];
                 var found = FindFirstOnGenerationBtn(thenStmts);
-                if (found is not null) return found;
+                if (found is not null)
+                {
+                    return found;
+                }
+
                 if (innerIf.Else is not null)
                 {
                     var elseStmts2 = innerIf.Else.Statement is BlockSyntax be ? be.Statements.AsEnumerable() : [innerIf.Else.Statement];
                     found = FindFirstOnGenerationBtn(elseStmts2);
-                    if (found is not null) return found;
+                    if (found is not null)
+                    {
+                        return found;
+                    }
                 }
             }
         }
@@ -1248,7 +1366,11 @@ public class PassageBodyVisitor
             current = UnwrapParens(ma.Expression);
         }
 
-        if (pairs.Count == 0) return false;
+        if (pairs.Count == 0)
+        {
+            return false;
+        }
+
         baseExpr = current;
         return true;
     }
@@ -1257,17 +1379,44 @@ public class PassageBodyVisitor
     // expression used to pick an element from a local List.
     private static bool IsRandomRangeFromCount(ExpressionSyntax expr, string listName)
     {
-        if (expr is not InvocationExpressionSyntax inv) return false;
-        if (GetSimpleMethodName(inv) != "Range") return false;
+        if (expr is not InvocationExpressionSyntax inv)
+        {
+            return false;
+        }
+
+        if (GetSimpleMethodName(inv) != "Range")
+        {
+            return false;
+        }
+
         var args = inv.ArgumentList.Arguments;
-        if (args.Count != 2) return false;
+        if (args.Count != 2)
+        {
+            return false;
+        }
+
         if (args[0].Expression is not LiteralExpressionSyntax zeroLit ||
             !zeroLit.IsKind(SyntaxKind.NumericLiteralExpression) ||
             Convert.ToInt32(zeroLit.Token.Value) != 0)
+        {
             return false;
-        if (args[1].Expression is not MemberAccessExpressionSyntax countMa) return false;
-        if (countMa.Name.Identifier.Text != "Count") return false;
-        if (countMa.Expression is not IdentifierNameSyntax countId) return false;
+        }
+
+        if (args[1].Expression is not MemberAccessExpressionSyntax countMa)
+        {
+            return false;
+        }
+
+        if (countMa.Name.Identifier.Text != "Count")
+        {
+            return false;
+        }
+
+        if (countMa.Expression is not IdentifierNameSyntax countId)
+        {
+            return false;
+        }
+
         return countId.Identifier.Text == listName;
     }
 
@@ -1280,8 +1429,15 @@ public class PassageBodyVisitor
 
         // Setup if must contain ispopup in the condition and have no else branch
         var setupCond = setupIf.Condition.ToString();
-        if (!setupCond.Contains("ispopup")) return false;
-        if (setupIf.Else is not null) return false;
+        if (!setupCond.Contains("ispopup"))
+        {
+            return false;
+        }
+
+        if (setupIf.Else is not null)
+        {
+            return false;
+        }
 
         var setupBody = setupIf.Statement is BlockSyntax sb ? sb.Statements.AsEnumerable() : [setupIf.Statement];
         InvocationExpressionSyntax? genBtn = null;
@@ -1293,13 +1449,23 @@ public class PassageBodyVisitor
                 genBtn = inv; break;
             }
         }
-        if (genBtn is null) return false;
+        if (genBtn is null)
+        {
+            return false;
+        }
 
         // Store if must contain a PassageValue* call in its condition
         var storeCond = storeIf.Condition.ToString();
-        if (!storeCond.Contains("PassageValueNumber") && !storeCond.Contains("PassageValueString")) return false;
+        if (!storeCond.Contains("PassageValueNumber") && !storeCond.Contains("PassageValueString"))
+        {
+            return false;
+        }
+
         var storeIn = ExtractStoreIn(storeIf.Statement);
-        if (storeIn is null) return false;
+        if (storeIn is null)
+        {
+            return false;
+        }
 
         var args = genBtn.ArgumentList.Arguments;
         var promptId = args.Count > 0 ? GetStringValue(args[0].Expression) ?? _passageName : _passageName;
@@ -1323,11 +1489,20 @@ public class PassageBodyVisitor
     {
         expr = UnwrapParens(expr);
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
             return lit.Token.ValueText;
+        }
+
         if (IsVarAccess(expr, out var v))
+        {
             return $"{{{v}}}";
+        }
+
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
             return ExtractTemplateString(bin.Left) + ExtractTemplateString(bin.Right);
+        }
+
         _report.AddWarning(_passageName, "Unhandled template expression", expr.ToString(), GetLine(expr));
         return $"?({Truncate(expr.ToString())})";
     }
@@ -1337,11 +1512,26 @@ public class PassageBodyVisitor
     private bool IsTemplateConcatExpr(ExpressionSyntax expr)
     {
         expr = UnwrapParens(expr);
-        if (expr is LiteralExpressionSyntax) return true;
-        if (IsVarAccess(expr, out _)) return true;
-        if (expr is InvocationExpressionSyntax inv && GetSimpleMethodName(inv) == "either") return true;
+        if (expr is LiteralExpressionSyntax)
+        {
+            return true;
+        }
+
+        if (IsVarAccess(expr, out _))
+        {
+            return true;
+        }
+
+        if (expr is InvocationExpressionSyntax inv && GetSimpleMethodName(inv) == "either")
+        {
+            return true;
+        }
+
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
             return IsTemplateConcatExpr(bin.Left) && IsTemplateConcatExpr(bin.Right);
+        }
+
         return false;
     }
 
@@ -1350,15 +1540,24 @@ public class PassageBodyVisitor
     private static bool ContainsStringOrEither(ExpressionSyntax expr)
     {
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
             return true;
+        }
+
         if (expr is InvocationExpressionSyntax inv)
         {
             var name = (inv.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text
                 ?? (inv.Expression as IdentifierNameSyntax)?.Identifier.Text;
-            if (name == "either") return true;
+            if (name == "either")
+            {
+                return true;
+            }
         }
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
             return ContainsStringOrEither(bin.Left) || ContainsStringOrEither(bin.Right);
+        }
+
         return false;
     }
 
@@ -1411,7 +1610,10 @@ public class PassageBodyVisitor
             var emptyTags = _pendingUnpreservedTags;
             _pendingUnpreservedTags = [];
             foreach (var (tag, line) in emptyTags)
+            {
                 _report.AddWarning(_passageName, $"Unpreserved layout tag: `{tag}`", null, line);
+            }
+
             return [];
         }
 
@@ -1431,7 +1633,9 @@ public class PassageBodyVisitor
         _pendingUnpreservedTags = [];
 
         foreach (var (tag, line) in unpreservedTags)
+        {
             _report.AddWarning(_passageName, $"Unpreserved layout tag: `{tag}`", null, line);
+        }
 
         // Single AssetRef run with a <size=N> wrapper → image node
         if (size is not null && runs.Count == 1 && runs[0].AssetRef is not null && runs[0].Text is null)
@@ -1459,7 +1663,11 @@ public class PassageBodyVisitor
     // Adds a run to the pending buffer; records the source line of the first run in the group.
     private void AddRun(TextRun run)
     {
-        if (_pendingRuns.Count == 0) _pendingTextStartLine = _currentStatementLine;
+        if (_pendingRuns.Count == 0)
+        {
+            _pendingTextStartLine = _currentStatementLine;
+        }
+
         _pendingRuns.Add(run);
     }
 
@@ -1478,7 +1686,9 @@ public class PassageBodyVisitor
     {
         // Closing tag — ignore; state is cleared at FlushText
         if (AnyClosingTagRegex.IsMatch(raw))
+        {
             return;
+        }
 
         var alignMatch = AlignOpenTagRegex.Match(raw);
         if (alignMatch.Success)
@@ -1516,7 +1726,9 @@ public class PassageBodyVisitor
     {
         // StyleScope styleScope = null;  (local declaration)
         if (stmt is LocalDeclarationStatementSyntax decl)
+        {
             return decl.Declaration.Type.ToString().Contains("StyleScope");
+        }
 
         // stylescopeN = null;  (Cradle nested scope cleanup — any variable name starting with "styleScope")
         if (stmt is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assign })
@@ -1524,7 +1736,9 @@ public class PassageBodyVisitor
             if (assign.Left is IdentifierNameSyntax id &&
                 id.Identifier.Text.StartsWith("styleScope", StringComparison.OrdinalIgnoreCase) &&
                 IsNullLiteral(assign.Right))
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -1533,8 +1747,15 @@ public class PassageBodyVisitor
     {
         scopeName = null; hookId = null;
         var expr = us.Expression ?? us.Declaration?.Variables.FirstOrDefault()?.Initializer?.Value;
-        if (expr is not InvocationExpressionSyntax inv) return false;
-        if (GetSimpleMethodName(inv) != "styleScope") return false;
+        if (expr is not InvocationExpressionSyntax inv)
+        {
+            return false;
+        }
+
+        if (GetSimpleMethodName(inv) != "styleScope")
+        {
+            return false;
+        }
 
         var args = inv.ArgumentList.Arguments;
         scopeName = args.Count > 0 ? GetStringValue(args[0].Expression) : null;
@@ -1546,13 +1767,18 @@ public class PassageBodyVisitor
     {
         // Unwrap else-if: the else clause may be another IfStatementSyntax — look inside its body
         if (ifStatement is IfStatementSyntax innerIf)
+        {
             return ExtractStoreIn(innerIf.Statement);
+        }
+
         var stmts = ifStatement is BlockSyntax b ? b.Statements.AsEnumerable() : [ifStatement];
         foreach (var s in stmts)
         {
             if (s is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assign } &&
                 IsVarAccess(assign.Left, out var varName))
+            {
                 return varName;
+            }
         }
         return null;
     }
@@ -1560,7 +1786,10 @@ public class PassageBodyVisitor
     private static bool IsVarAccess(ExpressionSyntax expr, out string? varName)
     {
         varName = null;
-        if (expr is not MemberAccessExpressionSyntax outer) return false;
+        if (expr is not MemberAccessExpressionSyntax outer)
+        {
+            return false;
+        }
 
         // this.Vars.X  (old partial-class files)
         if (outer.Expression is MemberAccessExpressionSyntax innerMember &&
@@ -1586,9 +1815,15 @@ public class PassageBodyVisitor
     private static string GetSimpleMethodName(InvocationExpressionSyntax inv)
     {
         if (inv.Expression is MemberAccessExpressionSyntax m)
+        {
             return m.Name.Identifier.Text;
+        }
+
         if (inv.Expression is IdentifierNameSyntax id)
+        {
             return id.Identifier.Text;
+        }
+
         return "";
     }
 
@@ -1606,20 +1841,35 @@ public class PassageBodyVisitor
     {
         // Strip the 2-character suffix (st/nd/rd/th) and parse the number.
         if (ordinal.Length >= 3 && int.TryParse(ordinal[..^2], out var n))
+        {
             return n - 1;
+        }
+
         return 0;
     }
 
     private static object LiteralValue(LiteralExpressionSyntax lit)
     {
-        if (lit.IsKind(SyntaxKind.StringLiteralExpression)) return lit.Token.ValueText;
+        if (lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            return lit.Token.ValueText;
+        }
+
         if (lit.IsKind(SyntaxKind.NumericLiteralExpression))
         {
             var val = lit.Token.Value;
             return val is double d ? (int)d : val ?? 0;
         }
-        if (lit.IsKind(SyntaxKind.TrueLiteralExpression)) return true;
-        if (lit.IsKind(SyntaxKind.FalseLiteralExpression)) return false;
+        if (lit.IsKind(SyntaxKind.TrueLiteralExpression))
+        {
+            return true;
+        }
+
+        if (lit.IsKind(SyntaxKind.FalseLiteralExpression))
+        {
+            return false;
+        }
+
         return lit.Token.ValueText;
     }
 
@@ -1627,13 +1877,20 @@ public class PassageBodyVisitor
     {
         if (expr is LiteralExpressionSyntax lit &&
             double.TryParse(lit.Token.ValueText, out var d))
+        {
             return (int)d;
+        }
+
         return null;
     }
 
     private static ExpressionSyntax UnwrapParens(ExpressionSyntax expr)
     {
-        while (expr is ParenthesizedExpressionSyntax p) expr = p.Expression;
+        while (expr is ParenthesizedExpressionSyntax p)
+        {
+            expr = p.Expression;
+        }
+
         return expr;
     }
 
@@ -1644,7 +1901,10 @@ public class PassageBodyVisitor
             (inv.Expression is IdentifierNameSyntax { Identifier.Text: "Parse" } ||
              (inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Parse")) &&
             inv.ArgumentList.Arguments.Count == 1)
+        {
             return inv.ArgumentList.Arguments[0].Expression;
+        }
+
         return expr;
     }
 
@@ -1721,9 +1981,15 @@ public class PassageBodyVisitor
     private EffectNode BuildBranchEffect(string varName, ExpressionSyntax expr)
     {
         if (IsVarAccess(expr, out var v))
+        {
             return new EffectNode { VarSets = new() { [varName] = $"{{{v}}}" } };
+        }
+
         if (expr is LiteralExpressionSyntax lit)
+        {
             return new EffectNode { VarSets = new() { [varName] = lit.Token.ValueText } };
+        }
+
         if (expr is InvocationExpressionSyntax inv)
         {
             var macroName = GetSimpleMethodName(inv);
@@ -1746,8 +2012,16 @@ public class PassageBodyVisitor
 
     private static string? GetStringOrLiteral(ExpressionSyntax expr)
     {
-        if (expr is LiteralExpressionSyntax lit) return lit.Token.ValueText;
-        if (IsVarAccess(expr, out var v)) return $"{{{v}}}";
+        if (expr is LiteralExpressionSyntax lit)
+        {
+            return lit.Token.ValueText;
+        }
+
+        if (IsVarAccess(expr, out var v))
+        {
+            return $"{{{v}}}";
+        }
+
         return expr.ToString();
     }
 
@@ -1757,22 +2031,37 @@ public class PassageBodyVisitor
     {
         expr = UnwrapParens(expr);
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
             return lit.Token.ValueText;
-        if (IsVarAccess(expr, out var v)) return $"{{{v}}}";
+        }
+
+        if (IsVarAccess(expr, out var v))
+        {
+            return $"{{{v}}}";
+        }
         // Vars.X.ToString() — strip the no-op .ToString() call
         if (expr is InvocationExpressionSyntax toStringInv
             && toStringInv.ArgumentList.Arguments.Count == 0
             && toStringInv.Expression is MemberAccessExpressionSyntax toStringMa2
             && toStringMa2.Name.Identifier.Text == "ToString"
             && IsVarAccess(toStringMa2.Expression, out var tsv))
+        {
             return $"{{{tsv}}}";
+        }
+
         if (expr is IdentifierNameSyntax id && _localVars.TryGetValue(id.Identifier.Text, out var lv))
+        {
             return lv;
+        }
+
         if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
         {
             var left = TryBuildConcatString(bin.Left);
             var right = TryBuildConcatString(bin.Right);
-            if (left is not null && right is not null) return left + right;
+            if (left is not null && right is not null)
+            {
+                return left + right;
+            }
         }
         return null;
     }
@@ -1789,17 +2078,32 @@ public class PassageBodyVisitor
             {
                 foreach (var elem in arr.Initializer.Expressions)
                 {
-                    if (elem is LiteralExpressionSyntax lit2) result.Add(LiteralValue(lit2));
-                    else if (IsVarAccess(elem, out var vn)) result.Add($"{{{vn}}}");
-                    else result.Add((object?)TryBuildConcatString(elem) ?? elem.ToString());
+                    if (elem is LiteralExpressionSyntax lit2)
+                    {
+                        result.Add(LiteralValue(lit2));
+                    }
+                    else if (IsVarAccess(elem, out var vn))
+                    {
+                        result.Add($"{{{vn}}}");
+                    }
+                    else
+                    {
+                        result.Add((object?)TryBuildConcatString(elem) ?? elem.ToString());
+                    }
                 }
             }
             else if (arg.Expression is LiteralExpressionSyntax lit3)
+            {
                 result.Add(LiteralValue(lit3));
+            }
             else if (IsVarAccess(arg.Expression, out var vn2))
+            {
                 result.Add($"{{{vn2}}}");
+            }
             else if (TryBuildConcatString(arg.Expression) is { } sv)
+            {
                 result.Add(sv);
+            }
         }
         return result;
     }
@@ -1811,7 +2115,10 @@ public class PassageBodyVisitor
     private string? TryBuildArithExpr(ExpressionSyntax expr)
     {
         // Strip outer parentheses
-        while (expr is ParenthesizedExpressionSyntax paren) expr = paren.Expression;
+        while (expr is ParenthesizedExpressionSyntax paren)
+        {
+            expr = paren.Expression;
+        }
 
         // int.Parse(Vars.X) — strip when X is int/unknown type; emit parseInt() when string type
         if (expr is InvocationExpressionSyntax parseInv &&
@@ -1821,33 +2128,54 @@ public class PassageBodyVisitor
             parseInv.ArgumentList.Arguments.Count == 1)
         {
             var inner = parseInv.ArgumentList.Arguments[0].Expression;
-            if (!IsVarAccess(inner, out var parsedVar) || parsedVar is null) return null;
+            if (!IsVarAccess(inner, out var parsedVar) || parsedVar is null)
+            {
+                return null;
+            }
             // String-declared variable: keep the coercion using the MWS parseInt() function
             if (_variables is not null &&
                 _variables.TryGetValue(parsedVar, out var parseDef) &&
                 parseDef.VarType == "string")
+            {
                 return $"parseInt({parsedVar})";
+            }
             // Int or unknown type: int.Parse is redundant — discard it
             return parsedVar;
         }
 
         // Bare Vars.X access
         if (IsVarAccess(expr, out var bareVar) && bareVar is not null)
+        {
             return bareVar;
+        }
 
         // Numeric literal
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
             return lit.Token.ValueText;
+        }
 
         // Binary arithmetic: recurse into both sides
         if (expr is BinaryExpressionSyntax bin)
         {
             var op = bin.OperatorToken.Text;
-            if (op is not ("+" or "-" or "*" or "/")) return null;
+            if (op is not ("+" or "-" or "*" or "/"))
+            {
+                return null;
+            }
+
             var left = TryBuildArithExpr(bin.Left);
-            if (left is null) return null;
+            if (left is null)
+            {
+                return null;
+            }
+
             var right = TryBuildArithExpr(bin.Right);
-            if (right is null) return null;
+            if (right is null)
+            {
+                return null;
+            }
+
             return $"{left} {op} {right}";
         }
 
@@ -1859,7 +2187,10 @@ public class PassageBodyVisitor
         var unwrapped = UnwrapIntParse(expr);
         if (IsVarAccess(unwrapped, out var v) && v is not null) { vars.Add(v); return true; }
         if (unwrapped is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
             return TryExtractVarAddChain(bin.Left, vars) && TryExtractVarAddChain(bin.Right, vars);
+        }
+
         return false;
     }
 
@@ -1870,12 +2201,18 @@ public class PassageBodyVisitor
         {
             var op = bin.OperatorToken.Text;
             var val = rLit.Token.ValueText;
-            if (op == "+" || op == "-" || op == "*") return $"{op}{val}";
+            if (op == "+" || op == "-" || op == "*")
+            {
+                return $"{op}{val}";
+            }
         }
         // N + int.Parse(this.Vars.X)
         if (bin.Left is LiteralExpressionSyntax lLit && lLit.IsKind(SyntaxKind.NumericLiteralExpression))
         {
-            if (bin.OperatorToken.Text == "+") return $"+{lLit.Token.ValueText}";
+            if (bin.OperatorToken.Text == "+")
+            {
+                return $"+{lLit.Token.ValueText}";
+            }
         }
         // int.Parse(Vars.X) OP int.Parse(Vars.Y)  →  "+{Y}" / "-{Y}"
         // Both sides must unwrap to var accesses; this guards against consuming random()+var.
@@ -1884,7 +2221,10 @@ public class PassageBodyVisitor
         if (IsVarAccess(lhsUnwrapped2, out _) && IsVarAccess(rhsUnwrapped2, out var rhsVar))
         {
             var op2 = bin.OperatorToken.Text;
-            if (op2 == "+" || op2 == "-") return $"{op2}{{{rhsVar}}}";
+            if (op2 == "+" || op2 == "-")
+            {
+                return $"{op2}{{{rhsVar}}}";
+            }
         }
         return null;
     }
@@ -1921,7 +2261,11 @@ public class PassageBodyVisitor
     private static bool IsCheckProgress(InvocationExpressionSyntax inv, out CheckProgressNode? node)
     {
         node = null;
-        if (GetSimpleMethodName(inv) != "CheckProgress") return false;
+        if (GetSimpleMethodName(inv) != "CheckProgress")
+        {
+            return false;
+        }
+
         var args = inv.ArgumentList.Arguments;
         node = new CheckProgressNode
         {
@@ -1940,7 +2284,10 @@ public class PassageBodyVisitor
     private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage)
     {
         nextPassage = null;
-        if (!assign.Left.ToString().Contains("SetupPassagename")) return false;
+        if (!assign.Left.ToString().Contains("SetupPassagename"))
+        {
+            return false;
+        }
 
         var literal = GetStringValue(assign.Right);
         if (literal is not null)
@@ -1968,13 +2315,21 @@ public class PassageBodyVisitor
 
     private static bool IsIgnorableAssignment(ExpressionStatementSyntax es)
     {
-        if (es.Expression is not AssignmentExpressionSyntax assign) return false;
+        if (es.Expression is not AssignmentExpressionSyntax assign)
+        {
+            return false;
+        }
         // this.ispasscode = ..., this.ispopup = ... — Cradle double-trigger guards (old files: explicit this.)
         if (assign.Left is MemberAccessExpressionSyntax m && m.Expression.ToString() == "this")
+        {
             return m.Name.Identifier.Text is "ispasscode" or "ispopup" or "iscreationA";
+        }
         // ispasscode = ..., ispopup = ... — same guards without "this." (complete-class files)
         if (assign.Left is IdentifierNameSyntax id)
+        {
             return id.Identifier.Text is "ispasscode" or "ispopup" or "iscreationA";
+        }
+
         return false;
     }
 
@@ -2003,7 +2358,9 @@ public class PassageBodyVisitor
 
         // Substitute local computed variables (LINQ aliases → aggregate expressions)
         foreach (var (name, expr) in _localComputedVars)
+        {
             cond = Regex.Replace(cond, $@"\b{Regex.Escape(name)}\b", _ => expr);
+        }
 
         return cond.Trim();
     }
@@ -2015,16 +2372,31 @@ public class PassageBodyVisitor
         var sb = new System.Text.StringBuilder();
         foreach (var n in nodes)
         {
-            if (n is not TextNode tn) continue;
+            if (n is not TextNode tn)
+            {
+                continue;
+            }
+
             foreach (var run in tn.Runs)
             {
                 if (run.AssetRef is not null)
+                {
                     sb.Append($"{{icon:{run.AssetRef.Replace("icon://", "")}}}");
+                }
                 else if (!string.IsNullOrEmpty(run.Text))
                 {
-                    if (run.Style == "bold") sb.Append($"**{run.Text}**");
-                    else if (run.Style == "italic") sb.Append($"_{run.Text}_");
-                    else sb.Append(run.Text);
+                    if (run.Style == "bold")
+                    {
+                        sb.Append($"**{run.Text}**");
+                    }
+                    else if (run.Style == "italic")
+                    {
+                        sb.Append($"_{run.Text}_");
+                    }
+                    else
+                    {
+                        sb.Append(run.Text);
+                    }
                 }
             }
         }
@@ -2043,10 +2415,18 @@ public class PassageBodyVisitor
     private int? GetLine(SyntaxNode node)
     {
         var span = node.GetLocation().GetLineSpan();
-        if (!span.IsValid) return null;
+        if (!span.IsValid)
+        {
+            return null;
+        }
+
         var line0 = span.StartLinePosition.Line;
         // line0 == 0: synthetic/rehomed node (all positions zeroed) — skip.
-        if (line0 == 0) return null;
+        if (line0 == 0)
+        {
+            return null;
+        }
+
         var line = line0 + _lineOffset;
         return line >= 1 ? line : null;
     }
@@ -2065,7 +2445,10 @@ public class PassageBodyVisitor
         {
             var name = v.Identifier.Text;
             var init = v.Initializer?.Value;
-            if (init is null) continue;
+            if (init is null)
+            {
+                continue;
+            }
 
             // string varName = "literal" → track for EOG message resolution
             if (init is LiteralExpressionSyntax strLit &&
@@ -2084,7 +2467,9 @@ public class PassageBodyVisitor
                     toStrInv.Expression is MemberAccessExpressionSyntax toStrMa &&
                     toStrMa.Name.Identifier.Text == "ToString" &&
                     toStrInv.ArgumentList.Arguments.Count == 0)
+                {
                     initUnwrapped = toStrMa.Expression;
+                }
 
                 if (IsVarAccess(initUnwrapped, out var trackedVar))
                 {
@@ -2101,7 +2486,11 @@ public class PassageBodyVisitor
                 var concatTmpl = new StringBuilder();
                 TryExtractTemplateConcat(init, concatLets, concatTmpl);
                 _localVars[name] = concatTmpl.ToString();
-                foreach (var let in concatLets) nodes.Add(let);
+                foreach (var let in concatLets)
+                {
+                    nodes.Add(let);
+                }
+
                 anyHandled = true;
                 continue;
             }
@@ -2154,6 +2543,7 @@ public class PassageBodyVisitor
                         {
                             List<MwsNode> branchNodes = [];
                             if (b.Expr is InvocationExpressionSyntax eitherInv)
+                            {
                                 branchNodes.Add(new LetNode
                                 {
                                     Var = letVarName,
@@ -2163,6 +2553,8 @@ public class PassageBodyVisitor
                                         Values = ExtractMacroArgs(eitherInv),
                                     },
                                 });
+                            }
+
                             return b.Cond == "else"
                                 ? new ConditionalBranch { Else = true, Nodes = branchNodes }
                                 : new ConditionalBranch { Condition = b.Cond, Nodes = branchNodes };
@@ -2216,19 +2608,33 @@ public class PassageBodyVisitor
     private static bool TryExtractListInit(TypeSyntax type, ExpressionSyntax init, out List<string>? vars)
     {
         vars = null;
-        if (!type.ToString().StartsWith("List<", StringComparison.Ordinal)) return false;
+        if (!type.ToString().StartsWith("List<", StringComparison.Ordinal))
+        {
+            return false;
+        }
 
-        if (init is not ObjectCreationExpressionSyntax objCreate) return false;
+        if (init is not ObjectCreationExpressionSyntax objCreate)
+        {
+            return false;
+        }
+
         var arg = objCreate.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
-        if (arg is not ArrayCreationExpressionSyntax arr || arr.Initializer is null) return false;
+        if (arg is not ArrayCreationExpressionSyntax arr || arr.Initializer is null)
+        {
+            return false;
+        }
 
         var result = new List<string>();
         foreach (var elem in arr.Initializer.Expressions)
         {
             if (IsVarAccess(elem, out var varName))
+            {
                 result.Add(varName!);
+            }
             else
+            {
                 return false;
+            }
         }
         vars = result;
         return true;
@@ -2239,8 +2645,15 @@ public class PassageBodyVisitor
     // Tracks:     _localComputedVars[num] = "countif(==max_<arr>, <arr>)"
     private bool TryExtractLinqCountIf(string varName, ExpressionSyntax init, List<MwsNode> emittedNodes)
     {
-        if (init is not InvocationExpressionSyntax countInv) return false;
-        if (GetSimpleMethodName(countInv) != "Count") return false;
+        if (init is not InvocationExpressionSyntax countInv)
+        {
+            return false;
+        }
+
+        if (GetSimpleMethodName(countInv) != "Count")
+        {
+            return false;
+        }
 
         var countReceiver = (countInv.Expression as MemberAccessExpressionSyntax)?.Expression;
 
@@ -2248,12 +2661,28 @@ public class PassageBodyVisitor
         if (countReceiver is ParenthesizedExpressionSyntax paren &&
             paren.Expression is QueryExpressionSyntax query)
         {
-            if (query.FromClause.Expression is not IdentifierNameSyntax fromId) return false;
+            if (query.FromClause.Expression is not IdentifierNameSyntax fromId)
+            {
+                return false;
+            }
+
             var arrayVarName = fromId.Identifier.Text;
             var whereClause = query.Body.Clauses.OfType<WhereClauseSyntax>().FirstOrDefault();
-            if (whereClause?.Condition is not BinaryExpressionSyntax whereBin) return false;
-            if (!whereBin.IsKind(SyntaxKind.EqualsExpression)) return false;
-            if (!whereBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal)) return false;
+            if (whereClause?.Condition is not BinaryExpressionSyntax whereBin)
+            {
+                return false;
+            }
+
+            if (!whereBin.IsKind(SyntaxKind.EqualsExpression))
+            {
+                return false;
+            }
+
+            if (!whereBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             var maxVarName = $"max_{arrayVarName}";
             emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
             _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
@@ -2290,7 +2719,9 @@ public class PassageBodyVisitor
         int completedRound = -1;
         if (args.Count > 1 && args[1].Expression is LiteralExpressionSyntax rl &&
             rl.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
             int.TryParse(rl.Token.ValueText, out completedRound);
+        }
 
         string? passageName = null;
         List<MwsNode>? passageNameNodes = null;
@@ -2298,14 +2729,20 @@ public class PassageBodyVisitor
         {
             var psnExpr = args[2].Expression;
             if (psnExpr is LiteralExpressionSyntax psnLit && psnLit.IsKind(SyntaxKind.StringLiteralExpression))
+            {
                 passageName = psnLit.Token.ValueText;
+            }
             else if (psnExpr is IdentifierNameSyntax psnId)
             {
                 var localName = psnId.Identifier.Text;
                 if (_localVars.TryGetValue(localName, out var literalPsn))
+                {
                     passageName = literalPsn;
+                }
                 else if (_localPassageConditionals.TryGetValue(localName, out var condNodes))
+                {
                     passageNameNodes = RenameLetVarInNodes(condNodes, localName, "passageName");
+                }
             }
         }
 
@@ -2326,13 +2763,20 @@ public class PassageBodyVisitor
     {
         expr = UnwrapParens(expr);
         if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
             return [new LetNode { Var = varName, Compute = $"\"{lit.Token.ValueText.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"" }];
+        }
+
         if (expr is ConditionalExpressionSyntax cond)
         {
             var condStr = SimplifyCondition(UnwrapParens(cond.Condition).ToString());
             var trueNodes = TryBuildPassageNameConditional(varName, cond.WhenTrue);
             var falseNodes = TryBuildPassageNameConditional(varName, cond.WhenFalse);
-            if (trueNodes is null || falseNodes is null) return null;
+            if (trueNodes is null || falseNodes is null)
+            {
+                return null;
+            }
+
             return [new ConditionalNode
             {
                 Branches =
@@ -2403,7 +2847,10 @@ public class PassageBodyVisitor
 
         bool isEog = _eogDelegates.Contains(methodName) ||
                      exprStr.Contains("S_OnEndOfGeneration");
-        if (!isEog) return false;
+        if (!isEog)
+        {
+            return false;
+        }
 
         var args = inv.ArgumentList.Arguments;
         string? rawMessage = null;
@@ -2412,16 +2859,22 @@ public class PassageBodyVisitor
             var msgExpr = args[0].Expression;
             if (msgExpr is LiteralExpressionSyntax msgLit &&
                 msgLit.IsKind(SyntaxKind.StringLiteralExpression))
+            {
                 rawMessage = msgLit.Token.ValueText;
+            }
             else if (msgExpr is IdentifierNameSyntax msgId &&
                      _localVars.TryGetValue(msgId.Identifier.Text, out var stored))
+            {
                 rawMessage = stored;
+            }
         }
 
         int generation = 0;
         if (args.Count > 1 && args[1].Expression is LiteralExpressionSyntax genLit &&
             genLit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
             int.TryParse(genLit.Token.ValueText, out generation);
+        }
 
         node = new EndOfGenerationNode
         {
@@ -2437,7 +2890,11 @@ public class PassageBodyVisitor
     // restore the word boundaries that surrounded the original sprite tags.
     private string? BuildEogMessageTemplate(string? rawMessage)
     {
-        if (rawMessage is null) return null;
+        if (rawMessage is null)
+        {
+            return null;
+        }
+
         var richRuns = _spriteMapper.TryParseRichText(rawMessage);
         if (richRuns is not null)
         {
@@ -2445,11 +2902,20 @@ public class PassageBodyVisitor
             bool prevWasSeg = false;
             foreach (var (text, assetRef) in richRuns)
             {
-                if (prevWasSeg) sb.Append(' ');
+                if (prevWasSeg)
+                {
+                    sb.Append(' ');
+                }
+
                 if (assetRef is not null)
+                {
                     sb.Append($"{{icon:{assetRef.Replace("icon://", "")}}}");
+                }
                 else if (text is not null)
+                {
                     sb.Append(text);
+                }
+
                 prevWasSeg = true;
             }
             return sb.ToString().Trim();

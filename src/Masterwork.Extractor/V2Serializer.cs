@@ -40,19 +40,40 @@ public static partial class V2Serializer
             ["passage_id"] = passage.PassageId,
         };
         if (!string.IsNullOrEmpty(passage.Title) && passage.Title != passage.PassageId)
+        {
             d["title"] = passage.Title;
-        if (passage.Tags.Length > 0) d["tags"] = passage.Tags;
+        }
+
+        if (passage.Tags.Length > 0)
+        {
+            d["tags"] = passage.Tags;
+        }
+
         d["layout"] = passage.Layout;
-        if (passage.Debug) d["debug"] = true;
+        if (passage.Debug)
+        {
+            d["debug"] = true;
+        }
 
         if (locationName is not null || locationIcon is not null)
         {
             var loc = new Dictionary<string, object?>();
-            if (locationName is not null) loc["name"] = locationName;
-            if (locationIcon is not null) loc["icon"] = locationIcon;
+            if (locationName is not null)
+            {
+                loc["name"] = locationName;
+            }
+
+            if (locationIcon is not null)
+            {
+                loc["icon"] = locationIcon;
+            }
+
             d["location"] = loc;
         }
-        if (checkProgress is not null) d["check_progress"] = checkProgress;
+        if (checkProgress is not null)
+        {
+            d["check_progress"] = checkProgress;
+        }
 
         d["nodes"] = TransformNodeList(bodyNodes, ctx);
         return d;
@@ -100,7 +121,10 @@ public static partial class V2Serializer
                 List<MwsNode> bodyNodes = [];
                 var j = i + 1;
                 while (j < nodes.Count && nodes[j] is BreakNode or ParagraphBreakNode)
+                {
                     j++;
+                }
+
                 if (j < nodes.Count && nodes[j] is SectionBodyNode body)
                 {
                     bodyNodes = body.Nodes;
@@ -118,15 +142,26 @@ public static partial class V2Serializer
             }
 
             // GotoMenuNode — app navigation is not a module concern; drop
-            if (node is GotoMenuNode) continue;
+            if (node is GotoMenuNode)
+            {
+                continue;
+            }
             // SetLocationNode / CheckProgressNode — should have been hoisted; ignore
-            if (node is SetLocationNode || node is CheckProgressNode) continue;
+            if (node is SetLocationNode || node is CheckProgressNode)
+            {
+                continue;
+            }
 
             var dicts = TransformNode(node, ctx).ToList();
             if (dicts.Count > 0)
+            {
                 AddSrcSentinel(result, node.SourceLine, ctx);
+            }
+
             foreach (var d in dicts)
+            {
                 result.Add(d);
+            }
         }
         return result;
     }
@@ -136,7 +171,9 @@ public static partial class V2Serializer
     private static void AddSrcSentinel(List<Dictionary<string, object?>> result, int? sourceLine, SerializationContext? ctx)
     {
         if (sourceLine.HasValue && ctx?.SourceRelativePath is not null)
+        {
             result.Add(new() { ["_src"] = $"{ctx.SourceRelativePath}:{sourceLine.Value}" });
+        }
     }
 
     // Appends a _link field to a node dict immediately after the "target" key was inserted.
@@ -144,9 +181,15 @@ public static partial class V2Serializer
     // Skipped for expression-valued targets (starting with "${") since the passage is not statically known.
     private static void AddLinkHint(Dictionary<string, object?> d, string target, SerializationContext? ctx)
     {
-        if (target.StartsWith("${", StringComparison.Ordinal)) return;
+        if (target.StartsWith("${", StringComparison.Ordinal))
+        {
+            return;
+        }
+
         if (ctx?.PassageFileMap?.TryGetValue(target, out var file) == true && file is not null)
+        {
             d["_link"] = file;
+        }
     }
 
     // Returns one or more v0.2 dicts for a single v0.1 node.
@@ -162,11 +205,17 @@ public static partial class V2Serializer
                 break;
             case LetNode let:
                 foreach (var d in TransformLetNode(let, ctx))
+                {
                     yield return d;
+                }
+
                 break;
             case EffectNode effect:
                 foreach (var d in TransformEffect(effect, ctx))
+                {
                     yield return d;
+                }
+
                 break;
             case LinkNode link:
                 yield return TransformNavigation(link, ctx);
@@ -188,8 +237,12 @@ public static partial class V2Serializer
                 // Inside an expand-link fragment, SetupBlockNode is handled by TransformPopup instead.
                 var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
                 var sNodes = TransformNodeList(setup.Nodes, ctx);
-                if (sNodes.Count > 0) pd["content"] = sNodes;
-                yield return pd;
+                if (sNodes.Count > 0)
+                    {
+                        pd["content"] = sNodes;
+                    }
+
+                    yield return pd;
                 break;
             }
             case ConditionalNode cond:
@@ -225,15 +278,25 @@ public static partial class V2Serializer
                 break;
             case ModalNode modal:
                 foreach (var d in TransformModal(modal, ctx))
+                {
                     yield return d;
+                }
+
                 break;
             case SetupNotificationNode sn:
                 foreach (var d in TransformSetupNotification(sn, ctx))
+                {
                     yield return d;
+                }
+
                 break;
             case UnknownNode unk:
                 var ud = new Dictionary<string, object?> { ["type"] = "unknown", ["original_code"] = unk.OriginalCode };
-                if (unk.Note is not null) ud["note"] = unk.Note;
+                if (unk.Note is not null)
+                {
+                    ud["note"] = unk.Note;
+                }
+
                 yield return ud;
                 break;
             default:
@@ -248,8 +311,16 @@ public static partial class V2Serializer
     private static Dictionary<string, object?> TransformImage(ImageNode img)
     {
         var d = new Dictionary<string, object?> { ["type"] = "image", ["asset"] = img.AssetRef };
-        if (img.Size is not null) d["size"] = img.Size;
-        if (img.Align is not null) d["align"] = img.Align;
+        if (img.Size is not null)
+        {
+            d["size"] = img.Size;
+        }
+
+        if (img.Align is not null)
+        {
+            d["align"] = img.Align;
+        }
+
         return d;
     }
 
@@ -283,12 +354,16 @@ public static partial class V2Serializer
         if (effect.VarSets is not null)
         {
             foreach (var (varName, val) in effect.VarSets)
+            {
                 yield return MakeAssign(varName, MwsExprHelper.VarSetValueToExpr(val), ctx);
+            }
         }
         if (effect.VarMath is not null)
         {
             foreach (var (varName, math) in effect.VarMath)
+            {
                 yield return MakeAssign(varName, MwsExprHelper.VarMathToExpr(varName, math));
+            }
         }
         if (effect.VarRandom is not null)
         {
@@ -310,11 +385,16 @@ public static partial class V2Serializer
             }
         }
         if (effect.VarPop is not null)
+        {
             yield return MakeAssign(effect.VarPop, $"{effect.VarPop}[..^1]");
+        }
+
         if (effect.VarSort is not null)
         {
             foreach (var (varName, sort) in effect.VarSort)
+            {
                 yield return MakeAssign(varName, MwsExprHelper.SortToExpr(varName, sort));
+            }
         }
         if (effect.VarRemove is not null)
         {
@@ -338,8 +418,16 @@ public static partial class V2Serializer
         };
         AddLinkHint(d, link.Target, ctx);
         d["state_affecting"] = link.StateAffecting;
-        if (link.TimelineLabel is not null) d["timeline_label"] = link.TimelineLabel;
-        if (link.Nodes.Count > 0) d["onclick"] = TransformNodeList(link.Nodes, ctx);
+        if (link.TimelineLabel is not null)
+        {
+            d["timeline_label"] = link.TimelineLabel;
+        }
+
+        if (link.Nodes.Count > 0)
+        {
+            d["onclick"] = TransformNodeList(link.Nodes, ctx);
+        }
+
         return d;
     }
 
@@ -406,9 +494,12 @@ public static partial class V2Serializer
                 }).ToList(),
             };
             if (elseBranch is not null)
+            {
                 cd["else"] = elseBranch.Nodes
                     .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
                     .ToList();
+            }
+
             return cd;
         }
         // Fallback: shouldn't be reached given IsNavigationOnly precondition
@@ -448,7 +539,10 @@ public static partial class V2Serializer
                 eogMarker = eog;
                 layout = "end_of_generation";
                 if (eog.PassageName is not null)
+                {
                     onclose = eog.PassageName;
+                }
+
                 continue;
             }
             // ViewItemObtain setup popup: the SetupNotificationNode carries the onclose passage name.
@@ -456,7 +550,10 @@ public static partial class V2Serializer
             {
                 layout = "setup";
                 if (sn.NextPassage is not null)
+                {
                     onclose = sn.NextPassage;
+                }
+
                 continue;
             }
             // SetupBlockNode wraps the popup body — unwrap into childNodes directly.
@@ -473,17 +570,30 @@ public static partial class V2Serializer
         {
             var eogPropNodes = new List<MwsNode>();
             if (eogMarker.Title is not null)
+            {
                 eogPropNodes.Add(new LetNode { Var = "title", Compute = $"\"{MwsExprHelper.EscapeStr(eogMarker.Title)}\"" });
+            }
+
             eogPropNodes.Add(new LetNode { Var = "completedRound", Compute = eogMarker.CompletedRound.ToString() });
             if (eogMarker.BodyText is not null)
+            {
                 eogPropNodes.Add(new TextNode { Template = eogMarker.BodyText });
+            }
+
             if (eogMarker.PassageNameNodes is not null)
+            {
                 eogPropNodes.AddRange(eogMarker.PassageNameNodes);
+            }
+
             childNodes.InsertRange(0, eogPropNodes);
         }
 
         var d = new Dictionary<string, object?> { ["type"] = "popup" };
-        if (layout is not null) d["layout"] = layout;
+        if (layout is not null)
+        {
+            d["layout"] = layout;
+        }
+
         d["label"] = expand.Label;
         if (onclose is not null)
         {
@@ -493,7 +603,11 @@ public static partial class V2Serializer
         d["state_affecting"] = expand.StateAffecting;
 
         var transformed = TransformNodeList(childNodes, ctx);
-        if (transformed.Count > 0) d["content"] = transformed;
+        if (transformed.Count > 0)
+        {
+            d["content"] = transformed;
+        }
+
         return d;
     }
 
@@ -509,7 +623,11 @@ public static partial class V2Serializer
             ["input"] = input.InputType,
             ["var"] = input.StoreIn,
         };
-        if (input.ResumePassage is not null) d["onsubmit"] = input.ResumePassage;
+        if (input.ResumePassage is not null)
+        {
+            d["onsubmit"] = input.ResumePassage;
+        }
+
         return d;
     }
 
@@ -528,8 +646,16 @@ public static partial class V2Serializer
         string? title, List<MwsNode> innerNodes, string? style = null, int? headingSourceLine = null, SerializationContext? ctx = null)
     {
         var d = new Dictionary<string, object?> { ["type"] = "section" };
-        if (!string.IsNullOrEmpty(title)) d["title"] = title;
-        if (style is not null) d["style"] = style;
+        if (!string.IsNullOrEmpty(title))
+        {
+            d["title"] = title;
+        }
+
+        if (style is not null)
+        {
+            d["style"] = style;
+        }
+
         d["content"] = TransformNodeList(innerNodes, ctx);
         return d;
     }
@@ -563,7 +689,10 @@ public static partial class V2Serializer
             }).ToList(),
         };
         if (elseBranch is not null)
+        {
             d["else"] = TransformNodeList(elseBranch.Nodes, ctx);
+        }
+
         return d;
     }
 
@@ -584,7 +713,10 @@ public static partial class V2Serializer
             }).ToList(),
         };
         if (defaultCase is not null)
+        {
             d["default"] = TransformNodeList(defaultCase.Nodes, ctx);
+        }
+
         return d;
     }
 
@@ -606,8 +738,16 @@ public static partial class V2Serializer
     private static Dictionary<string, object?> TransformCheckpoint(CheckpointNode cp)
     {
         var d = new Dictionary<string, object?> { ["type"] = "checkpoint", ["id"] = cp.Id };
-        if (cp.DisplayLabel is not null) d["display"] = cp.DisplayLabel;
-        if (cp.DiagnosticLabel is not null) d["diagnostic"] = cp.DiagnosticLabel;
+        if (cp.DisplayLabel is not null)
+        {
+            d["display"] = cp.DisplayLabel;
+        }
+
+        if (cp.DiagnosticLabel is not null)
+        {
+            d["diagnostic"] = cp.DiagnosticLabel;
+        }
+
         return d;
     }
 
@@ -619,7 +759,10 @@ public static partial class V2Serializer
     {
         var nodes = new List<Dictionary<string, object?>>();
         if (eog.Message is not null)
+        {
             nodes.Add(new() { ["type"] = "text", ["value"] = eog.Message });
+        }
+
         nodes.Add(MakeLet("generation", eog.Generation.ToString()));
 
         var d = new Dictionary<string, object?>
@@ -639,7 +782,9 @@ public static partial class V2Serializer
         var nodes = new List<Dictionary<string, object?>>();
 
         if (modal.Body is not null)
+        {
             nodes.Add(new() { ["type"] = "text", ["value"] = modal.Body });
+        }
 
         if (modal.Round.HasValue)
         {
@@ -682,9 +827,14 @@ public static partial class V2Serializer
     {
         var nodes = new List<Dictionary<string, object?>>();
         if (sn.Title is not null)
+        {
             nodes.Add(new() { ["type"] = "text", ["value"] = $"**{sn.Title}**" });
+        }
+
         if (sn.Text is not null)
+        {
             nodes.Add(new() { ["type"] = "text", ["value"] = sn.Text });
+        }
 
         yield return new() { ["type"] = "section", ["style"] = "panel", ["content"] = nodes };
 
@@ -708,7 +858,11 @@ public static partial class V2Serializer
         List<string>? lets = null)
     {
         var d = new Dictionary<string, object?> { ["type"] = "let", ["var"] = varName, ["expr"] = expr };
-        if (lets is { Count: > 0 }) d["lets"] = lets;
+        if (lets is { Count: > 0 })
+        {
+            d["lets"] = lets;
+        }
+
         return d;
     }
 

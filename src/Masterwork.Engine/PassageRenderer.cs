@@ -19,7 +19,9 @@ public static class PassageRenderer
         MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds)
     {
         if (passage.CheckProgress is not null && !visitedPassageIds.Contains(passage.CheckProgress))
+        {
             throw new CheckProgressViolationException(passage.PassageId, passage.CheckProgress);
+        }
 
         var ctx = new RenderContext(store, module);
         var nodes = RenderNodes(passage.Nodes, ctx);
@@ -57,7 +59,10 @@ public static class PassageRenderer
         foreach (var node in nodes)
         {
             RenderNode(node, ctx, output);
-            if (ctx.PendingGoto is not null) break;
+            if (ctx.PendingGoto is not null)
+            {
+                break;
+            }
         }
         return output;
     }
@@ -102,15 +107,26 @@ public static class PassageRenderer
             case IncludePassageNode inc:
                 var targetId = ResolveTargetNow(inc.Target, ctx.Store);
                 if (ctx.Module.Passages.TryGetValue(targetId, out var includedPassage))
+                {
                     output.AddRange(RenderNodes(includedPassage.Nodes, ctx));
+                }
+
                 break;
             case ConditionalNode cond:
                 var condBranch = SelectConditionalBranch(cond, ctx.Store);
-                if (condBranch is not null) output.AddRange(RenderNodes(condBranch, ctx));
+                if (condBranch is not null)
+                {
+                    output.AddRange(RenderNodes(condBranch, ctx));
+                }
+
                 break;
             case SwitchNode sw:
                 var switchCase = SelectSwitchCase(sw, ctx.Store);
-                if (switchCase is not null) output.AddRange(RenderNodes(switchCase, ctx));
+                if (switchCase is not null)
+                {
+                    output.AddRange(RenderNodes(switchCase, ctx));
+                }
+
                 break;
             case ForEachNode fe:
                 RenderForEach(fe, ctx, output);
@@ -184,15 +200,23 @@ public static class PassageRenderer
         {
             ctx.Store.SetLetVariable(fe.Var, item);
             output.AddRange(RenderNodes(fe.Do, ctx));
-            if (ctx.PendingGoto is not null) break;
+            if (ctx.PendingGoto is not null)
+            {
+                break;
+            }
         }
     }
 
     private static IReadOnlyList<Node>? SelectConditionalBranch(ConditionalNode cond, VariableStore store)
     {
         foreach (var branch in cond.Conditions)
+        {
             if (ExpressionEvaluator.Evaluate(branch.If, store).AsBool())
+            {
                 return branch.Then;
+            }
+        }
+
         return cond.Else;
     }
 
@@ -200,14 +224,23 @@ public static class PassageRenderer
     {
         var onValue = store.GetVariable(sw.On);
         foreach (var c in sw.Cases)
+        {
             if (SwitchCaseMatches(onValue, c.Match))
+            {
                 return c.Nodes;
+            }
+        }
+
         return sw.Default;
     }
 
     private static bool SwitchCaseMatches(ExprValue value, object match)
     {
-        if (match is List<object> list) return list.Any(m => SwitchCaseMatches(value, m));
+        if (match is List<object> list)
+        {
+            return list.Any(m => SwitchCaseMatches(value, m));
+        }
+
         var patternStr = match switch
         {
             long l => l.ToString(),

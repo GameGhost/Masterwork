@@ -43,6 +43,9 @@ public sealed class SessionPrng(long masterSeed)
     public void RestoreOccurrences(IReadOnlyDictionary<string, int> occurrences)
     {
         _occurrences.Clear();
-        foreach (var (k, v) in occurrences) _occurrences[k] = v;
+        foreach (var (k, v) in occurrences)
+        {
+            _occurrences[k] = v;
+        }
     }
 }

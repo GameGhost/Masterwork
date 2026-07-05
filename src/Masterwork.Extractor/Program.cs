@@ -23,7 +23,10 @@ partial class Program
         }
 
         var opts = ParseArgs(args);
-        if (opts is null) return 1;
+        if (opts is null)
+        {
+            return 1;
+        }
 
         Console.WriteLine($"mw-extract: {opts.InputDir} → {opts.OutputDir}");
 
@@ -48,7 +51,9 @@ partial class Program
 
         Console.WriteLine($"  Source files: {sourceFiles.Count}");
         foreach (var f in sourceFiles)
+        {
             Console.WriteLine($"    {Path.GetFileName(f)}");
+        }
 
         var spriteMapper = opts.SpriteMapPath is not null
             ? SpriteMapper.FromJsonFile(opts.SpriteMapPath)
@@ -72,15 +77,40 @@ partial class Program
         var extractor = new CradleExtractor(opts, spriteMapper, report);
 
         // Record command-line settings for the extraction report.
-        if (opts.ModuleTitle is { Length: > 0 } mt) report.Settings["Module title"] = mt;
-        if (opts.ModuleId is { Length: > 0 } mid) report.Settings["Module ID"] = mid;
-        if (opts.SpriteMapPath is not null) report.Settings["Sprite map"] = Path.GetFileName(opts.SpriteMapPath);
+        if (opts.ModuleTitle is { Length: > 0 } mt)
+        {
+            report.Settings["Module title"] = mt;
+        }
+
+        if (opts.ModuleId is { Length: > 0 } mid)
+        {
+            report.Settings["Module ID"] = mid;
+        }
+
+        if (opts.SpriteMapPath is not null)
+        {
+            report.Settings["Sprite map"] = Path.GetFileName(opts.SpriteMapPath);
+        }
+
         if (opts.RestextExcludeTags.Count > 0)
+        {
             report.Settings["Restext exclude tags"] = string.Join(", ", opts.RestextExcludeTags.Order());
+        }
+
         if (opts.RestextExcludeIds.Count > 0)
+        {
             report.Settings["Restext exclude IDs"] = string.Join(", ", opts.RestextExcludeIds.Order());
-        if (opts.OverridesDir is not null) report.Settings["Overrides dir"] = opts.OverridesDir;
-        if (opts.Breaks != BreaksMode.Omit) report.Settings["Extra breaks"] = opts.Breaks.ToString().ToLowerInvariant();
+        }
+
+        if (opts.OverridesDir is not null)
+        {
+            report.Settings["Overrides dir"] = opts.OverridesDir;
+        }
+
+        if (opts.Breaks != BreaksMode.Omit)
+        {
+            report.Settings["Extra breaks"] = opts.Breaks.ToString().ToLowerInvariant();
+        }
 
         Console.WriteLine("Extracting...");
         var passages = extractor.Extract(sourceFiles);
@@ -95,7 +125,9 @@ partial class Program
             .Select(p => p.PassageId)
             .ToList();
         if (isolated.Count > 0)
+        {
             report.AddIsolatedPassages(isolated);
+        }
 
         if (opts.DryRun)
         {
@@ -124,16 +156,26 @@ partial class Program
 
         // Filter trailing and non-rendered-sandwiched breaks from all passages.
         if (opts.Breaks != BreaksMode.Emit)
+        {
             foreach (var p in passages)
+            {
                 p.Nodes = BreakFilter.Apply(p.Nodes, opts.Breaks);
+            }
+        }
 
         // Build the set of passage IDs excluded from restext extraction.
         var excludedFromRestext = new HashSet<string>(StringComparer.Ordinal);
         if (opts.RestextExcludeTags.Count > 0 || opts.RestextExcludeIds.Count > 0)
+        {
             foreach (var p in passages)
+            {
                 if (opts.RestextExcludeIds.Contains(p.PassageId) ||
                     p.Tags.Any(t => opts.RestextExcludeTags.Contains(t)))
+                {
                     excludedFromRestext.Add(p.PassageId);
+                }
+            }
+        }
 
         // Phase 1: build all dicts and collect restext entries.
         // Restext line numbers depend on the complete file content, so collect everything first.
@@ -155,11 +197,16 @@ partial class Program
             );
             var dict = V2Serializer.ToDict(passage, ctx);
             if (!excludedFromRestext.Contains(passage.PassageId))
+            {
                 // Mutates dict in-place: replaces string values with restext://Key references
                 restext.CollectPassage(passage.PassageId, fileName, dict,
                     isTemplate: !passage.Tags.Contains("notext", StringComparer.Ordinal));
+            }
             else
+            {
                 report.AddRestextExclusion(passage.PassageId);
+            }
+
             cachedPassages.Add((passage, dict, fileName, outPath, relSourcePath));
         }
 
@@ -180,7 +227,10 @@ partial class Program
         if (renameMap.Count > 0)
         {
             foreach (var (_, dict, _, _, _) in cachedPassages)
+            {
                 RestextCollector.ApplyRenamesInDict(dict, renameMap);
+            }
+
             restext.ApplyRenames(renameMap);
         }
 
@@ -317,7 +367,10 @@ partial class Program
 
     private static void ApplyOverrides(ExtractionOptions opts, ExtractionReport report)
     {
-        if (opts.OverridesDir is null) return;
+        if (opts.OverridesDir is null)
+        {
+            return;
+        }
 
         var overrideFiles = Directory.GetFiles(opts.OverridesDir, "*.mws.yaml", SearchOption.TopDirectoryOnly)
             .OrderBy(f => f)
@@ -376,7 +429,11 @@ partial class Program
     private static string? ExtractPassageId(string content)
     {
         var m = PassageIdRegex().Match(content);
-        if (!m.Success) return null;
+        if (!m.Success)
+        {
+            return null;
+        }
+
         var val = m.Groups[1].Value;
         return val.Length >= 2 && val[0] == '\'' && val[^1] == '\'' ? val[1..^1] : val;
     }
@@ -386,7 +443,9 @@ partial class Program
     private static string InjectSourceComments(string yaml, MwsPassage passage, string? relSourcePath)
     {
         if (!passage.MainMethodSourceLine.HasValue || relSourcePath is null)
+        {
             return yaml;
+        }
 
         var lines = yaml.Split('\n');
         var result = new List<string>(lines.Length + 1);
@@ -395,7 +454,10 @@ partial class Program
         foreach (var line in lines)
         {
             if (firstLine && line == "---")
+            {
                 result.Add($"# {relSourcePath}:{passage.MainMethodSourceLine}");
+            }
+
             firstLine = false;
             result.Add(line);
         }
@@ -435,7 +497,10 @@ partial class Program
             if (linkMatch.Success)
             {
                 if (result.Count > 0)
+                {
                     result[^1] += $" # {UnquoteYamlSingleScalar(linkMatch.Groups[1].Value)}";
+                }
+
                 continue;
             }
 
@@ -477,7 +542,10 @@ partial class Program
         IReadOnlyDictionary<string, string> commentMap,
         IReadOnlyDictionary<string, int> keyLineMap)
     {
-        if (commentMap.Count == 0) return yaml;
+        if (commentMap.Count == 0)
+        {
+            return yaml;
+        }
 
         var lines = yaml.Split('\n');
         var result = new List<string>(lines.Length + commentMap.Count);
@@ -507,7 +575,11 @@ partial class Program
                 foreach (Match m in matches)
                 {
                     var key = m.Groups[1].Value;
-                    if (!commentMap.TryGetValue(key, out var value)) continue;
+                    if (!commentMap.TryGetValue(key, out var value))
+                    {
+                        continue;
+                    }
+
                     var link = keyLineMap.TryGetValue(key, out var ln) ? $"en-US.restext:{ln}" : key;
                     result.Add($"{indent}# {link} | {key} | {FormatRestextPreview(value)}");
                 }
@@ -545,7 +617,11 @@ partial class Program
         int line = 4;
         foreach (var (_, entries) in restext.Passages)
         {
-            if (entries.Count == 0) continue;
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
             line++; // # section comment
             foreach (var entry in entries)
             {
@@ -570,7 +646,11 @@ partial class Program
         int totalStrings = 0;
         foreach (var (fileName, entries) in restext.Passages)
         {
-            if (entries.Count == 0) continue;
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
             sb.AppendLine(fileName == "(Common)"
                 ? "# Common strings — shared by multiple passages"
                 : $"# {fileName}");
@@ -590,7 +670,10 @@ partial class Program
     {
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var p in passages)
+        {
             CollectFromNodes(p.Nodes, ids);
+        }
+
         return ids;
     }
 
@@ -602,7 +685,11 @@ partial class Program
             {
                 case LinkNode lk:
                     ids.Add(lk.Target);
-                    if (lk.Nodes.Count > 0) CollectFromNodes(lk.Nodes, ids);
+                    if (lk.Nodes.Count > 0)
+                    {
+                        CollectFromNodes(lk.Nodes, ids);
+                    }
+
                     break;
                 case GotoNode go when !go.Target.StartsWith("${", StringComparison.Ordinal):
                     ids.Add(go.Target); break;
@@ -616,10 +703,18 @@ partial class Program
                 case ModalNode mo when mo.Next is not null:
                     ids.Add(mo.Next); break;
                 case ConditionalNode cond:
-                    foreach (var b in cond.Branches) CollectFromNodes(b.Nodes, ids);
+                    foreach (var b in cond.Branches)
+                    {
+                        CollectFromNodes(b.Nodes, ids);
+                    }
+
                     break;
                 case SwitchNode sw:
-                    foreach (var c in sw.Cases) CollectFromNodes(c.Nodes, ids);
+                    foreach (var c in sw.Cases)
+                    {
+                        CollectFromNodes(c.Nodes, ids);
+                    }
+
                     break;
                 case SectionBodyNode sec: CollectFromNodes(sec.Nodes, ids); break;
                 case SetupBlockNode sb2: CollectFromNodes(sb2.Nodes, ids); break;
@@ -627,7 +722,11 @@ partial class Program
                 case ForeachNode fe: CollectFromNodes(fe.Nodes, ids); break;
                 // choose-one values on a let node may be passage IDs (dynamic inclusion pattern)
                 case LetNode let when let.Random?.RandomType == "choose-one":
-                    foreach (var v in let.Random.Values.OfType<string>()) ids.Add(v);
+                    foreach (var v in let.Random.Values.OfType<string>())
+                    {
+                        ids.Add(v);
+                    }
+
                     break;
             }
         }
@@ -691,7 +790,9 @@ partial class Program
                     _ctx.Push(!top); // toggle key ↔ value
                 }
                 if (isValue && eventInfo.Source.Type == typeof(string))
+                {
                     eventInfo.Style = ScalarStyle.SingleQuoted;
+                }
             }
             base.Emit(eventInfo, emitter);
         }

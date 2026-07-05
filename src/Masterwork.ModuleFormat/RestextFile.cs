@@ -10,9 +10,17 @@ public static class RestextFile
         foreach (var rawLine in text.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r');
-            if (line.Length == 0 || line.StartsWith('#')) continue;
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+
             var eq = line.IndexOf('=');
-            if (eq < 0) continue;
+            if (eq < 0)
+            {
+                continue;
+            }
+
             result[line[..eq]] = line[(eq + 1)..];
         }
         return result;

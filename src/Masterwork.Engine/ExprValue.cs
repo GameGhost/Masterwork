@@ -78,16 +78,30 @@ public abstract record ExprValue
     {
         if (a is RecordVal ra && b is RecordVal rb)
         {
-            if (ra.Properties.Count != rb.Properties.Count) return false;
+            if (ra.Properties.Count != rb.Properties.Count)
+            {
+                return false;
+            }
+
             return ra.Properties.All(kv => rb.Properties.TryGetValue(kv.Key, out var v) && ValueEquals(kv.Value, v));
         }
         if (a is ArrayVal aa && b is ArrayVal ab)
+        {
             return aa.Items.Count == ab.Items.Count && aa.Items.Zip(ab.Items, ValueEquals).All(x => x);
-        if (a is RecordVal || b is RecordVal || a is ArrayVal || b is ArrayVal) return false;
+        }
+
+        if (a is RecordVal || b is RecordVal || a is ArrayVal || b is ArrayVal)
+        {
+            return false;
+        }
+
         if (a is IntVal || b is IntVal)
         {
             // Compare numerically when either side parses as int; otherwise string-coerce per spec.
-            if (TryAsLong(a, out var la) && TryAsLong(b, out var lb)) return la == lb;
+            if (TryAsLong(a, out var la) && TryAsLong(b, out var lb))
+            {
+                return la == lb;
+            }
         }
         return a.AsString() == b.AsString();
     }

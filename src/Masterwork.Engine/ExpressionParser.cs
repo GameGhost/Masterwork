@@ -35,7 +35,11 @@ public static class ExpressionParser
                 if (char.IsDigit(c))
                 {
                     int start = i;
-                    while (i < s.Length && char.IsDigit(s[i])) i++;
+                    while (i < s.Length && char.IsDigit(s[i]))
+                    {
+                        i++;
+                    }
+
                     var text = s[start..i];
                     tokens.Add(new Token(TokenKind.Int, text, long.Parse(text)));
                     continue;
@@ -58,7 +62,11 @@ public static class ExpressionParser
                             i++;
                         }
                     }
-                    if (i >= s.Length) throw new ExprParseException("Unterminated string literal");
+                    if (i >= s.Length)
+                    {
+                        throw new ExprParseException("Unterminated string literal");
+                    }
+
                     i++; // closing quote
                     tokens.Add(new Token(TokenKind.String, sb.ToString()));
                     continue;
@@ -67,7 +75,11 @@ public static class ExpressionParser
                 if (char.IsLetter(c) || c == '_')
                 {
                     int start = i;
-                    while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++;
+                    while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_'))
+                    {
+                        i++;
+                    }
+
                     tokens.Add(new Token(TokenKind.Ident, s[start..i]));
                     continue;
                 }
@@ -110,13 +122,20 @@ public static class ExpressionParser
 
         private void Expect(string punct)
         {
-            if (!IsPunct(punct)) throw new ExprParseException($"Expected '{punct}' but found '{Current.Text}'");
+            if (!IsPunct(punct))
+            {
+                throw new ExprParseException($"Expected '{punct}' but found '{Current.Text}'");
+            }
+
             Advance();
         }
 
         public void ExpectEof()
         {
-            if (Current.Kind != TokenKind.Eof) throw new ExprParseException($"Unexpected trailing input: '{Current.Text}'");
+            if (Current.Kind != TokenKind.Eof)
+            {
+                throw new ExprParseException($"Unexpected trailing input: '{Current.Text}'");
+            }
         }
 
         public Expr ParseOr()
@@ -252,7 +271,11 @@ public static class ExpressionParser
 
         private (Expr? expr, bool fromEnd) ParseOptionalBound(string closer)
         {
-            if (IsPunct(closer)) return (null, false);
+            if (IsPunct(closer))
+            {
+                return (null, false);
+            }
+
             return ParseBound();
         }
 
@@ -285,7 +308,11 @@ public static class ExpressionParser
 
         private string ExpectIdent()
         {
-            if (Current.Kind != TokenKind.Ident) throw new ExprParseException($"Expected identifier but found '{Current.Text}'");
+            if (Current.Kind != TokenKind.Ident)
+            {
+                throw new ExprParseException($"Expected identifier but found '{Current.Text}'");
+            }
+
             return Advance().Text;
         }
 
@@ -305,7 +332,10 @@ public static class ExpressionParser
                     if (tok.Text == "false") { Advance(); return new Expr.BoolLiteral(false); }
                     Advance();
                     if (IsPunct("("))
+                    {
                         return new Expr.FunctionCall(tok.Text, ParseArgList());
+                    }
+
                     return new Expr.VarRef(tok.Text);
                 case TokenKind.Punct when tok.Text == "(":
                     Advance();

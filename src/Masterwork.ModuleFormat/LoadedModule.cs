@@ -69,7 +69,9 @@ public static class ModuleLoader
     private static void ValidatePassageReferences(IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)
     {
         foreach (var passage in passages.Values)
+        {
             CheckNodeListReferences(passage.PassageId, passage.Nodes, passages, warnings);
+        }
     }
 
     private static void CheckNodeListReferences(string passageId, IReadOnlyList<Node> nodes,
@@ -90,7 +92,11 @@ public static class ModuleLoader
                     CheckTarget(passageId, ip.Target, passages, warnings);
                     break;
                 case PopupNode p:
-                    if (p.OnClose is not null) CheckTarget(passageId, p.OnClose, passages, warnings);
+                    if (p.OnClose is not null)
+                    {
+                        CheckTarget(passageId, p.OnClose, passages, warnings);
+                    }
+
                     CheckNodeListReferences(passageId, p.Content, passages, warnings);
                     break;
                 case InputNode i:
@@ -101,13 +107,27 @@ public static class ModuleLoader
                     break;
                 case ConditionalNode c:
                     foreach (var branch in c.Conditions)
+                    {
                         CheckNodeListReferences(passageId, branch.Then, passages, warnings);
-                    if (c.Else is not null) CheckNodeListReferences(passageId, c.Else, passages, warnings);
+                    }
+
+                    if (c.Else is not null)
+                    {
+                        CheckNodeListReferences(passageId, c.Else, passages, warnings);
+                    }
+
                     break;
                 case SwitchNode sw:
                     foreach (var sc in sw.Cases)
+                    {
                         CheckNodeListReferences(passageId, sc.Nodes, passages, warnings);
-                    if (sw.Default is not null) CheckNodeListReferences(passageId, sw.Default, passages, warnings);
+                    }
+
+                    if (sw.Default is not null)
+                    {
+                        CheckNodeListReferences(passageId, sw.Default, passages, warnings);
+                    }
+
                     break;
                 case ForEachNode f:
                     CheckNodeListReferences(passageId, f.Do, passages, warnings);
@@ -119,8 +139,14 @@ public static class ModuleLoader
     private static void CheckTarget(string fromPassageId, string target,
         IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)
     {
-        if (target.StartsWith("${", StringComparison.Ordinal)) return; // dynamic — can't validate statically
+        if (target.StartsWith("${", StringComparison.Ordinal))
+        {
+            return; // dynamic — can't validate statically
+        }
+
         if (!passages.ContainsKey(target))
+        {
             warnings.Add("unresolved_passage_ref", $"{fromPassageId}: target '{target}' does not exist");
+        }
     }
 }

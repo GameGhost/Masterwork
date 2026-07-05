@@ -62,16 +62,22 @@ public sealed partial class RestextCollector
 
         // v0.2: location.name is a passage-level header, not a node
         if (passageDict.TryGetValue("location", out var locObj) && locObj is Dictionary<string, object?> loc)
+        {
             ExtractField(loc, "name");
+        }
 
         if (passageDict.TryGetValue("nodes", out var nodes))
+        {
             WalkNodeList(nodes);
+        }
 
         if (_current.Count > 0)
         {
             _passages.Add((fileName, _current));
             if (!isTemplate)
+            {
                 _nonTemplateFileNames.Add(fileName);
+            }
         }
     }
 
@@ -84,8 +90,13 @@ public sealed partial class RestextCollector
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (_, entries) in _passages)
+        {
             foreach (var e in entries)
+            {
                 map[e.Key] = e.Value;
+            }
+        }
+
         return map;
     }
 
@@ -112,7 +123,10 @@ public sealed partial class RestextCollector
     // Also updates _globalValueToKey so BuildCommentMap sees the new key names.
     public void ApplyRenames(Dictionary<string, string> renames)
     {
-        if (renames.Count == 0) return;
+        if (renames.Count == 0)
+        {
+            return;
+        }
 
         var commonEntries = new List<Entry>();
 
@@ -133,7 +147,9 @@ public sealed partial class RestextCollector
         commonEntries.Sort((a, b) => string.Compare(a.Key, b.Key, StringComparison.Ordinal));
 
         if (commonEntries.Count > 0)
+        {
             _passages.Insert(0, ("(Common)", commonEntries));
+        }
     }
 
     // Recursively replaces restext://OldKey with restext://NewKey in a V2Serializer dict.
@@ -148,7 +164,10 @@ public sealed partial class RestextCollector
                 case string s when s.StartsWith("restext://", StringComparison.Ordinal):
                     var oldKey = s[10..];
                     if (renames.TryGetValue(oldKey, out var newKey))
+                    {
                         d[k] = $"restext://{newKey}";
+                    }
+
                     break;
                 case string s when s.Contains("restext://", StringComparison.Ordinal):
                     d[k] = RestextKeyInStringRegex().Replace(s, m =>
@@ -164,7 +183,10 @@ public sealed partial class RestextCollector
                     break;
                 case IEnumerable<Dictionary<string, object?>> list:
                     foreach (var item in list)
+                    {
                         ApplyRenamesInDict(item, renames);
+                    }
+
                     break;
             }
         }
@@ -188,7 +210,9 @@ public sealed partial class RestextCollector
     public void ApplyConditionLiteralReplacements(IEnumerable<Dictionary<string, object?>> dicts)
     {
         foreach (var dict in dicts)
+        {
             ApplyConditionReplacementsInNodeList(dict.GetValueOrDefault("nodes"));
+        }
     }
 
     // After all CollectPassage calls: restores string literals that were provisionally extracted
@@ -198,7 +222,10 @@ public sealed partial class RestextCollector
     // Call BEFORE ScanConditionLiterals so removed keys don't influence the rename pass.
     public void RestoreNonTemplateAssignments()
     {
-        if (_newAssignmentKeys.Count == 0) return;
+        if (_newAssignmentKeys.Count == 0)
+        {
+            return;
+        }
 
         var templateVarNames = BuildTemplateVarNames();
         // Known popup layout display-text properties are always treated as template-used.
@@ -211,7 +238,9 @@ public sealed partial class RestextCollector
                 // Restore direct assignments: whole expr was '"restext://KEY"'
                 var restored = $"\"{rec.Value}\"";
                 foreach (var dict in rec.DirectDicts)
+                {
                     dict["expr"] = restored;
+                }
 
                 // Restore embedded occurrences (shuffled arrays) via string substitution.
                 // The value must be re-escaped to match the array element syntax.
@@ -219,14 +248,20 @@ public sealed partial class RestextCollector
                 {
                     var escapedInArray = rec.Value.Replace("\\", "\\\\").Replace("\"", "\\\"");
                     foreach (var dict in rec.EmbeddedDicts)
+                    {
                         if (dict.TryGetValue("expr", out var exprObj) && exprObj is string exprStr)
+                        {
                             dict["expr"] = exprStr.Replace($"restext://{key}", escapedInArray);
+                        }
+                    }
                 }
 
                 _globalValueToKey.Remove(rec.Value);
                 _keyPassages.Remove(key);
                 foreach (var (_, entries) in _passages)
+                {
                     entries.RemoveAll(e => e.Key == key);
+                }
             }
         }
     }
@@ -239,15 +274,25 @@ public sealed partial class RestextCollector
         var varNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (fileName, entries) in _passages)
         {
-            if (_nonTemplateFileNames.Contains(fileName)) continue;
+            if (_nonTemplateFileNames.Contains(fileName))
+            {
+                continue;
+            }
+
             foreach (var entry in entries)
+            {
                 foreach (Match m in PlaceholderRegex().Matches(entry.Value))
                 {
                     var content = m.Value[1..^1]; // strip { }
-                    if (content.StartsWith("icon:", StringComparison.Ordinal)) continue;
+                    if (content.StartsWith("icon:", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
                     var split = content.IndexOfAny(['.', '[']);
                     varNames.Add(split >= 0 ? content[..split] : content);
                 }
+            }
         }
         return varNames;
     }
@@ -255,24 +300,35 @@ public sealed partial class RestextCollector
     private void ScanConditionLiteralsInNodeList(object? listObj)
     {
         foreach (var d in AsDictList(listObj))
+        {
             ScanConditionLiteralsInNode(d);
+        }
     }
 
     private void ScanConditionLiteralsInNode(Dictionary<string, object?> d)
     {
-        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type) return;
+        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type)
+        {
+            return;
+        }
 
         if (type == "conditional")
         {
             // Flat format: single if/then directly on the node
             if (d.TryGetValue("if", out var flatCondObj) && flatCondObj is string flatCond)
+            {
                 RegisterStringLiteralsInExpr(flatCond);
+            }
+
             ScanConditionLiteralsInNodeList(d.GetValueOrDefault("then"));
             // Multi-branch format: conditions array
             foreach (var branch in AsDictList(d.GetValueOrDefault("conditions")))
             {
                 if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
+                {
                     RegisterStringLiteralsInExpr(cond);
+                }
+
                 ScanConditionLiteralsInNodeList(branch.GetValueOrDefault("then"));
             }
             ScanConditionLiteralsInNodeList(d.GetValueOrDefault("else"));
@@ -282,7 +338,10 @@ public sealed partial class RestextCollector
             foreach (var c in AsDictList(d.GetValueOrDefault("cases")))
             {
                 if (c.TryGetValue("match", out var matchObj) && matchObj is string matchStr)
+                {
                     TryRegisterConditionLiteral(matchStr);
+                }
+
                 ScanConditionLiteralsInNodeList(c.GetValueOrDefault("nodes"));
             }
             ScanConditionLiteralsInNodeList(d.GetValueOrDefault("default"));
@@ -290,7 +349,9 @@ public sealed partial class RestextCollector
         else if (type is "assign" or "let")
         {
             if (d.TryGetValue("expr", out var exprObj) && exprObj is string expr)
+            {
                 RegisterStringLiteralsInExpr(expr);
+            }
         }
         else
         {
@@ -322,36 +383,51 @@ public sealed partial class RestextCollector
     private void TryRegisterConditionLiteral(string value)
     {
         if (_globalValueToKey.TryGetValue(value, out var key) && _keyPassages.ContainsKey(key))
+        {
             _keyPassages[key].Add(_passageId);
+        }
     }
 
     private void TryScanStringField(Dictionary<string, object?> d, string field)
     {
         if (d.TryGetValue(field, out var val) && val is string s)
+        {
             TryRegisterConditionLiteral(s);
+        }
     }
 
     private void ApplyConditionReplacementsInNodeList(object? listObj)
     {
         foreach (var d in AsDictList(listObj))
+        {
             ApplyConditionReplacementsInNode(d);
+        }
     }
 
     private void ApplyConditionReplacementsInNode(Dictionary<string, object?> d)
     {
-        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type) return;
+        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type)
+        {
+            return;
+        }
 
         if (type == "conditional")
         {
             // Flat format: single if/then directly on the node
             if (d.TryGetValue("if", out var flatCondObj) && flatCondObj is string flatCond)
+            {
                 d["if"] = ReplaceStringLiteralsInCondExpr(flatCond);
+            }
+
             ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("then"));
             // Multi-branch format: conditions array
             foreach (var branch in AsDictList(d.GetValueOrDefault("conditions")))
             {
                 if (branch.TryGetValue("if", out var condObj) && condObj is string cond)
+                {
                     branch["if"] = ReplaceStringLiteralsInCondExpr(cond);
+                }
+
                 ApplyConditionReplacementsInNodeList(branch.GetValueOrDefault("then"));
             }
             ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("else"));
@@ -411,9 +487,15 @@ public sealed partial class RestextCollector
             var raw = m.Groups[1].Value;
             var unescaped = raw.Replace("\\\"", "\"").Replace("\\\\", "\\");
             if (unescaped.StartsWith("restext://", StringComparison.Ordinal))
+            {
                 return m.Value;
+            }
+
             if (_globalValueToKey.TryGetValue(unescaped, out var key))
+            {
                 return $"\"restext://{key}\"";
+            }
+
             return m.Value;
         });
     }
@@ -423,8 +505,10 @@ public sealed partial class RestextCollector
     {
         int commonCount = _keyPassages.Count(kv => kv.Value.Count > 1);
         if (commonCount > 0)
+        {
             report.AddInfo("[restext]",
                 $"{commonCount} Common string key(s) shared across passages; {_reuseCount} total reference(s) deduplicated.");
+        }
     }
 
     // ── Walking ────────────────────────────────────────────────────────────
@@ -432,12 +516,17 @@ public sealed partial class RestextCollector
     private void WalkNodeList(object? listObj)
     {
         foreach (var d in AsDictList(listObj))
+        {
             WalkNode(d);
+        }
     }
 
     private void WalkNode(Dictionary<string, object?> d)
     {
-        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type) return;
+        if (!d.TryGetValue("type", out var typeObj) || typeObj is not string type)
+        {
+            return;
+        }
 
         switch (type)
         {
@@ -477,19 +566,25 @@ public sealed partial class RestextCollector
     {
         // v0.2: value field (combined template + inline style applied by V2Serializer)
         if (d.TryGetValue("value", out var val) && val is string vs && !IsSingleVarRef(vs))
+        {
             d["value"] = AllocKey(vs);
+        }
     }
 
     private void WalkBranchOrCaseList(object? listObj, string bodyField = "nodes")
     {
         foreach (var d in AsDictList(listObj))
+        {
             WalkNodeList(d.GetValueOrDefault(bodyField));
+        }
     }
 
     private void ExtractField(Dictionary<string, object?> d, string field)
     {
         if (d.TryGetValue(field, out var val) && val is string s && !string.IsNullOrEmpty(s) && !IsSingleVarRef(s))
+        {
             d[field] = AllocKey(s);
+        }
     }
 
     // Extracts string literals from assign/let expr fields.
@@ -499,7 +594,10 @@ public sealed partial class RestextCollector
     //   3. Template string: The {townname} {_rnd_0} — extracts the whole expr as a restext key
     private void WalkExprNode(Dictionary<string, object?> d)
     {
-        if (!d.TryGetValue("expr", out var exprObj) || exprObj is not string expr) return;
+        if (!d.TryGetValue("expr", out var exprObj) || exprObj is not string expr)
+        {
+            return;
+        }
 
         // Quoted string literal assignment: extract all to restext; non-template var assignments
         // are pruned back to raw literals by RestoreNonTemplateAssignments after all passages are collected.
@@ -547,7 +645,10 @@ public sealed partial class RestextCollector
                 var raw = ms.Groups[1].Value;
                 var unescaped = raw.Replace("\\\"", "\"").Replace("\\\\", "\\");
                 if (unescaped.StartsWith("restext://") || IsNumericString(unescaped) || IsSeedKeyLike(unescaped) || _passageIds.Contains(unescaped))
+                {
                     return ms.Value;
+                }
+
                 bool wasNew = !_globalValueToKey.ContainsKey(unescaped);
                 var keyRef = AllocKey(unescaped);
                 if (keyRef.StartsWith("restext://", StringComparison.Ordinal))
@@ -561,15 +662,21 @@ public sealed partial class RestextCollector
                         _newAssignmentKeys[key] = rec;
                     }
                     else if (_newAssignmentKeys.TryGetValue(key, out var rec))
+                    {
                         rec.VarNames.Add(saVarName);
+                    }
                 }
                 return keyRef.StartsWith("restext://", StringComparison.Ordinal) ? $"\"{keyRef}\"" : ms.Value;
             });
 
             // Register this dict for potential embedded restoration
             foreach (var key in newKeys)
+            {
                 if (_newAssignmentKeys.TryGetValue(key, out var rec) && !rec.EmbeddedDicts.Contains(d))
+                {
                     rec.EmbeddedDicts.Add(d);
+                }
+            }
 
             if (newArrayPart != arrayPart)
             {
@@ -581,17 +688,27 @@ public sealed partial class RestextCollector
 
         // Template string: plain text with {var} interpolations, e.g. "The {townname} {_rnd_0}"
         if (IsTemplateExpr(expr))
+        {
             d["expr"] = AllocKey(expr);
+        }
     }
 
     private static bool IsTemplateExpr(string expr)
     {
-        if (!expr.Contains('{')) return false;
+        if (!expr.Contains('{'))
+        {
+            return false;
+        }
         // Skip quoted strings, arrays, function calls, ternary expressions
         if (expr.StartsWith('"') || expr.StartsWith('[') || expr.StartsWith('(') || expr.StartsWith("?("))
+        {
             return false;
+        }
         // A bare single-var ref like {varname} has no static text — not a template
-        if (IsSingleVarRef(expr)) return false;
+        if (IsSingleVarRef(expr))
+        {
+            return false;
+        }
         // Must have non-whitespace text outside {var} placeholders
         var stripped = PlaceholderRegex().Replace(expr, "");
         return !string.IsNullOrWhiteSpace(stripped);
@@ -626,7 +743,10 @@ public sealed partial class RestextCollector
     {
         // Skip strings with no displayable content: whitespace/punctuation only (no letters,
         // digits, or {placeholder} refs). These are formatting artifacts, not localizable strings.
-        if (!HasDisplayableContent(value)) return value;
+        if (!HasDisplayableContent(value))
+        {
+            return value;
+        }
 
         if (_globalValueToKey.TryGetValue(value, out var existing))
         {
@@ -659,9 +779,21 @@ public sealed partial class RestextCollector
     private static IEnumerable<Dictionary<string, object?>> AsDictList(object? obj)
     {
         if (obj is IEnumerable<Dictionary<string, object?>> typed)
-            foreach (var d in typed) yield return d;
+        {
+            foreach (var d in typed)
+            {
+                yield return d;
+            }
+        }
         else if (obj is System.Collections.IEnumerable items)
+        {
             foreach (var item in items)
-                if (item is Dictionary<string, object?> d) yield return d;
+            {
+                if (item is Dictionary<string, object?> d)
+                {
+                    yield return d;
+                }
+            }
+        }
     }
 }

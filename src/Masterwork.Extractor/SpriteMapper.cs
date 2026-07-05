@@ -58,7 +58,10 @@ public class SpriteMapper
                     return mapper;
                 }
             }
-            else return mapper;
+            else
+            {
+                return mapper;
+            }
 
             foreach (var item in itemArray.EnumerateArray())
             {
@@ -70,9 +73,14 @@ public class SpriteMapper
                 var displayName = englishName ?? identifier ?? spriteName;
 
                 if (!string.IsNullOrEmpty(spriteName) && !string.IsNullOrEmpty(displayName))
+                {
                     mapper._spriteToUri[spriteName] = $"icon://{SlugifyName(displayName)}";
+                }
+
                 if (!string.IsNullOrEmpty(identifier))
+                {
                     mapper._spriteToUri[identifier] = $"icon://{SlugifyName(displayName ?? identifier)}";
+                }
             }
             Console.WriteLine($"Sprite map loaded: {mapper._spriteToUri.Count} entries from '{Path.GetFileName(jsonPath)}'");
         }
@@ -88,7 +96,9 @@ public class SpriteMapper
     public List<(string? Text, string? AssetRef)>? TryParseRichText(string raw)
     {
         if (!SpriteTag.IsMatch(raw) && !HtmlTag.IsMatch(raw))
+        {
             return null;
+        }
 
         var runs = new List<(string? Text, string? AssetRef)>();
         int pos = 0;
@@ -98,7 +108,9 @@ public class SpriteMapper
             {
                 var textSegment = HtmlTag.Replace(raw[pos..m.Index], "").Trim();
                 if (!string.IsNullOrEmpty(textSegment))
+                {
                     runs.Add((textSegment, null));
+                }
             }
             // Atlas name from <sprite="AtlasName" index=N> — try lookup, fall back to slug
             var atlasName = m.Groups[1].Value;
@@ -112,7 +124,9 @@ public class SpriteMapper
         {
             var remaining = HtmlTag.Replace(raw[pos..], "").Trim();
             if (!string.IsNullOrEmpty(remaining))
+            {
                 runs.Add((remaining, null));
+            }
         }
         return runs;
     }

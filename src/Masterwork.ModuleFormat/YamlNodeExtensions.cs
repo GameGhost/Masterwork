@@ -24,8 +24,16 @@ internal static class YamlNodeExtensions
     public static string? GetString(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
-        if (node is null) return null;
-        if (node is YamlScalarNode s) return s.Value;
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is YamlScalarNode s)
+        {
+            return s.Value;
+        }
+
         ctx.Warn("wrong_field_type", $"field '{key}' expected a text value but found a {DescribeKind(node)}; ignoring it");
         return null;
     }
@@ -34,24 +42,42 @@ internal static class YamlNodeExtensions
     {
         var node = map.TryGet(key);
         if (node is null)
+        {
             throw new MwsParseException($"{ctx.Source}: missing required field '{key}'");
+        }
+
         if (node is YamlScalarNode { Value: { } value })
+        {
             return value;
+        }
+
         throw new MwsParseException($"{ctx.Source}: field '{key}' must be a text value but found a {DescribeKind(node)}");
     }
 
     public static bool GetBool(this YamlMappingNode map, string key, YamlParseContext ctx, bool defaultValue = false)
     {
         var raw = map.GetString(key, ctx);
-        if (raw is null) return defaultValue;
-        if (bool.TryParse(raw, out var value)) return value;
+        if (raw is null)
+        {
+            return defaultValue;
+        }
+
+        if (bool.TryParse(raw, out var value))
+        {
+            return value;
+        }
+
         throw new MwsParseException($"{ctx.Source}: field '{key}' must be 'true' or 'false' but found '{raw}'");
     }
 
     public static IReadOnlyList<string> GetStringList(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
-        if (node is null) return [];
+        if (node is null)
+        {
+            return [];
+        }
+
         if (node is not YamlSequenceNode seq)
         {
             ctx.Warn("wrong_field_type", $"field '{key}' expected a list but found a {DescribeKind(node)}; ignoring it");
@@ -60,8 +86,14 @@ internal static class YamlNodeExtensions
         var result = new List<string>(seq.Children.Count);
         foreach (var child in seq.Children)
         {
-            if (child is YamlScalarNode s) result.Add(s.Value ?? "");
-            else ctx.Warn("wrong_field_type", $"field '{key}' contains a non-text element ({DescribeKind(child)}); skipping it");
+            if (child is YamlScalarNode s)
+            {
+                result.Add(s.Value ?? "");
+            }
+            else
+            {
+                ctx.Warn("wrong_field_type", $"field '{key}' contains a non-text element ({DescribeKind(child)}); skipping it");
+            }
         }
         return result;
     }
@@ -69,8 +101,16 @@ internal static class YamlNodeExtensions
     public static YamlMappingNode? GetMapping(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
-        if (node is null) return null;
-        if (node is YamlMappingNode m) return m;
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is YamlMappingNode m)
+        {
+            return m;
+        }
+
         ctx.Warn("wrong_field_type", $"field '{key}' expected a mapping but found a {DescribeKind(node)}; ignoring it");
         return null;
     }
@@ -78,8 +118,16 @@ internal static class YamlNodeExtensions
     public static YamlSequenceNode? GetSequence(this YamlMappingNode map, string key, YamlParseContext ctx)
     {
         var node = map.TryGet(key);
-        if (node is null) return null;
-        if (node is YamlSequenceNode seq) return seq;
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is YamlSequenceNode seq)
+        {
+            return seq;
+        }
+
         ctx.Warn("wrong_field_type", $"field '{key}' expected a list but found a {DescribeKind(node)}; ignoring it");
         return null;
     }
@@ -92,7 +140,9 @@ internal static class YamlNodeExtensions
         foreach (var keyNode in map.Children.Keys)
         {
             if (keyNode is YamlScalarNode { Value: { } key } && !expectedKeys.Contains(key))
+            {
                 ctx.Warn("unmatched_field", $"{label}: unrecognized field '{key}'");
+            }
         }
     }
 
@@ -105,13 +155,23 @@ internal static class YamlNodeExtensions
             var v = s.Value ?? "";
             if (s.Style == YamlDotNet.Core.ScalarStyle.Plain)
             {
-                if (long.TryParse(v, out var l)) return l;
-                if (bool.TryParse(v, out var b)) return b;
+                if (long.TryParse(v, out var l))
+                {
+                    return l;
+                }
+
+                if (bool.TryParse(v, out var b))
+                {
+                    return b;
+                }
             }
             return v;
         }
         if (node is YamlSequenceNode seq)
+        {
             return seq.Children.Select(c => c.ToNaturalValue(ctx)).ToList();
+        }
+
         throw new MwsParseException($"{ctx.Source}: switch case 'match' has an unsupported value shape ({DescribeKind(node)})");
     }
 

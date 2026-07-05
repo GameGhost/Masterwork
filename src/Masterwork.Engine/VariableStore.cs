@@ -16,13 +16,23 @@ public sealed partial class VariableStore : IExprContext
     {
         _prng = prng;
         foreach (var (name, def) in manifest)
+        {
             _session[name] = DefaultValueFor(def);
+        }
     }
 
     public ExprValue GetVariable(string name)
     {
-        if (_let.TryGetValue(name, out var letVal)) return letVal;
-        if (_session.TryGetValue(name, out var sessVal)) return sessVal;
+        if (_let.TryGetValue(name, out var letVal))
+        {
+            return letVal;
+        }
+
+        if (_session.TryGetValue(name, out var sessVal))
+        {
+            return sessVal;
+        }
+
         throw new ExprEvalException($"Unknown variable '{name}'");
     }
 
@@ -39,7 +49,10 @@ public sealed partial class VariableStore : IExprContext
     public void RestoreSession(IReadOnlyDictionary<string, ExprValue> snapshot)
     {
         _session.Clear();
-        foreach (var (k, v) in snapshot) _session[k] = v;
+        foreach (var (k, v) in snapshot)
+        {
+            _session[k] = v;
+        }
     }
 
     // A sandbox copy sharing the same PRNG (so seed-key occurrence counters keep advancing) but
@@ -58,7 +71,11 @@ public sealed partial class VariableStore : IExprContext
         PlaceholderRegex().Replace(template, m =>
         {
             var content = m.Groups[1].Value;
-            if (content.StartsWith("icon:", StringComparison.Ordinal)) return m.Value;
+            if (content.StartsWith("icon:", StringComparison.Ordinal))
+            {
+                return m.Value;
+            }
+
             return ExpressionEvaluator.Evaluate(content, this).AsString();
         });
 

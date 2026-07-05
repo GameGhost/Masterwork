@@ -12,7 +12,11 @@ public static class ExpressionEvaluator
     {
         lock (CacheLock)
         {
-            if (Cache.TryGetValue(source, out var cached)) return cached;
+            if (Cache.TryGetValue(source, out var cached))
+            {
+                return cached;
+            }
+
             var expr = ExpressionParser.Parse(source);
             Cache[source] = expr;
             return expr;
@@ -43,7 +47,10 @@ public static class ExpressionEvaluator
         var target = Evaluate(p.Target, ctx);
         var record = target.AsRecord();
         if (!record.TryGetValue(p.Property, out var value))
+        {
             throw new ExprEvalException($"Property '{p.Property}' not found on record");
+        }
+
         return value;
     }
 
@@ -65,7 +72,11 @@ public static class ExpressionEvaluator
         if (arg is IndexArg.Single single)
         {
             var idx = ResolveIndex(single, ctx, items.Count);
-            if (idx < 0 || idx >= items.Count) throw new ExprEvalException("Array index out of range");
+            if (idx < 0 || idx >= items.Count)
+            {
+                throw new ExprEvalException("Array index out of range");
+            }
+
             return items[idx];
         }
         var (start, len) = ResolveRange((IndexArg.Range)arg, ctx, items.Count);
@@ -77,7 +88,11 @@ public static class ExpressionEvaluator
         if (arg is IndexArg.Single single)
         {
             var idx = ResolveIndex(single, ctx, s.Length);
-            if (idx < 0 || idx >= s.Length) throw new ExprEvalException("String index out of range");
+            if (idx < 0 || idx >= s.Length)
+            {
+                throw new ExprEvalException("String index out of range");
+            }
+
             return ExprValue.Of(s[idx].ToString());
         }
         var (start, len) = ResolveRange((IndexArg.Range)arg, ctx, s.Length);
@@ -120,9 +135,14 @@ public static class ExpressionEvaluator
     {
         // Logical operators short-circuit.
         if (b.Op == "&&")
+        {
             return Evaluate(b.Left, ctx).AsBool() ? ExprValue.Of(Evaluate(b.Right, ctx).AsBool()) : ExprValue.Of(false);
+        }
+
         if (b.Op == "||")
+        {
             return Evaluate(b.Left, ctx).AsBool() ? ExprValue.Of(true) : ExprValue.Of(Evaluate(b.Right, ctx).AsBool());
+        }
 
         var left = Evaluate(b.Left, ctx);
         var right = Evaluate(b.Right, ctx);
@@ -200,7 +220,11 @@ public static class ExpressionEvaluator
 
         var sorted = items.ToList();
         sorted.Sort(cmp);
-        if (dir == "descending") sorted.Reverse();
+        if (dir == "descending")
+        {
+            sorted.Reverse();
+        }
+
         return ExprValue.Of(sorted);
     }
 
@@ -212,7 +236,10 @@ public static class ExpressionEvaluator
     private static ExprValue EvalExcept(IReadOnlyList<ExprValue> items, ExprValue arg)
     {
         if (arg is ExprValue.ArrayVal excludeArr)
+        {
             return ExprValue.Of(items.Where(v => !excludeArr.Items.Any(e => ExprValue.ValueEquals(v, e))).ToList());
+        }
+
         return ExprValue.Of(items.Where(v => !ExprValue.ValueEquals(v, arg)).ToList());
     }
 
@@ -247,13 +274,23 @@ public static class ExpressionEvaluator
     {
         pattern = pattern.Trim();
         foreach (var op in new[] { ">=", "<=", "!=", "=", ">", "<" })
-            if (pattern.StartsWith(op, StringComparison.Ordinal)) return (op, pattern[op.Length..].Trim());
+        {
+            if (pattern.StartsWith(op, StringComparison.Ordinal))
+            {
+                return (op, pattern[op.Length..].Trim());
+            }
+        }
+
         return ("", pattern);
     }
 
     private static bool MatchesEquality(ExprValue value, string operand)
     {
-        if (long.TryParse(operand, out var n)) return value.AsInt() == n;
+        if (long.TryParse(operand, out var n))
+        {
+            return value.AsInt() == n;
+        }
+
         var s = operand.Length >= 2 && operand[0] == '"' && operand[^1] == '"' ? operand[1..^1] : operand;
         return value.AsString() == s;
     }
@@ -280,8 +317,14 @@ public static class ExpressionEvaluator
         var items = new List<ExprValue>();
         foreach (var el in a.Elements)
         {
-            if (el is ArrayElement.Spread sp) items.AddRange(Evaluate(sp.Value, ctx).AsArray());
-            else if (el is ArrayElement.Item it) items.Add(Evaluate(it.Value, ctx));
+            if (el is ArrayElement.Spread sp)
+            {
+                items.AddRange(Evaluate(sp.Value, ctx).AsArray());
+            }
+            else if (el is ArrayElement.Item it)
+            {
+                items.Add(Evaluate(it.Value, ctx));
+            }
         }
         return ExprValue.Of(items);
     }

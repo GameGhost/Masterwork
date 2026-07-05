@@ -16,7 +16,10 @@ public static class PassageYamlParser
         var stream = new YamlStream();
         stream.Load(new StringReader(yamlText));
         if (stream.Documents.Count == 0)
+        {
             throw new MwsParseException("Empty YAML document");
+        }
+
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
 
         // Grab passage_id up front (best-effort) purely so subsequent warnings/errors can be
@@ -25,7 +28,9 @@ public static class PassageYamlParser
 
         var format = root.GetRequiredString("format", ctx);
         if (format != ExpectedFormat)
+        {
             ctx.Warn("unexpected_format_version", $"passage declares format '{format}', expected '{ExpectedFormat}' — may be stale output from an older extractor/hand-authored file");
+        }
 
         Location? location = null;
         var locMap = root.GetMapping("location", ctx);
@@ -59,14 +64,24 @@ public static class PassageYamlParser
     {
         foreach (var child in seq.Children)
         {
-            if (child is YamlMappingNode m) yield return m;
-            else ctx.Warn("wrong_field_type", $"{label}: expected a node mapping but found a {YamlNodeExtensions.DescribeKind(child)}; skipping it");
+            if (child is YamlMappingNode m)
+            {
+                yield return m;
+            }
+            else
+            {
+                ctx.Warn("wrong_field_type", $"{label}: expected a node mapping but found a {YamlNodeExtensions.DescribeKind(child)}; skipping it");
+            }
         }
     }
 
     internal static List<Node> BuildNodeList(YamlNode? node, YamlParseContext ctx, string label = "node list")
     {
-        if (node is null) return [];
+        if (node is null)
+        {
+            return [];
+        }
+
         if (node is not YamlSequenceNode seq)
         {
             ctx.Warn("wrong_field_type", $"{label}: expected a list but found a {YamlNodeExtensions.DescribeKind(node)}; ignoring it");
@@ -286,7 +301,10 @@ public static class PassageYamlParser
             {
                 var matchNode = caseNode.TryGet("match");
                 if (matchNode is null)
+                {
                     throw new MwsParseException($"{ctx.Source}: switch case missing 'match'");
+                }
+
                 cases.Add(new SwitchCase
                 {
                     Match = matchNode.ToNaturalValue(ctx),
@@ -309,7 +327,11 @@ public static class PassageYamlParser
     private static Alignment? ParseAlignment(YamlMappingNode map, YamlParseContext ctx, string key)
     {
         var raw = map.GetString(key, ctx);
-        if (raw is null) return null;
+        if (raw is null)
+        {
+            return null;
+        }
+
         var value = raw switch
         {
             "left" => Alignment.Left,
@@ -319,7 +341,10 @@ public static class PassageYamlParser
             _ => (Alignment?)null,
         };
         if (value is null)
+        {
             ctx.Warn("invalid_enum_value", $"field '{key}' has unrecognized alignment '{raw}'; falling back to default");
+        }
+
         return value;
     }
 

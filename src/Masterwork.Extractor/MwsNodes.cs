@@ -28,10 +28,22 @@ public class MwsPassage
             ["format"] = "mws/0.3",
             ["passage_id"] = PassageId,
         };
-        if (!string.IsNullOrEmpty(Title) && Title != PassageId) d["title"] = Title;
-        if (Tags.Length > 0) d["tags"] = Tags;
+        if (!string.IsNullOrEmpty(Title) && Title != PassageId)
+        {
+            d["title"] = Title;
+        }
+
+        if (Tags.Length > 0)
+        {
+            d["tags"] = Tags;
+        }
+
         d["layout"] = Layout;
-        if (Debug) d["debug"] = true;
+        if (Debug)
+        {
+            d["debug"] = true;
+        }
+
         d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
@@ -58,9 +70,21 @@ public class TextRun
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?>();
-        if (Text is not null) d["text"] = Text;
-        if (Style is not null) d["style"] = Style;
-        if (AssetRef is not null) d["asset_ref"] = AssetRef;
+        if (Text is not null)
+        {
+            d["text"] = Text;
+        }
+
+        if (Style is not null)
+        {
+            d["style"] = Style;
+        }
+
+        if (AssetRef is not null)
+        {
+            d["asset_ref"] = AssetRef;
+        }
+
         return d;
     }
 }
@@ -87,14 +111,29 @@ public class TextNode : MwsNode
         var d = new Dictionary<string, object?> { ["type"] = Type };
         string value;
         if (Template is not null)
+        {
             value = MwsExprHelper.ApplyInlineStyle(Template, Style);
+        }
         else if (Runs.Count > 0)
+        {
             value = MwsExprHelper.BuildValueFromRuns(Runs);
+        }
         else
+        {
             value = "";
+        }
+
         d["value"] = value;
-        if (Lets is { Count: > 0 }) d["lets"] = Lets;
-        if (Align is not null) d["align"] = Align;
+        if (Lets is { Count: > 0 })
+        {
+            d["lets"] = Lets;
+        }
+
+        if (Align is not null)
+        {
+            d["align"] = Align;
+        }
+
         return d;
     }
 }
@@ -112,8 +151,16 @@ public class ImageNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["asset"] = AssetRef };
-        if (Size is not null) d["size"] = Size;
-        if (Align is not null) d["align"] = Align;
+        if (Size is not null)
+        {
+            d["size"] = Size;
+        }
+
+        if (Align is not null)
+        {
+            d["align"] = Align;
+        }
+
         return d;
     }
 }
@@ -182,8 +229,16 @@ public class LinkNode : MwsNode
             ["target"] = Target,
             ["state_affecting"] = StateAffecting,
         };
-        if (TimelineLabel is not null) d["timeline_label"] = TimelineLabel;
-        if (Nodes.Count > 0) d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
+        if (TimelineLabel is not null)
+        {
+            d["timeline_label"] = TimelineLabel;
+        }
+
+        if (Nodes.Count > 0)
+        {
+            d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
+        }
+
         return d;
     }
 }
@@ -213,7 +268,11 @@ public class GotoNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["target"] = Target };
-        if (Condition is not null) d["condition"] = Condition;
+        if (Condition is not null)
+        {
+            d["condition"] = Condition;
+        }
+
         return d;
     }
 }
@@ -258,11 +317,31 @@ public class ModalNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
-        if (Chrome is not null) d["chrome"] = Chrome;
-        if (Body is not null) d["body"] = Body;
-        if (Round is not null) d["round"] = Round;
-        if (Next is not null) d["next"] = Next;
-        if (Instruction is not null) d["instruction"] = Instruction;
+        if (Chrome is not null)
+        {
+            d["chrome"] = Chrome;
+        }
+
+        if (Body is not null)
+        {
+            d["body"] = Body;
+        }
+
+        if (Round is not null)
+        {
+            d["round"] = Round;
+        }
+
+        if (Next is not null)
+        {
+            d["next"] = Next;
+        }
+
+        if (Instruction is not null)
+        {
+            d["instruction"] = Instruction;
+        }
+
         return d;
     }
 }
@@ -278,7 +357,11 @@ public class ConditionalBranch
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?>();
-        if (Condition is not null) d["if"] = Condition;
+        if (Condition is not null)
+        {
+            d["if"] = Condition;
+        }
+
         d["then"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
@@ -311,7 +394,10 @@ public class ConditionalNode : MwsNode
             ["conditions"] = ifBranches.Select(b => b.ToDict()).ToList(),
         };
         if (elseBranch is not null)
+        {
             d["else"] = elseBranch.Nodes.Select(n => n.ToDict()).ToList();
+        }
+
         return d;
     }
 }
@@ -325,7 +411,11 @@ public class SwitchCase
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?>();
-        if (Match is not null) d["match"] = Match;
+        if (Match is not null)
+        {
+            d["match"] = Match;
+        }
+
         d["nodes"] = Nodes.Select(n => n.ToDict()).ToList();
         return d;
     }
@@ -348,7 +438,10 @@ public class SwitchNode : MwsNode
             ["cases"] = matchCases.Select(c => c.ToDict()).ToList(),
         };
         if (defaultCase is not null)
+        {
             d["default"] = defaultCase.Nodes.Select(n => n.ToDict()).ToList();
+        }
+
         return d;
     }
 }
@@ -364,10 +457,26 @@ public class VarRandom
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = RandomType };
-        if (Values.Count > 0) d["values"] = Values;
-        if (Min.HasValue) d["min"] = Min;
-        if (Max.HasValue) d["max"] = Max;
-        if (SeedKey is not null) d["seed_key"] = SeedKey;
+        if (Values.Count > 0)
+        {
+            d["values"] = Values;
+        }
+
+        if (Min.HasValue)
+        {
+            d["min"] = Min;
+        }
+
+        if (Max.HasValue)
+        {
+            d["max"] = Max;
+        }
+
+        if (SeedKey is not null)
+        {
+            d["seed_key"] = SeedKey;
+        }
+
         return d;
     }
 }
@@ -384,8 +493,16 @@ public class SortSpec
     public Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["direction"] = Direction };
-        if (From is not null) d["from"] = From;
-        if (Property is not null) d["property"] = Property;
+        if (From is not null)
+        {
+            d["from"] = From;
+        }
+
+        if (Property is not null)
+        {
+            d["property"] = Property;
+        }
+
         return d;
     }
 }
@@ -408,19 +525,45 @@ public class EffectNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
-        if (VarSets is { Count: > 0 }) d["var_sets"] = VarSets;
-        if (VarMath is { Count: > 0 }) d["var_math"] = VarMath;
+        if (VarSets is { Count: > 0 })
+        {
+            d["var_sets"] = VarSets;
+        }
+
+        if (VarMath is { Count: > 0 })
+        {
+            d["var_math"] = VarMath;
+        }
+
         if (VarRandom is { Count: > 0 })
+        {
             d["var_random"] = VarRandom.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
-        if (VarPush is { Count: > 0 }) d["var_push"] = VarPush;
-        if (VarPop is not null) d["var_pop"] = VarPop;
+        }
+
+        if (VarPush is { Count: > 0 })
+        {
+            d["var_push"] = VarPush;
+        }
+
+        if (VarPop is not null)
+        {
+            d["var_pop"] = VarPop;
+        }
+
         if (VarSort is { Count: > 0 })
+        {
             d["var_sort"] = VarSort.ToDictionary(
                 kv => kv.Key,
                 kv => (object?)kv.Value.ToDict());
-        if (VarRemove is { Count: > 0 }) d["var_remove"] = VarRemove;
+        }
+
+        if (VarRemove is { Count: > 0 })
+        {
+            d["var_remove"] = VarRemove;
+        }
+
         return d;
     }
 }
@@ -507,7 +650,11 @@ public class InputPromptNode : MwsNode
             ["input"] = InputType,
             ["var"] = StoreIn,
         };
-        if (ResumePassage is not null) d["resume_passage"] = ResumePassage;
+        if (ResumePassage is not null)
+        {
+            d["resume_passage"] = ResumePassage;
+        }
+
         return d;
     }
 }
@@ -522,8 +669,16 @@ public class SetLocationNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
-        if (Name is not null) d["name"] = Name;
-        if (Icon is not null) d["icon"] = Icon;
+        if (Name is not null)
+        {
+            d["name"] = Name;
+        }
+
+        if (Icon is not null)
+        {
+            d["icon"] = Icon;
+        }
+
         return d;
     }
 }
@@ -537,9 +692,21 @@ public class SetupNotificationNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
-        if (Title is not null) d["title"] = Title;
-        if (Text is not null) d["text"] = Text;
-        if (NextPassage is not null) d["next_passage"] = NextPassage;
+        if (Title is not null)
+        {
+            d["title"] = Title;
+        }
+
+        if (Text is not null)
+        {
+            d["text"] = Text;
+        }
+
+        if (NextPassage is not null)
+        {
+            d["next_passage"] = NextPassage;
+        }
+
         return d;
     }
 }
@@ -568,8 +735,16 @@ public class CheckpointNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["id"] = Id };
-        if (DisplayLabel is not null) d["display"] = DisplayLabel;
-        if (DiagnosticLabel is not null) d["diagnostic"] = DiagnosticLabel;
+        if (DisplayLabel is not null)
+        {
+            d["display"] = DisplayLabel;
+        }
+
+        if (DiagnosticLabel is not null)
+        {
+            d["diagnostic"] = DiagnosticLabel;
+        }
+
         return d;
     }
 }
@@ -584,7 +759,11 @@ public class UnknownNode : MwsNode
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type, ["original_code"] = OriginalCode };
-        if (Note is not null) d["note"] = Note;
+        if (Note is not null)
+        {
+            d["note"] = Note;
+        }
+
         return d;
     }
 }
@@ -620,7 +799,10 @@ public static class MwsExprHelper
                 sb.Append($"{{icon:{slug}}}");
                 continue;
             }
-            if (run.Text is null) continue;
+            if (run.Text is null)
+            {
+                continue;
+            }
 
             bool needBold = run.Style == "bold";
             bool needItalic = run.Style == "italic";
@@ -633,8 +815,15 @@ public static class MwsExprHelper
             sb.Append(run.Text);
         }
 
-        if (inBold) sb.Append("**");
-        if (inItalic) sb.Append("_");
+        if (inBold)
+        {
+            sb.Append("**");
+        }
+
+        if (inItalic)
+        {
+            sb.Append("_");
+        }
 
         return sb.ToString();
     }
@@ -650,37 +839,81 @@ public static class MwsExprHelper
 
     public static string StringValueToExpr(string s)
     {
-        if (string.IsNullOrEmpty(s)) return "\"\"";
-        if (s.StartsWith("restext://")) return $"\"{s}\"";
+        if (string.IsNullOrEmpty(s))
+        {
+            return "\"\"";
+        }
+
+        if (s.StartsWith("restext://"))
+        {
+            return $"\"{s}\"";
+        }
+
         if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
         {
             var inner = s[1..^1].Replace(".first()", "[0]");
             return inner;
         }
         if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
+        {
             return s;
-        if (s.StartsWith("?(")) return s;
-        if (long.TryParse(s, out _)) return s;
+        }
+
+        if (s.StartsWith("?("))
+        {
+            return s;
+        }
+
+        if (long.TryParse(s, out _))
+        {
+            return s;
+        }
+
         if (!s.Contains('{') && !s.Contains('+'))
+        {
             return $"\"{EscapeStr(s)}\"";
+        }
+
         return s;
     }
 
     public static string VarSetStringToExpr(string s)
     {
-        if (string.IsNullOrEmpty(s)) return "\"\"";
-        if (s.StartsWith("restext://")) return $"\"{s}\"";
+        if (string.IsNullOrEmpty(s))
+        {
+            return "\"\"";
+        }
+
+        if (s.StartsWith("restext://"))
+        {
+            return $"\"{s}\"";
+        }
+
         if (s.StartsWith("{") && s.EndsWith("}") && !s[1..^1].Contains('{'))
         {
             var inner = s[1..^1].Replace(".first()", "[0]");
             return inner;
         }
         if (s.StartsWith("(") || s.Contains("global:") || s.Contains("input:"))
+        {
             return s;
-        if (s.StartsWith("?(")) return s;
-        if (s.Contains(".shuffle()")) return s;
+        }
+
+        if (s.StartsWith("?("))
+        {
+            return s;
+        }
+
+        if (s.Contains(".shuffle()"))
+        {
+            return s;
+        }
+
         if (!s.Contains('{'))
+        {
             return $"\"{EscapeStr(s)}\"";
+        }
+
         return s;
     }
 
@@ -697,12 +930,23 @@ public static class MwsExprHelper
 
     public static string VarMathToExpr(string varName, string math)
     {
-        if (math == "+0") return varName;
-        if (math.StartsWith("= ")) return math[2..];
+        if (math == "+0")
+        {
+            return varName;
+        }
+
+        if (math.StartsWith("= "))
+        {
+            return math[2..];
+        }
+
         var op = math[0];
         var operand = math[1..];
         if (operand.StartsWith("{") && operand.EndsWith("}"))
+        {
             operand = operand[1..^1];
+        }
+
         return $"{varName} {op} {operand}";
     }
 
@@ -731,7 +975,10 @@ public static class MwsExprHelper
         {
             var result = r.Source;
             foreach (var find in finds)
+            {
                 result = $"{result}.replace(\"{EscapeStr(find)}\", {with})";
+            }
+
             return result;
         }
         var findStr = r.Find?.ToString() ?? "";
@@ -742,20 +989,55 @@ public static class MwsExprHelper
     {
         var dir = $"\"{EscapeStr(sort.Direction)}\"";
         if (sort.Property is not null)
+        {
             return $"{source}.toSorted({dir}, \"{EscapeStr(sort.Property)}\")";
+        }
+
         return $"{source}.toSorted({dir})";
     }
 
     public static string LetToExpr(LetNode let)
     {
-        if (let.Random is not null) return VarRandomToExpr(let.Random);
-        if (let.Replace is not null) return ReplaceToExpr(let.Replace);
-        if (let.PickFrom is not null) return $"{let.PickFrom}.shuffled(\"{EscapeStr(let.Var)}_0\")[0]";
-        if (let.Array is not null) return "[" + string.Join(", ", let.Array) + "]";
-        if (let.Compute is not null) return let.Compute;
-        if (let.Sort is not null) return SortToExpr(let.Sort.From ?? let.Var, let.Sort);
-        if (let.Pop is not null) return $"{let.Pop}[^1]";
-        if (let.Dequeue is not null) return $"{let.Dequeue}[0]";
+        if (let.Random is not null)
+        {
+            return VarRandomToExpr(let.Random);
+        }
+
+        if (let.Replace is not null)
+        {
+            return ReplaceToExpr(let.Replace);
+        }
+
+        if (let.PickFrom is not null)
+        {
+            return $"{let.PickFrom}.shuffled(\"{EscapeStr(let.Var)}_0\")[0]";
+        }
+
+        if (let.Array is not null)
+        {
+            return "[" + string.Join(", ", let.Array) + "]";
+        }
+
+        if (let.Compute is not null)
+        {
+            return let.Compute;
+        }
+
+        if (let.Sort is not null)
+        {
+            return SortToExpr(let.Sort.From ?? let.Var, let.Sort);
+        }
+
+        if (let.Pop is not null)
+        {
+            return $"{let.Pop}[^1]";
+        }
+
+        if (let.Dequeue is not null)
+        {
+            return $"{let.Dequeue}[0]";
+        }
+
         return "null";
     }
 }

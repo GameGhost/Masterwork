@@ -51,7 +51,9 @@ public class ExtractionReport
     {
         var relevant = tags.Where(t => StructureTags.Contains(t, StringComparer.Ordinal)).ToArray();
         if (relevant.Length > 0)
+        {
             _taggedPassages[passageId] = relevant;
+        }
     }
 
     private List<string>? _isolatedPassages;
@@ -94,12 +96,18 @@ public class ExtractionReport
         _variables = vars;
         foreach (var p in _inputPrompts)
         {
-            if (!_variables.TryGetValue(p.StoreIn, out var def)) continue;
+            if (!_variables.TryGetValue(p.StoreIn, out var def))
+            {
+                continue;
+            }
+
             var expectedType = p.InputType == "number" ? "int" : "string";
             if (def.VarType != expectedType)
+            {
                 AddWarning(p.PassageName,
                     $"Input type mismatch: `{p.StoreIn}` is declared `{def.VarType}` but input_type is `{p.InputType}`",
                     null, p.SourceLine);
+            }
         }
     }
 
@@ -126,17 +134,32 @@ public class ExtractionReport
         sb.AppendLine($"| Passages extracted | **{PassagesExtracted}** |");
         sb.AppendLine($"| Variables discovered | **{VariablesDiscovered}** |");
         if (_restextExclusions.Count > 0)
+        {
             sb.AppendLine($"| Restext excluded | **{_restextExclusions.Count}** passages |");
+        }
+
         sb.AppendLine($"| Unknown nodes | **{unknownCount}** |");
         sb.AppendLine($"| Warnings | **{warnCount}** |");
         if (promptCount > 0)
+        {
             sb.AppendLine($"| Input prompts | **{promptCount}** |");
+        }
+
         if (infoCount > 0)
+        {
             sb.AppendLine($"| Info | **{infoCount}** |");
+        }
+
         if (isolatedCount > 0)
+        {
             sb.AppendLine($"| Isolated passages | **{isolatedCount}** |");
+        }
+
         if (overrideCount > 0)
+        {
             sb.AppendLine($"| Overrides applied | **{overrideCount}** |");
+        }
+
         sb.AppendLine();
 
         WriteSettingsSection(sb);
@@ -149,8 +172,11 @@ public class ExtractionReport
             "Recognized patterns that required a fallback or approximation.");
         WriteInputPromptsSection(sb);
         if (infoCount > 0)
+        {
             WriteSection(sb, activeFlags, "info", "Info",
                 "Informational notes — no action required.");
+        }
+
         WriteIsolatedSection(sb);
 
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
@@ -159,7 +185,10 @@ public class ExtractionReport
 
     private void WriteSettingsSection(StringBuilder sb)
     {
-        if (Settings.Count == 0) return;
+        if (Settings.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -168,13 +197,19 @@ public class ExtractionReport
         sb.AppendLine("| Option | Value |");
         sb.AppendLine("|---|---|");
         foreach (var (key, value) in Settings)
+        {
             sb.AppendLine($"| {key} | `{value}` |");
+        }
+
         sb.AppendLine();
     }
 
     private void WriteRestextExclusionsSection(StringBuilder sb)
     {
-        if (_restextExclusions.Count == 0) return;
+        if (_restextExclusions.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -185,16 +220,23 @@ public class ExtractionReport
         foreach (var passageId in _restextExclusions)
         {
             if (PassageFiles.TryGetValue(passageId, out var file))
+            {
                 sb.AppendLine($"- [{file}]({file}) (`{passageId}`)");
+            }
             else
+            {
                 sb.AppendLine($"- `{passageId}`");
+            }
         }
         sb.AppendLine();
     }
 
     private void WriteTaggedPassagesSection(StringBuilder sb)
     {
-        if (_taggedPassages.Count == 0) return;
+        if (_taggedPassages.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -207,16 +249,23 @@ public class ExtractionReport
                 .Where(kv => kv.Value.Contains(tag, StringComparer.Ordinal))
                 .OrderBy(kv => PassageFiles.TryGetValue(kv.Key, out var f) ? f : kv.Key)
                 .ToList();
-            if (passages.Count == 0) continue;
+            if (passages.Count == 0)
+            {
+                continue;
+            }
 
             sb.AppendLine($"### {tag}");
             sb.AppendLine();
             foreach (var (passageId, _) in passages)
             {
                 if (PassageFiles.TryGetValue(passageId, out var file))
+                {
                     sb.AppendLine($"- [{file}]({file}) (`{passageId}`)");
+                }
                 else
+                {
                     sb.AppendLine($"- `{passageId}`");
+                }
             }
             sb.AppendLine();
         }
@@ -224,7 +273,10 @@ public class ExtractionReport
 
     private void WriteInputPromptsSection(StringBuilder sb)
     {
-        if (_inputPrompts.Count == 0) return;
+        if (_inputPrompts.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -266,7 +318,10 @@ public class ExtractionReport
 
     private void WriteOverridesSection(StringBuilder sb)
     {
-        if (_overrides.Count == 0) return;
+        if (_overrides.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -280,15 +335,20 @@ public class ExtractionReport
         {
             sb.AppendLine($"- [{fileName}]({fileName}) (`{passageId}`)");
             if (unknownCount == 0)
+            {
                 sb.AppendLine($"  > ⚠ Possibly stale: the extractor generates 0 unknown nodes for `{passageId}`. " +
                     "Verify the generated output matches the hand-authored version before removing the override.");
+            }
         }
         sb.AppendLine();
     }
 
     private void WriteIsolatedSection(StringBuilder sb)
     {
-        if (_isolatedPassages is not { Count: > 0 }) return;
+        if (_isolatedPassages is not { Count: > 0 })
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -304,9 +364,13 @@ public class ExtractionReport
         foreach (var name in _isolatedPassages)
         {
             if (PassageFiles.TryGetValue(name, out var file))
+            {
                 sb.AppendLine($"- [{name}]({file})");
+            }
             else
+            {
                 sb.AppendLine($"- {name}");
+            }
         }
         sb.AppendLine();
     }
@@ -314,7 +378,10 @@ public class ExtractionReport
     private void WriteSection(StringBuilder sb, List<Flag> flags, string kind, string title, string description)
     {
         var items = flags.Where(f => f.Kind == kind).ToList();
-        if (items.Count == 0) return;
+        if (items.Count == 0)
+        {
+            return;
+        }
 
         sb.AppendLine("---");
         sb.AppendLine();
@@ -384,13 +451,17 @@ public class ExtractionReport
     private string FormatLocation(int line)
     {
         if (SourceFilePath is null)
+        {
             return $"line {line}";
+        }
 
         var fileName = Path.GetFileName(SourceFilePath);
         var display = $"{fileName}:{line}";
 
         if (OutputDirPath is null)
+        {
             return display;
+        }
 
         var relPath = Path.GetRelativePath(OutputDirPath, SourceFilePath).Replace('\\', '/');
         return $"[{display}]({relPath}#L{line})";
@@ -401,11 +472,19 @@ public class ExtractionReport
         Console.WriteLine($"  Passages: {PassagesExtracted}");
         Console.WriteLine($"  Variables: {VariablesDiscovered}");
         if (_restextExclusions.Count > 0)
+        {
             Console.WriteLine($"  Restext excluded: {_restextExclusions.Count} passages");
+        }
+
         if (UnknownNodeCount > 0)
+        {
             Console.WriteLine($"  Unknown nodes: {UnknownNodeCount} (see report for details)");
+        }
+
         var warnings = _flags.Count(f => f.Kind == "warning");
         if (warnings > 0)
+        {
             Console.WriteLine($"  Warnings: {warnings}");
+        }
     }
 }
