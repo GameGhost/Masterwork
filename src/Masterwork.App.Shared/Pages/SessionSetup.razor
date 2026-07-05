@@ -1,0 +1,27 @@
+﻿@page "/"
+@inject IModuleLoader ModuleLoader
+@inject GameSessionState State
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork</PageTitle>
+
+<h1>Masterwork</h1>
+<p>A community companion app for <em>My Father's Work</em>.</p>
+
+<p>
+    Real module loading (extracted scenario directories, <code>.mwm</code> packages) is still being
+    built out. For now, start the small hand-authored sample scenario below to exercise the
+    rendering pipeline end-to-end.
+</p>
+
+<button type="button" @onclick="StartSampleSession">Start sample scenario</button>
+
+@code {
+    private void StartSampleSession()
+    {
+        var module = ModuleLoader.LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml);
+        var session = new GameSession(module, masterSeed: Random.Shared.NextInt64());
+        State.Start(module, session);
+        Nav.NavigateTo("/play");
+    }
+}

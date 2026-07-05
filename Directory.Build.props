@@ -1,0 +1,6 @@
+﻿<Project>
+
+  <!-- Machine-local overrides (JDK/Android SDK paths, etc.) — not committed. See Directory.Build.local.props.example. -->
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+
+</Project>

@@ -1,0 +1,15 @@
+﻿<!--
+  Copy this file to Directory.Build.local.props (same directory) and fill in your local paths.
+  Directory.Build.local.props is gitignored — it's machine-specific and never committed.
+
+  Only needed for building the net10.0-android target framework (Masterwork.App). Everything
+  else (Engine, ModuleFormat, Extractor, Tests, the Web app) builds fine without it.
+-->
+<Project>
+
+  <PropertyGroup>
+    <JavaSdkDirectory>C:\Path\To\Your\jdk</JavaSdkDirectory>
+    <AndroidSdkDirectory>C:\Path\To\Your\android-sdk</AndroidSdkDirectory>
+  </PropertyGroup>
+
+</Project>

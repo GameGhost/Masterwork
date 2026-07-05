@@ -1,0 +1,14 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+@* Full popup handling (open/close transaction, named layouts) is Milestone B/C. *@
+<div class="mws-popup">
+    <p>@(Node.Label ?? "(auto-display popup)")</p>
+    <p><em>Popups aren't implemented yet (Milestone B).</em></p>
+</div>
+
+@code {
+    /// <summary>The popup node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedPopup Node { get; set; } = null!;
+}

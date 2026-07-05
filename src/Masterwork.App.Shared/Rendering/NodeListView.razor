@@ -1,0 +1,43 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+@foreach (var node in Nodes)
+{
+    @switch (node)
+    {
+        case RenderedText text:
+            <RenderedTextView Node="text" />
+            break;
+        case RenderedBreak:
+            <RenderedBreakView />
+            break;
+        case RenderedParagraphBreak:
+            <RenderedParagraphBreakView />
+            break;
+        case RenderedImage image:
+            <RenderedImageView Node="image" />
+            break;
+        case RenderedSection section:
+            <RenderedSectionView Node="section" OnFollowLink="OnFollowLink" />
+            break;
+        case RenderedNavigation nav:
+            <RenderedNavigationView Node="nav" OnFollowLink="OnFollowLink" />
+            break;
+        case RenderedInput input:
+            <RenderedInputView Node="input" />
+            break;
+        case RenderedPopup popup:
+            <RenderedPopupView Node="popup" />
+            break;
+    }
+}
+
+@code {
+    /// <summary>The node list to render, in document order.</summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<RenderedNode> Nodes { get; set; } = [];
+
+    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link.</summary>
+    [Parameter]
+    public EventCallback<string> OnFollowLink { get; set; }
+}

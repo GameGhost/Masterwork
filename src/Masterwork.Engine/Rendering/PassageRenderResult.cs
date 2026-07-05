@@ -8,6 +8,7 @@ namespace Masterwork.Engine.Rendering;
 /// </summary>
 public sealed record PassageRenderResult(
     string PassageId,
+    string Layout,
     string? LocationName,
     string? LocationIcon,
     IReadOnlyList<RenderedNode> Nodes,

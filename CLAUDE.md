@@ -16,13 +16,16 @@ Solution file: `src/Masterwork.slnx`
 src/Masterwork.slnx
 ├── src/MasterWork.Engine/          pure C# — interpreter and game session (Phase 1, implemented)
 ├── src/MasterWork.ModuleFormat/    VarDef, v0.3 reader types + YAML loader (shared library)
-├── src/MasterWork.App/             MAUI Blazor Hybrid player app (Phase 2 placeholder)
+├── src/MasterWork.App.Shared/      Razor Class Library — the actual player-app UI (Phase 2, in progress); shared by both heads below
+├── src/MasterWork.App/             MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
+├── src/MasterWork.App.Web/         ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
+├── src/MasterWork.App.Web.Client/  Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app"
 ├── src/MasterWork.Editor/          WPF module designer (Phase 5 placeholder)
 ├── src/MasterWork.Extractor/       CLI tool: Cradle C# → MWS v0.3 YAML (also owns extractor-internal node types, MwsNodes.cs)
 └── src/MasterWork.Tests/           xUnit test suite
 ```
 
-All six projects are registered in `Masterwork.slnx` (previously only `Masterwork.Extractor` was).
+All nine projects are registered in `Masterwork.slnx`.
 
 ## Build and Test
 
@@ -31,7 +34,22 @@ dotnet build src/Masterwork.slnx
 dotnet test src/Masterwork.Tests/Masterwork.Tests.csproj
 ```
 
-All 191 tests must pass after any change to `ModuleFormat`, `Engine`, or `Extractor`.
+All 215 tests must pass after any change to `ModuleFormat`, `Engine`, or `Extractor`.
+
+### Android build setup
+
+Building `Masterwork.App`'s `net10.0-android` target needs a local JDK + Android SDK. Copy `Directory.Build.local.props.example` to `Directory.Build.local.props` (gitignored) and fill in your paths:
+
+```xml
+<JavaSdkDirectory>C:\Path\To\Your\jdk</JavaSdkDirectory>
+<AndroidSdkDirectory>C:\Path\To\Your\android-sdk</AndroidSdkDirectory>
+```
+
+Building the Android target adds noticeably to build time (~3 min vs ~30s for the rest of the solution). Pass `-p:BuildAndroid=false` to skip it for fast iteration when only working on Engine/ModuleFormat/Web:
+
+```powershell
+dotnet build src/Masterwork.slnx -p:BuildAndroid=false
+```
 
 ---
 

@@ -1,0 +1,27 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+@if (Result.LocationName is not null)
+{
+    <header class="mws-location-header">
+        @if (Result.LocationIcon is not null)
+        {
+            <span class="mws-location-icon">@Result.LocationIcon</span>
+        }
+        <span class="mws-location-name">@Result.LocationName</span>
+    </header>
+}
+
+<div class="mws-passage layout-@Result.Layout">
+    <NodeListView Nodes="Result.Nodes" OnFollowLink="OnFollowLink" />
+</div>
+
+@code {
+    /// <summary>The passage render to display.</summary>
+    [Parameter, EditorRequired]
+    public PassageRenderResult Result { get; set; } = null!;
+
+    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link.</summary>
+    [Parameter]
+    public EventCallback<string> OnFollowLink { get; set; }
+}

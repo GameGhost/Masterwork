@@ -1,0 +1,20 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+<section class="mws-section">
+    @if (Node.Title is not null)
+    {
+        <h3>@Node.Title</h3>
+    }
+    <NodeListView Nodes="Node.Content" OnFollowLink="OnFollowLink" />
+</section>
+
+@code {
+    /// <summary>The section node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedSection Node { get; set; } = null!;
+
+    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link inside this section.</summary>
+    [Parameter]
+    public EventCallback<string> OnFollowLink { get; set; }
+}

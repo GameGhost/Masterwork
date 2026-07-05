@@ -1,0 +1,20 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+@using Masterwork.ModuleFormat
+
+<p class="mws-text@AlignClass">@Node.Value</p>
+
+@code {
+    /// <summary>The text node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedText Node { get; set; } = null!;
+
+    private string AlignClass => Node.Align switch
+    {
+        Alignment.Left => " align-left",
+        Alignment.Center => " align-center",
+        Alignment.Right => " align-right",
+        Alignment.Justified => " align-justified",
+        _ => "",
+    };
+}

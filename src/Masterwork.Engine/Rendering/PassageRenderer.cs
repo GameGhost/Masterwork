@@ -43,6 +43,7 @@ public sealed class PassageRenderer : IPassageRenderer
 
         return new PassageRenderResult(
             PassageId: passage.PassageId,
+            Layout: passage.Layout,
             LocationName: passage.Location?.Name,
             LocationIcon: passage.Location?.Icon,
             Nodes: nodes,

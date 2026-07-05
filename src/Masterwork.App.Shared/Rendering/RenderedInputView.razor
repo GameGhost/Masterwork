@@ -1,0 +1,14 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+@* Full input handling (submit, drafts, read-only-on-rewind) is Milestone B. *@
+<div class="mws-input">
+    <p>@Node.Label</p>
+    <p><em>Input prompts aren't implemented yet (Milestone B).</em></p>
+</div>
+
+@code {
+    /// <summary>The input node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedInput Node { get; set; } = null!;
+}

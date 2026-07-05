@@ -1,0 +1,18 @@
+﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+<button type="button" class="mws-nav @(Node.StateAffecting ? "state-affecting" : "in-place")" @onclick="HandleClick">
+    @Node.Label
+</button>
+
+@code {
+    /// <summary>The navigation node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedNavigation Node { get; set; } = null!;
+
+    /// <summary>Invoked with <see cref="Node"/>'s <c>Id</c> when clicked.</summary>
+    [Parameter]
+    public EventCallback<string> OnFollowLink { get; set; }
+
+    private Task HandleClick() => OnFollowLink.InvokeAsync(Node.Id);
+}

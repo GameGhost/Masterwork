@@ -1,0 +1,26 @@
+﻿@page "/play"
+@inject GameSessionState State
+
+<PageTitle>Masterwork</PageTitle>
+
+@if (State.Session is null)
+{
+    <p>No active session. <a href="/">Start a new game</a>.</p>
+}
+else
+{
+    <PassageView Result="State.Session.CurrentRender" OnFollowLink="HandleFollowLink" />
+}
+
+@code {
+    private async Task HandleFollowLink(string actionId)
+    {
+        if (State.Session is null)
+        {
+            return;
+        }
+
+        await State.Session.FollowLinkAsync(actionId);
+        StateHasChanged();
+    }
+}
