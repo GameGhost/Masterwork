@@ -1,4 +1,5 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
 @foreach (var node in Nodes)
@@ -18,16 +19,16 @@
             <RenderedImageView Node="image" />
             break;
         case RenderedSection section:
-            <RenderedSectionView Node="section" OnFollowLink="OnFollowLink" />
+            <RenderedSectionView Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedNavigation nav:
-            <RenderedNavigationView Node="nav" OnFollowLink="OnFollowLink" />
+            <RenderedNavigationView Node="nav" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedInput input:
-            <RenderedInputView Node="input" />
+            <RenderedInputView Node="input" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedPopup popup:
-            <RenderedPopupView Node="popup" />
+            <RenderedPopupView Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
     }
 }
@@ -37,7 +38,15 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<RenderedNode> Nodes { get; set; } = [];
 
-    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link.</summary>
+    /// <summary>The active session — interactive nodes call its methods directly.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
+
+    /// <summary>Whether the timeline is currently rewound — disables interactive controls.</summary>
     [Parameter]
-    public EventCallback<string> OnFollowLink { get; set; }
+    public bool IsRewound { get; set; }
+
+    /// <summary>Invoked after an interactive node completes an action that may have changed <see cref="Session"/>'s current render.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
 }

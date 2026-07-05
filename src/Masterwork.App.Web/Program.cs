@@ -13,6 +13,7 @@ builder.Services.AddRazorComponents()
 // Masterwork.App.Web.Client registers for the live WASM app are needed for that first render.
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
 builder.Services.AddScoped<GameSessionState>();
+builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 
 var app = builder.Build();
 

@@ -1,4 +1,5 @@
 ﻿@page "/play"
+@using Masterwork.App.Shared.Chrome
 @inject GameSessionState State
 
 <PageTitle>Masterwork</PageTitle>
@@ -9,18 +10,13 @@
 }
 else
 {
-    <PassageView Result="State.Session.CurrentRender" OnFollowLink="HandleFollowLink" />
+    <TimelineScrubber Session="State.Session" OnStateChanged="Refresh" />
+
+    <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound" OnStateChanged="Refresh" />
+
+    <SaveMenu State="State" OnStateChanged="Refresh" />
 }
 
 @code {
-    private async Task HandleFollowLink(string actionId)
-    {
-        if (State.Session is null)
-        {
-            return;
-        }
-
-        await State.Session.FollowLinkAsync(actionId);
-        StateHasChanged();
-    }
+    private void Refresh() => StateHasChanged();
 }

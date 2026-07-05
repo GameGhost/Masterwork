@@ -1,4 +1,5 @@
-﻿using Masterwork.App.Shared.Services;
+﻿using Masterwork.App.Services;
+using Masterwork.App.Shared.Services;
 using Masterwork.ModuleFormat;
 using Microsoft.Extensions.Logging;
 
@@ -19,6 +20,7 @@ public static class MauiProgram
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
         builder.Services.AddScoped<GameSessionState>();
+        builder.Services.AddScoped<ISaveStore, FileSaveStore>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

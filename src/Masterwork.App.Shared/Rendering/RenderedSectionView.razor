@@ -1,4 +1,5 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
 <section class="mws-section">
@@ -6,7 +7,7 @@
     {
         <h3>@Node.Title</h3>
     }
-    <NodeListView Nodes="Node.Content" OnFollowLink="OnFollowLink" />
+    <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
 </section>
 
 @code {
@@ -14,7 +15,15 @@
     [Parameter, EditorRequired]
     public RenderedSection Node { get; set; } = null!;
 
-    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link inside this section.</summary>
+    /// <summary>The active session — interactive nodes call its methods directly.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
+
+    /// <summary>Whether the timeline is currently rewound — disables interactive controls.</summary>
     [Parameter]
-    public EventCallback<string> OnFollowLink { get; set; }
+    public bool IsRewound { get; set; }
+
+    /// <summary>Invoked after an interactive node completes an action that may have changed <see cref="Session"/>'s current render.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
 }

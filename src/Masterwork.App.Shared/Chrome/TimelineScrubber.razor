@@ -1,0 +1,52 @@
+﻿@namespace Masterwork.App.Shared.Chrome
+@using Masterwork.Engine
+@using Masterwork.Engine.Session
+
+<div class="mws-timeline">
+    <div class="mws-timeline-controls">
+        <button type="button" disabled="@(!Session.CanStepBack)" @onclick="StepBack">◀ Back</button>
+        <button type="button" disabled="@(!Session.CanStepForward)" @onclick="StepForward">Forward ▶</button>
+        @if (Session.IsRewound)
+        {
+            <button type="button" class="mws-resume" @onclick="Resume">Resume from here</button>
+        }
+    </div>
+    <ol class="mws-timeline-list">
+        @for (var i = 0; i < Session.Timeline.Count; i++)
+        {
+            var snapshot = Session.Timeline[i];
+            var isCurrent = i == Session.HistoryIndex;
+            <li class="@(isCurrent ? "current" : "") @(snapshot.Kind == SnapshotKind.Checkpoint ? "checkpoint" : "")">
+                @(snapshot.DisplayLabel ?? snapshot.PassageId)
+            </li>
+        }
+    </ol>
+</div>
+
+@code {
+    /// <summary>The active session to display and navigate.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
+
+    /// <summary>Invoked after stepping back/forward or resuming.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
+
+    private async Task StepBack()
+    {
+        Session.StepBack();
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task StepForward()
+    {
+        Session.StepForward();
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task Resume()
+    {
+        Session.ResumeFromHere();
+        await OnStateChanged.InvokeAsync();
+    }
+}

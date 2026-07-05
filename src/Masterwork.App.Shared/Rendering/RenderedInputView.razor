@@ -1,14 +1,71 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine
 @using Masterwork.Engine.Rendering
+@using Masterwork.ModuleFormat
 
-@* Full input handling (submit, drafts, read-only-on-rewind) is Milestone B. *@
 <div class="mws-input">
-    <p>@Node.Label</p>
-    <p><em>Input prompts aren't implemented yet (Milestone B).</em></p>
+    @if (!_open)
+    {
+        <button type="button" disabled="@IsRewound" @onclick="() => _open = true">@Node.Label</button>
+    }
+    else
+    {
+        <p>@Node.Text</p>
+        <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
+               value="@_draftText"
+               disabled="@IsRewound"
+               @oninput="HandleInput" />
+        <button type="button" disabled="@IsRewound" @onclick="Submit">Submit</button>
+    }
 </div>
 
 @code {
     /// <summary>The input node to render.</summary>
     [Parameter, EditorRequired]
     public RenderedInput Node { get; set; } = null!;
+
+    /// <summary>The active session — submitting calls <see cref="GameSession.SubmitInputAsync"/> directly.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
+
+    /// <summary>Frozen (disabled) while the timeline is rewound; drafts aren't restored to the exact historical value yet — see masterwork-plan Q11.</summary>
+    [Parameter]
+    public bool IsRewound { get; set; }
+
+    /// <summary>Invoked after the value is submitted.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
+
+    private bool _open;
+    private string _draftText = "";
+
+    protected override void OnParametersSet()
+    {
+        if (Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var draft))
+        {
+            _draftText = draft.ToString() ?? "";
+        }
+    }
+
+    private void HandleInput(ChangeEventArgs e)
+    {
+        _draftText = e.Value?.ToString() ?? "";
+        Session.UpdateInputDraft(Node.Id, _draftText);
+    }
+
+    private async Task Submit()
+    {
+        if (IsRewound)
+        {
+            return;
+        }
+
+        object value = Node.InputType == InputValueType.Number
+            ? (long.TryParse(_draftText, out var n) ? n : 0L)
+            : _draftText;
+
+        await Session.SubmitInputAsync(Node.Id, value);
+        _open = false;
+        await OnStateChanged.InvokeAsync();
+    }
 }

@@ -1,27 +1,52 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-@if (Result.LocationName is not null)
+@if (Result.Layout == "private" && !Session.ViewState.ConfirmedGates.Contains(Result.PassageId))
 {
-    <header class="mws-location-header">
-        @if (Result.LocationIcon is not null)
-        {
-            <span class="mws-location-icon">@Result.LocationIcon</span>
-        }
-        <span class="mws-location-name">@Result.LocationName</span>
-    </header>
+    <div class="mws-private-gate">
+        <p>This passage is private. Hand the device to the appropriate player before revealing.</p>
+        <button type="button" @onclick="RevealGate">Reveal</button>
+    </div>
 }
+else
+{
+    @if (Result.LocationName is not null)
+    {
+        <header class="mws-location-header">
+            @if (Result.LocationIcon is not null)
+            {
+                <span class="mws-location-icon">@Result.LocationIcon</span>
+            }
+            <span class="mws-location-name">@Result.LocationName</span>
+        </header>
+    }
 
-<div class="mws-passage layout-@Result.Layout">
-    <NodeListView Nodes="Result.Nodes" OnFollowLink="OnFollowLink" />
-</div>
+    <div class="mws-passage layout-@Result.Layout">
+        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+    </div>
+}
 
 @code {
     /// <summary>The passage render to display.</summary>
     [Parameter, EditorRequired]
     public PassageRenderResult Result { get; set; } = null!;
 
-    /// <summary>Invoked with a <see cref="RenderedNavigation"/>'s <c>Id</c> when the player clicks a link.</summary>
+    /// <summary>The active session — interactive nodes call its methods directly.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
+
+    /// <summary>Whether the timeline is currently rewound — disables interactive controls.</summary>
     [Parameter]
-    public EventCallback<string> OnFollowLink { get; set; }
+    public bool IsRewound { get; set; }
+
+    /// <summary>Invoked after an interactive node completes an action that may have changed <see cref="Session"/>'s current render.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
+
+    private async Task RevealGate()
+    {
+        Session.ConfirmPrivateGate(Result.PassageId);
+        await OnStateChanged.InvokeAsync();
+    }
 }

@@ -1,7 +1,8 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-<button type="button" class="mws-nav @(Node.StateAffecting ? "state-affecting" : "in-place")" @onclick="HandleClick">
+<button type="button" class="mws-nav @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@IsRewound" @onclick="HandleClick">
     @Node.Label
 </button>
 
@@ -10,9 +11,26 @@
     [Parameter, EditorRequired]
     public RenderedNavigation Node { get; set; } = null!;
 
-    /// <summary>Invoked with <see cref="Node"/>'s <c>Id</c> when clicked.</summary>
-    [Parameter]
-    public EventCallback<string> OnFollowLink { get; set; }
+    /// <summary>The active session — following the link calls <see cref="GameSession.FollowLinkAsync"/> directly.</summary>
+    [Parameter, EditorRequired]
+    public GameSession Session { get; set; } = null!;
 
-    private Task HandleClick() => OnFollowLink.InvokeAsync(Node.Id);
+    /// <summary>Frozen (disabled) while the timeline is rewound.</summary>
+    [Parameter]
+    public bool IsRewound { get; set; }
+
+    /// <summary>Invoked after the link is followed.</summary>
+    [Parameter]
+    public EventCallback OnStateChanged { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (IsRewound)
+        {
+            return;
+        }
+
+        await Session.FollowLinkAsync(Node.Id);
+        await OnStateChanged.InvokeAsync();
+    }
 }
