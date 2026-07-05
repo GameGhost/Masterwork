@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -File \"C:\\Projects\\Masterwork\\.claude\\hooks\\ensure-crlf.ps1\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

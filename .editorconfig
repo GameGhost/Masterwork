@@ -1,0 +1,18 @@
+root = true
+
+[*]
+end_of_line = crlf
+insert_final_newline = true
+charset = utf-8
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Braces are always required on if/else/for/foreach/while/using blocks — no single-statement
+# inline bodies. Enforced as a build warning (IDE0011).
+csharp_prefer_braces = true:warning
+
+[*.{json,yaml,yml}]
+indent_style = space
+indent_size = 2
