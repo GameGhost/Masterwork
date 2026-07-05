@@ -10,9 +10,11 @@
 public static class SampleModule
 {
     /// <summary>
-    /// Five passages covering every standard node type Milestone A/B need to exercise: text,
+    /// Five passages covering every standard node type Milestones A/B/C need to exercise: text,
     /// break, paragraph_break, section, navigation, input, popup (generic and <c>voting</c>
-    /// layout), checkpoint, and a <c>private</c>-layout passage (the private-gate mechanic).
+    /// layout), checkpoint, image, inline <c>{icon:slug}</c> refs (one resolvable via the test
+    /// asset pack, one deliberately not — exercising <see cref="Masterwork.App.Shared.Services.AssetResolver"/>'s
+    /// fallback tier), and a <c>private</c>-layout passage (the private-gate mechanic).
     /// </summary>
     public static readonly IReadOnlyList<string> PassageYamls =
     [
@@ -28,6 +30,10 @@ public static class SampleModule
         nodes:
         - type: 'text'
           value: 'Welcome to the Masterwork sample module.'
+        - type: 'image'
+          asset: 'icon://hospital'
+        - type: 'text'
+          value: 'The town crest bears the mark of {icon:village} — and, on this old copy, a faded {icon:nonexistent_test_icon} nobody can identify anymore.'
         - type: 'break'
         - type: 'section'
           title: 'About this scenario'

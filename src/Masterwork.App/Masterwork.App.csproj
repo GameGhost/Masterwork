@@ -37,7 +37,7 @@
     <ApplicationTitle>Masterwork.App</ApplicationTitle>
 
     <!-- App Identifier -->
-    <ApplicationId>com.companyname.masterwork.app</ApplicationId>
+    <ApplicationId>ca.digitalghost.masterwork.app</ApplicationId>
 
     <!-- Versions -->
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>

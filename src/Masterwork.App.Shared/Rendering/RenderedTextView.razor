@@ -1,13 +1,20 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using System.Net
+@using System.Text
+@using System.Text.RegularExpressions
 @using Masterwork.Engine.Rendering
+@using Masterwork.App.Shared.Services
 @using Masterwork.ModuleFormat
+@inject IAssetResolver AssetResolver
 
-<p class="mws-text@AlignClass">@Node.Value</p>
+<p class="mws-text@AlignClass">@_rendered</p>
 
 @code {
     /// <summary>The text node to render.</summary>
     [Parameter, EditorRequired]
     public RenderedText Node { get; set; } = null!;
+
+    private MarkupString _rendered;
 
     private string AlignClass => Node.Align switch
     {
@@ -17,4 +24,42 @@
         Alignment.Justified => " align-justified",
         _ => "",
     };
+
+    // The engine deliberately leaves {icon:slug} refs unevaluated in RenderedText.Value (see
+    // VariableStore.ExpandTemplate) so the App can render them as real icons — this is where that
+    // happens, resolving each ref and splicing in an <img>, HTML-encoding everything else.
+    private static readonly Regex IconRefPattern = new(@"\{icon:([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _rendered = new MarkupString(await ExpandIconsAsync(Node.Value));
+    }
+
+    private async Task<string> ExpandIconsAsync(string value)
+    {
+        var sb = new StringBuilder();
+        var lastIndex = 0;
+        foreach (Match match in IconRefPattern.Matches(value))
+        {
+            sb.Append(WebUtility.HtmlEncode(value[lastIndex..match.Index]));
+
+            var slug = match.Groups[1].Value;
+            var url = await AssetResolver.ResolveAsync($"icon://{slug}");
+            if (url is not null)
+            {
+                sb.Append("<img src=\"").Append(WebUtility.HtmlEncode(url))
+                  .Append("\" alt=\"").Append(WebUtility.HtmlEncode(slug))
+                  .Append("\" class=\"mws-inline-icon\" />");
+            }
+            else
+            {
+                sb.Append(WebUtility.HtmlEncode(match.Value));
+            }
+
+            lastIndex = match.Index + match.Length;
+        }
+
+        sb.Append(WebUtility.HtmlEncode(value[lastIndex..]));
+        return sb.ToString();
+    }
 }

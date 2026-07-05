@@ -50,8 +50,6 @@ h1:focus {
 
 .mws-passage {
     padding: 1rem;
-    max-width: 40rem;
-    margin: 0 auto;
 }
 
 /* hub: a calmer, card-like frame for home-base passages */
@@ -190,4 +188,68 @@ h1:focus {
     align-items: center;
     gap: 0.5rem;
     margin: 0.25rem 0;
+}
+
+.mws-inline-icon {
+    height: 1.1em;
+    width: 1.1em;
+    vertical-align: text-bottom;
+}
+
+.mws-image-missing {
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    background: #f0f0f0;
+    font-style: italic;
+}
+
+.mws-audio-test {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+/* ── Responsive / platform layout (Phase 2 Milestone C) ──────────────────────
+   Mobile-first base styles above (see .mws-passage etc.); widen up for
+   tablet/desktop below. iOS/MacCatalyst can't be built or tested here yet (no
+   Mac build host) — this is CSS-only, so it applies to those targets too
+   whenever that changes. */
+
+/* Respect notches/rounded corners/home indicators on phones and tablets
+   (Android/iOS status bars, the "status-bar-safe-area" div already present
+   in the MAUI head's wwwroot/index.html). */
+body {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+@media (min-width: 48rem) {
+    .mws-passage {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+    }
+
+    .mws-timeline,
+    .mws-save-menu,
+    .mws-audio-test {
+        max-width: 40rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+@media (max-width: 47.99rem) {
+    .mws-popup-overlay > * {
+        max-width: none;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        overflow-y: auto;
+    }
+
+    .mws-timeline-list {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
 }

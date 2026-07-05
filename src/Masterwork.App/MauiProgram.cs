@@ -19,8 +19,10 @@ public static class MauiProgram
 
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
+        builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
         builder.Services.AddScoped<GameSessionState>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
+        builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

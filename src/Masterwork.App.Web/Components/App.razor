@@ -8,6 +8,8 @@
     <ResourcePreloader />
     <link rel="stylesheet" href="_content/Masterwork.App.Shared/app.css" />
     <link rel="stylesheet" href="Masterwork.App.Web.styles.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#7c3aed" />
     <ImportMap />
     <HeadOutlet @rendermode="InteractiveWebAssembly" />
 </head>
@@ -15,6 +17,11 @@
 <body>
     <Routes @rendermode="InteractiveWebAssembly" />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
+        }
+    </script>
 </body>
 
 </html>

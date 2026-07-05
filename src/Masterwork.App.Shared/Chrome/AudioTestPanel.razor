@@ -1,0 +1,19 @@
+﻿@namespace Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Services
+@inject IAudioPlayer AudioPlayer
+
+@* No real BGM/SFX assets exist until Phase 3 (MFW_Common_Assets) — these buttons exercise the
+   playback/crossfade/stop pipeline with synthesized tones instead. See the Milestone C manual
+   verification checklist. *@
+<div class="mws-audio-test">
+    <h4>Audio test (synthesized — no real assets yet)</h4>
+    <button type="button" @onclick="PlayTestBgm">Play test BGM tone</button>
+    <button type="button" @onclick="StopBgm">Stop BGM</button>
+    <button type="button" @onclick="PlayTestSfx">Play test SFX blip</button>
+</div>
+
+@code {
+    private Task PlayTestBgm() => AudioPlayer.PlayBgmAsync("synth://tone");
+    private Task StopBgm() => AudioPlayer.StopBgmAsync();
+    private Task PlayTestSfx() => AudioPlayer.PlaySfxAsync("synth://blip");
+}

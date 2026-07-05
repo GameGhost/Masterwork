@@ -1,11 +1,26 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine.Rendering
+@using Masterwork.App.Shared.Services
+@inject IAssetResolver AssetResolver
 
-@* Real asset resolution (bundle-local / dependency pack / engine fallback) is Milestone C. *@
-<div class="mws-image" title="@Node.Asset">[image: @Node.Asset]</div>
+@if (_url is not null)
+{
+    <img src="@_url" alt="@Node.Asset" title="@Node.Asset" class="mws-image" />
+}
+else
+{
+    <div class="mws-image-missing" title="@Node.Asset">[missing image: @Node.Asset]</div>
+}
 
 @code {
     /// <summary>The image node to render.</summary>
     [Parameter, EditorRequired]
     public RenderedImage Node { get; set; } = null!;
+
+    private string? _url;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _url = await AssetResolver.ResolveAsync(Node.Asset);
+    }
 }

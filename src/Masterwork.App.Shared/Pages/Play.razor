@@ -1,6 +1,8 @@
 ﻿@page "/play"
 @using Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Services
 @inject GameSessionState State
+@inject IAudioPlayer AudioPlayer
 
 <PageTitle>Masterwork</PageTitle>
 
@@ -15,8 +17,25 @@ else
     <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound" OnStateChanged="Refresh" />
 
     <SaveMenu State="State" OnStateChanged="Refresh" />
+
+    <AudioTestPanel />
 }
 
 @code {
-    private void Refresh() => StateHasChanged();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && State.Session is not null)
+        {
+            await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
+        }
+    }
+
+    private async Task Refresh()
+    {
+        StateHasChanged();
+        if (State.Session is not null)
+        {
+            await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
+        }
+    }
 }
