@@ -34,7 +34,7 @@ public static class ModuleLoader
 
         var variables = variablesYaml is null
             ? new Dictionary<string, VarDef>()
-            : VariableManifest.Parse(variablesYaml);
+            : VariableManifest.Parse(variablesYaml, warnings);
 
         var locale = restextText is null
             ? new Dictionary<string, string>()
@@ -43,7 +43,7 @@ public static class ModuleLoader
         var passages = new Dictionary<string, MwsPassageDoc>();
         foreach (var yaml in passageYamls)
         {
-            var raw = PassageYamlParser.ParsePassage(yaml);
+            var raw = PassageYamlParser.ParsePassage(yaml, warnings);
             var resolved = RestextResolver.Resolve(raw, locale, warnings);
             passages[resolved.PassageId] = resolved;
         }

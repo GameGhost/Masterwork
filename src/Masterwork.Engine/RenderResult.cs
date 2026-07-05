@@ -26,10 +26,10 @@ public abstract record RenderedAction : RenderedNode
     public required string Id { get; init; }
 }
 
-public sealed record RenderedText(string Value, string? Align) : RenderedNode;
+public sealed record RenderedText(string Value, Alignment? Align) : RenderedNode;
 public sealed record RenderedBreak : RenderedNode;
 public sealed record RenderedParagraphBreak : RenderedNode;
-public sealed record RenderedImage(string Asset, string? Size, string? Align) : RenderedNode;
+public sealed record RenderedImage(string Asset, string? Size, Alignment? Align) : RenderedNode;
 
 public sealed record RenderedSection(string? Title, string? Style, bool Collapsed, IReadOnlyList<RenderedNode> Content) : RenderedNode;
 
@@ -64,7 +64,7 @@ public sealed record RenderedInput : RenderedAction
     public required string Label { get; init; }
     public string? Style { get; init; }
     public required string Text { get; init; }
-    public required string InputType { get; init; }
+    public required InputValueType InputType { get; init; }
     public required string Var { get; init; }
     public required string OnSubmit { get; init; }
 }

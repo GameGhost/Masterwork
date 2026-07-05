@@ -7,8 +7,10 @@ namespace Masterwork.ModuleFormat;
 // applies a fixed typing rule here: `players` is int, every other standard variable is string.
 public static class VariableManifest
 {
-    public static IReadOnlyDictionary<string, VarDef> Parse(string yamlText)
+    public static IReadOnlyDictionary<string, VarDef> Parse(string yamlText, ModuleWarnings? warnings = null)
     {
+        var ctx = new YamlParseContext(warnings, "_variables.yaml");
+
         var stream = new YamlStream();
         stream.Load(new StringReader(yamlText));
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
@@ -20,7 +22,7 @@ public static class VariableManifest
         //   module and player initialization. At some point it seem that was moved
         //   to the App itself, and theses variables became "standard" pre-initialized
         //   variables available to the modules.
-        foreach (var name in root.GetStringList("standard_variables"))
+        foreach (var name in root.GetStringList("standard_variables", ctx))
         {
             var isPlayers = name == "players";
             result[name] = new VarDef
@@ -32,13 +34,17 @@ public static class VariableManifest
             };
         }
 
-        if (root.GetMapping("variables") is { } varsMap)
+        if (root.GetMapping("variables", ctx) is { } varsMap)
         {
             foreach (var (keyNode, valueNode) in varsMap.Children)
             {
-                var name = ((YamlScalarNode)keyNode).Value ?? "";
-                var def = (YamlMappingNode)valueNode;
-                var varType = def.GetRequiredString("type");
+                var name = keyNode is YamlScalarNode { Value: { } n } ? n : "";
+                if (valueNode is not YamlMappingNode def)
+                {
+                    ctx.Warn("wrong_field_type", $"variable '{name}': expected a mapping but found a {YamlNodeExtensions.DescribeKind(valueNode)}; skipping it");
+                    continue;
+                }
+                var varType = def.GetRequiredString("type", ctx);
                 var defaultNode = def.TryGet("default");
                 result[name] = new VarDef
                 {
@@ -47,8 +53,11 @@ public static class VariableManifest
                     Default = defaultNode is null ? null : ParseDefaultValue(defaultNode, varType),
                     IsStandard = false,
                 };
+                def.WarnUnmatchedFields(ctx, $"variable '{name}'", "type", "default");
             }
         }
+
+        root.WarnUnmatchedFields(ctx, "_variables.yaml", "standard_variables", "variables");
 
         return result;
     }

@@ -33,7 +33,7 @@ public sealed record TextNode : Node
 {
     public override string Type => "text";
     public required string Value { get; init; }
-    public string? Align { get; init; }
+    public Alignment? Align { get; init; }
     public IReadOnlyList<string> Lets { get; init; } = [];
 }
 
@@ -42,7 +42,7 @@ public sealed record ImageNode : Node
     public override string Type => "image";
     public required string Asset { get; init; }
     public string? Size { get; init; }
-    public string? Align { get; init; }
+    public Alignment? Align { get; init; }
 }
 
 // ── Structural ─────────────────────────────────────────────────────────────
@@ -131,8 +131,7 @@ public sealed record InputNode : Node
     public required string Label { get; init; }
     public string? Style { get; init; }
     public required string Text { get; init; }
-    // "string" | "number"
-    public required string InputType { get; init; }
+    public required InputValueType InputType { get; init; }
     public required string Var { get; init; }
     // Passage_id, or "${expr}" for a dynamic target.
     public required string OnSubmit { get; init; }
@@ -142,8 +141,7 @@ public sealed record PromptNode : Node
 {
     public override string Type => "prompt";
     public required string Text { get; init; }
-    // "string" | "number"
-    public required string InputType { get; init; }
+    public required InputValueType InputType { get; init; }
     public required string Var { get; init; }
 }
 

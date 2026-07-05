@@ -93,7 +93,7 @@ public sealed class GameSession
     public Task<PassageRenderResult> SubmitInputAsync(string actionId, object value)
     {
         var input = FindAction<RenderedInput>(actionId);
-        var exprValue = input.InputType == "number"
+        var exprValue = input.InputType == InputValueType.Number
             ? ExprValue.Of(Convert.ToInt64(value))
             : ExprValue.Of(value.ToString() ?? "");
         _store.SetSessionVariable(input.Var, exprValue);
