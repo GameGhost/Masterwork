@@ -118,10 +118,10 @@ public sealed class PassageRenderer : IPassageRenderer
                 RenderInput(input, ctx, output);
                 break;
             case GotoNode go:
-                ctx.PendingGoto = ResolveTargetNow(go.Target, ctx.Store);
+                ctx.PendingGoto = ResolveTargetNow(go.Target, ctx);
                 break;
             case IncludePassageNode inc:
-                var targetId = ResolveTargetNow(inc.Target, ctx.Store);
+                var targetId = ResolveTargetNow(inc.Target, ctx);
                 if (ctx.Module.Passages.TryGetValue(targetId, out var includedPassage))
                 {
                     output.AddRange(RenderNodes(includedPassage.Nodes, ctx));
@@ -273,15 +273,24 @@ public sealed class PassageRenderer : IPassageRenderer
         return _evaluator.MatchesPattern(value, patternStr);
     }
 
+    // "${module::entrypoint}" is a special sentinel, not an ordinary expression — see the same
+    // constant/comment on GameSession.ResolveTarget (masterwork-plan-rev14.md Q24).
+    private const string ModuleEntrypointTarget = "${module::entrypoint}";
+
     // Resolves a target/onclose/onsubmit field immediately: strips the "${...}" wrapper and
     // evaluates it if present, otherwise treats it as a literal passage_id. Used for `goto` and
     // `include_passage`, which must resolve at render time. navigation.Target, input.Onsubmit and
     // popup.Onclose stay raw in the rendered output — the App resolves them at follow/submit/close
     // time (see RenderedNavigation.Target and friends).
-    private string ResolveTargetNow(string raw, VariableStore store) =>
-        raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}')
-            ? _evaluator.Evaluate(raw[2..^1], store).AsString()
-            : raw;
+    private string ResolveTargetNow(string raw, RenderContext ctx) =>
+        raw switch
+        {
+            ModuleEntrypointTarget => ctx.Module.StartPassageId
+                ?? throw new InvalidOperationException("'module::entrypoint' was used as a target, but this module has no 'Begins-Here' passage."),
+            _ when raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') =>
+                _evaluator.Evaluate(raw[2..^1], ctx.Store).AsString(),
+            _ => raw,
+        };
 
     private static string? ExpandOrNull(string? template, VariableStore store) =>
         template is null ? null : store.ExpandTemplate(template);

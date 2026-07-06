@@ -85,6 +85,35 @@ public sealed class ModuleLoader : IModuleLoader
         };
     }
 
+    /// <inheritdoc/>
+    public LoadedModule MergeDependency(LoadedModule module, LoadedModule dependency)
+    {
+        var passages = new Dictionary<string, MwsPassageDoc>(dependency.Passages);
+        foreach (var (id, passage) in module.Passages)
+        {
+            passages[id] = passage; // module's own passages win on collision
+        }
+
+        var variables = new Dictionary<string, VarDef>(dependency.Variables);
+        foreach (var (name, def) in module.Variables)
+        {
+            variables[name] = def; // module's own declarations win on collision
+        }
+
+        _logger.LogDebug(
+            "Merged dependency into module: {DependencyPassageCount} dependency passages, {DependencyVarCount} dependency variables",
+            dependency.Passages.Count, dependency.Variables.Count);
+
+        return new LoadedModule
+        {
+            Passages = passages,
+            Variables = variables,
+            Locale = module.Locale,
+            Warnings = module.Warnings,
+            StartPassageId = module.StartPassageId,
+        };
+    }
+
     // Verifies that every statically-known navigation/goto/include_passage target resolves to a
     // known passage. Dynamic targets ("${expr}") are skipped — they can't be checked until runtime.
     private void ValidatePassageReferences(IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)

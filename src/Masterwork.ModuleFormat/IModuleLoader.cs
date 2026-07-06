@@ -21,4 +21,14 @@ public interface IModuleLoader
     /// <param name="variablesYaml">Raw <c>_variables.yaml</c> text, if any.</param>
     /// <param name="restextText">Raw <c>en-US.restext</c> text, if any.</param>
     LoadedModule LoadFromSources(IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null);
+
+    /// <summary>
+    /// Merges a dependency (typically an asset pack) into <paramref name="module"/> — its passages
+    /// (e.g. a shared onboarding flow, reachable via the <c>module::entrypoint</c> dynamic target)
+    /// and declared variables (e.g. <c>standard_variables</c> like <c>nameA</c>-<c>nameE</c>,
+    /// <c>townname</c>) become part of the result. Entries already present on <paramref name="module"/>
+    /// take precedence over the dependency's on id collision — a module can always override a
+    /// dependency's passage or variable declaration by declaring its own with the same name.
+    /// </summary>
+    LoadedModule MergeDependency(LoadedModule module, LoadedModule dependency);
 }

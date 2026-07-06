@@ -394,8 +394,18 @@ public sealed class GameSession
         return action as T ?? throw new InvalidOperationException($"Action '{actionId}' is not a {typeof(T).Name}.");
     }
 
+    // "${module::entrypoint}" is a special sentinel, not an ordinary expression — it's how a shared
+    // asset-pack onboarding flow's final goto/navigation reaches the loaded module's own Begins-Here
+    // passage without hardcoding a passage id it can't know in advance (masterwork-plan-rev14.md Q24).
+    private const string ModuleEntrypointTarget = "${module::entrypoint}";
+
     private string ResolveTarget(string raw) =>
-        raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}')
-            ? _expressionEvaluator.Evaluate(raw[2..^1], _store).AsString()
-            : raw;
+        raw switch
+        {
+            ModuleEntrypointTarget => _module.StartPassageId
+                ?? throw new InvalidOperationException("'module::entrypoint' was used as a target, but this module has no 'Begins-Here' passage."),
+            _ when raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') =>
+                _expressionEvaluator.Evaluate(raw[2..^1], _store).AsString(),
+            _ => raw,
+        };
 }
