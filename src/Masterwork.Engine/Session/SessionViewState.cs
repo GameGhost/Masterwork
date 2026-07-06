@@ -6,9 +6,6 @@ public sealed class SessionViewState
     /// <summary>Action IDs of popups the player has opened.</summary>
     public HashSet<string> ExpandedPopups { get; } = [];
 
-    /// <summary>IDs of private gates the player has confirmed.</summary>
-    public HashSet<string> ConfirmedGates { get; } = [];
-
     /// <summary>In-progress (not yet submitted) input values, keyed by action ID.</summary>
     public Dictionary<string, object> InputDrafts { get; } = [];
 
@@ -16,7 +13,6 @@ public sealed class SessionViewState
     public void Reset()
     {
         ExpandedPopups.Clear();
-        ConfirmedGates.Clear();
         InputDrafts.Clear();
     }
 }

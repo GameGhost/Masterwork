@@ -15,8 +15,8 @@ public static class SampleModule
     /// Six passages: an evolving hub (<c>Start</c>, revisited and changing as <c>wellVisits</c>
     /// grows), an event passage exercising <c>rand_between</c> (via <c>switch</c>) and
     /// <c>.shuffled(...)</c> (via <c>let</c>), an input prompt, generic and <c>voting</c>-layout
-    /// popups, a <c>private</c>-layout gate, and a terminal <c>ending: true</c> passage reachable
-    /// once the hub has evolved enough.
+    /// popups, a <c>foreach</c> over a shuffled array (<c>let</c> + <c>foreach</c> together), and a
+    /// terminal <c>ending: true</c> passage reachable once the hub has evolved enough.
     /// </summary>
     public static readonly IReadOnlyList<string> PassageYamls =
     [
@@ -70,8 +70,8 @@ public static class SampleModule
           target: 'Survey'
           state_affecting: true
         - type: 'navigation'
-          label: 'Read the secret note'
-          target: 'Secret'
+          label: 'Listen to the rumors'
+          target: 'Rumors'
           state_affecting: true
         - type: 'conditional'
           if: 'wellVisits >= 3'
@@ -167,13 +167,21 @@ public static class SampleModule
         """,
         """
         format: 'mws/0.3'
-        passage_id: 'Secret'
-        layout: 'private'
+        passage_id: 'Rumors'
+        layout: 'narration'
         nodes:
-        - type: 'text'
-          value: 'This note is for one player only — do not let the others see the screen.'
+        - type: 'let'
+          var: 'rumorList'
+          expr: '["They say the mayor never sleeps.", "Someone heard laughter from the empty chapel.", "The miller swears his flour has gone missing again."].shuffled("rumor_order")'
+        - type: 'foreach'
+          var: 'rumor'
+          in: 'rumorList'
+          do:
+          - type: 'text'
+            value: '{rumor}'
+          - type: 'break'
         - type: 'navigation'
-          label: 'Fold it back up'
+          label: 'Head back to the square'
           target: 'Start'
           state_affecting: true
         """,

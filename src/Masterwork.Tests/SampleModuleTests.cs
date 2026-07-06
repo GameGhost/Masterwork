@@ -61,15 +61,13 @@ public class SampleModuleTests
         var afterVoteClose = await session.ClosePopupAsync(votingPopup.Id);
         Assert.Equal("Start", afterVoteClose.PassageId);
 
-        // Secret: private layout + private-gate confirmation.
-        var secretNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Read the secret note");
-        var secretResult = await session.FollowLinkAsync(secretNav.Id);
-        Assert.Equal("private", secretResult.Layout);
-        Assert.DoesNotContain(secretResult.PassageId, session.ViewState.ConfirmedGates);
-        session.ConfirmPrivateGate(secretResult.PassageId);
-        Assert.Contains(secretResult.PassageId, session.ViewState.ConfirmedGates);
-        var backFromSecret = secretResult.Actions.OfType<RenderedNavigation>().Single();
-        await session.FollowLinkAsync(backFromSecret.Id);
+        // Rumors: let + foreach over a shuffled array.
+        var rumorsNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Listen to the rumors");
+        var rumorsResult = await session.FollowLinkAsync(rumorsNav.Id);
+        Assert.Equal("Rumors", rumorsResult.PassageId);
+        Assert.Equal(3, rumorsResult.Nodes.OfType<RenderedText>().Count());
+        var backFromRumors = rumorsResult.Actions.OfType<RenderedNavigation>().Single();
+        await session.FollowLinkAsync(backFromRumors.Id);
     }
 
     [Fact]

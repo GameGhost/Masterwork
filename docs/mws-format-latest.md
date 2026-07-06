@@ -31,7 +31,7 @@ nodes:
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id` |
 | `tags` | list of strings | no | Source tags; drives layout inference |
-| `layout` | string | yes | One of: `hub`, `event`, `narration`, `private`, `modal` |
+| `layout` | string | yes | An open, module-extensible vocabulary. Built-in values: `hub`, `event`, `narration` (see below) |
 | `debug` | bool | no | `true` for developer-only passages excluded from player builds |
 | `location` | object | no | Location shown in app header. Fields: `name` (string), `icon` (asset URI) |
 | `check_progress` | string | no | `passage_id` that must have been visited before this passage is valid to render |
@@ -43,8 +43,8 @@ nodes:
 | `hub` | Generation hub — sections with headings, collapsible bodies, multiple optional links |
 | `event` | Full-page event card — narrative text with prominent bottom links |
 | `narration` | Story passage; minimal chrome |
-| `private` | Full-screen cover until the player confirms; used for secret per-player information |
-| `modal` | Full-screen modal panel; used for generation-end summaries and special events |
+
+These are the only values the engine's own passage chrome renders specially; any other string is accepted and rendered generically (with a `layout-{value}` CSS class for module/asset-pack theming), since `layout` is deliberately an open vocabulary a module can extend. A `private`/gated-reveal passage layout and a `modal` full-screen summary layout were both specified in earlier revisions of this doc but never matched anything the three official scenarios' extracted content actually produces, so the special-cased engine support for `private` was removed (masterwork-plan-rev14.md) rather than carried forward unused; a generation-end summary is already handled by `popup` nodes with `layout: end_of_generation` (see §9), which is unrelated to a passage-level `modal` layout. A module wanting a "reveal to one player" moment can still compose one from ordinary `conditional`/`input`/`assign` nodes.
 
 The passage `layout` selects the chrome from the module manifest or engine built-in defaults. Module-specific chrome is defined in the module manifest (see §9).
 

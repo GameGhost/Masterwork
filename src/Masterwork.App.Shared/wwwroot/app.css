@@ -104,14 +104,6 @@ h1:focus {
     background: #f0f0f0;
 }
 
-.mws-private-gate {
-    padding: 2rem;
-    text-align: center;
-    background: #222;
-    color: #eee;
-    border-radius: 0.5rem;
-}
-
 .mws-popup-trigger {
     margin: 0.25rem 0.5rem 0.25rem 0;
     padding: 0.4rem 0.9rem;

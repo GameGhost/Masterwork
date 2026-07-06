@@ -214,9 +214,6 @@ public sealed class GameSession
         return Task.FromResult(result);
     }
 
-    /// <summary>Marks a private gate as confirmed in <see cref="ViewState"/>.</summary>
-    public void ConfirmPrivateGate(string gateId) => ViewState.ConfirmedGates.Add(gateId);
-
     /// <summary>Records an in-progress (not yet submitted) input value in <see cref="ViewState"/>.</summary>
     public void UpdateInputDraft(string actionId, object draft) => ViewState.InputDrafts[actionId] = draft;
 
