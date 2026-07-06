@@ -1,20 +1,22 @@
-﻿namespace Masterwork.App.Shared.SampleData;
+namespace Masterwork.App.Shared.SampleData;
 
 /// <summary>
-/// A tiny, hand-authored MWS v0.3 test scenario (not derived from any copyrighted source) used to
-/// exercise the Phase 2 rendering pipeline end-to-end while real module loading (directory/.mwm
-/// based) is still deferred. Loaded via <see cref="Masterwork.ModuleFormat.IModuleLoader.LoadFromSources"/>,
-/// which works identically on every host (unlike <c>LoadFromDirectory</c>, which needs real
-/// filesystem access and can't run in a browser WebAssembly sandbox).
+/// A small, hand-authored MWS v0.3 scenario (not derived from any copyrighted source), pre-loaded
+/// into the app as a permanent, non-deletable entry in <see cref="Masterwork.App.Shared.Services.EmbeddedModuleStore"/>.
+/// Originally just an engine test fixture (Phase 2), it doubles as a feature showcase and the
+/// primary vehicle for testing app-shell mechanics that need real, playable content — the
+/// autosave/named-save model, the ending-triggered autosave cleanup, and Manage Modules' non-deletable
+/// built-in entry (masterwork-plan-rev13.md Phase 3 Milestone E) — without depending on the much
+/// larger Cost of Disease content (Milestone D).
 /// </summary>
 public static class SampleModule
 {
     /// <summary>
-    /// Five passages covering every standard node type Milestones A/B/C need to exercise: text,
-    /// break, paragraph_break, section, navigation, input, popup (generic and <c>voting</c>
-    /// layout), checkpoint, image, inline <c>{icon:slug}</c> refs (one resolvable via the test
-    /// asset pack, one deliberately not — exercising <see cref="Masterwork.App.Shared.Services.AssetResolver"/>'s
-    /// fallback tier), and a <c>private</c>-layout passage (the private-gate mechanic).
+    /// Six passages: an evolving hub (<c>Start</c>, revisited and changing as <c>wellVisits</c>
+    /// grows), an event passage exercising <c>rand_between</c> (via <c>switch</c>) and
+    /// <c>.shuffled(...)</c> (via <c>let</c>), an input prompt, generic and <c>voting</c>-layout
+    /// popups, a <c>private</c>-layout gate, and a terminal <c>ending: true</c> passage reachable
+    /// once the hub has evolved enough.
     /// </summary>
     public static readonly IReadOnlyList<string> PassageYamls =
     [
@@ -29,17 +31,35 @@ public static class SampleModule
           icon: 'icon://village'
         nodes:
         - type: 'text'
-          value: 'Welcome to the Masterwork sample module.'
+          value: 'Welcome to {townname}, home of the Masterwork sample module.'
         - type: 'image'
           asset: 'icon://hospital'
         - type: 'text'
           value: 'The town crest bears the mark of {icon:village} — and, on this old copy, a faded {icon:nonexistent_test_icon} nobody can identify anymore.'
         - type: 'break'
+        - type: 'conditional'
+          conditions:
+          - if: 'wellVisits == 0'
+            then:
+            - type: 'text'
+              value: 'The old well at the square has been quiet for as long as anyone remembers.'
+          - if: 'wellVisits == 1'
+            then:
+            - type: 'text'
+              value: 'Villagers murmur about strange sounds from the well after your last visit.'
+          - if: 'wellVisits == 2'
+            then:
+            - type: 'text'
+              value: 'The murmurs have turned to whispers. Something is stirring beneath {townname}.'
+          else:
+          - type: 'text'
+            value: 'The town is on edge. Whatever lives in the well is close to the surface now.'
+        - type: 'paragraph_break'
         - type: 'section'
           title: 'About this scenario'
           content:
           - type: 'text'
-            value: 'This is a small hand-authored test scenario used to exercise the Phase 2 rendering pipeline end-to-end. It is not derived from the original game.'
+            value: 'This is a small hand-authored demo scenario used to exercise the engine end-to-end. It is not derived from the original game.'
         - type: 'paragraph_break'
         - type: 'navigation'
           label: 'Visit the old well'
@@ -53,14 +73,48 @@ public static class SampleModule
           label: 'Read the secret note'
           target: 'Secret'
           state_affecting: true
+        - type: 'conditional'
+          if: 'wellVisits >= 3'
+          then:
+          - type: 'navigation'
+            label: 'Confront what waits in the well'
+            target: 'Ending'
+            state_affecting: true
         """,
         """
         format: 'mws/0.3'
         passage_id: 'Well'
         layout: 'event'
         nodes:
+        - type: 'let'
+          var: 'wellFlavor'
+          expr: '["The water is ice cold tonight.", "A frog watches you from the mossy rim.", "The echo takes far too long to return."].shuffled("well_flavor")[0]'
         - type: 'text'
-          value: 'The well is deep and dark. Something stirs within.'
+          value: '{wellFlavor}'
+        - type: 'let'
+          var: 'encounterRoll'
+          expr: 'rand_between(1, 3, "well_encounter")'
+        - type: 'switch'
+          on: 'encounterRoll'
+          cases:
+          - match: 1
+            nodes:
+            - type: 'text'
+              value: 'The bucket comes up empty, but the rope is oddly warm.'
+          - match: 2
+            nodes:
+            - type: 'text'
+              value: 'A coin glints at the bottom of the well. You toss in another for luck.'
+          - match: 3
+            nodes:
+            - type: 'text'
+              value: 'Something brushes against the bucket in the dark water below.'
+          default:
+          - type: 'text'
+            value: 'The well is silent today.'
+        - type: 'assign'
+          var: 'wellVisits'
+          expr: 'wellVisits + 1'
         - type: 'checkpoint'
           id: 'visited_well'
           display: 'Visited the well'
@@ -123,14 +177,38 @@ public static class SampleModule
           target: 'Start'
           state_affecting: true
         """,
+        """
+        format: 'mws/0.3'
+        passage_id: 'Ending'
+        layout: 'narration'
+        ending: true
+        nodes:
+        - type: 'assign'
+          var: 'ending'
+          expr: '"END-WellDepths"'
+        - type: 'text'
+          value: 'You lower a lantern into the well and finally see it — pale eyes, patient and old, staring back from the depths beneath {townname}.'
+        - type: 'break'
+        - type: 'text'
+          value: 'THE END ({ending})'
+        """,
     ];
 
-    /// <summary>Declares the one session variable this sample scenario writes to.</summary>
+    /// <summary>Declares the session variables this demo scenario writes to — an int, a string, and a running counter, showcasing the variable-type range alongside the node-type coverage above.</summary>
     public const string VariablesYaml = """
         standard_variables: []
         variables:
           surveyCount:
             type: 'int'
             default: 0
+          wellVisits:
+            type: 'int'
+            default: 0
+          townname:
+            type: 'string'
+            default: 'Sampleton'
+          ending:
+            type: 'string'
+            default: ''
         """;
 }

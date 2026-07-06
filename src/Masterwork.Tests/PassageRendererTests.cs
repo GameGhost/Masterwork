@@ -876,6 +876,37 @@ public class PassageRendererTests
         Assert.Null(result.LocationName);
     }
 
+    // ── Ending header ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void EndingHeader_ExposedInResult()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.3'
+            passage_id: 'END-1'
+            layout: 'narration'
+            ending: true
+            nodes: []
+            """, mainId: "END-1");
+
+        var result = Render(passage, module, store);
+        Assert.True(result.IsEnding);
+    }
+
+    [Fact]
+    public void NoEnding_IsFalse()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.3'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.False(result.IsEnding);
+    }
+
     // ── Check progress ───────────────────────────────────────────────────────
 
     [Fact]

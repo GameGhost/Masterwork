@@ -1,5 +1,9 @@
 let audioCtx = null;
 let ambientOnly = false;
+let bgmVolume = 1.0;
+let bgmMuted = false;
+let sfxVolume = 1.0;
+let sfxMuted = false;
 let currentTrack = null; // { gain, stop }
 
 function ensureContext() {
@@ -8,7 +12,14 @@ function ensureContext() {
 }
 
 function targetGain() {
-    return ambientOnly ? 0.15 : 1.0;
+    if (bgmMuted) {
+        return 0;
+    }
+    return (ambientOnly ? 0.15 : 1.0) * bgmVolume;
+}
+
+function sfxGain() {
+    return sfxMuted ? 0 : sfxVolume;
 }
 
 function makeSource(ctx, url) {
@@ -64,7 +75,7 @@ export function playSfx(url) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain.gain.setValueAtTime(0.5 * sfxGain(), ctx.currentTime);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start();
@@ -72,11 +83,35 @@ export function playSfx(url) {
         return;
     }
 
-    new Audio(url).play();
+    const audio = new Audio(url);
+    audio.volume = sfxGain();
+    audio.play();
 }
 
 export function setAmbientOnly(value) {
     ambientOnly = value;
+    applyBgmGain();
+}
+
+export function setBgmVolume(value) {
+    bgmVolume = value;
+    applyBgmGain();
+}
+
+export function setBgmMuted(value) {
+    bgmMuted = value;
+    applyBgmGain();
+}
+
+export function setSfxVolume(value) {
+    sfxVolume = value;
+}
+
+export function setSfxMuted(value) {
+    sfxMuted = value;
+}
+
+function applyBgmGain() {
     if (currentTrack) {
         const ctx = ensureContext();
         currentTrack.gain.gain.linearRampToValueAtTime(targetGain(), ctx.currentTime + 0.5);

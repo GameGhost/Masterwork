@@ -68,11 +68,12 @@ public sealed class PassageYamlParser : IPassageYamlParser
             Debug = root.GetBool("debug", ctx),
             Location = location,
             CheckProgress = root.GetString("check_progress", ctx),
+            Ending = root.GetBool("ending", ctx),
             Nodes = BuildNodeList(root.TryGet("nodes"), ctx, "passage nodes"),
         };
 
         root.WarnUnmatchedFields(ctx, "passage header",
-            "format", "passage_id", "title", "tags", "layout", "debug", "location", "check_progress", "nodes");
+            "format", "passage_id", "title", "tags", "layout", "debug", "location", "check_progress", "ending", "nodes");
 
         _logger.LogDebug("Parsed passage '{PassageId}' with {NodeCount} top-level nodes", passage.PassageId, passage.Nodes.Count);
         return passage;

@@ -258,6 +258,19 @@ public sealed class GameSession
         ViewState.Reset();
     }
 
+    /// <summary>Jumps straight back to the head of the timeline without discarding it — unlike <see cref="ResumeFromHere"/>, the rewound-past future (if any) is kept.</summary>
+    public PassageRenderResult JumpToPresent()
+    {
+        if (!IsRewound)
+        {
+            return CurrentRender;
+        }
+
+        HistoryIndex = _timeline.Count - 1;
+        _logger.LogDebug("Jumped to present at history index {HistoryIndex}", HistoryIndex);
+        return RestoreAndRerenderCurrent();
+    }
+
     // ── Internals ────────────────────────────────────────────────────────────
 
     private PassageRenderResult PushAndRender(string passageId, SnapshotKind kind,

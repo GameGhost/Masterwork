@@ -1,0 +1,142 @@
+@page "/continue"
+@using System.Text.Json
+@using Masterwork.App.Shared.Services
+@using Masterwork.Engine.Session
+@inject ISaveStore SaveStore
+@inject IModuleStore ModuleStore
+@inject GameSessionState State
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork — Continue</PageTitle>
+
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+
+<div class="mws-continue-list">
+    <h2>Continue</h2>
+
+    @if (_saves.Count == 0)
+    {
+        <p>No saved sessions yet.</p>
+    }
+    else
+    {
+        @foreach (var save in _saves.OrderByDescending(s => s.LastPlayedUtc))
+        {
+            var moduleTitle = _modulesById.TryGetValue(save.ModuleId, out var m) ? m.Title : save.ModuleId;
+            var versionMismatch = _modulesById.TryGetValue(save.ModuleId, out var installed) && installed.Version != save.ModuleVersion;
+
+            <div class="mws-save-row">
+                <div class="mws-save-info">
+                    <strong>@(save.DisplayName ?? (save.IsAutosave ? "Autosave" : "Unnamed save"))</strong>
+                    <span>@moduleTitle</span>
+                    <span>@(save.LastStateLabel ?? "")</span>
+                    <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g")</span>
+                    @if (versionMismatch)
+                    {
+                        <span class="mws-version-warning">⚠ Saved with module v@save.ModuleVersion, installed is v@(installed!.Version) — may not load correctly.</span>
+                    }
+                </div>
+                <div class="mws-save-actions">
+                    <button type="button" @onclick="() => Resume(save)">Resume</button>
+                    <button type="button" @onclick="() => Export(save)">Export</button>
+                    <button type="button" @onclick="() => Delete(save)">Delete</button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (_pendingResume is not null)
+{
+    var moduleTitle = _modulesById.TryGetValue(_pendingResume.ModuleId, out var m) ? m.Title : _pendingResume.ModuleId;
+
+    <div class="mws-dialog-overlay">
+        <div class="mws-dialog">
+            <h3>Resume this save?</h3>
+            <p>Resuming will overwrite @moduleTitle's autosave with this save's progress.</p>
+            <div class="mws-dialog-actions">
+                <button type="button" @onclick="() => ConfirmResume(_pendingResume)">Resume anyway</button>
+                <button type="button" @onclick="() => _pendingResume = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SaveEntry> _saves = [];
+    private Dictionary<string, InstalledModule> _modulesById = [];
+    private SaveEntry? _pendingResume;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _saves = [.. await SaveStore.ListAsync()];
+        var modules = await ModuleStore.ListAsync();
+        _modulesById = modules.ToDictionary(m => m.ModuleId);
+    }
+
+    // Only warns when resuming a named save would actually clobber an existing autosave for that
+    // module — once play resumes, PersistAutosaveAsync (Play.razor) starts overwriting the module's
+    // autosave with this save's progress, but there's nothing to lose if that module has no autosave
+    // right now (e.g. it was already deleted via Abandon Game or a prior ending).
+    private Task Resume(SaveEntry entry)
+    {
+        var wouldOverwriteAutosave = !entry.IsAutosave && _saves.Any(s => s.ModuleId == entry.ModuleId && s.IsAutosave);
+        if (!wouldOverwriteAutosave)
+        {
+            return ConfirmResume(entry);
+        }
+
+        _pendingResume = entry;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmResume(SaveEntry entry)
+    {
+        _pendingResume = null;
+
+        var json = await SaveStore.LoadAsync(entry.Id);
+        if (json is null)
+        {
+            return;
+        }
+
+        var save = JsonSerializer.Deserialize<SessionSave>(json);
+        if (save is null)
+        {
+            return;
+        }
+
+        var module = await ModuleStore.LoadAsync(entry.ModuleId);
+        var session = GameSession.Restore(module, save);
+        State.Start(entry.ModuleId, entry.ModuleVersion, module, session);
+        Nav.NavigateTo("/play");
+    }
+
+    private async Task Export(SaveEntry entry)
+    {
+        var json = await SaveStore.LoadAsync(entry.Id);
+        if (json is null)
+        {
+            return;
+        }
+
+        var fileName = $"masterwork-save-{entry.Id}.json";
+        await SaveStore.ExportAsync(entry.Id, fileName, json);
+    }
+
+    private async Task Delete(SaveEntry entry)
+    {
+        await SaveStore.DeleteAsync(entry.Id);
+        await RefreshAsync();
+    }
+}

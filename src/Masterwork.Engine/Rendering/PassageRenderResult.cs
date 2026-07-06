@@ -14,5 +14,6 @@ public sealed record PassageRenderResult(
     IReadOnlyList<RenderedNode> Nodes,
     IReadOnlyList<RenderedAction> Actions,
     IReadOnlyList<RenderedCheckpoint> Checkpoints,
-    string? PendingGoto
+    string? PendingGoto,
+    bool IsEnding
 );

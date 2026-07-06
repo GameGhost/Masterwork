@@ -28,4 +28,16 @@ public interface IAudioPlayer
 
     /// <summary>Reduces (or restores) background music volume to an "ambient" level — wired to <see cref="Masterwork.Engine.GameSession.IsRewound"/>.</summary>
     Task SetAmbientOnlyAsync(bool ambientOnly);
+
+    /// <summary>Sets background music volume, 0.0-1.0 — the Options dialog's Background Volume slider.</summary>
+    Task SetBgmVolumeAsync(double volume);
+
+    /// <summary>Mutes/unmutes background music independent of its volume level — the Options dialog's Mute toggle.</summary>
+    Task SetBgmMutedAsync(bool muted);
+
+    /// <summary>Sets sound effect volume, 0.0-1.0 — the Options dialog's Sound Effects Volume slider.</summary>
+    Task SetSfxVolumeAsync(double volume);
+
+    /// <summary>Mutes/unmutes sound effects independent of their volume level — the Options dialog's Mute toggle.</summary>
+    Task SetSfxMutedAsync(bool muted);
 }

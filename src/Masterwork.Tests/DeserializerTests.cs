@@ -441,4 +441,31 @@ public class DeserializerTests
 
         Assert.Equal("Hospital0", passage.CheckProgress);
     }
+
+    [Fact]
+    public void Ending_Header_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.3'
+            passage_id: 'END-1'
+            layout: 'narration'
+            ending: true
+            nodes: []
+            """);
+
+        Assert.True(passage.Ending);
+    }
+
+    [Fact]
+    public void Ending_Header_DefaultsToFalse()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.3'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        Assert.False(passage.Ending);
+    }
 }

@@ -1,4 +1,8 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using Masterwork.App.Shared.Services
+@inject IAppSettingsStore SettingsStore
+@inject IAudioPlayer AudioPlayer
+@inject IJSRuntime JS
 
 @Body
 
@@ -7,3 +11,19 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    // Runs once per app session (MainLayout wraps every page and isn't recreated on navigation) —
+    // this is what makes the saved Options actually take effect on a fresh launch/refresh instead
+    // of only when the Options dialog itself is opened and Applied. OnAfterRenderAsync (rather than
+    // OnInitializedAsync) is deliberate: it never runs during the server-side static prerender pass,
+    // so no RendererInfo.IsInteractive guard is needed before these IJSRuntime-backed calls.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var settings = await SettingsStore.LoadAsync();
+            await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, JS);
+        }
+    }
+}

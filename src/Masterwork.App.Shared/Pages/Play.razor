@@ -1,32 +1,61 @@
-﻿@page "/play"
+@page "/play"
+@using System.Text.Json
 @using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Services
 @inject GameSessionState State
 @inject IAudioPlayer AudioPlayer
+@inject ISaveStore SaveStore
+@inject NavigationManager Nav
 
 <PageTitle>Masterwork</PageTitle>
 
 @if (State.Session is null)
 {
-    <p>No active session. <a href="/">Start a new game</a>.</p>
+    <p>No active session. <a href="/">Return to the main menu</a>.</p>
 }
 else
 {
-    <TimelineScrubber Session="State.Session" OnStateChanged="Refresh" />
+    <div class="mws-play-chrome">
+        @if (State.Session.IsRewound)
+        {
+            <TimelineScrubber Session="State.Session" OnStateChanged="Refresh" />
+        }
+        else
+        {
+            <button type="button" class="mws-back-button" @onclick="StepBack">◀ Back</button>
+        }
+        <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
+    </div>
 
-    <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound" OnStateChanged="Refresh" />
+    <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound"
+                 OnStateChanged="Refresh" />
 
-    <SaveMenu State="State" OnStateChanged="Refresh" />
+    @if (!State.Session.IsRewound && State.Session.CurrentRender.IsEnding)
+    {
+        <div class="mws-ending-banner">
+            <p>You've reached the end of your story, and the game.</p>
+            <button type="button" @onclick="ReturnToMainMenu">Return to Main Menu</button>
+        </div>
+    }
 
     <AudioTestPanel />
+
+    @if (_showOptions)
+    {
+        <OptionsDialog DialogContext="OptionsDialogContext.InGame" OnClose="() => _showOptions = false"
+                       OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
+    }
 }
 
 @code {
+    private bool _showOptions;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && State.Session is not null)
         {
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
+            await PersistAutosaveAsync();
         }
     }
 
@@ -36,6 +65,98 @@ else
         if (State.Session is not null)
         {
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
+            await PersistAutosaveAsync();
         }
+    }
+
+    private async Task StepBack()
+    {
+        State.Session!.StepBack();
+        await Refresh();
+    }
+
+    // Continuously updates the module's autosave while playing live (not while just reviewing
+    // history via the timeline scrubber) — see masterwork-plan-rev13.md Section 13's save model.
+    // Deletes it instead once a recognized ending is reached, since there's no longer an
+    // in-progress session to resume.
+    private async Task PersistAutosaveAsync()
+    {
+        if (State.Session is null || State.ModuleId is null || State.Session.IsRewound)
+        {
+            return;
+        }
+
+        var id = SaveIds.Autosave(State.ModuleId);
+        if (State.Session.CurrentRender.IsEnding)
+        {
+            await SaveStore.DeleteAsync(id);
+            return;
+        }
+
+        var entry = new SaveEntry(
+            Id: id,
+            ModuleId: State.ModuleId,
+            ModuleVersion: State.ModuleVersion ?? "",
+            IsAutosave: true,
+            DisplayName: null,
+            LastStateLabel: State.Session.Current.DisplayLabel ?? State.Session.CurrentRender.PassageId,
+            LastPlayedUtc: DateTimeOffset.UtcNow);
+        var json = JsonSerializer.Serialize(State.Session.Serialize());
+        await SaveStore.SaveAsync(entry, json);
+    }
+
+    private string DefaultSaveName()
+    {
+        var townName = State.Session?.Current.Variables.TryGetValue("townname", out var v) == true ? v.AsString() : "Session";
+        return $"{townName} — {DateTime.Now:yyyy-MM-dd}";
+    }
+
+    private async Task SaveAndQuit(string name)
+    {
+        if (State.Session is null || State.ModuleId is null)
+        {
+            return;
+        }
+
+        var entry = new SaveEntry(
+            Id: SaveIds.NewNamedSave(),
+            ModuleId: State.ModuleId,
+            ModuleVersion: State.ModuleVersion ?? "",
+            IsAutosave: false,
+            DisplayName: name,
+            LastStateLabel: State.Session.Current.DisplayLabel ?? State.Session.CurrentRender.PassageId,
+            LastPlayedUtc: DateTimeOffset.UtcNow);
+        var json = JsonSerializer.Serialize(State.Session.Serialize());
+        await SaveStore.SaveAsync(entry, json);
+
+        // The named save now stands in for this session going forward — dropping the autosave keeps
+        // it from lingering as a second, confusingly-similar entry (and keeps "the autosave is always
+        // the newest save" true, since there's no longer a bare autosave at all for this module).
+        await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
+
+        State.Clear();
+        Nav.NavigateTo("/continue");
+    }
+
+    private async Task AbandonGame()
+    {
+        // Abandoning means the session's progress isn't wanted at all — unlike Save and Quit, there's
+        // no named save to fall back to, so the autosave (the only record of this progress) goes too.
+        if (State.ModuleId is not null)
+        {
+            await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
+        }
+
+        State.Clear();
+        Nav.NavigateTo("/");
+    }
+
+    // Reaching an ending already deleted the module's autosave (see PersistAutosaveAsync above) —
+    // this just clears the in-memory session and returns to the menu. Distinct from AbandonGame,
+    // which is for walking away from an *unfinished* session rather than a completed one.
+    private void ReturnToMainMenu()
+    {
+        State.Clear();
+        Nav.NavigateTo("/");
     }
 }

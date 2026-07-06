@@ -49,7 +49,8 @@ public sealed class PassageRenderer : IPassageRenderer
             Nodes: nodes,
             Actions: ctx.Actions,
             Checkpoints: ctx.Checkpoints,
-            PendingGoto: ctx.PendingGoto);
+            PendingGoto: ctx.PendingGoto,
+            IsEnding: passage.Ending);
     }
 
     /// <inheritdoc/>

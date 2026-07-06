@@ -176,20 +176,6 @@ h1:focus {
     font-weight: 600;
 }
 
-.mws-save-menu {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: #f5f5f5;
-    border-radius: 0.5rem;
-}
-
-.mws-save-slot {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 0.25rem 0;
-}
-
 .mws-inline-icon {
     height: 1.1em;
     width: 1.1em;
@@ -206,6 +192,234 @@ h1:focus {
 .mws-audio-test {
     margin-top: 1rem;
     padding: 0.5rem 1rem;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+/* ── App shell (Phase 3 Milestone A) ─────────────────────────────────────── */
+
+:root {
+    --mws-text-scale: 1;
+}
+
+body {
+    font-size: calc(1rem * var(--mws-text-scale));
+}
+
+.mws-back-button,
+.mws-options-button {
+    padding: 0.4rem 0.9rem;
+}
+
+.mws-play-chrome {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.mws-play-chrome .mws-timeline {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.mws-options-button {
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.mws-main-menu-buttons,
+.mws-tabs,
+.mws-help-topics {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mws-tabs,
+.mws-help-topics {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.mws-tabs button.selected,
+.mws-help-topics button.selected {
+    background: #7c3aed;
+    color: #fff;
+}
+
+.mws-help {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+}
+
+.mws-help-topics {
+    flex-direction: column;
+    flex: 0 0 auto;
+}
+
+.mws-help-content {
+    flex: 1;
+}
+
+.mws-empty-state {
+    font-style: italic;
+    color: #666;
+}
+
+.mws-achievement-module {
+    margin: 1rem 0;
+    padding: 0.5rem 1rem;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+.mws-module-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    margin: 0.5rem 0;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+.mws-delete-confirm {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mws-badge {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    background: #7c3aed;
+    color: #fff;
+    border-radius: 1rem;
+}
+
+.mws-module-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.mws-module-carousel {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.mws-module-tile {
+    flex: 0 0 auto;
+    width: 12rem;
+    padding: 1rem;
+    background: #f5f5f5;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+.mws-module-tile.selected {
+    border-color: #7c3aed;
+}
+
+.mws-module-detail {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+.mws-save-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    background: #f5f5f5;
+    border-radius: 0.5rem;
+}
+
+.mws-save-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.mws-save-timestamp {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.mws-version-warning {
+    font-size: 0.85rem;
+    color: #b32121;
+}
+
+.mws-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1100;
+}
+
+.mws-dialog {
+    background: #fff;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    max-width: 26rem;
+    width: 100%;
+}
+
+.mws-options-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.mws-options-row input[type="range"] {
+    flex: 1;
+}
+
+.mws-dialog-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.mws-dialog-footer {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ddd;
+}
+
+.mws-quit-button {
+    color: #b32121;
+}
+
+.mws-save-name-input {
+    width: 100%;
+    padding: 0.4rem;
+    margin-top: 0.5rem;
+}
+
+.mws-ending-banner {
+    margin-top: 1rem;
+    padding: 1rem;
+    text-align: center;
     background: #f5f5f5;
     border-radius: 0.5rem;
 }
@@ -231,8 +445,14 @@ body {
     }
 
     .mws-timeline,
-    .mws-save-menu,
-    .mws-audio-test {
+    .mws-audio-test,
+    .mws-ending-banner,
+    .mws-main-menu,
+    .mws-help,
+    .mws-achievements,
+    .mws-manage-modules,
+    .mws-continue-list,
+    .mws-start-new-game {
         max-width: 40rem;
         margin-left: auto;
         margin-right: auto;

@@ -1,0 +1,58 @@
+@page "/achievements"
+@using Masterwork.App.Shared.Services
+@inject IModuleStore ModuleStore
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork — Achievements</PageTitle>
+
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+
+<div class="mws-achievements">
+    <nav class="mws-tabs">
+        <button type="button" class="@(_tab == Tab.Achievements ? "selected" : "")" @onclick="() => _tab = Tab.Achievements">Achievements</button>
+        <button type="button" class="@(_tab == Tab.Memories ? "selected" : "")" @onclick="() => _tab = Tab.Memories">Memories</button>
+    </nav>
+
+    @if (_tab == Tab.Achievements)
+    {
+        <div class="mws-achievements-by-module">
+            @if (_modules.Count == 0)
+            {
+                <p>No modules installed yet.</p>
+            }
+            else
+            {
+                @foreach (var module in _modules)
+                {
+                    <section class="mws-achievement-module">
+                        <h4>@module.Title</h4>
+                        <p class="mws-empty-state">No achievements recorded for this module yet.</p>
+                    </section>
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <div class="mws-memories">
+            <p class="mws-empty-state">No completed sessions yet. Reaching an ending records a Memory here.</p>
+        </div>
+    }
+</div>
+
+@code {
+    private enum Tab { Achievements, Memories }
+
+    private Tab _tab = Tab.Achievements;
+    private IReadOnlyList<InstalledModule> _modules = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        _modules = await ModuleStore.ListAsync();
+    }
+}

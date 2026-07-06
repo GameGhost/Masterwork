@@ -6,8 +6,10 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
 builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
+builder.Services.AddSingleton<IModuleStore, EmbeddedModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
+builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 
 await builder.Build().RunAsync();

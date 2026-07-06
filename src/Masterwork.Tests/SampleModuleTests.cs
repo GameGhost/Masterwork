@@ -17,7 +17,7 @@ public class SampleModuleTests
     {
         var module = new ModuleLoader().LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml);
 
-        Assert.Equal(5, module.Passages.Count);
+        Assert.Equal(6, module.Passages.Count);
         Assert.Equal("Start", module.StartPassageId);
         Assert.Empty(module.Warnings.Items);
     }
@@ -68,5 +68,45 @@ public class SampleModuleTests
         Assert.DoesNotContain(secretResult.PassageId, session.ViewState.ConfirmedGates);
         session.ConfirmPrivateGate(secretResult.PassageId);
         Assert.Contains(secretResult.PassageId, session.ViewState.ConfirmedGates);
+        var backFromSecret = secretResult.Actions.OfType<RenderedNavigation>().Single();
+        await session.FollowLinkAsync(backFromSecret.Id);
+    }
+
+    [Fact]
+    public async Task HubEvolves_AsWellVisitsAccumulate_ThenReachesEnding()
+    {
+        var module = new ModuleLoader().LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml);
+        var session = new GameSession(module, masterSeed: 1);
+
+        // Not yet visited: no route to the Ending.
+        Assert.DoesNotContain(session.CurrentRender.Actions.OfType<RenderedNavigation>(), a => a.Label.Contains("Confront"));
+        Assert.Contains(session.CurrentRender.Nodes.OfType<RenderedText>(), t => t.Value.Contains("quiet for as long as anyone remembers"));
+
+        for (var visit = 1; visit <= 3; visit++)
+        {
+            var wellNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Visit the old well");
+            var wellResult = await session.FollowLinkAsync(wellNav.Id);
+
+            // Exercises both random mechanisms: a shuffled-array pick (let) and rand_between (switch).
+            Assert.Contains(wellResult.Nodes.OfType<RenderedText>(), t =>
+                t.Value.Contains("ice cold") || t.Value.Contains("frog") || t.Value.Contains("echo"));
+
+            var backNav = wellResult.Actions.OfType<RenderedNavigation>().Single();
+            await session.FollowLinkAsync(backNav.Id);
+            Assert.Equal((long)visit, session.Current.Variables["wellVisits"].AsInt());
+        }
+
+        Assert.False(session.CurrentRender.IsEnding);
+        var endingNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label.Contains("Confront"));
+        var endingResult = await session.FollowLinkAsync(endingNav.Id);
+
+        Assert.Equal("Ending", endingResult.PassageId);
+        Assert.True(endingResult.IsEnding);
+        // The 'ending' assign runs during this terminal passage's own render, so its new value is
+        // only observable in this render's output — not in session.Current.Variables, which is a
+        // snapshot of state from just *before* this passage rendered (see SessionSnapshot's doc
+        // comment on precision).
+        Assert.Contains(endingResult.Nodes.OfType<RenderedText>(), t => t.Value.Contains("END-WellDepths"));
+        Assert.Empty(endingResult.Actions);
     }
 }

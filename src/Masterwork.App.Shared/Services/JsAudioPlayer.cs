@@ -49,6 +49,34 @@ public sealed class JsAudioPlayer(IJSRuntime js) : IAudioPlayer, IAsyncDisposabl
     }
 
     /// <inheritdoc/>
+    public async Task SetBgmVolumeAsync(double volume)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("setBgmVolume", volume);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetBgmMutedAsync(bool muted)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("setBgmMuted", muted);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetSfxVolumeAsync(double volume)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("setSfxVolume", volume);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetSfxMutedAsync(bool muted)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("setSfxMuted", muted);
+    }
+
+    /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
         if (_module is not null)

@@ -6,10 +6,8 @@
     <div class="mws-timeline-controls">
         <button type="button" disabled="@(!Session.CanStepBack)" @onclick="StepBack">◀ Back</button>
         <button type="button" disabled="@(!Session.CanStepForward)" @onclick="StepForward">Forward ▶</button>
-        @if (Session.IsRewound)
-        {
-            <button type="button" class="mws-resume" @onclick="Resume">Resume from here</button>
-        }
+        <button type="button" @onclick="JumpToPresent">Return to present</button>
+        <button type="button" class="mws-resume" @onclick="Resume">Restart from here</button>
     </div>
     <ol class="mws-timeline-list">
         @for (var i = 0; i < Session.Timeline.Count; i++)
@@ -47,6 +45,12 @@
     private async Task Resume()
     {
         Session.ResumeFromHere();
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task JumpToPresent()
+    {
+        Session.JumpToPresent();
         await OnStateChanged.InvokeAsync();
     }
 }

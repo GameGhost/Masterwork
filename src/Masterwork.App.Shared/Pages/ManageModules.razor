@@ -1,0 +1,78 @@
+@page "/modules/manage"
+@using Masterwork.App.Shared.Services
+@inject IModuleStore ModuleStore
+@inject ISaveStore SaveStore
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork — Manage Modules</PageTitle>
+
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+
+<div class="mws-manage-modules">
+    <h2>Manage Modules</h2>
+
+    @foreach (var module in _modules)
+    {
+        <div class="mws-module-row">
+            <div>
+                <strong>@module.Title</strong>
+                <span class="mws-module-version">v@module.Version</span>
+                @if (module.IsBuiltIn)
+                {
+                    <span class="mws-badge">Built-in</span>
+                }
+            </div>
+            @if (module.IsBuiltIn)
+            {
+                <span class="mws-empty-state">Ships with the app — can't be removed.</span>
+            }
+            else if (_confirmingDeleteId == module.ModuleId)
+            {
+                <div class="mws-delete-confirm">
+                    <span>Also delete this module's saves?</span>
+                    <button type="button" @onclick="() => ConfirmDelete(module.ModuleId, deleteSaves: true)">Delete module + saves</button>
+                    <button type="button" @onclick="() => ConfirmDelete(module.ModuleId, deleteSaves: false)">Delete module only</button>
+                    <button type="button" @onclick="() => _confirmingDeleteId = null">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">Delete</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<InstalledModule> _modules = [];
+    private string? _confirmingDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        _modules = await ModuleStore.ListAsync();
+    }
+
+    private async Task ConfirmDelete(string moduleId, bool deleteSaves)
+    {
+        // Real uninstall (removing from IModuleStore's index, and reference-counting shared
+        // dependency asset packs before freeing their storage) is Milestone B work, once modules
+        // can actually be uploaded/removed — see masterwork-plan-rev13.md Section 13. For now only
+        // the built-in demo module exists and it's never deletable, so this path isn't reachable;
+        // the save-cleanup half is wired up regardless so it's ready once real modules land.
+        if (deleteSaves)
+        {
+            var saves = await SaveStore.ListAsync();
+            foreach (var save in saves.Where(s => s.ModuleId == moduleId))
+            {
+                await SaveStore.DeleteAsync(save.Id);
+            }
+        }
+
+        _confirmingDeleteId = null;
+    }
+}

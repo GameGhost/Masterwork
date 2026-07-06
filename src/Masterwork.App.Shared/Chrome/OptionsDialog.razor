@@ -1,0 +1,151 @@
+@namespace Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Services
+@inject IAppSettingsStore SettingsStore
+@inject IAudioPlayer AudioPlayer
+@inject IJSRuntime JS
+
+<div class="mws-dialog-overlay">
+    <div class="mws-dialog mws-options-dialog">
+        @switch (_view)
+        {
+            case View.Options:
+                <h3>Options</h3>
+                <label class="mws-options-row">
+                    Background Volume
+                    <input type="range" min="0" max="100" value="@((int)(_draft.BgmVolume * 100))"
+                           @oninput="OnBgmVolumeInput" disabled="@_draft.BgmMuted" />
+                    <button type="button" class="mws-mute-toggle" @onclick="ToggleBgmMuted">@(_draft.BgmMuted ? "Unmute" : "Mute")</button>
+                </label>
+                <label class="mws-options-row">
+                    Sound Effects Volume
+                    <input type="range" min="0" max="100" value="@((int)(_draft.SfxVolume * 100))"
+                           @oninput="OnSfxVolumeInput" disabled="@_draft.SfxMuted" />
+                    <button type="button" class="mws-mute-toggle" @onclick="ToggleSfxMuted">@(_draft.SfxMuted ? "Unmute" : "Mute")</button>
+                </label>
+                <label class="mws-options-row">
+                    Text Size
+                    <input type="range" min="0" max="5" step="1" value="@_draft.TextSizeStep" @oninput="OnTextSizeInput" />
+                </label>
+
+                <div class="mws-dialog-actions">
+                    <button type="button" @onclick="Apply">Apply</button>
+                    <button type="button" @onclick="Cancel">Cancel</button>
+                </div>
+
+                <div class="mws-dialog-footer">
+                    @if (DialogContext == OptionsDialogContext.MainMenu)
+                    {
+                        <button type="button" @onclick="ManageModules">Manage Modules</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="mws-quit-button" @onclick="() => _view = View.QuitConfirm">Quit</button>
+                    }
+                </div>
+                break;
+
+            case View.QuitConfirm:
+                <h3>Quit?</h3>
+                <p>Your progress in this session hasn't been saved as a named save yet.</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" @onclick="BeginSaveAndQuit">Save and Quit</button>
+                    <button type="button" @onclick="AbandonGame">Abandon Game</button>
+                    <button type="button" @onclick="() => _view = View.Options">Cancel</button>
+                </div>
+                break;
+
+            case View.QuitNamePrompt:
+                <h3>Name this save</h3>
+                <input type="text" @bind="_saveName" @bind:event="oninput" class="mws-save-name-input" />
+                <div class="mws-dialog-actions">
+                    <button type="button" @onclick="ConfirmSaveAndQuit">Save</button>
+                    <button type="button" @onclick="() => _view = View.QuitConfirm">Cancel</button>
+                </div>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    private enum View { Options, QuitConfirm, QuitNamePrompt }
+
+    /// <summary>Which footer action to show — see <see cref="OptionsDialogContext"/>.</summary>
+    [Parameter, EditorRequired]
+    public OptionsDialogContext DialogContext { get; set; }
+
+    /// <summary>Invoked when the dialog should close (Apply, Cancel, or after a quit action completes).</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnClose { get; set; }
+
+    /// <summary>Invoked when "Manage Modules" is tapped — <see cref="OptionsDialogContext.MainMenu"/> only.</summary>
+    [Parameter]
+    public EventCallback OnManageModules { get; set; }
+
+    /// <summary>Invoked with the chosen name once "Save and Quit" is confirmed — <see cref="OptionsDialogContext.InGame"/> only.</summary>
+    [Parameter]
+    public EventCallback<string> OnSaveAndQuit { get; set; }
+
+    /// <summary>Invoked when "Abandon Game" is confirmed — <see cref="OptionsDialogContext.InGame"/> only.</summary>
+    [Parameter]
+    public EventCallback OnAbandonGame { get; set; }
+
+    /// <summary>Prefilled name for the "Save and Quit" prompt — typically <c>"{townname} — {date}"</c>.</summary>
+    [Parameter]
+    public string DefaultSaveName { get; set; } = "";
+
+    private View _view = View.Options;
+    private AppSettings _draft = AppSettings.Default;
+    private string _saveName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        _draft = await SettingsStore.LoadAsync();
+    }
+
+    private void OnBgmVolumeInput(ChangeEventArgs e) => _draft = _draft with { BgmVolume = ParsePercent(e.Value) };
+    private void OnSfxVolumeInput(ChangeEventArgs e) => _draft = _draft with { SfxVolume = ParsePercent(e.Value) };
+    private void OnTextSizeInput(ChangeEventArgs e) => _draft = _draft with { TextSizeStep = ParseInt(e.Value, _draft.TextSizeStep) };
+
+    private void ToggleBgmMuted() => _draft = _draft with { BgmMuted = !_draft.BgmMuted };
+    private void ToggleSfxMuted() => _draft = _draft with { SfxMuted = !_draft.SfxMuted };
+
+    private static double ParsePercent(object? value) =>
+        double.TryParse(value?.ToString(), out var pct) ? pct / 100.0 : 1.0;
+
+    private static int ParseInt(object? value, int fallback) =>
+        int.TryParse(value?.ToString(), out var i) ? i : fallback;
+
+    private async Task Apply()
+    {
+        await SettingsStore.SaveAsync(_draft);
+        await AppSettingsApplier.ApplyAsync(_draft, AudioPlayer, JS);
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task Cancel() => await OnClose.InvokeAsync();
+
+    private async Task ManageModules() => await OnManageModules.InvokeAsync();
+
+    private void BeginSaveAndQuit()
+    {
+        _saveName = DefaultSaveName;
+        _view = View.QuitNamePrompt;
+    }
+
+    private async Task ConfirmSaveAndQuit()
+    {
+        await OnSaveAndQuit.InvokeAsync(_saveName);
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task AbandonGame()
+    {
+        await OnAbandonGame.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+}

@@ -446,6 +446,53 @@ public class GameSessionTests
         Assert.Equal(countBefore + 1, session.Timeline.Count);
     }
 
+    // ── Jump to present ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task JumpToPresent_MovesToTimelineHead()
+    {
+        var (session, _) = await MakeThreeStepSessionAsync();
+        session.StepBack();
+        session.StepBack();
+
+        session.JumpToPresent();
+
+        Assert.Equal(session.Timeline.Count - 1, session.HistoryIndex);
+    }
+
+    [Fact]
+    public async Task JumpToPresent_IsRewound_False()
+    {
+        var (session, _) = await MakeThreeStepSessionAsync();
+        session.StepBack();
+
+        session.JumpToPresent();
+
+        Assert.False(session.IsRewound);
+    }
+
+    [Fact]
+    public async Task JumpToPresent_DoesNotTruncateTimeline()
+    {
+        var (session, _) = await MakeThreeStepSessionAsync();
+        session.StepBack();
+        session.StepBack();
+        var countBefore = session.Timeline.Count;
+
+        session.JumpToPresent();
+
+        Assert.Equal(countBefore, session.Timeline.Count);
+    }
+
+    [Fact]
+    public void JumpToPresent_WhileLive_IsNoOp()
+    {
+        var (session, _) = MakeSimpleSession();
+        var result = session.JumpToPresent();
+        Assert.Equal(session.CurrentRender.PassageId, result.PassageId);
+        Assert.Equal(0, session.HistoryIndex);
+    }
+
     // ── Checkpoint ───────────────────────────────────────────────────────────
 
     private static GameSession MakeCheckpointSession()

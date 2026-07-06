@@ -1,0 +1,42 @@
+@page "/help"
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork — Help</PageTitle>
+
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+
+<div class="mws-help">
+    <nav class="mws-help-topics">
+        @foreach (var topic in Topics)
+        {
+            <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@topic</button>
+        }
+    </nav>
+    <div class="mws-help-content">
+        @switch (_selected)
+        {
+            case "How to use":
+                <h3>How to Use Masterwork</h3>
+                <p>Masterwork plays community-authored scenarios for <em>My Father's Work</em>. Start a module from
+                   "Start New Game," follow the passages as they're presented, and use the timeline scrubber to
+                   review — not undo — anything you've already decided.</p>
+                break;
+            case "Timeline and rewind":
+                <h3>Timeline and Rewind</h3>
+                <p>Stepping back lets you review what happened without changing it — links and inputs disable while
+                   you're looking at the past. "Resume from here" discards anything after the point you're viewing;
+                   "Return to present" just brings you back without discarding it.</p>
+                break;
+            case "Saves":
+                <h3>Saves</h3>
+                <p>Each module keeps one autosave that updates as you play. Quitting from the in-game Options menu
+                   offers to save your progress under a name of your choosing before returning to the Continue list.</p>
+                break;
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Topics = ["How to use", "Timeline and rewind", "Saves"];
+    private string _selected = Topics[0];
+}

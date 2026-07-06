@@ -1,0 +1,46 @@
+@page "/"
+@using Masterwork.App.Shared.Chrome
+@inject ISaveStore SaveStore
+@inject NavigationManager Nav
+
+<PageTitle>Masterwork</PageTitle>
+
+<div class="mws-main-menu">
+    <h1>Masterwork</h1>
+    <p>A community companion app for <em>My Father's Work</em>.</p>
+
+    <nav class="mws-main-menu-buttons">
+        <button type="button" @onclick='() => Nav.NavigateTo("/help")'>Help</button>
+        <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>Achievements</button>
+        <button type="button" @onclick="() => _showOptions = true">Options</button>
+        <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>Continue</button>
+        <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>Start New Game</button>
+    </nav>
+</div>
+
+@if (_showOptions)
+{
+    <OptionsDialog DialogContext="OptionsDialogContext.MainMenu"
+                   OnClose="() => _showOptions = false"
+                   OnManageModules='() => Nav.NavigateTo("/modules/manage")' />
+}
+
+@code {
+    private bool _hasAnySave;
+    private bool _showOptions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ISaveStore may use IJSRuntime (browser localStorage), which throws if called during the
+        // server-side static prerender pass. This component gets re-initialized once the
+        // WebAssembly client takes over, when RendererInfo.IsInteractive is true and the check below
+        // stops skipping.
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        var saves = await SaveStore.ListAsync();
+        _hasAnySave = saves.Count > 0;
+    }
+}
