@@ -14,8 +14,15 @@
 <div class="mws-start-new-game">
     <div class="mws-module-toolbar">
         <button type="button" disabled title="Coming soon — needs a hosted module registry (Phase 6)">Download Modules</button>
-        <button type="button" disabled title="Coming soon — needs the .mwm upload pipeline (Phase 3 Milestone B)">Upload Module</button>
+        <label class="mws-upload-button">
+            Upload Module
+            <InputFile OnChange="OnUploadFileSelected" accept=".mwm" />
+        </label>
     </div>
+    @if (_uploadError is not null)
+    {
+        <p class="mws-version-warning">@_uploadError</p>
+    }
 
     <div class="mws-module-carousel">
         @foreach (var module in _modules)
@@ -59,6 +66,7 @@
     private string? _selectedId;
     private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
     private InstalledModule? _conflictModule;
+    private string? _uploadError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -138,5 +146,24 @@
         var session = new GameSession(loaded, masterSeed: Random.Shared.NextInt64());
         State.Start(module.ModuleId, module.Version, loaded, session);
         Nav.NavigateTo("/play");
+    }
+
+    private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
+    {
+        _uploadError = null;
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+
+            var installed = await ModuleStore.InstallAsync(memory.ToArray());
+            _modules = await ModuleStore.ListAsync();
+            _selectedId = installed.ModuleId;
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Couldn't install that module: {ex.Message}";
+        }
     }
 }

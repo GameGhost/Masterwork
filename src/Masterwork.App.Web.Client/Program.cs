@@ -6,7 +6,7 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
 builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
-builder.Services.AddSingleton<IModuleStore, EmbeddedModuleStore>();
+builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();

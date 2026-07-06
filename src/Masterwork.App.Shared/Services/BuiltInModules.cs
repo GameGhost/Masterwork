@@ -3,8 +3,13 @@ using Masterwork.ModuleFormat;
 
 namespace Masterwork.App.Shared.Services;
 
-/// <inheritdoc cref="IModuleStore"/>
-public sealed class EmbeddedModuleStore(IModuleLoader loader) : IModuleStore
+/// <summary>
+/// The app's permanently-embedded modules — currently just the demo module, ships with the app
+/// binary rather than living in an <see cref="IModuleStore"/> implementation's own uploaded-module
+/// storage, and can't be deleted via Manage Modules. Shared by every per-host <see cref="IModuleStore"/>
+/// implementation so each one only has to add its own uploaded-module storage on top of this.
+/// </summary>
+public static class BuiltInModules
 {
     /// <summary>The demo module's stable id — used as a <see cref="SaveEntry.ModuleId"/> and for <see cref="SaveIds.Autosave"/>.</summary>
     public const string DemoModuleId = "masterwork.demo";
@@ -12,7 +17,8 @@ public sealed class EmbeddedModuleStore(IModuleLoader loader) : IModuleStore
     /// <summary>Bumped whenever <see cref="SampleModule"/>'s content changes in a way that could break an existing save.</summary>
     public const string DemoModuleVersion = "1.0.0";
 
-    private static readonly InstalledModule DemoModule = new(
+    /// <summary>The demo module's <see cref="InstalledModule"/> entry.</summary>
+    public static readonly InstalledModule Demo = new(
         ModuleId: DemoModuleId,
         Version: DemoModuleVersion,
         Title: "Masterwork Demo",
@@ -20,18 +26,7 @@ public sealed class EmbeddedModuleStore(IModuleLoader loader) : IModuleStore
                      "random/shuffled events, module variables, and an ending. Ships with the app and can't be removed.",
         IsBuiltIn: true);
 
-    /// <inheritdoc/>
-    public Task<IReadOnlyList<InstalledModule>> ListAsync() =>
-        Task.FromResult<IReadOnlyList<InstalledModule>>([DemoModule]);
-
-    /// <inheritdoc/>
-    public Task<LoadedModule> LoadAsync(string moduleId)
-    {
-        if (moduleId != DemoModuleId)
-        {
-            throw new InvalidOperationException($"Unknown module id '{moduleId}' — only the built-in demo module is available until Milestone B's upload/download pipeline exists.");
-        }
-
-        return Task.FromResult(loader.LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml));
-    }
+    /// <summary>Loads the demo module's full content.</summary>
+    public static LoadedModule LoadDemo(IModuleLoader loader) =>
+        loader.LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml);
 }

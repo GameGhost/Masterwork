@@ -59,11 +59,12 @@
 
     private async Task ConfirmDelete(string moduleId, bool deleteSaves)
     {
-        // Real uninstall (removing from IModuleStore's index, and reference-counting shared
-        // dependency asset packs before freeing their storage) is Milestone B work, once modules
-        // can actually be uploaded/removed — see masterwork-plan-rev13.md Section 13. For now only
-        // the built-in demo module exists and it's never deletable, so this path isn't reachable;
-        // the save-cleanup half is wired up regardless so it's ready once real modules land.
+        // Dependency-asset-pack reference counting (don't free a shared pack's storage while
+        // another installed module still depends on it) is still a TODO — it doesn't matter yet
+        // since real modules don't declare dependencies against anything installable until asset
+        // packs exist (Milestone C), but it needs solving before that changes.
+        await ModuleStore.DeleteAsync(moduleId);
+
         if (deleteSaves)
         {
             var saves = await SaveStore.ListAsync();
@@ -74,5 +75,6 @@
         }
 
         _confirmingDeleteId = null;
+        _modules = await ModuleStore.ListAsync();
     }
 }
