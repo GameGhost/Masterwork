@@ -3,8 +3,10 @@
 @using System.Text.Json
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
+@using Masterwork.ModuleFormat
 @inject IModuleStore ModuleStore
 @inject ISaveStore SaveStore
+@inject IAppSettingsStore SettingsStore
 @inject GameSessionState State
 @inject NavigationManager Nav
 
@@ -29,7 +31,7 @@
             <div class="mws-module-carousel">
                 @foreach (var module in _modules)
                 {
-                    <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => _selectedId = module.ModuleId">
+                    <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => SelectModule(module.ModuleId)">
                         @if (module.IsBuiltIn)
                         {
                             <span class="mws-badge">Built-in</span>
@@ -40,11 +42,21 @@
                 }
             </div>
 
-            @if (_selected is not null)
+            @if (_selected is null)
+            {
+                <p class="mws-empty-state">Select a module to get started.</p>
+            }
+            else
             {
                 <div class="mws-module-detail">
                     <p>@_selected.Description</p>
                     <button type="button" @onclick="() => Play(_selected)">Play</button>
+                    <select class="mws-module-language" value="@_selectedLanguage" disabled="@(_selected.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
+                        @foreach (var lang in _selected.AvailableLanguages)
+                        {
+                            <option value="@lang">@lang</option>
+                        }
+                    </select>
                 </div>
             }
 
@@ -54,10 +66,14 @@
                     <div class="mws-dialog">
                         <h3>Resume in-progress session?</h3>
                         <p>@_conflictModule.Title already has an autosave in progress.</p>
+                        @if (ConflictAutosaveSummary() is { } summary)
+                        {
+                            <p class="mws-save-timestamp">@summary</p>
+                        }
                         <div class="mws-dialog-actions">
                             <button type="button" @onclick="ResumeConflicting">Resume</button>
                             <button type="button" @onclick="DiscardAndStartFresh">Discard previous session</button>
-                            <button type="button" @onclick="() => _conflictModule = null">Cancel</button>
+                            <button type="button" @onclick="() => { _conflictModule = null; _conflictAutosave = null; }">Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -92,10 +108,13 @@
     private IReadOnlyList<InstalledModule> _modules = [];
     private string? _selectedId;
     private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
+    private string? _selectedLanguage;
     private InstalledModule? _conflictModule;
+    private SaveEntry? _conflictAutosave;
     private string? _uploadError;
     private PendingUpload? _pendingUpload;
     private ErrorBoundary? _errorBoundary;
+    private AppSettings _appSettings = AppSettings.Default;
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,12 +124,49 @@
         }
 
         _modules = await ModuleStore.ListAsync();
-        _selectedId = _modules.FirstOrDefault()?.ModuleId;
+        _appSettings = await SettingsStore.LoadAsync();
+        // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
+        // auto-committed to whatever happened to load first.
     }
 
     private void Recover()
     {
         _errorBoundary?.Recover();
+    }
+
+    // Resets the language choice every time the selected module changes: the preferred module
+    // language (Options) if that module actually has it, else the module's own default, else
+    // whatever's there — never carries a previous module's language selection over by accident.
+    private void SelectModule(string moduleId)
+    {
+        _selectedId = moduleId;
+        _selectedLanguage = _selected is { } module ? DefaultLanguageFor(module, _appSettings.PreferredModuleLanguage) : null;
+    }
+
+    private static string DefaultLanguageFor(InstalledModule module, string? preferred)
+    {
+        if (preferred is not null && module.AvailableLanguages.Contains(preferred))
+        {
+            return preferred;
+        }
+
+        return module.AvailableLanguages.Contains(ModuleLocales.Default)
+            ? ModuleLocales.Default
+            : module.AvailableLanguages[0];
+    }
+
+    private void OnLanguageChanged(ChangeEventArgs e) => _selectedLanguage = e.Value?.ToString();
+
+    private string? ConflictAutosaveSummary()
+    {
+        if (_conflictAutosave is null)
+        {
+            return null;
+        }
+
+        var parts = new[] { _conflictAutosave.LastStateLabel, _conflictAutosave.LastPlayedUtc.ToLocalTime().ToString("g"), _conflictAutosave.Language }
+            .Where(s => !string.IsNullOrEmpty(s));
+        return string.Join(" · ", parts);
     }
 
     private async Task Play(InstalledModule? module)
@@ -122,13 +178,15 @@
 
         var autosaveId = SaveIds.Autosave(module.ModuleId);
         var saves = await SaveStore.ListAsync();
-        if (saves.Any(s => s.Id == autosaveId))
+        var autosave = saves.FirstOrDefault(s => s.Id == autosaveId);
+        if (autosave is not null)
         {
             _conflictModule = module;
+            _conflictAutosave = autosave;
             return;
         }
 
-        await StartFreshAsync(module);
+        await StartFreshAsync(module, _selectedLanguage);
     }
 
     private async Task ResumeConflicting()
@@ -139,25 +197,29 @@
         }
 
         var module = _conflictModule;
+        var autosaveLanguage = _conflictAutosave?.Language;
         _conflictModule = null;
+        _conflictAutosave = null;
 
         var json = await SaveStore.LoadAsync(SaveIds.Autosave(module.ModuleId));
         if (json is null)
         {
-            await StartFreshAsync(module);
+            await StartFreshAsync(module, _selectedLanguage);
             return;
         }
 
         var save = JsonSerializer.Deserialize<SessionSave>(json);
         if (save is null)
         {
-            await StartFreshAsync(module);
+            await StartFreshAsync(module, _selectedLanguage);
             return;
         }
 
-        var loaded = await ModuleStore.LoadAsync(module.ModuleId);
+        // Resuming always uses the save's own recorded language, not whatever's currently picked in
+        // the dropdown — the save state is what decides, per the "preserved in the save state" rule.
+        var loaded = await ModuleStore.LoadAsync(module.ModuleId, autosaveLanguage);
         var session = GameSession.Restore(loaded, save);
-        State.Start(module.ModuleId, module.Version, loaded, session);
+        State.Start(module.ModuleId, module.Version, autosaveLanguage, loaded, session);
         Nav.NavigateTo("/play");
     }
 
@@ -170,15 +232,16 @@
 
         var module = _conflictModule;
         _conflictModule = null;
+        _conflictAutosave = null;
         await SaveStore.DeleteAsync(SaveIds.Autosave(module.ModuleId));
-        await StartFreshAsync(module);
+        await StartFreshAsync(module, _selectedLanguage);
     }
 
-    private async Task StartFreshAsync(InstalledModule module)
+    private async Task StartFreshAsync(InstalledModule module, string? language)
     {
-        var loaded = await ModuleStore.LoadAsync(module.ModuleId);
+        var loaded = await ModuleStore.LoadAsync(module.ModuleId, language);
         var session = new GameSession(loaded, masterSeed: Random.Shared.NextInt64());
-        State.Start(module.ModuleId, module.Version, loaded, session);
+        State.Start(module.ModuleId, module.Version, language, loaded, session);
         Nav.NavigateTo("/play");
     }
 
@@ -287,7 +350,7 @@
         {
             var installed = await ModuleStore.InstallAsync(bytes);
             _modules = await ModuleStore.ListAsync();
-            _selectedId = installed.ModuleId;
+            SelectModule(installed.ModuleId);
         }
         catch (Exception ex)
         {

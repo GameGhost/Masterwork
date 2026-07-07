@@ -11,5 +11,6 @@ public sealed record InstalledModule(
     string Version,
     string Title,
     string Description,
-    bool IsBuiltIn
+    bool IsBuiltIn,
+    IReadOnlyList<string> AvailableLanguages
 );

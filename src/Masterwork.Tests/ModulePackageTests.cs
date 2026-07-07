@@ -23,6 +23,7 @@ public class ModulePackageTests
                 default: 0
             """);
         File.WriteAllText(Path.Combine(dir, "en-US.restext"), "Greeting=Hello");
+        File.WriteAllText(Path.Combine(dir, "es.restext"), "Greeting=Hola");
         File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
             format: 'mws/0.3'
             passage_id: 'Start'
@@ -47,7 +48,8 @@ public class ModulePackageTests
 
             Assert.Contains("id: 'test.module'", contents.ManifestYaml);
             Assert.Contains("foo:", contents.VariablesYaml);
-            Assert.Equal("Greeting=Hello", contents.RestextText);
+            Assert.Equal("Greeting=Hello", contents.RestextByLocale["en-US"]);
+            Assert.Equal("Greeting=Hola", contents.RestextByLocale["es"]);
             Assert.Single(contents.PassageYamls);
             Assert.Contains("passage_id: 'Start'", contents.PassageYamls[0]);
             Assert.True(contents.Assets.ContainsKey("assets/images/icon.png"));
@@ -67,8 +69,9 @@ public class ModulePackageTests
         {
             var bytes = ModulePackage.WriteToBytes(dir);
             var contents = ModulePackage.ReadFromBytes(bytes);
+            var restext = ModuleLocales.SelectRestext(contents.RestextByLocale, preferredLocale: null);
 
-            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml, contents.RestextText);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml, restext);
 
             Assert.Equal("Start", module.StartPassageId);
             Assert.True(module.Variables.ContainsKey("foo"));

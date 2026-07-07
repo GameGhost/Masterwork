@@ -12,11 +12,11 @@ function openDb() {
     });
 }
 
-export async function putModule(id, title, version, description, bytes) {
+export async function putModule(id, title, version, description, languages, bytes) {
     const db = await openDb();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, "readwrite");
-        tx.objectStore(STORE).put({ id, title, version, description, bytes });
+        tx.objectStore(STORE).put({ id, title, version, description, languages, bytes });
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
@@ -29,6 +29,7 @@ export async function listModules() {
         const req = tx.objectStore(STORE).getAll();
         req.onsuccess = () => resolve(req.result.map(m => ({
             id: m.id, title: m.title, version: m.version, description: m.description,
+            languages: m.languages ?? ["en-US"],
         })));
         req.onerror = () => reject(req.error);
     });

@@ -24,11 +24,19 @@ public sealed class GameSessionState
     /// <summary>The installed module's version at the time this session started — recorded into every save (see <see cref="SaveEntry.ModuleVersion"/>) for the Continue List's compatibility check.</summary>
     public string? ModuleVersion { get; private set; }
 
+    /// <summary>
+    /// The module-content language chosen when this session started (see <see cref="Masterwork.ModuleFormat.ModuleLocales"/>).
+    /// Fixed for the lifetime of the session — no mid-session language switching yet — and carried
+    /// into every save for this session so resuming loads the same language back (<see cref="SaveEntry.Language"/>).
+    /// </summary>
+    public string? Language { get; private set; }
+
     /// <summary>Starts tracking a newly created or restored session.</summary>
-    public void Start(string moduleId, string moduleVersion, LoadedModule module, GameSession session)
+    public void Start(string moduleId, string moduleVersion, string? language, LoadedModule module, GameSession session)
     {
         ModuleId = moduleId;
         ModuleVersion = moduleVersion;
+        Language = language;
         Module = module;
         Session = session;
     }
@@ -38,6 +46,7 @@ public sealed class GameSessionState
     {
         ModuleId = null;
         ModuleVersion = null;
+        Language = null;
         Module = null;
         Session = null;
     }

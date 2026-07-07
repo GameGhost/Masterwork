@@ -32,6 +32,10 @@
                     <span>@moduleTitle</span>
                     <span>@(save.LastStateLabel ?? "")</span>
                     <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g")</span>
+                    @if (save.Language is not null)
+                    {
+                        <span class="mws-save-language">@save.Language</span>
+                    }
                     @if (installed is null)
                     {
                         <span class="mws-version-warning">⚠ This save's module isn't installed anymore.</span>
@@ -174,9 +178,9 @@
                 return;
             }
 
-            var module = await ModuleStore.LoadAsync(entry.ModuleId);
+            var module = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
             var session = GameSession.Restore(module, save);
-            State.Start(entry.ModuleId, entry.ModuleVersion, module, session);
+            State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, module, session);
             Nav.NavigateTo("/play");
         }
         catch (InvalidOperationException ex)

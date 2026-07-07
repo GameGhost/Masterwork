@@ -105,7 +105,8 @@ else
             IsAutosave: true,
             DisplayName: null,
             LastStateLabel: State.Session.Current.DisplayLabel ?? State.Session.CurrentRender.PassageId,
-            LastPlayedUtc: DateTimeOffset.UtcNow);
+            LastPlayedUtc: DateTimeOffset.UtcNow,
+            Language: State.Language);
         var json = JsonSerializer.Serialize(State.Session.Serialize());
         await SaveStore.SaveAsync(entry, json);
     }
@@ -130,7 +131,8 @@ else
             IsAutosave: false,
             DisplayName: name,
             LastStateLabel: State.Session.Current.DisplayLabel ?? State.Session.CurrentRender.PassageId,
-            LastPlayedUtc: DateTimeOffset.UtcNow);
+            LastPlayedUtc: DateTimeOffset.UtcNow,
+            Language: State.Language);
         var json = JsonSerializer.Serialize(State.Session.Serialize());
         await SaveStore.SaveAsync(entry, json);
 

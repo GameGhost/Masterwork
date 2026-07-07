@@ -2,6 +2,7 @@
 @using Masterwork.App.Shared.Services
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
+@inject IModuleStore ModuleStore
 @inject IJSRuntime JS
 
 <div class="mws-dialog-overlay">
@@ -26,6 +27,36 @@
                     Text Size
                     <input type="range" min="0" max="5" step="1" value="@_draft.TextSizeStep" @oninput="OnTextSizeInput" />
                 </label>
+
+                @if (DialogContext == OptionsDialogContext.MainMenu)
+                {
+                    <label class="mws-options-row">
+                        UI Language
+                        <select value="@_draft.UiLocale" @onchange="OnUiLocaleChanged">
+                            @foreach (var culture in AppUiCultures.Supported)
+                            {
+                                <option value="@culture.Code">@culture.DisplayName</option>
+                            }
+                        </select>
+                        <span class="mws-options-hint" title="Changes the app's own menus and screens only — not module content.">ⓘ</span>
+                    </label>
+                    @if (_draft.UiLocale != _loadedUiLocale)
+                    {
+                        <p class="mws-version-warning">The UI language change will take effect after you reload/restart the app.</p>
+                    }
+
+                    <label class="mws-options-row">
+                        Preferred Module Language
+                        <select value="@(_draft.PreferredModuleLanguage ?? "")" @onchange="OnPreferredModuleLanguageChanged">
+                            <option value="">No preference</option>
+                            @foreach (var lang in _availableModuleLanguages)
+                            {
+                                <option value="@lang">@lang</option>
+                            }
+                        </select>
+                        <span class="mws-options-hint" title="Only applies if the module you're playing supports this language — otherwise it falls back to the module's own default.">ⓘ</span>
+                    </label>
+                }
 
                 <div class="mws-dialog-actions">
                     <button type="button" @onclick="Apply">Apply</button>
@@ -95,7 +126,9 @@
 
     private View _view = View.Options;
     private AppSettings _draft = AppSettings.Default;
+    private string _loadedUiLocale = AppUiCultures.Default;
     private string _saveName = "";
+    private IReadOnlyList<string> _availableModuleLanguages = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,11 +138,25 @@
         }
 
         _draft = await SettingsStore.LoadAsync();
+        _loadedUiLocale = _draft.UiLocale;
+
+        if (DialogContext == OptionsDialogContext.MainMenu)
+        {
+            var modules = await ModuleStore.ListAsync();
+            _availableModuleLanguages = [.. modules.SelectMany(m => m.AvailableLanguages).Distinct().OrderBy(l => l, StringComparer.OrdinalIgnoreCase)];
+        }
     }
 
     private void OnBgmVolumeInput(ChangeEventArgs e) => _draft = _draft with { BgmVolume = ParsePercent(e.Value) };
     private void OnSfxVolumeInput(ChangeEventArgs e) => _draft = _draft with { SfxVolume = ParsePercent(e.Value) };
     private void OnTextSizeInput(ChangeEventArgs e) => _draft = _draft with { TextSizeStep = ParseInt(e.Value, _draft.TextSizeStep) };
+    private void OnUiLocaleChanged(ChangeEventArgs e) => _draft = _draft with { UiLocale = e.Value?.ToString() ?? AppUiCultures.Default };
+
+    private void OnPreferredModuleLanguageChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        _draft = _draft with { PreferredModuleLanguage = string.IsNullOrEmpty(value) ? null : value };
+    }
 
     private void ToggleBgmMuted() => _draft = _draft with { BgmMuted = !_draft.BgmMuted };
     private void ToggleSfxMuted() => _draft = _draft with { SfxMuted = !_draft.SfxMuted };

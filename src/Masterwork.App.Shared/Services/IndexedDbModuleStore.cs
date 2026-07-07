@@ -7,7 +7,7 @@ namespace Masterwork.App.Shared.Services;
 /// <remarks>Uploaded packages are backed by IndexedDB (<c>wwwroot/moduleStore.js</c>) rather than <c>localStorage</c>, since real <c>.mwm</c> files with real assets are multi-megabyte. Registered for the web heads only.</remarks>
 public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : IModuleStore
 {
-    private sealed record UploadedModuleMeta(string Id, string Title, string Version, string? Description);
+    private sealed record UploadedModuleMeta(string Id, string Title, string Version, string? Description, string[] Languages);
 
     private async Task<IJSObjectReference> ModuleAsync() =>
         await js.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/moduleStore.js");
@@ -19,16 +19,16 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         var uploaded = await module.InvokeAsync<UploadedModuleMeta[]>("listModules");
 
         var result = new List<InstalledModule> { BuiltInModules.Demo };
-        result.AddRange(uploaded.Select(m => new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", IsBuiltIn: false)));
+        result.AddRange(uploaded.Select(m => new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", IsBuiltIn: false, m.Languages)));
         return result;
     }
 
     /// <inheritdoc/>
-    public async Task<LoadedModule> LoadAsync(string moduleId)
+    public async Task<LoadedModule> LoadAsync(string moduleId, string? locale = null)
     {
         if (moduleId == BuiltInModules.DemoModuleId)
         {
-            return BuiltInModules.LoadDemo(loader);
+            return BuiltInModules.LoadDemo(loader, locale);
         }
 
         var module = await ModuleAsync();
@@ -36,7 +36,8 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
             ?? throw new InvalidOperationException($"Module '{moduleId}' is not installed.");
 
         var contents = ModulePackage.ReadFromBytes(bytes);
-        return loader.LoadFromSources(contents.PassageYamls, contents.VariablesYaml, contents.RestextText);
+        var restext = ModuleLocales.SelectRestext(contents.RestextByLocale, locale);
+        return loader.LoadFromSources(contents.PassageYamls, contents.VariablesYaml, restext);
     }
 
     /// <inheritdoc/>
@@ -49,10 +50,11 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         }
 
         var manifest = new ManifestParser().Parse(contents.ManifestYaml);
+        var languages = ModuleLocales.SortedLocales(contents.RestextByLocale);
         var module = await ModuleAsync();
-        await module.InvokeVoidAsync("putModule", manifest.Id, manifest.Title, manifest.Version, manifest.Description, mwmBytes);
+        await module.InvokeVoidAsync("putModule", manifest.Id, manifest.Title, manifest.Version, manifest.Description, languages, mwmBytes);
 
-        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", IsBuiltIn: false);
+        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", IsBuiltIn: false, languages);
     }
 
     /// <inheritdoc/>

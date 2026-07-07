@@ -25,11 +25,11 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
     }
 
     /// <inheritdoc/>
-    public async Task<LoadedModule> LoadAsync(string moduleId)
+    public async Task<LoadedModule> LoadAsync(string moduleId, string? locale = null)
     {
         if (moduleId == BuiltInModules.DemoModuleId)
         {
-            return BuiltInModules.LoadDemo(loader);
+            return BuiltInModules.LoadDemo(loader, locale);
         }
 
         var path = PackagePath(moduleId);
@@ -40,7 +40,8 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
 
         var bytes = await File.ReadAllBytesAsync(path);
         var contents = ModulePackage.ReadFromBytes(bytes);
-        return loader.LoadFromSources(contents.PassageYamls, contents.VariablesYaml, contents.RestextText);
+        var restext = ModuleLocales.SelectRestext(contents.RestextByLocale, locale);
+        return loader.LoadFromSources(contents.PassageYamls, contents.VariablesYaml, restext);
     }
 
     /// <inheritdoc/>
@@ -53,11 +54,12 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
         }
 
         var manifest = new ManifestParser().Parse(contents.ManifestYaml);
+        var languages = ModuleLocales.SortedLocales(contents.RestextByLocale);
 
         Directory.CreateDirectory(ModulesDir);
         await File.WriteAllBytesAsync(PackagePath(manifest.Id), mwmBytes);
 
-        var entry = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", IsBuiltIn: false);
+        var entry = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", IsBuiltIn: false, languages);
         var index = await ReadIndexAsync();
         var updated = index.Where(m => m.ModuleId != entry.ModuleId).Append(entry).ToList();
         await WriteIndexAsync(updated);

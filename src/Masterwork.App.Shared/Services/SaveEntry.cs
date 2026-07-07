@@ -14,5 +14,6 @@ public sealed record SaveEntry(
     bool IsAutosave,
     string? DisplayName,
     string? LastStateLabel,
-    DateTimeOffset LastPlayedUtc
+    DateTimeOffset LastPlayedUtc,
+    string? Language
 );

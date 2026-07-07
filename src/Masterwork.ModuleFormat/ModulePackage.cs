@@ -6,23 +6,25 @@ namespace Masterwork.ModuleFormat;
 /// <summary>
 /// A <c>.mwm</c> package's raw contents, read directly from zip bytes — no filesystem access
 /// needed, so this works identically on a browser upload (<c>byte[]</c> from an <c>&lt;InputFile&gt;</c>)
-/// and a MAUI <c>FilePicker</c> read. Feed <see cref="PassageYamls"/>/<see cref="VariablesYaml"/>/
-/// <see cref="RestextText"/> straight into <see cref="IModuleLoader.LoadFromSources"/>.
+/// and a MAUI <c>FilePicker</c> read. Feed <see cref="PassageYamls"/>/<see cref="VariablesYaml"/>
+/// and one chosen entry from <see cref="RestextByLocale"/> (see <see cref="ModuleLocales"/>) straight
+/// into <see cref="IModuleLoader.LoadFromSources"/>.
 /// </summary>
 public sealed record ModulePackageContents(
     string? ManifestYaml,
     string? VariablesYaml,
-    string? RestextText,
+    IReadOnlyDictionary<string, string> RestextByLocale,
     IReadOnlyList<string> PassageYamls,
     IReadOnlyDictionary<string, byte[]> Assets
 );
 
 /// <summary>
 /// Reads/writes the <c>.mwm</c> zip format. Layout mirrors what the extractor already produces
-/// (passages, <c>_variables.yaml</c>, and <c>en-US.restext</c> flat at the root — not the
-/// <c>scenes/</c>/<c>i18n/</c> subfolder sketch from an earlier design pass, which never matched
-/// real extractor output) plus a new root-level <c>manifest.yaml</c> and an <c>assets/</c> folder
-/// for whatever an asset pack contributes (Milestone C).
+/// (passages and <c>_variables.yaml</c> flat at the root — not the <c>scenes/</c>/<c>i18n/</c>
+/// subfolder sketch from an earlier design pass, which never matched real extractor output) plus a
+/// new root-level <c>manifest.yaml</c> and an <c>assets/</c> folder for whatever an asset pack
+/// contributes (Milestone C). Any root-level <c>{locale}.restext</c> file is picked up — a module
+/// can ship as many as it has translations for (<c>en-US.restext</c>, <c>es.restext</c>, ...).
 /// </summary>
 public static class ModulePackage
 {
@@ -34,7 +36,7 @@ public static class ModulePackage
 
         string? manifestYaml = null;
         string? variablesYaml = null;
-        string? restextText = null;
+        var restextByLocale = new Dictionary<string, string>();
         var passageYamls = new List<string>();
         var assets = new Dictionary<string, byte[]>();
 
@@ -55,9 +57,10 @@ public static class ModulePackage
             {
                 variablesYaml = ReadText(entry);
             }
-            else if (path.Equals("en-US.restext", StringComparison.OrdinalIgnoreCase))
+            else if (!path.Contains('/') && path.EndsWith(".restext", StringComparison.OrdinalIgnoreCase))
             {
-                restextText = ReadText(entry);
+                var locale = path[..^".restext".Length];
+                restextByLocale[locale] = ReadText(entry);
             }
             else if (!path.Contains('/') && path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
             {
@@ -69,10 +72,10 @@ public static class ModulePackage
             }
         }
 
-        return new ModulePackageContents(manifestYaml, variablesYaml, restextText, passageYamls, assets);
+        return new ModulePackageContents(manifestYaml, variablesYaml, restextByLocale, passageYamls, assets);
     }
 
-    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + <c>en-US.restext</c> at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes.</summary>
+    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes.</summary>
     public static byte[] WriteToBytes(string sourceDirectory)
     {
         using var stream = new MemoryStream();

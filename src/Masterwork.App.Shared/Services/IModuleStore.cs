@@ -14,8 +14,13 @@ public interface IModuleStore
     /// <summary>All modules currently installed, built-in or otherwise.</summary>
     Task<IReadOnlyList<InstalledModule>> ListAsync();
 
-    /// <summary>Loads the full content of an installed module by id.</summary>
-    Task<LoadedModule> LoadAsync(string moduleId);
+    /// <summary>
+    /// Loads the full content of an installed module by id, resolving its passage text against
+    /// <paramref name="locale"/> if given (see <see cref="Masterwork.ModuleFormat.ModuleLocales"/> for
+    /// the fallback chain — falls through to the module's own default, then whatever's available, if
+    /// <paramref name="locale"/> is <see langword="null"/> or the module doesn't have it).
+    /// </summary>
+    Task<LoadedModule> LoadAsync(string moduleId, string? locale = null);
 
     /// <summary>Installs a <c>.mwm</c> package from raw bytes (a browser upload or a MAUI file read), keyed by its manifest's declared id.</summary>
     /// <exception cref="InvalidOperationException">The package has no <c>manifest.yaml</c>.</exception>
