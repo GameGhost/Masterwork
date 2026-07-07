@@ -14,11 +14,6 @@
 <div class="mws-continue-list">
     <h2>Continue</h2>
 
-    @if (_resumeError is not null)
-    {
-        <p class="mws-version-warning">@_resumeError</p>
-    }
-
     @if (_saves.Count == 0)
     {
         <p>No saved sessions yet.</p>
@@ -27,8 +22,9 @@
     {
         @foreach (var save in _saves.OrderByDescending(s => s.LastPlayedUtc))
         {
-            var moduleTitle = _modulesById.TryGetValue(save.ModuleId, out var m) ? m.Title : save.ModuleId;
-            var versionMismatch = _modulesById.TryGetValue(save.ModuleId, out var installed) && installed.Version != save.ModuleVersion;
+            var installed = _modulesById.GetValueOrDefault(save.ModuleId);
+            var moduleTitle = installed?.Title ?? save.ModuleId;
+            var versionWarning = VersionWarning(save, installed);
 
             <div class="mws-save-row">
                 <div class="mws-save-info">
@@ -36,13 +32,19 @@
                     <span>@moduleTitle</span>
                     <span>@(save.LastStateLabel ?? "")</span>
                     <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g")</span>
-                    @if (versionMismatch)
+                    @if (installed is null)
                     {
-                        <span class="mws-version-warning">⚠ Saved with module v@save.ModuleVersion, installed is v@(installed!.Version) — may not load correctly.</span>
+                        <span class="mws-version-warning">⚠ This save's module isn't installed anymore.</span>
+                    }
+                    else if (versionWarning is not null)
+                    {
+                        <span class="mws-version-warning">⚠ @versionWarning</span>
                     }
                 </div>
                 <div class="mws-save-actions">
-                    <button type="button" @onclick="() => Resume(save)">Resume</button>
+                    <button type="button" disabled="@(installed is null)"
+                            title="@(installed is null ? "This save's module isn't installed anymore" : null)"
+                            @onclick="() => Resume(save)">Resume</button>
                     <button type="button" @onclick="() => Export(save)">Export</button>
                     <button type="button" @onclick="() => Delete(save)">Delete</button>
                 </div>
@@ -53,7 +55,7 @@
 
 @if (_pendingResume is not null)
 {
-    var moduleTitle = _modulesById.TryGetValue(_pendingResume.ModuleId, out var m) ? m.Title : _pendingResume.ModuleId;
+    var moduleTitle = _modulesById.GetValueOrDefault(_pendingResume.ModuleId)?.Title ?? _pendingResume.ModuleId;
 
     <div class="mws-dialog-overlay">
         <div class="mws-dialog">
@@ -62,6 +64,19 @@
             <div class="mws-dialog-actions">
                 <button type="button" @onclick="() => ConfirmResume(_pendingResume)">Resume anyway</button>
                 <button type="button" @onclick="() => _pendingResume = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_resumeError is not null)
+{
+    <div class="mws-dialog-overlay">
+        <div class="mws-dialog">
+            <h3>Couldn't resume</h3>
+            <p>@_resumeError</p>
+            <div class="mws-dialog-actions">
+                <button type="button" @onclick="() => _resumeError = null">OK</button>
             </div>
         </div>
     </div>
@@ -90,6 +105,31 @@
         _modulesById = modules.ToDictionary(m => m.ModuleId);
     }
 
+    // Warns in two directions: the save was made with a *newer* module version than what's
+    // installed now (the module may have been downgraded, or the save came from elsewhere), or the
+    // installed module has moved on by a major/minor version since the save was made (a patch-only
+    // difference isn't flagged — that's not expected to break compatibility on its own).
+    private static string? VersionWarning(SaveEntry save, InstalledModule? installed)
+    {
+        if (installed is null)
+        {
+            return null;
+        }
+
+        var comparison = SemVer.Compare(save.ModuleVersion, installed.Version);
+        if (comparison > 0)
+        {
+            return $"Saved with module v{save.ModuleVersion}, installed is v{installed.Version} — this save is newer than the installed module and may not load correctly.";
+        }
+
+        if (comparison < 0 && SemVer.MajorOrMinorDiffers(save.ModuleVersion, installed.Version))
+        {
+            return $"Saved with module v{save.ModuleVersion}, installed is v{installed.Version} — the module has moved on since this save and it may not be compatible.";
+        }
+
+        return null;
+    }
+
     // Only warns when resuming a named save would actually clobber an existing autosave for that
     // module — once play resumes, PersistAutosaveAsync (Play.razor) starts overwriting the module's
     // autosave with this save's progress, but there's nothing to lose if that module has no autosave
@@ -100,7 +140,9 @@
 
         if (!_modulesById.ContainsKey(entry.ModuleId))
         {
-            _resumeError = $"Can't resume — the module this save belongs to isn't installed anymore. Uninstalling a module doesn't remove its saves automatically; delete this one manually if it's no longer needed.";
+            // The Resume button is disabled in this case (see the markup above) — this is just
+            // defense in depth for a module uninstalled in the moment between page load and click.
+            _resumeError = "This save's module isn't installed anymore. Uninstalling a module doesn't remove its saves automatically — delete this one manually if it's no longer needed.";
             return Task.CompletedTask;
         }
 

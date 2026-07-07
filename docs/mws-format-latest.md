@@ -44,7 +44,7 @@ nodes:
 | `event` | Full-page event card — narrative text with prominent bottom links |
 | `narration` | Story passage; minimal chrome |
 
-These are the only values the engine's own passage chrome renders specially; any other string is accepted and rendered generically (with a `layout-{value}` CSS class for module/asset-pack theming), since `layout` is deliberately an open vocabulary a module can extend. A `private`/gated-reveal passage layout and a `modal` full-screen summary layout were both specified in earlier revisions of this doc but never matched anything the three official scenarios' extracted content actually produces, so the special-cased engine support for `private` was removed (masterwork-plan-rev14.md) rather than carried forward unused; a generation-end summary is already handled by `popup` nodes with `layout: end_of_generation` (see §9), which is unrelated to a passage-level `modal` layout. A module wanting a "reveal to one player" moment can still compose one from ordinary `conditional`/`input`/`assign` nodes.
+These are the only values the engine's own passage chrome renders specially; any other string is accepted and rendered generically (with a `layout-{value}` CSS class for module/asset-pack theming), since `layout` is deliberately an open vocabulary a module can extend. A generation-end summary is handled by `popup` nodes with `layout: end_of_generation` (see §9), which is unrelated to a passage-level `modal` layout. A module wanting a "reveal to one player" moment can compose one from ordinary `conditional`/`input`/`assign` nodes.
 
 The passage `layout` selects the chrome from the module manifest or engine built-in defaults. Module-specific chrome is defined in the module manifest (see §9).
 

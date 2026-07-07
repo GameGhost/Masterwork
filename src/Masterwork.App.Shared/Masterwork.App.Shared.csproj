@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+    <PackageReference Include="NuGet.Versioning" Version="7.6.0" />
   </ItemGroup>
 
   <ItemGroup>

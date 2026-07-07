@@ -49,6 +49,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(
         typeof(Masterwork.App.Shared._Imports).Assembly,
-        typeof(Masterwork.App.Web.Client._Imports).Assembly);
+        typeof(Masterwork.App.Web.Client._Imports).Assembly)
+    .WithStaticAssets();
 
 app.Run();
