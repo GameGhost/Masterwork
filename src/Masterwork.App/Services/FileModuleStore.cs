@@ -66,6 +66,18 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
     }
 
     /// <inheritdoc/>
+    public async Task<byte[]?> GetPackageBytesAsync(string moduleId)
+    {
+        if (moduleId == BuiltInModules.DemoModuleId)
+        {
+            return null;
+        }
+
+        var path = PackagePath(moduleId);
+        return File.Exists(path) ? await File.ReadAllBytesAsync(path) : null;
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteAsync(string moduleId)
     {
         if (moduleId == BuiltInModules.DemoModuleId)

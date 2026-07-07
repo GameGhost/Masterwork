@@ -302,7 +302,6 @@ body {
 }
 
 .mws-upload-button {
-    position: relative;
     display: inline-flex;
     align-items: center;
     padding: 0.35rem 0.75rem;
@@ -314,12 +313,18 @@ body {
     cursor: pointer;
 }
 
-.mws-upload-button input[type="file"] {
+/* Visually hidden but still focusable/clickable-via-label — unlike display:none, this pattern is
+   reliably triggerable by a <label for="..."> across browsers/WebViews for file inputs. */
+.mws-visually-hidden {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    opacity: 0;
-    cursor: pointer;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .mws-module-carousel {
@@ -330,6 +335,7 @@ body {
 }
 
 .mws-module-tile {
+    position: relative;
     flex: 0 0 auto;
     width: 12rem;
     padding: 1rem;
@@ -341,6 +347,14 @@ body {
 
 .mws-module-tile.selected {
     border-color: #7c3aed;
+}
+
+.mws-tile-version {
+    position: absolute;
+    bottom: 0.35rem;
+    right: 0.5rem;
+    font-size: 0.7rem;
+    color: #666;
 }
 
 .mws-module-detail {

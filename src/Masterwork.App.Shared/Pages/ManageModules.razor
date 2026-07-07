@@ -26,15 +26,6 @@
             {
                 <span class="mws-empty-state">Ships with the app — can't be removed.</span>
             }
-            else if (_confirmingDeleteId == module.ModuleId)
-            {
-                <div class="mws-delete-confirm">
-                    <span>Also delete this module's saves?</span>
-                    <button type="button" @onclick="() => ConfirmDelete(module.ModuleId, deleteSaves: true)">Delete module + saves</button>
-                    <button type="button" @onclick="() => ConfirmDelete(module.ModuleId, deleteSaves: false)">Delete module only</button>
-                    <button type="button" @onclick="() => _confirmingDeleteId = null">Cancel</button>
-                </div>
-            }
             else
             {
                 <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">Delete</button>
@@ -42,6 +33,21 @@
         </div>
     }
 </div>
+
+@if (_confirmingDeleteId is not null)
+{
+    <div class="mws-dialog-overlay">
+        <div class="mws-dialog">
+            <h3>Delete this module?</h3>
+            <p>Also delete this module's saves?</p>
+            <div class="mws-dialog-actions">
+                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">Delete module + saves</button>
+                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">Delete module only</button>
+                <button type="button" @onclick="() => _confirmingDeleteId = null">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     private IReadOnlyList<InstalledModule> _modules = [];
@@ -57,8 +63,13 @@
         _modules = await ModuleStore.ListAsync();
     }
 
-    private async Task ConfirmDelete(string moduleId, bool deleteSaves)
+    private async Task ConfirmDelete(string? moduleId, bool deleteSaves)
     {
+        if (moduleId is null)
+        {
+            return;
+        }
+
         // Dependency-asset-pack reference counting (don't free a shared pack's storage while
         // another installed module still depends on it) is still a TODO — it doesn't matter yet
         // since real modules don't declare dependencies against anything installable until asset

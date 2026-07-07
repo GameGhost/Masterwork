@@ -51,6 +51,19 @@ Building the Android target adds noticeably to build time (~3 min vs ~30s for th
 dotnet build src/Masterwork.slnx -p:BuildAndroid=false
 ```
 
+### Logging
+
+`FileLoggerProvider` (`Masterwork.App.Shared/Services/FileLoggerProvider.cs`) writes a rolling daily
+text log — no external logging package, always on (not DEBUG-only), since it's what would have
+diagnosed a crash a user hits before they can describe it. Registered on the two hosts that have a
+real filesystem:
+
+| Host | Log location |
+|---|---|
+| `Masterwork.App` (MAUI — Windows/Android) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
+| `Masterwork.App.Web` (ASP.NET Core host) | `{ContentRootPath}/logs/masterwork-{yyyy-MM-dd}.log` (next to the project when run via `dotnet run`) |
+| `Masterwork.App.Web.Client` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
+
 ---
 
 ## Key Architecture Decisions

@@ -22,7 +22,7 @@ else
         }
         else
         {
-            <button type="button" class="mws-back-button" @onclick="StepBack">◀ Back</button>
+            <button type="button" class="mws-back-button" disabled="@(!State.Session.CanStepBack)" @onclick="StepBack">◀ Back</button>
         }
         <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
     </div>
@@ -71,7 +71,12 @@ else
 
     private async Task StepBack()
     {
-        State.Session!.StepBack();
+        if (State.Session is not { CanStepBack: true })
+        {
+            return;
+        }
+
+        State.Session.StepBack();
         await Refresh();
     }
 

@@ -56,6 +56,18 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
     }
 
     /// <inheritdoc/>
+    public async Task<byte[]?> GetPackageBytesAsync(string moduleId)
+    {
+        if (moduleId == BuiltInModules.DemoModuleId)
+        {
+            return null;
+        }
+
+        var module = await ModuleAsync();
+        return await module.InvokeAsync<byte[]?>("getModuleBytes", moduleId);
+    }
+
+    /// <inheritdoc/>
     public async Task DeleteAsync(string moduleId)
     {
         if (moduleId == BuiltInModules.DemoModuleId)

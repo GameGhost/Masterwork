@@ -1,4 +1,5 @@
 @page "/new-game"
+@using System.Security.Cryptography
 @using System.Text.Json
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
@@ -11,62 +12,90 @@
 
 <button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
 
-<div class="mws-start-new-game">
-    <div class="mws-module-toolbar">
-        <button type="button" disabled title="Coming soon — needs a hosted module registry (Phase 6)">Download Modules</button>
-        <label class="mws-upload-button">
-            Upload Module
-            <InputFile OnChange="OnUploadFileSelected" accept=".mwm" />
-        </label>
-    </div>
-    @if (_uploadError is not null)
-    {
-        <p class="mws-version-warning">@_uploadError</p>
-    }
+<ErrorBoundary @ref="_errorBoundary">
+    <ChildContent>
+        <div class="mws-start-new-game">
+            <div class="mws-module-toolbar">
+                <button type="button" disabled title="Coming soon — needs a hosted module registry (Phase 6)">Download Modules</button>
+                <label for="mws-upload-input" class="mws-upload-button">Upload Module</label>
+                <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
+                           accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
+            </div>
+            @if (_uploadError is not null)
+            {
+                <p class="mws-version-warning">@_uploadError</p>
+            }
 
-    <div class="mws-module-carousel">
-        @foreach (var module in _modules)
-        {
-            <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => _selectedId = module.ModuleId">
-                @if (module.IsBuiltIn)
+            <div class="mws-module-carousel">
+                @foreach (var module in _modules)
                 {
-                    <span class="mws-badge">Built-in</span>
+                    <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => _selectedId = module.ModuleId">
+                        @if (module.IsBuiltIn)
+                        {
+                            <span class="mws-badge">Built-in</span>
+                        }
+                        <strong>@module.Title</strong>
+                        <span class="mws-tile-version">v@module.Version</span>
+                    </div>
                 }
-                <strong>@module.Title</strong>
             </div>
-        }
-    </div>
 
-    @if (_selected is not null)
-    {
-        <div class="mws-module-detail">
-            <p>@_selected.Description</p>
-            <button type="button" @onclick="() => Play(_selected)">Play</button>
-        </div>
-    }
-
-    @if (_conflictModule is not null)
-    {
-        <div class="mws-dialog-overlay">
-            <div class="mws-dialog">
-                <h3>Resume in-progress session?</h3>
-                <p>@_conflictModule.Title already has an autosave in progress.</p>
-                <div class="mws-dialog-actions">
-                    <button type="button" @onclick="ResumeConflicting">Resume</button>
-                    <button type="button" @onclick="DiscardAndStartFresh">Discard previous session</button>
-                    <button type="button" @onclick="() => _conflictModule = null">Cancel</button>
+            @if (_selected is not null)
+            {
+                <div class="mws-module-detail">
+                    <p>@_selected.Description</p>
+                    <button type="button" @onclick="() => Play(_selected)">Play</button>
                 </div>
-            </div>
+            }
+
+            @if (_conflictModule is not null)
+            {
+                <div class="mws-dialog-overlay">
+                    <div class="mws-dialog">
+                        <h3>Resume in-progress session?</h3>
+                        <p>@_conflictModule.Title already has an autosave in progress.</p>
+                        <div class="mws-dialog-actions">
+                            <button type="button" @onclick="ResumeConflicting">Resume</button>
+                            <button type="button" @onclick="DiscardAndStartFresh">Discard previous session</button>
+                            <button type="button" @onclick="() => _conflictModule = null">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (_pendingUpload is not null)
+            {
+                <div class="mws-dialog-overlay">
+                    <div class="mws-dialog">
+                        <h3>@_pendingUpload.Title</h3>
+                        <p>@_pendingUpload.Message</p>
+                        <div class="mws-dialog-actions">
+                            <button type="button" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
+                            <button type="button" @onclick="() => _pendingUpload = null">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
-    }
-</div>
+    </ChildContent>
+    <ErrorContent>
+        <div class="mws-start-new-game">
+            <p class="mws-version-warning">Something went wrong loading this screen. Please try again.</p>
+            <button type="button" @onclick="Recover">Try again</button>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
 
 @code {
+    private sealed record PendingUpload(byte[] Bytes, string Title, string Message, string ConfirmLabel);
+
     private IReadOnlyList<InstalledModule> _modules = [];
     private string? _selectedId;
     private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
     private InstalledModule? _conflictModule;
     private string? _uploadError;
+    private PendingUpload? _pendingUpload;
+    private ErrorBoundary? _errorBoundary;
 
     protected override async Task OnInitializedAsync()
     {
@@ -77,6 +106,11 @@
 
         _modules = await ModuleStore.ListAsync();
         _selectedId = _modules.FirstOrDefault()?.ModuleId;
+    }
+
+    private void Recover()
+    {
+        _errorBoundary?.Recover();
     }
 
     private async Task Play(InstalledModule? module)
@@ -156,8 +190,102 @@
             using var stream = e.File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
+            var bytes = memory.ToArray();
 
-            var installed = await ModuleStore.InstallAsync(memory.ToArray());
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            if (contents.ManifestYaml is null)
+            {
+                _uploadError = "This file has no manifest.yaml and can't be installed.";
+                return;
+            }
+
+            var manifest = new ManifestParser().Parse(contents.ManifestYaml);
+            if (manifest.Id == BuiltInModules.DemoModuleId)
+            {
+                _uploadError = "This module's id is reserved for the built-in demo module — rename it in the manifest and try again.";
+                return;
+            }
+
+            var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
+            if (existing is null)
+            {
+                await InstallBytesAsync(bytes);
+                return;
+            }
+
+            await PrepareConflictPromptAsync(bytes, manifest, existing);
+        }
+        catch (Exception ex)
+        {
+            _uploadError = $"Couldn't install that module: {ex.Message}";
+        }
+    }
+
+    // Compares the uploaded manifest's version against what's already installed under the same id
+    // and prepares an appropriately-worded confirm prompt — same content is a no-op-ish notice, an
+    // upgrade/downgrade gets a warning scaled to the risk, mentioning existing saves if there are any
+    // (masterwork-plan-rev14's upload-conflict design, added after manual testing surfaced the need).
+    private async Task PrepareConflictPromptAsync(byte[] bytes, ModuleManifest manifest, InstalledModule existing)
+    {
+        var saveCount = (await SaveStore.ListAsync()).Count(s => s.ModuleId == manifest.Id);
+        var saveNote = saveCount switch
+        {
+            0 => "",
+            1 => " There is 1 existing save for this module.",
+            _ => $" There are {saveCount} existing saves for this module.",
+        };
+
+        var comparison = SemVer.Compare(manifest.Version, existing.Version);
+
+        if (comparison == 0)
+        {
+            var existingBytes = await ModuleStore.GetPackageBytesAsync(manifest.Id);
+            var identical = existingBytes is not null && ComputeHash(existingBytes).SequenceEqual(ComputeHash(bytes));
+
+            _pendingUpload = identical
+                ? new PendingUpload(bytes, "Already installed",
+                    $"\"{manifest.Title}\" v{manifest.Version} is already installed and this file is identical.",
+                    "Reinstall anyway")
+                : new PendingUpload(bytes, "Same version, different content",
+                    $"\"{manifest.Title}\" v{manifest.Version} is already installed, but this file's content differs from what's installed.{saveNote}",
+                    "Replace anyway");
+            return;
+        }
+
+        if (comparison > 0)
+        {
+            _pendingUpload = new PendingUpload(bytes, "Upgrade available",
+                $"This will upgrade \"{manifest.Title}\" from v{existing.Version} to v{manifest.Version}. " +
+                $"Major changes in this update could invalidate existing saves.{saveNote}",
+                "Upgrade");
+            return;
+        }
+
+        _pendingUpload = new PendingUpload(bytes, "Downgrade warning",
+            $"This will downgrade \"{manifest.Title}\" from v{existing.Version} to v{manifest.Version}. " +
+            $"Saves made with the newer version may not work correctly after downgrading.{saveNote}",
+            "Downgrade anyway");
+    }
+
+    private static byte[] ComputeHash(byte[] data) => SHA256.HashData(data);
+
+    private async Task ConfirmPendingUpload()
+    {
+        if (_pendingUpload is null)
+        {
+            return;
+        }
+
+        var bytes = _pendingUpload.Bytes;
+        _pendingUpload = null;
+        await InstallBytesAsync(bytes);
+    }
+
+    private async Task InstallBytesAsync(byte[] bytes)
+    {
+        try
+        {
+            var installed = await ModuleStore.InstallAsync(bytes);
             _modules = await ModuleStore.ListAsync();
             _selectedId = installed.ModuleId;
         }

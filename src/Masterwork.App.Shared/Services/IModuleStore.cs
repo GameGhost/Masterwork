@@ -21,6 +21,9 @@ public interface IModuleStore
     /// <exception cref="InvalidOperationException">The package has no <c>manifest.yaml</c>.</exception>
     Task<InstalledModule> InstallAsync(byte[] mwmBytes);
 
+    /// <summary>Reads back the raw <c>.mwm</c> bytes for an installed, non-built-in module — used to detect whether a re-upload is actually identical content. Returns <see langword="null"/> for the built-in module or an unknown id.</summary>
+    Task<byte[]?> GetPackageBytesAsync(string moduleId);
+
     /// <summary>Uninstalls a module. Does not touch its saves — see Manage Modules for that prompt.</summary>
     /// <exception cref="InvalidOperationException"><paramref name="moduleId"/> is a built-in module.</exception>
     Task DeleteAsync(string moduleId);

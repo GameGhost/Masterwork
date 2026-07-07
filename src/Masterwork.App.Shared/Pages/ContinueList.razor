@@ -14,6 +14,11 @@
 <div class="mws-continue-list">
     <h2>Continue</h2>
 
+    @if (_resumeError is not null)
+    {
+        <p class="mws-version-warning">@_resumeError</p>
+    }
+
     @if (_saves.Count == 0)
     {
         <p>No saved sessions yet.</p>
@@ -66,6 +71,7 @@
     private List<SaveEntry> _saves = [];
     private Dictionary<string, InstalledModule> _modulesById = [];
     private SaveEntry? _pendingResume;
+    private string? _resumeError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,6 +96,14 @@
     // right now (e.g. it was already deleted via Abandon Game or a prior ending).
     private Task Resume(SaveEntry entry)
     {
+        _resumeError = null;
+
+        if (!_modulesById.ContainsKey(entry.ModuleId))
+        {
+            _resumeError = $"Can't resume — the module this save belongs to isn't installed anymore. Uninstalling a module doesn't remove its saves automatically; delete this one manually if it's no longer needed.";
+            return Task.CompletedTask;
+        }
+
         var wouldOverwriteAutosave = !entry.IsAutosave && _saves.Any(s => s.ModuleId == entry.ModuleId && s.IsAutosave);
         if (!wouldOverwriteAutosave)
         {
@@ -104,22 +118,31 @@
     {
         _pendingResume = null;
 
-        var json = await SaveStore.LoadAsync(entry.Id);
-        if (json is null)
+        try
         {
-            return;
-        }
+            var json = await SaveStore.LoadAsync(entry.Id);
+            if (json is null)
+            {
+                return;
+            }
 
-        var save = JsonSerializer.Deserialize<SessionSave>(json);
-        if (save is null)
+            var save = JsonSerializer.Deserialize<SessionSave>(json);
+            if (save is null)
+            {
+                return;
+            }
+
+            var module = await ModuleStore.LoadAsync(entry.ModuleId);
+            var session = GameSession.Restore(module, save);
+            State.Start(entry.ModuleId, entry.ModuleVersion, module, session);
+            Nav.NavigateTo("/play");
+        }
+        catch (InvalidOperationException ex)
         {
-            return;
+            // Defense in depth — Resume() already checks this ahead of time, but this covers the
+            // module being uninstalled in the moment between opening this page and clicking Resume.
+            _resumeError = $"Couldn't resume this save: {ex.Message}";
         }
-
-        var module = await ModuleStore.LoadAsync(entry.ModuleId);
-        var session = GameSession.Restore(module, save);
-        State.Start(entry.ModuleId, entry.ModuleVersion, module, session);
-        Nav.NavigateTo("/play");
     }
 
     private async Task Export(SaveEntry entry)

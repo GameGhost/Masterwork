@@ -19,6 +19,12 @@ builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 
+// This only covers the server-side prerender pass and any server-side logging (e.g. the ASP.NET
+// Core request pipeline itself) — the live WASM client that takes over afterward runs entirely in
+// the browser sandbox and has no filesystem to log to; its errors surface via the browser console
+// and the blazor-error-ui banner instead. See CLAUDE.md for the exact log location.
+builder.Logging.AddMasterworkFileLogger(Path.Combine(builder.Environment.ContentRootPath, "logs"));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

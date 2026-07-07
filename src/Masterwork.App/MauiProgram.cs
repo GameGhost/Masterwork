@@ -26,6 +26,11 @@ public static class MauiProgram
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 
+        // Always on, not just DEBUG — a file trail is what would have told us why the first upload
+        // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the
+        // exact log location.
+        builder.Logging.AddMasterworkFileLogger(Path.Combine(FileSystem.AppDataDirectory, "logs"));
+
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
