@@ -11,13 +11,29 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#7c3aed" />
     <ImportMap />
-    <HeadOutlet @rendermode="InteractiveWebAssembly" />
+    <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveWebAssembly" />
-    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <!-- Server-side prerendering is deliberately off, otherwise it renders
+         English/default-size content while the real WASM bundle downloaded and
+         booted with the player's actual saved settings.
+         This splash fills that gap instead — removed by MainLayout.razor (via window.mwsHideSplash)
+         once real, correctly-cultured content has actually rendered. Not tied to Blazor.start()'s
+         own promise: that resolves before the app's first real render, which left a blank white gap
+         between the splash disappearing and content appearing. -->
+    <div id="mws-splash" class="mws-splash">
+        <h1>Masterwork</h1>
+        <p>Loading…</p>
+        <div class="mws-spinner" aria-hidden="true"></div>
+    </div>
+    <Routes @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
+    <script src="@Assets["_framework/blazor.web.js"]" autostart="false"></script>
     <script>
+        window.mwsHideSplash = function () {
+            document.getElementById('mws-splash')?.remove();
+        };
+        Blazor.start();
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
         }

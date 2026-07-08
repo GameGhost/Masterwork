@@ -9,6 +9,11 @@ public static class MauiProgram
 {
     public static MauiApp CreateMauiApp()
     {
+        // Must run before the BlazorWebView renders anything — MainLayout's own settings-load-and-
+        // apply happens on first render, which is already too late (the main view has already
+        // painted once by then). Preferences is synchronous, so this can run right here.
+        PreferencesAppSettingsStore.ApplyStartupCulture();
+
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()

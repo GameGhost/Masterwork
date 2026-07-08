@@ -4,6 +4,11 @@
 @inject IAudioPlayer AudioPlayer
 @inject IJSRuntime JS
 
+@{ AppSettingsApplier.ReassertCulture(); }
+@* This only fires on the very first paint and on page navigation (a layout doesn't re-render just
+   because a page nested in @Body re-renders from its own internal state, like a dialog opening) —
+   every page and every independently-re-rendering chrome component has this exact same line for
+   that reason. See AppSettingsApplier.ReassertCulture's doc comment. *@
 @Body
 
 <div id="blazor-error-ui" data-nosnippet>
@@ -13,6 +18,8 @@
 </div>
 
 @code {
+    private bool _splashHidden;
+
     // Runs once per app session (MainLayout wraps every page and isn't recreated on navigation) —
     // this is what makes the saved Options actually take effect on a fresh launch/refresh instead
     // of only when the Options dialog itself is opened and Applied. OnAfterRenderAsync (rather than
@@ -24,6 +31,23 @@
         {
             var settings = await SettingsStore.LoadAsync();
             await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, JS);
+
+            // The current page (@Body) already rendered once before this completed, using whatever
+            // culture was in effect at that point — without this, the just-applied UI language
+            // never becomes visible until something else happens to re-render the page.
+            StateHasChanged();
+        }
+        else if (!_splashHidden && OperatingSystem.IsBrowser())
+        {
+            // Web only (mws-splash/window.mwsHideSplash only exist in Masterwork.App.Web's
+            // App.razor) — this is the *second* time this method runs, i.e. the render right after
+            // the StateHasChanged() above actually committed, so real (correctly-cultured) content
+            // is genuinely on screen now. Tying splash removal to this instead of Blazor.start()'s
+            // own promise is deliberate: that promise was found to resolve before the app's first
+            // real render, leaving a blank-white gap between the splash disappearing and content
+            // appearing (see masterwork-plan-rev18.md).
+            _splashHidden = true;
+            await JS.InvokeVoidAsync("mwsHideSplash");
         }
     }
 }

@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Common_Back" xml:space="preserve"><value>◀ Retour</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Common_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Resume" xml:space="preserve"><value>Reprendre</value></data>
+  <data name="Common_Export" xml:space="preserve"><value>Exporter</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>Enregistrer</value></data>
+  <data name="Common_TryAgain" xml:space="preserve"><value>Réessayer</value></data>
+  <data name="Common_Mute" xml:space="preserve"><value>Muet</value></data>
+  <data name="Common_Unmute" xml:space="preserve"><value>Réactiver le son</value></data>
+  <data name="Common_Autosave" xml:space="preserve"><value>Sauvegarde automatique</value></data>
+  <data name="Common_BuiltInBadge" xml:space="preserve"><value>Intégré</value></data>
+
+  <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
+  <data name="MainMenu_Help" xml:space="preserve"><value>Aide</value></data>
+  <data name="MainMenu_Achievements" xml:space="preserve"><value>Réussites</value></data>
+  <data name="MainMenu_Options" xml:space="preserve"><value>Options</value></data>
+  <data name="MainMenu_Continue" xml:space="preserve"><value>Continuer</value></data>
+  <data name="MainMenu_StartNewGame" xml:space="preserve"><value>Nouvelle partie</value></data>
+
+  <data name="Help_PageTitle" xml:space="preserve"><value>Masterwork — Aide</value></data>
+  <data name="Help_Topic_HowToUse" xml:space="preserve"><value>Comment jouer</value></data>
+  <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Chronologie et retour en arrière</value></data>
+  <data name="Help_Topic_Saves" xml:space="preserve"><value>Sauvegardes</value></data>
+  <data name="Help_HowToUse_Title" xml:space="preserve"><value>Comment utiliser Masterwork</value></data>
+  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork permet de jouer des scénarios créés par la communauté pour &lt;em&gt;My Father's Work&lt;/em&gt;. Lancez un module depuis « Nouvelle partie », suivez les passages au fur et à mesure qu'ils apparaissent, et utilisez le curseur de chronologie pour revoir — sans annuler — ce que vous avez déjà décidé.</value></data>
+  <data name="Help_TimelineRewind_Title" xml:space="preserve"><value>Chronologie et retour en arrière</value></data>
+  <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Reculer dans le temps vous permet de revoir ce qui s'est passé sans rien changer — les liens et les champs de saisie sont désactivés pendant que vous consultez le passé. « Reprendre à partir d'ici » supprime tout ce qui suit le point que vous consultez; « Retour au présent » vous ramène simplement sans rien supprimer.</value></data>
+  <data name="Help_Saves_Title" xml:space="preserve"><value>Sauvegardes</value></data>
+  <data name="Help_Saves_Body" xml:space="preserve"><value>Chaque module conserve une sauvegarde automatique qui se met à jour au fil du jeu. Quitter depuis le menu Options en cours de partie propose d'enregistrer votre progression sous un nom de votre choix avant de revenir à la liste Continuer.</value></data>
+
+  <data name="Achievements_PageTitle" xml:space="preserve"><value>Masterwork — Réussites</value></data>
+  <data name="Achievements_Tab_Achievements" xml:space="preserve"><value>Réussites</value></data>
+  <data name="Achievements_Tab_Memories" xml:space="preserve"><value>Souvenirs</value></data>
+  <data name="Achievements_NoModules" xml:space="preserve"><value>Aucun module installé pour le moment.</value></data>
+  <data name="Achievements_NoneForModule" xml:space="preserve"><value>Aucune réussite enregistrée pour ce module pour le moment.</value></data>
+  <data name="Achievements_NoMemories" xml:space="preserve"><value>Aucune partie terminée pour le moment. Atteindre une fin enregistre un Souvenir ici.</value></data>
+
+  <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Gérer les modules</value></data>
+  <data name="ManageModules_Heading" xml:space="preserve"><value>Gérer les modules</value></data>
+  <data name="ManageModules_BuiltInNote" xml:space="preserve"><value>Fourni avec l'application — ne peut pas être retiré.</value></data>
+  <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Supprimer ce module?</value></data>
+  <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
+  <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>
+  <data name="ManageModules_DeleteModuleOnly" xml:space="preserve"><value>Supprimer le module seulement</value></data>
+
+  <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continuer</value></data>
+  <data name="ContinueList_Heading" xml:space="preserve"><value>Continuer</value></data>
+  <data name="ContinueList_Empty" xml:space="preserve"><value>Aucune partie sauvegardée pour le moment.</value></data>
+  <data name="ContinueList_UnnamedSave" xml:space="preserve"><value>Sauvegarde sans nom</value></data>
+  <data name="ContinueList_ModuleMissing" xml:space="preserve"><value>Le module de cette sauvegarde n'est plus installé.</value></data>
+  <data name="ContinueList_ModuleMissingTitle" xml:space="preserve"><value>Le module de cette sauvegarde n'est plus installé</value></data>
+  <data name="ContinueList_ResumeConfirmTitle" xml:space="preserve"><value>Reprendre cette sauvegarde?</value></data>
+  <data name="ContinueList_ResumeConfirmBody" xml:space="preserve"><value>Reprendre écrasera la sauvegarde automatique de {0} avec la progression de cette sauvegarde.</value></data>
+  <data name="ContinueList_ResumeAnyway" xml:space="preserve"><value>Reprendre quand même</value></data>
+  <data name="ContinueList_ResumeErrorTitle" xml:space="preserve"><value>Impossible de reprendre</value></data>
+  <data name="ContinueList_VersionWarning_Newer" xml:space="preserve"><value>Sauvegardée avec le module v{0}, la version installée est v{1} — cette sauvegarde est plus récente que le module installé et pourrait ne pas se charger correctement.</value></data>
+  <data name="ContinueList_VersionWarning_Moved" xml:space="preserve"><value>Sauvegardée avec le module v{0}, la version installée est v{1} — le module a évolué depuis cette sauvegarde et pourrait ne pas être compatible.</value></data>
+  <data name="ContinueList_ResumeError_ModuleMissing" xml:space="preserve"><value>Le module de cette sauvegarde n'est plus installé. Désinstaller un module ne supprime pas automatiquement ses sauvegardes — supprimez celle-ci manuellement si elle n'est plus nécessaire.</value></data>
+  <data name="ContinueList_ResumeError_Exception" xml:space="preserve"><value>Impossible de reprendre cette sauvegarde : {0}</value></data>
+
+  <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Nouvelle partie</value></data>
+  <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Télécharger des modules</value></data>
+  <data name="StartNewGame_DownloadModulesHint" xml:space="preserve"><value>Bientôt disponible — nécessite un registre de modules hébergé (Phase 6)</value></data>
+  <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Téléverser un module</value></data>
+  <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Sélectionnez un module pour commencer.</value></data>
+  <data name="StartNewGame_Play" xml:space="preserve"><value>Jouer</value></data>
+  <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Reprendre la session en cours?</value></data>
+  <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} a déjà une sauvegarde automatique en cours.</value></data>
+  <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Abandonner la session précédente</value></data>
+  <data name="StartNewGame_AlreadyInstalledTitle" xml:space="preserve"><value>Déjà installé</value></data>
+  <data name="StartNewGame_AlreadyInstalledBody" xml:space="preserve"><value>« {0} » v{1} est déjà installé et ce fichier est identique.</value></data>
+  <data name="StartNewGame_ReinstallAnyway" xml:space="preserve"><value>Réinstaller quand même</value></data>
+  <data name="StartNewGame_SameVersionDiffContentTitle" xml:space="preserve"><value>Même version, contenu différent</value></data>
+  <data name="StartNewGame_SameVersionDiffContentBody" xml:space="preserve"><value>« {0} » v{1} est déjà installé, mais le contenu de ce fichier diffère de celui installé.{2}</value></data>
+  <data name="StartNewGame_ReplaceAnyway" xml:space="preserve"><value>Remplacer quand même</value></data>
+  <data name="StartNewGame_UpgradeTitle" xml:space="preserve"><value>Mise à jour disponible</value></data>
+  <data name="StartNewGame_UpgradeBody" xml:space="preserve"><value>Ceci mettra à jour « {0} » de v{1} à v{2}. Des changements majeurs dans cette mise à jour pourraient invalider les sauvegardes existantes.{3}</value></data>
+  <data name="StartNewGame_Upgrade" xml:space="preserve"><value>Mettre à jour</value></data>
+  <data name="StartNewGame_DowngradeTitle" xml:space="preserve"><value>Avertissement de rétrogradation</value></data>
+  <data name="StartNewGame_DowngradeBody" xml:space="preserve"><value>Ceci rétrogradera « {0} » de v{1} à v{2}. Les sauvegardes faites avec la version plus récente pourraient ne pas fonctionner correctement après la rétrogradation.{3}</value></data>
+  <data name="StartNewGame_DowngradeAnyway" xml:space="preserve"><value>Rétrograder quand même</value></data>
+  <data name="StartNewGame_SaveNote_One" xml:space="preserve"><value> Il y a 1 sauvegarde existante pour ce module.</value></data>
+  <data name="StartNewGame_SaveNote_Many" xml:space="preserve"><value> Il y a {0} sauvegardes existantes pour ce module.</value></data>
+  <data name="StartNewGame_ErrorFallback" xml:space="preserve"><value>Une erreur s'est produite lors du chargement de cet écran. Veuillez réessayer.</value></data>
+  <data name="StartNewGame_UploadError_NoManifest" xml:space="preserve"><value>Ce fichier n'a pas de manifest.yaml et ne peut pas être installé.</value></data>
+  <data name="StartNewGame_UploadError_ReservedId" xml:space="preserve"><value>Cet identifiant de module est réservé au module de démonstration intégré — renommez-le dans le manifeste et réessayez.</value></data>
+  <data name="StartNewGame_UploadError_Generic" xml:space="preserve"><value>Impossible d'installer ce module : {0}</value></data>
+
+  <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
+  <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Volume de la musique de fond</value></data>
+  <data name="OptionsDialog_SfxVolume" xml:space="preserve"><value>Volume des effets sonores</value></data>
+  <data name="OptionsDialog_TextSize" xml:space="preserve"><value>Taille du texte</value></data>
+  <data name="OptionsDialog_UiLanguage" xml:space="preserve"><value>Langue de l'interface</value></data>
+  <data name="OptionsDialog_UiLanguageHint" xml:space="preserve"><value>Change uniquement les menus et écrans de l'application — pas le contenu du module.</value></data>
+  <data name="OptionsDialog_PreferredModuleLanguage" xml:space="preserve"><value>Langue préférée du module</value></data>
+  <data name="OptionsDialog_NoPreference" xml:space="preserve"><value>Aucune préférence</value></data>
+  <data name="OptionsDialog_ModuleLanguageHint" xml:space="preserve"><value>S'applique seulement si le module que vous jouez prend en charge cette langue — sinon, la langue par défaut du module est utilisée.</value></data>
+  <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer les modules</value></data>
+  <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quitter</value></data>
+  <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quitter?</value></data>
+  <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Votre progression dans cette session n'a pas encore été enregistrée sous forme de sauvegarde nommée.</value></data>
+  <data name="OptionsDialog_SaveAndQuit" xml:space="preserve"><value>Enregistrer et quitter</value></data>
+  <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Abandonner la partie</value></data>
+  <data name="OptionsDialog_NameSaveTitle" xml:space="preserve"><value>Nommer cette sauvegarde</value></data>
+
+  <data name="Play_NoSessionMessage" xml:space="preserve"><value>Aucune session active.</value></data>
+  <data name="Play_ReturnToMainMenuLink" xml:space="preserve"><value>Retour au menu principal</value></data>
+  <data name="Play_EndingMessage" xml:space="preserve"><value>Vous avez atteint la fin de votre histoire, et du jeu.</value></data>
+  <data name="Play_ReturnToMainMenuButton" xml:space="preserve"><value>Retour au menu principal</value></data>
+
+  <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer ▶</value></data>
+  <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Retour au présent</value></data>
+  <data name="TimelineScrubber_RestartFromHere" xml:space="preserve"><value>Recommencer à partir d'ici</value></data>
+
+  <data name="AudioTestPanel_Heading" xml:space="preserve"><value>Test audio (synthétisé — pas encore de vrais éléments)</value></data>
+  <data name="AudioTestPanel_PlayBgm" xml:space="preserve"><value>Jouer une tonalité de test (musique)</value></data>
+  <data name="AudioTestPanel_StopBgm" xml:space="preserve"><value>Arrêter la musique</value></data>
+  <data name="AudioTestPanel_PlaySfx" xml:space="preserve"><value>Jouer un bip de test (effet sonore)</value></data>
+</root>

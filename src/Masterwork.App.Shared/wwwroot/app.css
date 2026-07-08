@@ -522,3 +522,43 @@ body {
         flex-wrap: nowrap;
     }
 }
+
+/* Web-only: shown in Components/App.razor while the WASM bundle downloads and boots (prerendering
+   is off — see masterwork-plan-rev17.md), removed once Blazor.start() resolves. */
+.mws-splash {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background: #7c3aed;
+    color: #fff;
+    z-index: 9999;
+}
+
+.mws-splash h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.mws-splash p {
+    margin: 0;
+    opacity: 0.85;
+}
+
+.mws-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 0.25rem solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: mws-spin 0.8s linear infinite;
+}
+
+@keyframes mws-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

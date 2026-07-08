@@ -1,6 +1,9 @@
+using System.Text.Json;
 using Masterwork.App.Shared.Services;
 using Masterwork.ModuleFormat;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -12,4 +15,35 @@ builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+
+// Must run before RunAsync() starts the renderer — MainLayout's own settings-load-and-apply is
+// already too late (the main view has already painted once by then). The JS interop channel is
+// live as soon as the host is built (it doesn't depend on the renderer), which is what makes a
+// *synchronous* localStorage read possible here, before the first render.
+ApplyStartupCulture(host.Services.GetRequiredService<IJSRuntime>());
+
+await host.RunAsync();
+
+static void ApplyStartupCulture(IJSRuntime js)
+{
+    try
+    {
+        var inProcess = (IJSInProcessRuntime)js;
+        var json = inProcess.Invoke<string?>("localStorage.getItem", LocalStorageAppSettingsStore.Key);
+        if (json is null)
+        {
+            return;
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty(nameof(AppSettings.UiLocale), out var uiLocale) && uiLocale.GetString() is { } locale)
+        {
+            AppSettingsApplier.ApplyCulture(locale);
+        }
+    }
+    catch
+    {
+        // Best-effort — worst case the main view paints once in English, same as before this fix.
+    }
+}

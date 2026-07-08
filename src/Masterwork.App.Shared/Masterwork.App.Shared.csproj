@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Generated AppStrings.* properties return non-null string (keys are always present in the resx) -->
+    <ResXGenerator_NullForgivingOperators>true</ResXGenerator_NullForgivingOperators>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,7 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+    <PackageReference Include="Aigamo.ResXGenerator" Version="4.4.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
     <PackageReference Include="NuGet.Versioning" Version="7.6.0" />
   </ItemGroup>
 
@@ -19,5 +25,31 @@
     <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Resources\AppStrings.resx">
+      <GenerateCode>true</GenerateCode>
+		  <GenerateResource>false</GenerateResource>
+      <PublicClass>true</PublicClass>
+      <PartialClass>true</PartialClass>
+    </EmbeddedResource>
+
+    <!-- Nest the localized files underneath the main file in the VS Code explorer. GenerateResource
+         is off here too — GenerateCode mode reads every AppStrings.*.resx at compile time and bakes
+         all languages into the main assembly, so a satellite resources.dll would just be dead weight. -->
+    <EmbeddedResource Update="Resources\AppStrings.*.resx">
+      <DependentUpon>AppStrings.resx</DependentUpon>
+      <GenerateResource>false</GenerateResource>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- With GenerateResource=false, there's no satellite resources.dll to copy for fr-CA etc., but
+       the SDK's default targets still expect one (MSB3030) — documented workaround from the
+       Aigamo.ResXGenerator README. -->
+  <Target Name="PreventMSB3030" DependsOnTargets="ComputeIntermediateSatelliteAssemblies" BeforeTargets="GenerateSatelliteAssemblies">
+    <ItemGroup>
+      <IntermediateSatelliteAssembliesWithTargetPath Remove="@(IntermediateSatelliteAssembliesWithTargetPath)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

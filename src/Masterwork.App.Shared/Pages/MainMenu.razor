@@ -1,20 +1,24 @@
 @page "/"
 @using Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
+
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
 
+@{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>Masterwork</PageTitle>
 
 <div class="mws-main-menu">
     <h1>Masterwork</h1>
-    <p>A community companion app for <em>My Father's Work</em>.</p>
+    <p>@((MarkupString)AppStrings.MainMenu_Tagline)</p>
 
     <nav class="mws-main-menu-buttons">
-        <button type="button" @onclick='() => Nav.NavigateTo("/help")'>Help</button>
-        <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>Achievements</button>
-        <button type="button" @onclick="() => _showOptions = true">Options</button>
-        <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>Continue</button>
-        <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>Start New Game</button>
+        <button type="button" @onclick='() => Nav.NavigateTo("/help")'>@AppStrings.MainMenu_Help</button>
+        <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
+        <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
+        <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
+        <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
     </nav>
 </div>
 

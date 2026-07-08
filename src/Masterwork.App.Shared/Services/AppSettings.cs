@@ -25,8 +25,10 @@ public sealed record AppSettings
     /// <summary>
     /// The app shell's own display language — a culture code from <see cref="AppUiCultures.Supported"/>.
     /// Distinct from <see cref="PreferredModuleLanguage"/>: this is chrome only (Milestone A.1),
-    /// never module content. Changing it needs a reload to fully take effect (Blazor doesn't hot-swap
-    /// <c>CultureInfo.CurrentUICulture</c> mid-session the way a CSS variable applies live).
+    /// never module content. Applied via <see cref="AppSettingsApplier"/>, which sets the generated
+    /// <c>AppStrings.CultureInfo</c> static property (see <c>Resources/AppStrings.resx</c>) — never
+    /// <c>CultureInfo.CurrentUICulture</c>. Options' Apply then force-navigates back to the main view
+    /// so the already-rendered tree picks up the new culture immediately.
     /// </summary>
     public string UiLocale { get; init; } = AppUiCultures.Default;
 
@@ -55,5 +57,6 @@ public static class AppUiCultures
     public static readonly IReadOnlyList<(string Code, string DisplayName)> Supported =
     [
         (Default, "English"),
+        ("fr-CA", "Français (Canada)"),
     ];
 }

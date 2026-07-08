@@ -1,16 +1,18 @@
 @page "/achievements"
+@using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject IModuleStore ModuleStore
 @inject NavigationManager Nav
 
-<PageTitle>Masterwork — Achievements</PageTitle>
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.Achievements_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
 
 <div class="mws-achievements">
     <nav class="mws-tabs">
-        <button type="button" class="@(_tab == Tab.Achievements ? "selected" : "")" @onclick="() => _tab = Tab.Achievements">Achievements</button>
-        <button type="button" class="@(_tab == Tab.Memories ? "selected" : "")" @onclick="() => _tab = Tab.Memories">Memories</button>
+        <button type="button" class="@(_tab == Tab.Achievements ? "selected" : "")" @onclick="() => _tab = Tab.Achievements">@AppStrings.Achievements_Tab_Achievements</button>
+        <button type="button" class="@(_tab == Tab.Memories ? "selected" : "")" @onclick="() => _tab = Tab.Memories">@AppStrings.Achievements_Tab_Memories</button>
     </nav>
 
     @if (_tab == Tab.Achievements)
@@ -18,7 +20,7 @@
         <div class="mws-achievements-by-module">
             @if (_modules.Count == 0)
             {
-                <p>No modules installed yet.</p>
+                <p>@AppStrings.Achievements_NoModules</p>
             }
             else
             {
@@ -26,7 +28,7 @@
                 {
                     <section class="mws-achievement-module">
                         <h4>@module.Title</h4>
-                        <p class="mws-empty-state">No achievements recorded for this module yet.</p>
+                        <p class="mws-empty-state">@AppStrings.Achievements_NoneForModule</p>
                     </section>
                 }
             }
@@ -35,7 +37,7 @@
     else
     {
         <div class="mws-memories">
-            <p class="mws-empty-state">No completed sessions yet. Reaching an ending records a Memory here.</p>
+            <p class="mws-empty-state">@AppStrings.Achievements_NoMemories</p>
         </div>
     }
 </div>

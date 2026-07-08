@@ -1,42 +1,52 @@
 @page "/help"
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
 @inject NavigationManager Nav
 
-<PageTitle>Masterwork — Help</PageTitle>
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.Help_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
 
 <div class="mws-help">
     <nav class="mws-help-topics">
         @foreach (var topic in Topics)
         {
-            <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@topic</button>
+            <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@TopicLabel(topic)</button>
         }
     </nav>
     <div class="mws-help-content">
         @switch (_selected)
         {
-            case "How to use":
-                <h3>How to Use Masterwork</h3>
-                <p>Masterwork plays community-authored scenarios for <em>My Father's Work</em>. Start a module from
-                   "Start New Game," follow the passages as they're presented, and use the timeline scrubber to
-                   review — not undo — anything you've already decided.</p>
+            case HelpTopic.HowToUse:
+                <h3>@AppStrings.Help_HowToUse_Title</h3>
+                <p>@((MarkupString)AppStrings.Help_HowToUse_Body)</p>
                 break;
-            case "Timeline and rewind":
-                <h3>Timeline and Rewind</h3>
-                <p>Stepping back lets you review what happened without changing it — links and inputs disable while
-                   you're looking at the past. "Resume from here" discards anything after the point you're viewing;
-                   "Return to present" just brings you back without discarding it.</p>
+            case HelpTopic.TimelineAndRewind:
+                <h3>@AppStrings.Help_TimelineRewind_Title</h3>
+                <p>@AppStrings.Help_TimelineRewind_Body</p>
                 break;
-            case "Saves":
-                <h3>Saves</h3>
-                <p>Each module keeps one autosave that updates as you play. Quitting from the in-game Options menu
-                   offers to save your progress under a name of your choosing before returning to the Continue list.</p>
+            case HelpTopic.Saves:
+                <h3>@AppStrings.Help_Saves_Title</h3>
+                <p>@AppStrings.Help_Saves_Body</p>
                 break;
         }
     </div>
 </div>
 
 @code {
-    private static readonly string[] Topics = ["How to use", "Timeline and rewind", "Saves"];
-    private string _selected = Topics[0];
+    private enum HelpTopic { HowToUse, TimelineAndRewind, Saves }
+
+    private static readonly HelpTopic[] Topics = [HelpTopic.HowToUse, HelpTopic.TimelineAndRewind, HelpTopic.Saves];
+    private HelpTopic _selected = Topics[0];
+
+    // Stable internal keys (HelpTopic) drive selection/dispatch; only the displayed label is
+    // localized, so switching the UI language can never change which topic is "selected".
+    private static string TopicLabel(HelpTopic topic) => topic switch
+    {
+        HelpTopic.HowToUse => AppStrings.Help_Topic_HowToUse,
+        HelpTopic.TimelineAndRewind => AppStrings.Help_Topic_TimelineAndRewind,
+        HelpTopic.Saves => AppStrings.Help_Topic_Saves,
+        _ => throw new ArgumentOutOfRangeException(nameof(topic)),
+    };
 }

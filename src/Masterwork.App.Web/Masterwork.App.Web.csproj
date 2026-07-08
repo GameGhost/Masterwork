@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.App.Web.Client\Masterwork.App.Web.Client.csproj" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
   </ItemGroup>
 
 </Project>

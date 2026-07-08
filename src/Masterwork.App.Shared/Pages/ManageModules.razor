@@ -1,15 +1,17 @@
 @page "/modules/manage"
+@using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject IModuleStore ModuleStore
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
 
-<PageTitle>Masterwork — Manage Modules</PageTitle>
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.ManageModules_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
 
 <div class="mws-manage-modules">
-    <h2>Manage Modules</h2>
+    <h2>@AppStrings.ManageModules_Heading</h2>
 
     @foreach (var module in _modules)
     {
@@ -19,16 +21,16 @@
                 <span class="mws-module-version">v@(module.Version)</span>
                 @if (module.IsBuiltIn)
                 {
-                    <span class="mws-badge">Built-in</span>
+                    <span class="mws-badge">@AppStrings.Common_BuiltInBadge</span>
                 }
             </div>
             @if (module.IsBuiltIn)
             {
-                <span class="mws-empty-state">Ships with the app — can't be removed.</span>
+                <span class="mws-empty-state">@AppStrings.ManageModules_BuiltInNote</span>
             }
             else
             {
-                <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">Delete</button>
+                <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
             }
         </div>
     }
@@ -38,12 +40,12 @@
 {
     <div class="mws-dialog-overlay">
         <div class="mws-dialog">
-            <h3>Delete this module?</h3>
-            <p>Also delete this module's saves?</p>
+            <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
+            <p>@AppStrings.ManageModules_ConfirmBody</p>
             <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">Delete module + saves</button>
-                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">Delete module only</button>
-                <button type="button" @onclick="() => _confirmingDeleteId = null">Cancel</button>
+                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
+                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
+                <button type="button" @onclick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</button>
             </div>
         </div>
     </div>

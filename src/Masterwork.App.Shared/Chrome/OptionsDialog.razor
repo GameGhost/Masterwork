@@ -1,96 +1,95 @@
 @namespace Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
 @inject IModuleStore ModuleStore
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
+@{ AppSettingsApplier.ReassertCulture(); }
 <div class="mws-dialog-overlay">
     <div class="mws-dialog mws-options-dialog">
         @switch (_view)
         {
             case View.Options:
-                <h3>Options</h3>
+                <h3>@AppStrings.OptionsDialog_Heading</h3>
                 <label class="mws-options-row">
-                    Background Volume
+                    @AppStrings.OptionsDialog_BgmVolume
                     <input type="range" min="0" max="100" value="@((int)(_draft.BgmVolume * 100))"
                            @oninput="OnBgmVolumeInput" disabled="@_draft.BgmMuted" />
-                    <button type="button" class="mws-mute-toggle" @onclick="ToggleBgmMuted">@(_draft.BgmMuted ? "Unmute" : "Mute")</button>
+                    <button type="button" class="mws-mute-toggle" @onclick="ToggleBgmMuted">@(_draft.BgmMuted ? AppStrings.Common_Unmute : AppStrings.Common_Mute)</button>
                 </label>
                 <label class="mws-options-row">
-                    Sound Effects Volume
+                    @AppStrings.OptionsDialog_SfxVolume
                     <input type="range" min="0" max="100" value="@((int)(_draft.SfxVolume * 100))"
                            @oninput="OnSfxVolumeInput" disabled="@_draft.SfxMuted" />
-                    <button type="button" class="mws-mute-toggle" @onclick="ToggleSfxMuted">@(_draft.SfxMuted ? "Unmute" : "Mute")</button>
+                    <button type="button" class="mws-mute-toggle" @onclick="ToggleSfxMuted">@(_draft.SfxMuted ? AppStrings.Common_Unmute : AppStrings.Common_Mute)</button>
                 </label>
                 <label class="mws-options-row">
-                    Text Size
+                    @AppStrings.OptionsDialog_TextSize
                     <input type="range" min="0" max="5" step="1" value="@_draft.TextSizeStep" @oninput="OnTextSizeInput" />
                 </label>
 
                 @if (DialogContext == OptionsDialogContext.MainMenu)
                 {
                     <label class="mws-options-row">
-                        UI Language
+                        @AppStrings.OptionsDialog_UiLanguage
                         <select value="@_draft.UiLocale" @onchange="OnUiLocaleChanged">
                             @foreach (var culture in AppUiCultures.Supported)
                             {
                                 <option value="@culture.Code">@culture.DisplayName</option>
                             }
                         </select>
-                        <span class="mws-options-hint" title="Changes the app's own menus and screens only — not module content.">ⓘ</span>
+                        <span class="mws-options-hint" title="@AppStrings.OptionsDialog_UiLanguageHint">ⓘ</span>
                     </label>
-                    @if (_draft.UiLocale != _loadedUiLocale)
-                    {
-                        <p class="mws-version-warning">The UI language change will take effect after you reload/restart the app.</p>
-                    }
 
                     <label class="mws-options-row">
-                        Preferred Module Language
+                        @AppStrings.OptionsDialog_PreferredModuleLanguage
                         <select value="@(_draft.PreferredModuleLanguage ?? "")" @onchange="OnPreferredModuleLanguageChanged">
-                            <option value="">No preference</option>
+                            <option value="">@AppStrings.OptionsDialog_NoPreference</option>
                             @foreach (var lang in _availableModuleLanguages)
                             {
                                 <option value="@lang">@lang</option>
                             }
                         </select>
-                        <span class="mws-options-hint" title="Only applies if the module you're playing supports this language — otherwise it falls back to the module's own default.">ⓘ</span>
+                        <span class="mws-options-hint" title="@AppStrings.OptionsDialog_ModuleLanguageHint">ⓘ</span>
                     </label>
                 }
 
                 <div class="mws-dialog-actions">
-                    <button type="button" @onclick="Apply">Apply</button>
-                    <button type="button" @onclick="Cancel">Cancel</button>
+                    <button type="button" @onclick="Apply">@AppStrings.Common_Apply</button>
+                    <button type="button" @onclick="Cancel">@AppStrings.Common_Cancel</button>
                 </div>
 
                 <div class="mws-dialog-footer">
                     @if (DialogContext == OptionsDialogContext.MainMenu)
                     {
-                        <button type="button" @onclick="ManageModules">Manage Modules</button>
+                        <button type="button" @onclick="ManageModules">@AppStrings.OptionsDialog_ManageModules</button>
                     }
                     else
                     {
-                        <button type="button" class="mws-quit-button" @onclick="() => _view = View.QuitConfirm">Quit</button>
+                        <button type="button" class="mws-quit-button" @onclick="() => _view = View.QuitConfirm">@AppStrings.OptionsDialog_Quit</button>
                     }
                 </div>
                 break;
 
             case View.QuitConfirm:
-                <h3>Quit?</h3>
-                <p>Your progress in this session hasn't been saved as a named save yet.</p>
+                <h3>@AppStrings.OptionsDialog_QuitConfirmTitle</h3>
+                <p>@AppStrings.OptionsDialog_QuitConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" @onclick="BeginSaveAndQuit">Save and Quit</button>
-                    <button type="button" @onclick="AbandonGame">Abandon Game</button>
-                    <button type="button" @onclick="() => _view = View.Options">Cancel</button>
+                    <button type="button" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
+                    <button type="button" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
+                    <button type="button" @onclick="() => _view = View.Options">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
 
             case View.QuitNamePrompt:
-                <h3>Name this save</h3>
+                <h3>@AppStrings.OptionsDialog_NameSaveTitle</h3>
                 <input type="text" @bind="_saveName" @bind:event="oninput" class="mws-save-name-input" />
                 <div class="mws-dialog-actions">
-                    <button type="button" @onclick="ConfirmSaveAndQuit">Save</button>
-                    <button type="button" @onclick="() => _view = View.QuitConfirm">Cancel</button>
+                    <button type="button" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
+                    <button type="button" @onclick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
         }
@@ -126,7 +125,6 @@
 
     private View _view = View.Options;
     private AppSettings _draft = AppSettings.Default;
-    private string _loadedUiLocale = AppUiCultures.Default;
     private string _saveName = "";
     private IReadOnlyList<string> _availableModuleLanguages = [];
 
@@ -138,7 +136,6 @@
         }
 
         _draft = await SettingsStore.LoadAsync();
-        _loadedUiLocale = _draft.UiLocale;
 
         if (DialogContext == OptionsDialogContext.MainMenu)
         {

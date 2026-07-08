@@ -1,6 +1,7 @@
 @page "/new-game"
 @using System.Security.Cryptography
 @using System.Text.Json
+@using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
 @using Masterwork.ModuleFormat
@@ -10,16 +11,17 @@
 @inject GameSessionState State
 @inject NavigationManager Nav
 
-<PageTitle>Masterwork — Start New Game</PageTitle>
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
 
 <ErrorBoundary @ref="_errorBoundary">
     <ChildContent>
         <div class="mws-start-new-game">
             <div class="mws-module-toolbar">
-                <button type="button" disabled title="Coming soon — needs a hosted module registry (Phase 6)">Download Modules</button>
-                <label for="mws-upload-input" class="mws-upload-button">Upload Module</label>
+                <button type="button" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
+                <label for="mws-upload-input" class="mws-upload-button">@AppStrings.StartNewGame_UploadModule</label>
                 <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
                            accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
             </div>
@@ -34,7 +36,7 @@
                     <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => SelectModule(module.ModuleId)">
                         @if (module.IsBuiltIn)
                         {
-                            <span class="mws-badge">Built-in</span>
+                            <span class="mws-badge">@AppStrings.Common_BuiltInBadge</span>
                         }
                         <strong>@module.Title</strong>
                         <span class="mws-tile-version">v@(module.Version)</span>
@@ -44,13 +46,13 @@
 
             @if (_selected is null)
             {
-                <p class="mws-empty-state">Select a module to get started.</p>
+                <p class="mws-empty-state">@AppStrings.StartNewGame_SelectPrompt</p>
             }
             else
             {
                 <div class="mws-module-detail">
                     <p>@_selected.Description</p>
-                    <button type="button" @onclick="() => Play(_selected)">Play</button>
+                    <button type="button" @onclick="() => Play(_selected)">@AppStrings.StartNewGame_Play</button>
                     <select class="mws-module-language" value="@_selectedLanguage" disabled="@(_selected.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
                         @foreach (var lang in _selected.AvailableLanguages)
                         {
@@ -64,16 +66,16 @@
             {
                 <div class="mws-dialog-overlay">
                     <div class="mws-dialog">
-                        <h3>Resume in-progress session?</h3>
-                        <p>@_conflictModule.Title already has an autosave in progress.</p>
+                        <h3>@AppStrings.StartNewGame_ConflictTitle</h3>
+                        <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_ConflictBody, _conflictModule.Title)</p>
                         @if (ConflictAutosaveSummary() is { } summary)
                         {
                             <p class="mws-save-timestamp">@summary</p>
                         }
                         <div class="mws-dialog-actions">
-                            <button type="button" @onclick="ResumeConflicting">Resume</button>
-                            <button type="button" @onclick="DiscardAndStartFresh">Discard previous session</button>
-                            <button type="button" @onclick="() => { _conflictModule = null; _conflictAutosave = null; }">Cancel</button>
+                            <button type="button" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
+                            <button type="button" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
+                            <button type="button" @onclick="() => { _conflictModule = null; _conflictAutosave = null; }">@AppStrings.Common_Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -87,7 +89,7 @@
                         <p>@_pendingUpload.Message</p>
                         <div class="mws-dialog-actions">
                             <button type="button" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
-                            <button type="button" @onclick="() => _pendingUpload = null">Cancel</button>
+                            <button type="button" @onclick="() => _pendingUpload = null">@AppStrings.Common_Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -96,8 +98,8 @@
     </ChildContent>
     <ErrorContent>
         <div class="mws-start-new-game">
-            <p class="mws-version-warning">Something went wrong loading this screen. Please try again.</p>
-            <button type="button" @onclick="Recover">Try again</button>
+            <p class="mws-version-warning">@AppStrings.StartNewGame_ErrorFallback</p>
+            <button type="button" @onclick="Recover">@AppStrings.Common_TryAgain</button>
         </div>
     </ErrorContent>
 </ErrorBoundary>
@@ -164,7 +166,7 @@
             return null;
         }
 
-        var parts = new[] { _conflictAutosave.LastStateLabel, _conflictAutosave.LastPlayedUtc.ToLocalTime().ToString("g"), _conflictAutosave.Language }
+        var parts = new[] { _conflictAutosave.LastStateLabel, _conflictAutosave.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture), _conflictAutosave.Language }
             .Where(s => !string.IsNullOrEmpty(s));
         return string.Join(" · ", parts);
     }
@@ -258,14 +260,14 @@
             var contents = ModulePackage.ReadFromBytes(bytes);
             if (contents.ManifestYaml is null)
             {
-                _uploadError = "This file has no manifest.yaml and can't be installed.";
+                _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
                 return;
             }
 
             var manifest = new ManifestParser().Parse(contents.ManifestYaml);
             if (manifest.Id == BuiltInModules.DemoModuleId)
             {
-                _uploadError = "This module's id is reserved for the built-in demo module — rename it in the manifest and try again.";
+                _uploadError = AppStrings.StartNewGame_UploadError_ReservedId;
                 return;
             }
 
@@ -280,7 +282,9 @@
         }
         catch (Exception ex)
         {
-            _uploadError = $"Couldn't install that module: {ex.Message}";
+            // ex.Message is an internal exception message (English, per the "behind the scenes
+            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
         }
     }
 
@@ -294,8 +298,8 @@
         var saveNote = saveCount switch
         {
             0 => "",
-            1 => " There is 1 existing save for this module.",
-            _ => $" There are {saveCount} existing saves for this module.",
+            1 => AppStrings.StartNewGame_SaveNote_One,
+            _ => string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SaveNote_Many, saveCount),
         };
 
         var comparison = SemVer.Compare(manifest.Version, existing.Version);
@@ -306,28 +310,26 @@
             var identical = existingBytes is not null && ComputeHash(existingBytes).SequenceEqual(ComputeHash(bytes));
 
             _pendingUpload = identical
-                ? new PendingUpload(bytes, "Already installed",
-                    $"\"{manifest.Title}\" v{manifest.Version} is already installed and this file is identical.",
-                    "Reinstall anyway")
-                : new PendingUpload(bytes, "Same version, different content",
-                    $"\"{manifest.Title}\" v{manifest.Version} is already installed, but this file's content differs from what's installed.{saveNote}",
-                    "Replace anyway");
+                ? new PendingUpload(bytes, AppStrings.StartNewGame_AlreadyInstalledTitle,
+                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_AlreadyInstalledBody, manifest.Title, manifest.Version),
+                    AppStrings.StartNewGame_ReinstallAnyway)
+                : new PendingUpload(bytes, AppStrings.StartNewGame_SameVersionDiffContentTitle,
+                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SameVersionDiffContentBody, manifest.Title, manifest.Version, saveNote),
+                    AppStrings.StartNewGame_ReplaceAnyway);
             return;
         }
 
         if (comparison > 0)
         {
-            _pendingUpload = new PendingUpload(bytes, "Upgrade available",
-                $"This will upgrade \"{manifest.Title}\" from v{existing.Version} to v{manifest.Version}. " +
-                $"Major changes in this update could invalidate existing saves.{saveNote}",
-                "Upgrade");
+            _pendingUpload = new PendingUpload(bytes, AppStrings.StartNewGame_UpgradeTitle,
+                string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpgradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
+                AppStrings.StartNewGame_Upgrade);
             return;
         }
 
-        _pendingUpload = new PendingUpload(bytes, "Downgrade warning",
-            $"This will downgrade \"{manifest.Title}\" from v{existing.Version} to v{manifest.Version}. " +
-            $"Saves made with the newer version may not work correctly after downgrading.{saveNote}",
-            "Downgrade anyway");
+        _pendingUpload = new PendingUpload(bytes, AppStrings.StartNewGame_DowngradeTitle,
+            string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_DowngradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
+            AppStrings.StartNewGame_DowngradeAnyway);
     }
 
     private static byte[] ComputeHash(byte[] data) => SHA256.HashData(data);
@@ -354,7 +356,9 @@
         }
         catch (Exception ex)
         {
-            _uploadError = $"Couldn't install that module: {ex.Message}";
+            // ex.Message is an internal exception message (English, per the "behind the scenes
+            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
         }
     }
 }

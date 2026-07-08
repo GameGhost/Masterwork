@@ -1,5 +1,6 @@
 @page "/continue"
 @using System.Text.Json
+@using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
 @inject ISaveStore SaveStore
@@ -7,16 +8,17 @@
 @inject GameSessionState State
 @inject NavigationManager Nav
 
-<PageTitle>Masterwork — Continue</PageTitle>
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.ContinueList_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>◀ Back</button>
+<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
 
 <div class="mws-continue-list">
-    <h2>Continue</h2>
+    <h2>@AppStrings.ContinueList_Heading</h2>
 
     @if (_saves.Count == 0)
     {
-        <p>No saved sessions yet.</p>
+        <p>@AppStrings.ContinueList_Empty</p>
     }
     else
     {
@@ -28,17 +30,17 @@
 
             <div class="mws-save-row">
                 <div class="mws-save-info">
-                    <strong>@(save.DisplayName ?? (save.IsAutosave ? "Autosave" : "Unnamed save"))</strong>
+                    <strong>@(save.DisplayName ?? (save.IsAutosave ? AppStrings.Common_Autosave : AppStrings.ContinueList_UnnamedSave))</strong>
                     <span>@moduleTitle</span>
                     <span>@(save.LastStateLabel ?? "")</span>
-                    <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g")</span>
+                    <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture)</span>
                     @if (save.Language is not null)
                     {
                         <span class="mws-save-language">@save.Language</span>
                     }
                     @if (installed is null)
                     {
-                        <span class="mws-version-warning">⚠ This save's module isn't installed anymore.</span>
+                        <span class="mws-version-warning">⚠ @AppStrings.ContinueList_ModuleMissing</span>
                     }
                     else if (versionWarning is not null)
                     {
@@ -47,10 +49,10 @@
                 </div>
                 <div class="mws-save-actions">
                     <button type="button" disabled="@(installed is null)"
-                            title="@(installed is null ? "This save's module isn't installed anymore" : null)"
-                            @onclick="() => Resume(save)">Resume</button>
-                    <button type="button" @onclick="() => Export(save)">Export</button>
-                    <button type="button" @onclick="() => Delete(save)">Delete</button>
+                            title="@(installed is null ? AppStrings.ContinueList_ModuleMissingTitle : null)"
+                            @onclick="() => Resume(save)">@AppStrings.Common_Resume</button>
+                    <button type="button" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
+                    <button type="button" @onclick="() => Delete(save)">@AppStrings.Common_Delete</button>
                 </div>
             </div>
         }
@@ -63,11 +65,11 @@
 
     <div class="mws-dialog-overlay">
         <div class="mws-dialog">
-            <h3>Resume this save?</h3>
-            <p>Resuming will overwrite @moduleTitle's autosave with this save's progress.</p>
+            <h3>@AppStrings.ContinueList_ResumeConfirmTitle</h3>
+            <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeConfirmBody, moduleTitle)</p>
             <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => ConfirmResume(_pendingResume)">Resume anyway</button>
-                <button type="button" @onclick="() => _pendingResume = null">Cancel</button>
+                <button type="button" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
+                <button type="button" @onclick="() => _pendingResume = null">@AppStrings.Common_Cancel</button>
             </div>
         </div>
     </div>
@@ -77,10 +79,10 @@
 {
     <div class="mws-dialog-overlay">
         <div class="mws-dialog">
-            <h3>Couldn't resume</h3>
+            <h3>@AppStrings.ContinueList_ResumeErrorTitle</h3>
             <p>@_resumeError</p>
             <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => _resumeError = null">OK</button>
+                <button type="button" @onclick="() => _resumeError = null">@AppStrings.Common_Ok</button>
             </div>
         </div>
     </div>
@@ -123,12 +125,12 @@
         var comparison = SemVer.Compare(save.ModuleVersion, installed.Version);
         if (comparison > 0)
         {
-            return $"Saved with module v{save.ModuleVersion}, installed is v{installed.Version} — this save is newer than the installed module and may not load correctly.";
+            return string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_VersionWarning_Newer, save.ModuleVersion, installed.Version);
         }
 
         if (comparison < 0 && SemVer.MajorOrMinorDiffers(save.ModuleVersion, installed.Version))
         {
-            return $"Saved with module v{save.ModuleVersion}, installed is v{installed.Version} — the module has moved on since this save and it may not be compatible.";
+            return string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_VersionWarning_Moved, save.ModuleVersion, installed.Version);
         }
 
         return null;
@@ -146,7 +148,7 @@
         {
             // The Resume button is disabled in this case (see the markup above) — this is just
             // defense in depth for a module uninstalled in the moment between page load and click.
-            _resumeError = "This save's module isn't installed anymore. Uninstalling a module doesn't remove its saves automatically — delete this one manually if it's no longer needed.";
+            _resumeError = AppStrings.ContinueList_ResumeError_ModuleMissing;
             return Task.CompletedTask;
         }
 
@@ -187,7 +189,9 @@
         {
             // Defense in depth — Resume() already checks this ahead of time, but this covers the
             // module being uninstalled in the moment between opening this page and clicking Resume.
-            _resumeError = $"Couldn't resume this save: {ex.Message}";
+            // ex.Message is an internal exception message (English, per the "behind the scenes
+            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+            _resumeError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeError_Exception, ex.Message);
         }
     }
 
