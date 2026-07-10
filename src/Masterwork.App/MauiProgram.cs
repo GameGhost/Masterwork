@@ -24,12 +24,14 @@ public static class MauiProgram
 
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
-        builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
+        // Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
+        builder.Services.AddScoped<IAssetResolver, AssetResolver>();
         builder.Services.AddScoped<IModuleStore, FileModuleStore>();
         builder.Services.AddScoped<GameSessionState>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
+        builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the

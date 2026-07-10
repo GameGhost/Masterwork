@@ -87,4 +87,13 @@ public sealed record ModuleManifest
 
     /// <summary>Relative path to the hand-maintained passage-overrides folder. Defaults to <c>"passages-override"</c> — see the note on <see cref="PassagesPath"/>.</summary>
     public string PassagesOverridePath { get; init; } = "passages-override";
+
+    /// <summary>
+    /// Relative path to this module's stylesheet, applied by the app at module-load time. The
+    /// chrome (<c>Masterwork.App.Shared</c>'s Razor components) only ever emits structural class
+    /// hooks (<c>layout-{value}</c>, <c>style-{value}</c>) — all layout/style-specific visual
+    /// treatment comes from here, not from the app's own CSS. Defaults to <c>"assets/style.css"</c>;
+    /// a module with no stylesheet at that path simply gets no custom styling (unstyled structure).
+    /// </summary>
+    public string StylePath { get; init; } = "assets/style.css";
 }

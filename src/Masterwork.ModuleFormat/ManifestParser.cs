@@ -87,11 +87,12 @@ public sealed class ManifestParser : IManifestParser
             Entry = root.GetString("entry", ctx),
             PassagesPath = root.GetString("passages", ctx) ?? "passages",
             PassagesOverridePath = root.GetString("passages_override", ctx) ?? "passages-override",
+            StylePath = root.GetString("style", ctx) ?? "assets/style.css",
         };
 
         root.WarnUnmatchedFields(ctx, "manifest.yaml",
             "id", "title", "version", "type", "description", "dependencies",
-            "languages", "thumbnail", "info", "entry", "passages", "passages_override");
+            "languages", "thumbnail", "info", "entry", "passages", "passages_override", "style");
 
         _logger.LogDebug("Parsed manifest '{Id}' v{Version} ({DependencyCount} dependencies)", manifest.Id, manifest.Version, dependencies.Count);
         return manifest;

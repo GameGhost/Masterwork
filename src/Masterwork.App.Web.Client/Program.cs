@@ -8,12 +8,14 @@ using Microsoft.JSInterop;
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
-builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
+// Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
+builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
+builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 
 var host = builder.Build();
 

@@ -12,12 +12,14 @@ builder.Services.AddRazorComponents()
 // server before the WebAssembly client takes over — the same services Program.cs in
 // Masterwork.App.Web.Client registers for the live WASM app are needed for that first render.
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
-builder.Services.AddSingleton<IAssetResolver, AssetResolver>();
+// Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
+builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
+builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 
 // This only covers the server-side prerender pass and any server-side logging (e.g. the ASP.NET
 // Core request pipeline itself) — the live WASM client that takes over afterward runs entirely in

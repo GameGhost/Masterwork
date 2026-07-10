@@ -27,7 +27,7 @@ public static class BuiltInModules
         IsBuiltIn: true,
         AvailableLanguages: [ModuleLocales.Default]);
 
-    /// <summary>Loads the demo module's full content. Single-language, so there's no <paramref name="locale"/> to select between — the parameter exists only to keep this call-compatible with <see cref="IModuleStore.LoadAsync"/>.</summary>
-    public static LoadedModule LoadDemo(IModuleLoader loader, string? locale = null) =>
-        loader.LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml);
+    /// <summary>Loads the demo module's full content. Single-language, so there's no <paramref name="locale"/> to select between — the parameter exists only to keep this call-compatible with <see cref="IModuleStore.LoadAsync"/>. Has no assets or stylesheet of its own.</summary>
+    public static LoadedModuleContent LoadDemo(IModuleLoader loader, string? locale = null) =>
+        new(loader.LoadFromSources(SampleModule.PassageYamls, SampleModule.VariablesYaml), new Dictionary<string, byte[]>(), null);
 }

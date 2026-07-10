@@ -25,7 +25,7 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
     }
 
     /// <inheritdoc/>
-    public async Task<LoadedModule> LoadAsync(string moduleId, string? locale = null)
+    public async Task<LoadedModuleContent> LoadAsync(string moduleId, string? locale = null)
     {
         if (moduleId == BuiltInModules.DemoModuleId)
         {
@@ -45,8 +45,9 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
         var restextOverride = resolvedLocale is not null
             ? contents.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
-        return loader.LoadFromSources(
+        var module = loader.LoadFromSources(
             contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride);
+        return LoadedModuleContent.FromPackage(contents, module);
     }
 
     /// <inheritdoc/>

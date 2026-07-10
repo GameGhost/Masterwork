@@ -31,13 +31,25 @@ public sealed class GameSessionState
     /// </summary>
     public string? Language { get; private set; }
 
+    /// <summary>
+    /// The active module's raw asset bytes (keyed by in-package path, e.g. <c>"assets/icons/village.png"</c>),
+    /// for <see cref="IAssetResolver"/>'s bundle-local tier. Empty if no session has started yet or
+    /// the module has no assets.
+    /// </summary>
+    public IReadOnlyDictionary<string, byte[]> Assets { get; private set; } = new Dictionary<string, byte[]>();
+
+    /// <summary>The active module's stylesheet text, if it has one — see <see cref="LoadedModuleContent.StyleCss"/>.</summary>
+    public string? StyleCss { get; private set; }
+
     /// <summary>Starts tracking a newly created or restored session.</summary>
-    public void Start(string moduleId, string moduleVersion, string? language, LoadedModule module, GameSession session)
+    public void Start(string moduleId, string moduleVersion, string? language, LoadedModuleContent content, GameSession session)
     {
         ModuleId = moduleId;
         ModuleVersion = moduleVersion;
         Language = language;
-        Module = module;
+        Module = content.Module;
+        Assets = content.Assets;
+        StyleCss = content.StyleCss;
         Session = session;
     }
 
@@ -48,6 +60,8 @@ public sealed class GameSessionState
         ModuleVersion = null;
         Language = null;
         Module = null;
+        Assets = new Dictionary<string, byte[]>();
+        StyleCss = null;
         Session = null;
     }
 }

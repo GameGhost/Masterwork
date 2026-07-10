@@ -6,6 +6,7 @@
 @inject ISaveStore SaveStore
 @inject IModuleStore ModuleStore
 @inject GameSessionState State
+@inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -180,9 +181,10 @@
                 return;
             }
 
-            var module = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
-            var session = GameSession.Restore(module, save);
-            State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, module, session);
+            var loaded = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
+            var session = GameSession.Restore(loaded.Module, save);
+            State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session);
+            await StyleInjector.ApplyAsync(loaded.StyleCss);
             Nav.NavigateTo("/play");
         }
         catch (InvalidOperationException ex)

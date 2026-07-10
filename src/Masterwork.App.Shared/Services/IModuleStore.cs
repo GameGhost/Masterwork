@@ -18,9 +18,12 @@ public interface IModuleStore
     /// Loads the full content of an installed module by id, resolving its passage text against
     /// <paramref name="locale"/> if given (see <see cref="Masterwork.ModuleFormat.ModuleLocales"/> for
     /// the fallback chain — falls through to the module's own default, then whatever's available, if
-    /// <paramref name="locale"/> is <see langword="null"/> or the module doesn't have it).
+    /// <paramref name="locale"/> is <see langword="null"/> or the module doesn't have it). Also
+    /// returns the module's raw asset bytes and stylesheet text (see <see cref="LoadedModuleContent"/>)
+    /// — the caller publishes these into <see cref="GameSessionState"/> so <see cref="IAssetResolver"/>
+    /// and the module-CSS injection can use them for the lifetime of the session.
     /// </summary>
-    Task<LoadedModule> LoadAsync(string moduleId, string? locale = null);
+    Task<LoadedModuleContent> LoadAsync(string moduleId, string? locale = null);
 
     /// <summary>Installs a <c>.mwm</c> package from raw bytes (a browser upload or a MAUI file read), keyed by its manifest's declared id.</summary>
     /// <exception cref="InvalidOperationException">The package has no <c>manifest.yaml</c>.</exception>

@@ -2,7 +2,7 @@
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-<button type="button" class="mws-nav @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@IsRewound" @onclick="HandleClick">
+<button type="button" class="mws-nav style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@IsRewound" @onclick="HandleClick">
     @Node.Label
 </button>
 

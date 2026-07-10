@@ -5,6 +5,7 @@
 @using Masterwork.App.Shared.Services
 @inject GameSessionState State
 @inject IAudioPlayer AudioPlayer
+@inject IModuleStyleInjector StyleInjector
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
 
@@ -143,6 +144,7 @@ else
         // the newest save" true, since there's no longer a bare autosave at all for this module).
         await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
 
+        await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/continue");
     }
@@ -156,6 +158,7 @@ else
             await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
         }
 
+        await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/");
     }
@@ -163,8 +166,9 @@ else
     // Reaching an ending already deleted the module's autosave (see PersistAutosaveAsync above) —
     // this just clears the in-memory session and returns to the menu. Distinct from AbandonGame,
     // which is for walking away from an *unfinished* session rather than a completed one.
-    private void ReturnToMainMenu()
+    private async Task ReturnToMainMenu()
     {
+        await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/");
     }

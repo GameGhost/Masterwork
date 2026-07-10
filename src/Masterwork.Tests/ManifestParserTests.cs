@@ -102,6 +102,7 @@ public class ManifestParserTests
         entry: 'Setup_01_PlayerCountSelect'
         passages: 'passages'
         passages_override: 'passages-override'
+        style: 'assets/style.css'
         dependencies: []
         """;
 
@@ -151,6 +152,7 @@ public class ManifestParserTests
         Assert.Equal("Setup_01_PlayerCountSelect", manifest.Entry);
         Assert.Equal("passages", manifest.PassagesPath);
         Assert.Equal("passages-override", manifest.PassagesOverridePath);
+        Assert.Equal("assets/style.css", manifest.StylePath);
     }
 
     [Fact]
@@ -164,6 +166,7 @@ public class ManifestParserTests
 
         Assert.Equal("passages", manifest.PassagesPath);
         Assert.Equal("passages-override", manifest.PassagesOverridePath);
+        Assert.Equal("assets/style.css", manifest.StylePath);
         Assert.Null(manifest.Thumbnail);
         Assert.Null(manifest.Info);
         Assert.Null(manifest.Entry);
