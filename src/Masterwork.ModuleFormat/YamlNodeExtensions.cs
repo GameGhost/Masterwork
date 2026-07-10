@@ -95,6 +95,26 @@ internal static class YamlNodeExtensions
     }
 
     /// <summary>
+    /// Reads an optional integer field, returning <see langword="null"/> if absent.
+    /// </summary>
+    /// <exception cref="MwsParseException">The field is present but not a valid integer.</exception>
+    public static int? GetInt(this YamlMappingNode map, string key, YamlParseContext ctx)
+    {
+        var raw = map.GetString(key, ctx);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (int.TryParse(raw, out var value))
+        {
+            return value;
+        }
+
+        throw new MwsParseException($"{ctx.Source}: field '{key}' must be an integer but found '{raw}'");
+    }
+
+    /// <summary>
     /// Reads a list-of-strings field. Logs "wrong_field_type" and returns an empty list if the
     /// field isn't a sequence; individual non-scalar elements are skipped with their own warning.
     /// </summary>

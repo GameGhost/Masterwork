@@ -62,6 +62,57 @@ public class ModulePackageTests
     }
 
     [Fact]
+    public void ReadFromBytes_PassagesAndOverrideSubfolders_SeparatedCorrectly()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "passages"));
+        Directory.CreateDirectory(Path.Combine(dir, "passages-override"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+                id: 'test.module'
+                title: 'Test Module'
+                version: '1.0.0'
+                """);
+            File.WriteAllText(Path.Combine(dir, "passages", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(dir, "passages-override", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Hand-authored'
+                """);
+
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+
+            Assert.Single(contents.PassageYamls);
+            Assert.Single(contents.OverridePassageYamls);
+            Assert.Contains("nodes: []", contents.PassageYamls[0]);
+            Assert.Contains("Hand-authored", contents.OverridePassageYamls[0]);
+
+            var module = new ModuleLoader().LoadFromSources(
+                contents.PassageYamls, contents.VariablesYaml, overridePassageYamls: contents.OverridePassageYamls);
+            var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+            Assert.Equal("Hand-authored", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ReadContents_LoadIntoModuleLoader_ProducesPlayableModule()
     {
         var dir = MakeSourceDirectory();

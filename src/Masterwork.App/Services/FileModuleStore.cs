@@ -40,8 +40,13 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
 
         var bytes = await File.ReadAllBytesAsync(path);
         var contents = ModulePackage.ReadFromBytes(bytes);
-        var restext = ModuleLocales.SelectRestext(contents.RestextByLocale, locale);
-        return loader.LoadFromSources(contents.PassageYamls, contents.VariablesYaml, restext);
+        var resolvedLocale = ModuleLocales.SelectLocale(contents.RestextByLocale, locale);
+        var restext = resolvedLocale is not null ? contents.RestextByLocale[resolvedLocale] : null;
+        var restextOverride = resolvedLocale is not null
+            ? contents.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
+            : null;
+        return loader.LoadFromSources(
+            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride);
     }
 
     /// <inheritdoc/>

@@ -347,9 +347,9 @@ public class DeserializerTests
                     default: ''
                 """);
 
-        Assert.Equal("int", module.Variables["round"].VarType);
+        Assert.Equal(VarKind.Integer, module.Variables["round"].VarType);
         Assert.Equal(0L, module.Variables["round"].Default);
-        Assert.Equal("string", module.Variables["wolves"].VarType);
+        Assert.Equal(VarKind.String, module.Variables["wolves"].VarType);
     }
 
     [Fact]
@@ -382,8 +382,60 @@ public class DeserializerTests
                 variables: {}
                 """);
 
-        Assert.Equal("int", module.Variables["players"].VarType);
-        Assert.Equal("string", module.Variables["nameA"].VarType);
+        Assert.Equal(VarKind.Integer, module.Variables["players"].VarType);
+        Assert.Equal(VarKind.String, module.Variables["nameA"].VarType);
+    }
+
+    [Fact]
+    public void VariableManifest_OneLineForm_ParsesTypeWithNoExplicitDefault()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  round: 'int'
+                  wolves: 'string'
+                  seen: 'bool'
+                  entry: 'record'
+                  tags: 'string_array'
+                """);
+
+        Assert.Equal(VarKind.Integer, module.Variables["round"].VarType);
+        Assert.Null(module.Variables["round"].Default);
+        Assert.Equal(VarKind.Boolean, module.Variables["seen"].VarType);
+        Assert.Equal(VarKind.Record, module.Variables["entry"].VarType);
+        Assert.Equal(VarKind.StringArray, module.Variables["tags"].VarType);
+    }
+
+    [Fact]
+    public void VariableManifest_OneLineAndExpandedForms_CanBeMixed()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  round: 'int'
+                  final5:
+                    type: 'int'
+                    default: 3
+                """);
+
+        Assert.Null(module.Variables["round"].Default);
+        Assert.Equal(3L, module.Variables["final5"].Default);
+    }
+
+    [Fact]
+    public void VariableManifest_UnrecognizedType_WarnsAndSkipsVariable()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  bogus: 'not_a_real_type'
+                """);
+
+        Assert.False(module.Variables.ContainsKey("bogus"));
+        Assert.Contains(module.Warnings.Items, w => w.Kind == "wrong_field_type");
     }
 
     [Fact]

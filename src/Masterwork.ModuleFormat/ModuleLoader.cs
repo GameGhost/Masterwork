@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModuleFormat;
 
@@ -36,17 +37,51 @@ public sealed class ModuleLoader : IModuleLoader
         var variablesPath = Path.Combine(directoryPath, "_variables.yaml");
         var variablesYaml = File.Exists(variablesPath) ? File.ReadAllText(variablesPath) : null;
 
-        var restextPath = Path.Combine(directoryPath, "en-US.restext");
-        var restextText = File.Exists(restextPath) ? File.ReadAllText(restextPath) : null;
+        var (restextText, restextOverrideText) = ReadRestextWithOverride(directoryPath);
 
-        var passageYamls = Directory.EnumerateFiles(directoryPath, "*.mws.yaml").Select(File.ReadAllText);
+        var (passagesDir, overrideDir) = ResolvePassageDirs(directoryPath);
 
-        return LoadFromSources(passageYamls, variablesYaml, restextText);
+        var passageYamls = Directory.EnumerateFiles(passagesDir, "*.mws.yaml").Select(File.ReadAllText);
+        var overridePassageYamls = overrideDir is not null
+            ? Directory.EnumerateFiles(overrideDir, "*.mws.yaml").Select(File.ReadAllText)
+            : null;
+
+        return LoadFromSources(passageYamls, variablesYaml, restextText, overridePassageYamls, restextOverrideText);
+    }
+
+    // Finds the module's base restext file — preferring en-US.restext, falling back to whichever
+    // single {culture}.restext is present — and, alongside it, an optional
+    // {culture}.overrides.restext with the same add/override-by-key semantics as passage overrides.
+    private static (string? Base, string? Override) ReadRestextWithOverride(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return (null, null);
+        }
+
+        var restextFiles = Directory.EnumerateFiles(directoryPath, "*.restext")
+            .Where(f => !f.EndsWith(".overrides.restext", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var basePath = restextFiles.FirstOrDefault(f =>
+                string.Equals(Path.GetFileName(f), "en-US.restext", StringComparison.OrdinalIgnoreCase))
+            ?? restextFiles.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
+
+        if (basePath is null)
+        {
+            return (null, null);
+        }
+
+        var culture = Path.GetFileNameWithoutExtension(basePath);
+        var overridePath = Path.Combine(directoryPath, $"{culture}.overrides.restext");
+
+        return (File.ReadAllText(basePath), File.Exists(overridePath) ? File.ReadAllText(overridePath) : null);
     }
 
     /// <inheritdoc/>
     public LoadedModule LoadFromSources(
-        IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null)
+        IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
+        IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null)
     {
         var warnings = new ModuleWarnings();
 
@@ -54,9 +89,22 @@ public sealed class ModuleLoader : IModuleLoader
             ? new Dictionary<string, VarDef>()
             : _variableManifest.Parse(variablesYaml, warnings);
 
-        var locale = restextText is null
+        IReadOnlyDictionary<string, string> locale = restextText is null
             ? new Dictionary<string, string>()
             : _restextFile.Parse(restextText);
+
+        if (restextOverrideText is not null)
+        {
+            // Same add/override-by-key semantics as passage overrides: a key present in the
+            // override text replaces the base value; a new key is simply added.
+            var mergedLocale = new Dictionary<string, string>(locale, StringComparer.Ordinal);
+            foreach (var (key, value) in _restextFile.Parse(restextOverrideText))
+            {
+                mergedLocale[key] = value;
+            }
+
+            locale = mergedLocale;
+        }
 
         var passages = new Dictionary<string, MwsPassageDoc>();
         foreach (var yaml in passageYamls)
@@ -64,6 +112,18 @@ public sealed class ModuleLoader : IModuleLoader
             var raw = _passageParser.ParsePassage(yaml, warnings);
             var resolved = _restextResolver.Resolve(raw, locale, warnings);
             passages[resolved.PassageId] = resolved;
+        }
+
+        // Hand-authored overrides load after the base passages: new passage_ids are added,
+        // matching ones replace the base version entirely (see IModuleLoader.LoadFromSources).
+        if (overridePassageYamls is not null)
+        {
+            foreach (var yaml in overridePassageYamls)
+            {
+                var raw = _passageParser.ParsePassage(yaml, warnings);
+                var resolved = _restextResolver.Resolve(raw, locale, warnings);
+                passages[resolved.PassageId] = resolved;
+            }
         }
 
         var startPassageId = passages.Values
@@ -83,6 +143,54 @@ public sealed class ModuleLoader : IModuleLoader
             Warnings = warnings,
             StartPassageId = startPassageId,
         };
+    }
+
+    // Resolves which subdirectory holds base passages and which (if any) holds hand-authored
+    // overrides. Consults manifest.yaml's optional "passages"/"passages_override" fields (relative
+    // to directoryPath) if present; otherwise falls back to the "passages"/"passages-override"
+    // folder-name convention. If no "passages" subfolder exists at all, falls back further to the
+    // legacy flat layout (passages directly at directoryPath), so older extractor output — which
+    // has no passages/ subfolder — still loads unchanged.
+    private static (string PassagesDir, string? OverrideDir) ResolvePassageDirs(string directoryPath)
+    {
+        string? passagesField = null;
+        string? overrideField = null;
+
+        var manifestPath = Path.Combine(directoryPath, "manifest.yaml");
+        if (File.Exists(manifestPath))
+        {
+            (passagesField, overrideField) = ReadPassagePathFields(File.ReadAllText(manifestPath));
+        }
+
+        var passagesDir = Path.Combine(directoryPath, passagesField ?? "passages");
+        if (!Directory.Exists(passagesDir))
+        {
+            passagesDir = directoryPath;
+        }
+
+        var overrideDir = Path.Combine(directoryPath, overrideField ?? "passages-override");
+        return (passagesDir, Directory.Exists(overrideDir) ? overrideDir : null);
+    }
+
+    // A minimal, tolerant peek at manifest.yaml for just the two path fields this loader needs.
+    // Deliberately does not go through ManifestParser/ModuleManifest's stricter schema — most
+    // manifest fields (localized title, thumbnail, info, etc.) aren't consumed by this load path
+    // at all, so a strict parse would fail on parts of the manifest this loader never touches.
+    private static (string? PassagesDir, string? OverrideDir) ReadPassagePathFields(string manifestYaml)
+    {
+        var stream = new YamlStream();
+        stream.Load(new StringReader(manifestYaml));
+        if (stream.Documents.Count == 0 || stream.Documents[0].RootNode is not YamlMappingNode root)
+        {
+            return (null, null);
+        }
+
+        string? Get(string key) =>
+            root.Children.TryGetValue(new YamlScalarNode(key), out var node) && node is YamlScalarNode s
+                ? s.Value
+                : null;
+
+        return (Get("passages"), Get("passages_override"));
     }
 
     /// <inheritdoc/>

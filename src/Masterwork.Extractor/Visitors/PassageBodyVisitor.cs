@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
+using Masterwork.ModuleFormat;
 using VarDef = Masterwork.ModuleFormat.VarDef;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -2132,7 +2133,7 @@ public class PassageBodyVisitor
             // String-declared variable: keep the coercion using the MWS parseInt() function
             if (_variables is not null &&
                 _variables.TryGetValue(parsedVar, out var parseDef) &&
-                parseDef.VarType == "string")
+                parseDef.VarType == VarKind.String)
             {
                 return $"parseInt({parsedVar})";
             }

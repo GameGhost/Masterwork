@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using Masterwork.ModuleFormat;
 using VarDef = Masterwork.ModuleFormat.VarDef;
 
 namespace Masterwork.Extractor;
@@ -25,8 +26,7 @@ public class ExtractionReport
 
     public int PassagesExtracted { get; set; }
     public int VariablesDiscovered { get; set; }
-    public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node" &&
-        !_overrides.Any(o => o.PassageId == f.PassageName));
+    public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node");
 
     // Set before Write() so the report can generate relative-path links.
     public string? SourceFilePath { get; set; }
@@ -61,13 +61,6 @@ public class ExtractionReport
     private readonly List<string> _restextExclusions = [];
     public void AddRestextExclusion(string passageId) => _restextExclusions.Add(passageId);
 
-    private readonly List<(string PassageId, string FileName, int GeneratedUnknownCount)> _overrides = [];
-    public void AddOverrideApplied(string passageId, string fileName)
-    {
-        var unknownCount = _flags.Count(f => f.Kind == "unknown_node" && f.PassageName == passageId);
-        _overrides.Add((passageId, fileName, unknownCount));
-    }
-
     // Unknown node — the code is the primary content; no separate message.
     public void AddUnhandled(string passageName, string code, int? sourceLine = null) =>
         _flags.Add(new(passageName, "unknown_node",
@@ -97,11 +90,11 @@ public class ExtractionReport
                 continue;
             }
 
-            var expectedType = p.InputType == "number" ? "int" : "string";
+            var expectedType = p.InputType == "number" ? VarKind.Integer : VarKind.String;
             if (def.VarType != expectedType)
             {
                 AddWarning(p.PassageName,
-                    $"Input type mismatch: `{p.StoreIn}` is declared `{def.VarType}` but input_type is `{p.InputType}`",
+                    $"Input type mismatch: `{p.StoreIn}` is declared `{def.VarType.ToYaml()}` but input_type is `{p.InputType}`",
                     null, p.SourceLine);
             }
         }
@@ -114,16 +107,13 @@ public class ExtractionReport
         sb.AppendLine($"# {title}");
         sb.AppendLine();
 
-        // Flags for overridden passages reflect the discarded generated file — suppress them.
-        var overriddenIds = new HashSet<string>(_overrides.Select(o => o.PassageId), StringComparer.Ordinal);
-        var activeFlags = _flags.Where(f => !overriddenIds.Contains(f.PassageName)).ToList();
+        var activeFlags = _flags;
 
         var unknownCount = activeFlags.Count(f => f.Kind == "unknown_node");
         var warnCount = activeFlags.Count(f => f.Kind == "warning");
         var infoCount = activeFlags.Count(f => f.Kind == "info");
         var promptCount = _inputPrompts.Count;
         var isolatedCount = _isolatedPassages?.Count ?? 0;
-        var overrideCount = _overrides.Count;
 
         sb.AppendLine("| | |");
         sb.AppendLine("|---|---|");
@@ -151,16 +141,10 @@ public class ExtractionReport
             sb.AppendLine($"| Isolated passages | **{isolatedCount}** |");
         }
 
-        if (overrideCount > 0)
-        {
-            sb.AppendLine($"| Overrides applied | **{overrideCount}** |");
-        }
-
         sb.AppendLine();
 
         WriteSettingsSection(sb);
         WriteTaggedPassagesSection(sb);
-        WriteOverridesSection(sb);
         WriteRestextExclusionsSection(sb);
         WriteSection(sb, activeFlags, "unknown_node", "Unknown Nodes",
             "Unrecognized statements — emitted as `type: unknown` in the passage YAML. Each requires manual review.");
@@ -285,13 +269,14 @@ public class ExtractionReport
 
         foreach (var p in _inputPrompts.OrderBy(p => p.PassageName))
         {
-            var varType = _variables is not null && _variables.TryGetValue(p.StoreIn, out var def)
-                ? def.VarType : "?";
-            var typeMismatch = (p.InputType == "number" && varType != "int") ||
-                               (p.InputType == "string" && varType != "string");
+            VarKind? varType = _variables is not null && _variables.TryGetValue(p.StoreIn, out var def)
+                ? def.VarType : null;
+            var varTypeText = varType?.ToYaml() ?? "?";
+            var typeMismatch = (p.InputType == "number" && varType != VarKind.Integer) ||
+                               (p.InputType == "string" && varType != VarKind.String);
             var varCell = typeMismatch
-                ? $"`{p.StoreIn}` [{varType}] ⚠"
-                : $"`{p.StoreIn}` [{varType}]";
+                ? $"`{p.StoreIn}` [{varTypeText}] ⚠"
+                : $"`{p.StoreIn}` [{varTypeText}]";
 
             string passageCell;
             if (PassageFiles.TryGetValue(p.PassageName, out var file))
@@ -311,33 +296,6 @@ public class ExtractionReport
     }
 
     private static string EscapeTableCell(string s) => s.Replace("|", "\\|");
-
-    private void WriteOverridesSection(StringBuilder sb)
-    {
-        if (_overrides.Count == 0)
-        {
-            return;
-        }
-
-        sb.AppendLine("---");
-        sb.AppendLine();
-        sb.AppendLine($"## Applied Overrides ({_overrides.Count})");
-        sb.AppendLine();
-        sb.AppendLine("These passages were replaced by hand-authored override YAML files. " +
-            "The generated file has been discarded; the override is the authoritative source.");
-        sb.AppendLine();
-
-        foreach (var (passageId, fileName, unknownCount) in _overrides.OrderBy(o => o.FileName))
-        {
-            sb.AppendLine($"- [{fileName}]({fileName}) (`{passageId}`)");
-            if (unknownCount == 0)
-            {
-                sb.AppendLine($"  > ⚠ Possibly stale: the extractor generates 0 unknown nodes for `{passageId}`. " +
-                    "Verify the generated output matches the hand-authored version before removing the override.");
-            }
-        }
-        sb.AppendLine();
-    }
 
     private void WriteIsolatedSection(StringBuilder sb)
     {

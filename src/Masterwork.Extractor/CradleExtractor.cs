@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
+using Masterwork.ModuleFormat;
 using VarDef = Masterwork.ModuleFormat.VarDef;
 using Masterwork.Extractor.Visitors;
 using Microsoft.CodeAnalysis;
@@ -29,13 +30,6 @@ public partial class CradleExtractor
     private readonly HashSet<string> _varDefsVars = [];
     // Source file paths that are complete (class + VarDefs included) vs. partial (method-only)
     private readonly HashSet<string> _completeFiles = [];
-
-    // Standard variables from GLOBALS.cs that all modules share
-    private static readonly HashSet<string> StandardVariables = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "nameA", "nameB", "nameC", "nameD", "nameE",
-        "townname", "players", "playerCount", "currentPassage",
-    };
 
     public CradleExtractor(ExtractionOptions opts, SpriteMapper spriteMapper, ExtractionReport report)
     {
@@ -137,11 +131,15 @@ public partial class CradleExtractor
 
     private void Pass1_DiscoverVariables(List<SyntaxTree> trees)
     {
-        // Phase A: VarDefs inner class field declarations in complete files.
-        // public StoryVar @name = 0   → int, default 0
-        // public StoryVar @name = ""  → string, default ""
-        // public StoryVar @name       → string, no default
-        // These are authoritative; usage-based inference below will not override them.
+        // Phase A: VarDefs inner class field declarations in complete files. This is the only
+        // place a real default can come from — StoryVar isn't statically typed, so the initializer
+        // is really just "help ensure there's a default" (per the original Cradle author's intent),
+        // not a type declaration. It informs TYPE here; usage-based inference in Phase C then
+        // confirms/refines type from every assignment, not just this one.
+        //   public StoryVar @name = 0     → int;  default kept only if != 0
+        //   public StoryVar @name = ""    → string; default kept only if != ""
+        //   public StoryVar @name = true  → bool; default kept only if true
+        //   public StoryVar @name         → string, no default (refinable by Phase C)
         foreach (var tree in trees)
         {
             if (!_completeFiles.Contains(tree.FilePath))
@@ -172,33 +170,13 @@ public partial class CradleExtractor
                             continue;
                         }
 
-                        string varType;
-                        object? defaultVal;
-                        if (declarator.Initializer?.Value is LiteralExpressionSyntax initLit)
-                        {
-                            if (initLit.IsKind(SyntaxKind.NumericLiteralExpression))
-                            {
-                                varType = "int";
-                                defaultVal = initLit.Token.Value ?? 0;
-                            }
-                            else
-                            {
-                                varType = "string";
-                                defaultVal = initLit.Token.ValueText;
-                            }
-                        }
-                        else
-                        {
-                            varType = "string";
-                            defaultVal = null;
-                        }
+                        var (varType, defaultVal) = InferFromVarDefsInitializer(declarator.Initializer);
 
                         _variables[varName] = new VarDef
                         {
                             Name = varName,
                             VarType = varType,
                             Default = defaultVal,
-                            IsStandard = StandardVariables.Contains(varName),
                         };
                         // Only mark as authoritative when an explicit initializer is present.
                         // Vars declared as "public StoryVar @x;" (no initializer) remain
@@ -243,15 +221,18 @@ public partial class CradleExtractor
                     {
                         Name = varName,
                         VarType = InferTypeFromContext(access),
-                        IsStandard = StandardVariables.Contains(varName),
                     };
                 }
             }
         }
 
-        // Phase C: refine types from assignment RHS for variables not from VarDefs.
-        // Accumulate all definite inferences per variable so mismatches can be detected.
-        var phaseC = new Dictionary<string, List<string>>();
+        // Phase C: confirm/refine types from every assignment RHS for variables not locked by an
+        // explicit VarDefs initializer. Accumulates every distinct inference (not just the first)
+        // so a genuine type conflict — not a first-assignment fluke — is what triggers hoisting.
+        // No default-value capture here: a "first assignment in source order" is an arbitrary
+        // location in a ~30k-line file, unrelated to actual game-start state, so it's not a
+        // trustworthy default source — see Phase A above for the one place a real default lives.
+        var phaseC = new Dictionary<string, List<VarKind>>();
         foreach (var tree in trees)
         {
             var root = tree.GetCompilationUnitRoot();
@@ -273,12 +254,7 @@ public partial class CradleExtractor
                 }
 
                 var varName = leftAccess.Name.Identifier.Text;
-                if (!_variables.TryGetValue(varName, out var def))
-                {
-                    continue;
-                }
-
-                if (_varDefsVars.Contains(varName))
+                if (!_variables.ContainsKey(varName) || _varDefsVars.Contains(varName))
                 {
                     continue;
                 }
@@ -291,13 +267,7 @@ public partial class CradleExtractor
                         phaseC[varName] = typeList = [];
                     }
 
-                    typeList.Add(inferredType);
-                }
-
-                // Capture first assigned literal as default
-                if (def.Default is null && assign.Right is LiteralExpressionSyntax lit)
-                {
-                    def.Default = GetLiteralValue(lit);
+                    typeList.Add(inferredType.Value);
                 }
             }
         }
@@ -324,26 +294,53 @@ public partial class CradleExtractor
         }
     }
 
-    private static string PickBestType(IEnumerable<string> types)
+    // Reads a VarDefs field's initializer, if any, for its type — and, only when the literal
+    // differs from that type's canonical zero value, its default too. No initializer means
+    // "string, no default" (StoryVar's own uninitialized-field behavior), refinable by Phase C.
+    private static (VarKind Type, object? Default) InferFromVarDefsInitializer(EqualsValueClauseSyntax? initializer)
     {
-        // When a variable is assigned conflicting types across passages the engine
-        // hoists int/bool to string at runtime (0 → "0", false → "0", true → "1"),
-        // so string is the safest declaration type for a conflict.
-        var set = new HashSet<string>(types);
+        if (initializer?.Value is not LiteralExpressionSyntax lit)
+        {
+            return (VarKind.String, null);
+        }
+
+        if (lit.IsKind(SyntaxKind.NumericLiteralExpression))
+        {
+            var value = Convert.ToInt64(lit.Token.Value ?? 0L);
+            return (VarKind.Integer, value != 0 ? value : null);
+        }
+
+        if (lit.IsKind(SyntaxKind.TrueLiteralExpression) || lit.IsKind(SyntaxKind.FalseLiteralExpression))
+        {
+            var value = lit.IsKind(SyntaxKind.TrueLiteralExpression);
+            return (VarKind.Boolean, value ? true : null);
+        }
+
+        var text = lit.Token.ValueText;
+        return (VarKind.String, !string.IsNullOrEmpty(text) ? text : null);
+    }
+
+    private static VarKind PickBestType(IEnumerable<VarKind> types)
+    {
+        var set = new HashSet<VarKind>(types);
         if (set.Count == 1)
         {
             return set.First();
         }
 
-        if (set.Contains("array") && !set.Contains("int") && !set.Contains("string"))
+        // bool < int < string: pick the widest scalar type that can represent every observed
+        // value (StoryValue.AsInt()/AsString() already hoist bool→int→string at runtime).
+        if (set.IsSubsetOf((VarKind[])[VarKind.Boolean, VarKind.Integer, VarKind.String]))
         {
-            return "array";
+            return set.Contains(VarKind.String) ? VarKind.String : VarKind.Integer;
         }
 
-        return "string";
+        // Array/record mixed with a scalar type (or with each other) isn't a coercion the engine
+        // supports — string is the safest fallback declaration.
+        return VarKind.String;
     }
 
-    private static string InferTypeFromContext(MemberAccessExpressionSyntax access)
+    private static VarKind InferTypeFromContext(MemberAccessExpressionSyntax access)
     {
         // Look at the parent — if it's int.Parse(this.Vars.X) the var is probably int
         var parent = access.Parent;
@@ -352,13 +349,13 @@ public partial class CradleExtractor
             var methodName = (inv.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text;
             if (methodName == "Parse")
             {
-                return "int";
+                return VarKind.Integer;
             }
         }
-        return "string";
+        return VarKind.String;
     }
 
-    private static string? InferTypeFromRhs(ExpressionSyntax rhs)
+    private static VarKind? InferTypeFromRhs(ExpressionSyntax rhs)
     {
         while (rhs is ParenthesizedExpressionSyntax paren)
         {
@@ -369,17 +366,22 @@ public partial class CradleExtractor
         {
             if (lit2.IsKind(SyntaxKind.NumericLiteralExpression))
             {
-                return "int";
+                return VarKind.Integer;
             }
 
             if (lit2.IsKind(SyntaxKind.StringLiteralExpression))
             {
-                return "string";
+                return VarKind.String;
+            }
+
+            if (lit2.IsKind(SyntaxKind.TrueLiteralExpression) || lit2.IsKind(SyntaxKind.FalseLiteralExpression))
+            {
+                return VarKind.Boolean;
             }
         }
         if (rhs is CastExpressionSyntax cast && cast.Type.ToString() == "int")
         {
-            return "int";
+            return VarKind.Integer;
         }
 
         if (rhs is InvocationExpressionSyntax inv2)
@@ -388,12 +390,15 @@ public partial class CradleExtractor
                 ?? (inv2.Expression as IdentifierNameSyntax)?.Identifier.Text;
             if (methodName == "a" || methodName == "shuffled")
             {
-                return "array";
+                // Element type isn't recoverable from the call alone; arrays are untyped at
+                // runtime anyway (VarKind's array split is documentation-only), so this is a
+                // harmless default rather than a real element-type claim.
+                return VarKind.StringArray;
             }
 
             if (methodName is "num" or "random" or "PassageValueNumber" or "Range" or "Parse")
             {
-                return "int";
+                return VarKind.Integer;
             }
             // either(x, y, ...) produces int when all args are numeric literals, string when all are string literals
             if (methodName == "either")
@@ -403,33 +408,23 @@ public partial class CradleExtractor
                         a.Expression is LiteralExpressionSyntax eLit &&
                         eLit.IsKind(SyntaxKind.NumericLiteralExpression)))
                 {
-                    return "int";
+                    return VarKind.Integer;
                 }
 
                 if (args.Count > 0 && args.All(a =>
                         a.Expression is LiteralExpressionSyntax eLit &&
                         eLit.IsKind(SyntaxKind.StringLiteralExpression)))
                 {
-                    return "string";
+                    return VarKind.String;
                 }
             }
         }
         if (rhs is ArrayCreationExpressionSyntax)
         {
-            return "array";
+            return VarKind.StringArray;
         }
 
         return null;
-    }
-
-    private static object GetLiteralValue(LiteralExpressionSyntax lit)
-    {
-        if (lit.IsKind(SyntaxKind.NumericLiteralExpression))
-        {
-            return lit.Token.Value ?? 0;
-        }
-
-        return lit.Token.ValueText;
     }
 
     // ── Pass 2: Passage registry ───────────────────────────────────────────

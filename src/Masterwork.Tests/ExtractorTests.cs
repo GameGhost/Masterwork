@@ -10,7 +10,7 @@ public class ExtractorTests
         System.IO.File.WriteAllText(tempFile, source);
         try
         {
-            var opts = new ExtractionOptions { InputDir = tempFile, OutputDir = "", IncludeDebug = true };
+            var opts = new ExtractionOptions { InputDir = tempFile, PassagesOutDir = "", IncludeDebug = true };
             var report = new ExtractionReport();
             var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report);
             return extractor.Extract([tempFile]);

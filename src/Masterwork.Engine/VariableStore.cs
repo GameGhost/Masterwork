@@ -104,11 +104,16 @@ public sealed partial class VariableStore : IStoryEvalContext
             return _evaluator.Evaluate(content, this).AsString();
         });
 
+    // Canonical zero per VarKind (empty string, 0, false, empty record, empty array) whenever
+    // def.Default isn't set — see VarDef.Default's remarks on when it's set at all.
     private static StoryValue DefaultValueFor(VarDef def) => def.VarType switch
     {
-        "int" => StoryValue.Of(def.Default is long l ? l : Convert.ToInt64(def.Default ?? 0L)),
-        "array" => StoryValue.Of(new List<StoryValue>()),
-        _ => StoryValue.Of(def.Default as string ?? ""),
+        VarKind.Integer => StoryValue.Of(def.Default is long l ? l : Convert.ToInt64(def.Default ?? 0L)),
+        VarKind.Boolean => StoryValue.Of(def.Default as bool? ?? false),
+        VarKind.Record => new StoryValue.RecordVal(new Dictionary<string, StoryValue>()),
+        VarKind.StringArray or VarKind.IntArray or VarKind.BooleanArray or VarKind.RecordArray =>
+            StoryValue.Of(new List<StoryValue>()),
+        _ => StoryValue.Of(def.Default as string ?? ""), // VarKind.String
     };
 
     [GeneratedRegex(@"\{([^{}]*)\}")]

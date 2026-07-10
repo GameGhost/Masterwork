@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
+using Masterwork.ModuleFormat;
 using VarDef = Masterwork.ModuleFormat.VarDef;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -24,7 +25,10 @@ partial class Program
             return 1;
         }
 
-        Console.WriteLine($"mw-extract: {opts.InputDir} → {opts.OutputDir}");
+        var variablesOutDir = opts.VariablesOutDir ?? opts.PassagesOutDir;
+        var restextOutDir = opts.RestextOutDir ?? opts.PassagesOutDir;
+
+        Console.WriteLine($"mw-extract: {opts.InputDir} → {opts.PassagesOutDir}");
 
         // Accept either a single .cs file or a directory
         List<string> sourceFiles;
@@ -67,7 +71,7 @@ partial class Program
         var report = new ExtractionReport
         {
             SourceFilePath = sourceFiles.Count == 1 ? sourceFiles[0] : null,
-            OutputDirPath = Path.GetFullPath(opts.OutputDir),
+            OutputDirPath = Path.GetFullPath(opts.PassagesOutDir),
             ModuleTitle = moduleTitle,
         };
         var extractor = new CradleExtractor(opts, spriteMapper, report);
@@ -98,9 +102,14 @@ partial class Program
             report.Settings["Restext exclude IDs"] = string.Join(", ", opts.RestextExcludeIds.Order());
         }
 
-        if (opts.OverridesDir is not null)
+        if (opts.VariablesOutDir is { Length: > 0 })
         {
-            report.Settings["Overrides dir"] = opts.OverridesDir;
+            report.Settings["Variables output"] = variablesOutDir;
+        }
+
+        if (opts.RestextOutDir is { Length: > 0 })
+        {
+            report.Settings["Restext output"] = restextOutDir;
         }
 
         if (opts.Breaks != BreaksMode.Omit)
@@ -132,7 +141,9 @@ partial class Program
             return 0;
         }
 
-        Directory.CreateDirectory(opts.OutputDir);
+        Directory.CreateDirectory(opts.PassagesOutDir);
+        Directory.CreateDirectory(variablesOutDir);
+        Directory.CreateDirectory(restextOutDir);
 
         var serializer = new SerializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
@@ -176,16 +187,16 @@ partial class Program
         // Phase 1: build all dicts and collect restext entries.
         // Restext line numbers depend on the complete file content, so collect everything first.
         var cachedPassages = new List<(MwsPassage Passage, Dictionary<string, object?> Dict, string FileName, string OutPath, string? RelSourcePath)>(passages.Count);
-        var fullOutputDir = Path.GetFullPath(opts.OutputDir);
+        var fullPassagesDir = Path.GetFullPath(opts.PassagesOutDir);
         foreach (var passage in passages)
         {
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
             var fileName = $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml";
             report.PassageFiles[passage.PassageId] = fileName;
             report.AddTaggedPassage(passage.PassageId, passage.Tags);
-            var outPath = Path.Combine(opts.OutputDir, fileName);
+            var outPath = Path.Combine(opts.PassagesOutDir, fileName);
             var relSourcePath = passage.SourceFile is not null
-                ? Path.GetRelativePath(fullOutputDir, passage.SourceFile).Replace('\\', '/')
+                ? Path.GetRelativePath(fullPassagesDir, passage.SourceFile).Replace('\\', '/')
                 : null;
             var ctx = new SerializationContext(
                 SourceRelativePath: relSourcePath,
@@ -240,53 +251,64 @@ partial class Program
         var commentMap = restext.BuildCommentMap();
         var keyLineMap = BuildRestextLineMap(restext);
 
+        // Relative path from the passages dir to the restext file, for "# {path}:{line} | ..." comments.
+        var restextRelFromPassages = Path.GetRelativePath(
+            fullPassagesDir, Path.Combine(Path.GetFullPath(restextOutDir), "en-US.restext")).Replace('\\', '/');
+
         // Phase 2: serialize and write YAML files using the now-complete restext index.
         foreach (var (passage, dict, _, outPath, relSourcePath) in cachedPassages)
         {
             var yaml = ("---\n" + serializer.Serialize(dict)).Replace("\r\n", "\n").Replace("\r", "\n");
             yaml = InjectSentinelComments(yaml);
             yaml = InjectSourceComments(yaml, passage, relSourcePath);
-            yaml = InjectRestextComments(yaml, commentMap, keyLineMap);
+            yaml = InjectRestextComments(yaml, commentMap, keyLineMap, restextRelFromPassages);
             File.WriteAllText(outPath, yaml.Replace("\n", "\r\n"), Encoding.UTF8);
         }
 
-        // Apply hand-authored overrides before writing the report so override info is included
-        ApplyOverrides(opts, report);
-
-        // Print summary after overrides so unknown-node count excludes suppressed passages
         report.PrintSummary();
 
         // Write restext locale file
         restext.ReportDeduplicationStats(report);
-        WriteRestextFile(restext, opts.OutputDir);
+        WriteRestextFile(restext, restextOutDir);
 
         // Write variables manifest
         var vars = extractor.GetDiscoveredVariables();
-        WriteVarsManifest(vars, opts.OutputDir, serializer);
+        WriteVarsManifest(vars, variablesOutDir, serializer);
 
         // Write extraction report
-        var reportPath = Path.Combine(opts.OutputDir, "_extraction-report.md");
+        var reportPath = Path.Combine(opts.PassagesOutDir, "_extraction-report.md");
         report.SetVariables(vars);
         report.Write(reportPath);
 
-        Console.WriteLine($"Done. {passages.Count} passages written to: {opts.OutputDir}");
+        Console.WriteLine($"Done. {passages.Count} passages written to: {opts.PassagesOutDir}");
+        if (variablesOutDir != opts.PassagesOutDir)
+        {
+            Console.WriteLine($"  Variables manifest: {variablesOutDir}");
+        }
+
+        if (restextOutDir != opts.PassagesOutDir)
+        {
+            Console.WriteLine($"  Restext file: {restextOutDir}");
+        }
+
         return 0;
     }
 
+    // One line per variable (`name: type`) in the common case; a variable only gets the expanded
+    // `name: {type, default}` form when it has an explicit non-canonical default (Default is only
+    // ever set that way — see VarDef.Default's remarks).
     private static void WriteVarsManifest(
         Dictionary<string, VarDef> vars,
         string outputDir,
         ISerializer serializer)
     {
-        var standard = vars.Values.Where(v => v.IsStandard).OrderBy(v => v.Name).ToList();
-        var module = vars.Values.Where(v => !v.IsStandard).OrderBy(v => v.Name).ToList();
-
         var manifest = new Dictionary<string, object?>
         {
-            ["standard_variables"] = standard.Select(v => v.Name).ToList(),
-            ["variables"] = module.ToDictionary(
+            ["variables"] = vars.Values.OrderBy(v => v.Name).ToDictionary(
                 v => v.Name,
-                v => (object?)new Dictionary<string, object?> { ["type"] = v.VarType, ["default"] = v.Default ?? DefaultForType(v.VarType) }),
+                v => v.Default is null
+                    ? (object?)v.VarType.ToYaml()
+                    : new Dictionary<string, object?> { ["type"] = v.VarType.ToYaml(), ["default"] = v.Default }),
         };
 
         var outPath = Path.Combine(outputDir, "_variables.yaml");
@@ -294,19 +316,12 @@ partial class Program
         Console.WriteLine($"Variables manifest: {outPath}");
     }
 
-    private static object DefaultForType(string type) => type switch
-    {
-        "int" => 0,
-        "array" => new List<object>(),
-        _ => "",
-    };
-
     private static ExtractionOptions? ParseArgs(string[] args)
     {
         var opts = new ExtractionOptions
         {
             InputDir = args[0],
-            OutputDir = args[1],
+            PassagesOutDir = args[1],
         };
 
         for (int i = 2; i < args.Length; i++)
@@ -325,8 +340,10 @@ partial class Program
                     opts.DryRun = true; break;
                 case "--seed-analysis":
                     opts.SeedAnalysis = true; break;
-                case "--overrides" when i + 1 < args.Length:
-                    opts.OverridesDir = args[++i]; break;
+                case "--variables-out" when i + 1 < args.Length:
+                    opts.VariablesOutDir = args[++i]; break;
+                case "--restext-out" when i + 1 < args.Length:
+                    opts.RestextOutDir = args[++i]; break;
                 case "--restext-exclude-tag" when i + 1 < args.Length:
                     opts.RestextExcludeTags.Add(args[++i]); break;
                 case "--restext-exclude-id" when i + 1 < args.Length:
@@ -352,86 +369,7 @@ partial class Program
             return null;
         }
 
-        if (opts.OverridesDir is not null && !Directory.Exists(opts.OverridesDir))
-        {
-            Console.Error.WriteLine($"Overrides directory not found: {opts.OverridesDir}");
-            return null;
-        }
-
         return opts;
-    }
-
-    private static void ApplyOverrides(ExtractionOptions opts, ExtractionReport report)
-    {
-        if (opts.OverridesDir is null)
-        {
-            return;
-        }
-
-        var overrideFiles = Directory.GetFiles(opts.OverridesDir, "*.mws.yaml", SearchOption.TopDirectoryOnly)
-            .OrderBy(f => f)
-            .ToList();
-
-        if (overrideFiles.Count == 0)
-        {
-            Console.WriteLine("[overrides] No override files found.");
-            return;
-        }
-
-        Console.WriteLine($"[overrides] Applying {overrideFiles.Count} override(s)...");
-
-        foreach (var overridePath in overrideFiles)
-        {
-            var fileName = Path.GetFileName(overridePath);
-            var generatedPath = Path.Combine(opts.OutputDir, fileName);
-
-            if (!File.Exists(generatedPath))
-            {
-                Console.Error.WriteLine($"[overrides] SKIP {fileName}: no matching generated file in output dir.");
-                continue;
-            }
-
-            var overrideContent = File.ReadAllText(overridePath, Encoding.UTF8);
-            var generatedContent = File.ReadAllText(generatedPath, Encoding.UTF8);
-
-            var overrideId = ExtractPassageId(overrideContent);
-            var generatedId = ExtractPassageId(generatedContent);
-
-            if (overrideId is null)
-            {
-                Console.Error.WriteLine($"[overrides] SKIP {fileName}: could not extract passage_id from override.");
-                continue;
-            }
-            if (generatedId is null)
-            {
-                Console.Error.WriteLine($"[overrides] SKIP {fileName}: could not extract passage_id from generated file.");
-                continue;
-            }
-            if (!string.Equals(overrideId, generatedId, StringComparison.Ordinal))
-            {
-                Console.Error.WriteLine($"[overrides] SKIP {fileName}: passage_id mismatch — override='{overrideId}' vs generated='{generatedId}'.");
-                continue;
-            }
-
-            File.Copy(overridePath, generatedPath, overwrite: true);
-            report.AddOverrideApplied(overrideId, fileName);
-            Console.WriteLine($"[overrides] Applied: {fileName} (passage_id: {overrideId})");
-        }
-    }
-
-    [GeneratedRegex(@"^passage_id:\s*(\S+)", RegexOptions.Multiline)]
-    private static partial Regex PassageIdRegex();
-
-    private static string? ExtractPassageId(string content)
-    {
-        var m = PassageIdRegex().Match(content);
-        if (!m.Success)
-        {
-            return null;
-        }
-
-        var val = m.Groups[1].Value;
-        return val.Length >= 2 && val[0] == '\'' && val[^1] == '\'' ? val[1..^1] : val;
     }
 
     // Injects a "# relpath:line" comment before the YAML document marker (--- line).
@@ -520,13 +458,15 @@ partial class Program
             : s;
 
     // Inserts restext comments above each YAML line that contains one or more restext://Key refs.
+    // The link path is relative to the passages output dir, e.g. "en-US.restext" when it's a
+    // sibling, or "../en-US.restext" when passages/_variables/restext are split across directories.
     //
     // Single reference on a line:
-    //   # en-US.restext:NNN | "preview"
+    //   # ../en-US.restext:NNN | "preview"
     //
     // Multiple references on a line (one comment per reference, in order):
-    //   # en-US.restext:NNN | KEY | "preview"
-    //   # en-US.restext:NNN | KEY | "preview"
+    //   # ../en-US.restext:NNN | KEY | "preview"
+    //   # ../en-US.restext:NNN | KEY | "preview"
     //
     // Preview: ≤30 chars shown in full; >30 truncated to 25 + "...". Multi-line: [multiline].
     // The field line itself is kept unchanged (no inline comment appended).
@@ -536,7 +476,8 @@ partial class Program
     private static string InjectRestextComments(
         string yaml,
         IReadOnlyDictionary<string, string> commentMap,
-        IReadOnlyDictionary<string, int> keyLineMap)
+        IReadOnlyDictionary<string, int> keyLineMap,
+        string restextRelPath)
     {
         if (commentMap.Count == 0)
         {
@@ -562,7 +503,7 @@ partial class Program
                 var key = matches[0].Groups[1].Value;
                 if (commentMap.TryGetValue(key, out var value))
                 {
-                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"en-US.restext:{ln}" : key;
+                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"{restextRelPath}:{ln}" : key;
                     result.Add($"{indent}# {link} | {FormatRestextPreview(value)}");
                 }
             }
@@ -576,7 +517,7 @@ partial class Program
                         continue;
                     }
 
-                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"en-US.restext:{ln}" : key;
+                    var link = keyLineMap.TryGetValue(key, out var ln) ? $"{restextRelPath}:{ln}" : key;
                     result.Add($"{indent}# {link} | {key} | {FormatRestextPreview(value)}");
                 }
             }
@@ -800,9 +741,20 @@ partial class Program
     private static void PrintUsage()
     {
         Console.WriteLine("""
-            mw-extract <input-dir> <output-dir> [options]
+            mw-extract <input-dir> <passages-out-dir> [options]
 
             Converts Cradle C# scenario files to MWS YAML.
+
+            Passages are always written to <passages-out-dir>. _variables.yaml and en-US.restext
+            default to the same directory but can be redirected independently — e.g. to place
+            passages in a module's passages/ subfolder while _variables.yaml and en-US.restext
+            stay at the module root:
+
+              mw-extract source.cs Modules/my-module/passages --variables-out Modules/my-module --restext-out Modules/my-module
+
+            Hand-authored passages are no longer accepted by the extractor — maintain them
+            directly in a module's passages-override/ folder; ModuleLoader applies them at load
+            time (base passages first, then overrides by passage_id).
 
             Options:
               --module-id <id>        Module ID (e.g. original.cost_of_disease)
@@ -811,8 +763,8 @@ partial class Program
               --include-debug         Include devpage-gated debug passages
               --dry-run               Parse and report without writing files
               --seed-analysis         Emit seed dependency report
-              --overrides <dir>       Directory of hand-authored override YAML files;
-                                      each must match the generated filename and passage_id
+              --variables-out <dir>   Where _variables.yaml is written (default: passages-out-dir)
+              --restext-out <dir>     Where en-US.restext is written (default: passages-out-dir)
               --restext-exclude-tag <tag>
                                       Exclude passages with this tag from restext extraction;
                                       may be specified multiple times (e.g. --restext-exclude-tag notext)

@@ -31,10 +31,47 @@ public class VariableStoreTests
     {
         var manifest = new Dictionary<string, VarDef>
         {
-            ["round"] = new() { Name = "round", VarType = "int", Default = 1L },
+            ["round"] = new() { Name = "round", VarType = VarKind.Integer, Default = 1L },
         };
         var store = MakeStore(manifest);
         Assert.Equal(1L, store.GetVariable("round").AsInt());
+    }
+
+    [Fact]
+    public void Default_CanonicalZero_UsedForEachVarKind_WhenNoExplicitDefault()
+    {
+        var manifest = new Dictionary<string, VarDef>
+        {
+            ["s"] = new() { Name = "s", VarType = VarKind.String },
+            ["i"] = new() { Name = "i", VarType = VarKind.Integer },
+            ["b"] = new() { Name = "b", VarType = VarKind.Boolean },
+            ["r"] = new() { Name = "r", VarType = VarKind.Record },
+            ["sa"] = new() { Name = "sa", VarType = VarKind.StringArray },
+            ["ia"] = new() { Name = "ia", VarType = VarKind.IntArray },
+            ["ba"] = new() { Name = "ba", VarType = VarKind.BooleanArray },
+            ["ra"] = new() { Name = "ra", VarType = VarKind.RecordArray },
+        };
+        var store = MakeStore(manifest);
+
+        Assert.Equal("", store.GetVariable("s").AsString());
+        Assert.Equal(0L, store.GetVariable("i").AsInt());
+        Assert.False(store.GetVariable("b").AsBool());
+        Assert.Empty(store.GetVariable("r").AsRecord());
+        Assert.Empty(store.GetVariable("sa").AsArray());
+        Assert.Empty(store.GetVariable("ia").AsArray());
+        Assert.Empty(store.GetVariable("ba").AsArray());
+        Assert.Empty(store.GetVariable("ra").AsArray());
+    }
+
+    [Fact]
+    public void Default_ExplicitBoolDefault_Honored()
+    {
+        var manifest = new Dictionary<string, VarDef>
+        {
+            ["flag"] = new() { Name = "flag", VarType = VarKind.Boolean, Default = true },
+        };
+        var store = MakeStore(manifest);
+        Assert.True(store.GetVariable("flag").AsBool());
     }
 
     [Fact]

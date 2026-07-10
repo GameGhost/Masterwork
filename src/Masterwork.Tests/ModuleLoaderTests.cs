@@ -157,4 +157,188 @@ public class ModuleLoaderTests
         var text = Assert.IsType<TextNode>(shared.Nodes.Single());
         Assert.Equal("Module version", text.Value);
     }
+
+    // ── passages-override merge (LoadFromSources overridePassageYamls) ─────
+
+    [Fact]
+    public void LoadFromSources_Override_ReplacesMatchingPassageAndAddsNew()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Extracted version'
+                """,
+                """
+                format: 'mws/0.3'
+                passage_id: 'Untouched'
+                layout: 'hub'
+                nodes: []
+                """,
+            ],
+            overridePassageYamls:
+            [
+                """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Hand-authored version'
+                """,
+                """
+                format: 'mws/0.3'
+                passage_id: 'NewOverridePassage'
+                layout: 'hub'
+                nodes: []
+                """,
+            ]);
+
+        Assert.Equal(3, module.Passages.Count);
+        Assert.True(module.Passages.ContainsKey("Untouched"));
+        Assert.True(module.Passages.ContainsKey("NewOverridePassage"));
+
+        var start = module.Passages["Start"];
+        var text = Assert.IsType<TextNode>(start.Nodes.Single());
+        Assert.Equal("Hand-authored version", text.Value);
+    }
+
+    // ── LoadFromDirectory folder-convention resolution ──────────────────────
+
+    [Fact]
+    public void LoadFromDirectory_PassagesAndOverrideSubfolders_MergedByConvention()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "passages"));
+        Directory.CreateDirectory(Path.Combine(dir, "passages-override"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "passages", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Extracted'
+                """);
+            File.WriteAllText(Path.Combine(dir, "passages-override", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Hand-authored'
+                """);
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+            Assert.Equal("Hand-authored", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadFromDirectory_LegacyFlatLayout_NoPassagesSubfolder_StillLoads()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes: []
+                """);
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            Assert.Equal("Start", module.StartPassageId);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── restext overrides (<culture>.overrides.restext) ─────────────────────
+
+    [Fact]
+    public void LoadFromSources_RestextOverride_ReplacesMatchingKeyAndAddsNew()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Start_001'
+                - type: 'text'
+                  value: 'restext://Start_002'
+                """,
+            ],
+            restextText: "Start_001=Extracted greeting\nStart_002=Untouched line\n",
+            restextOverrideText: "Start_001=Hand-authored greeting\nStart_003=Brand new line\n");
+
+        Assert.Equal("Hand-authored greeting", module.Locale["Start_001"]);
+        Assert.Equal("Untouched line", module.Locale["Start_002"]);
+        Assert.Equal("Brand new line", module.Locale["Start_003"]);
+    }
+
+    [Fact]
+    public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Start_001'
+                """);
+            File.WriteAllText(Path.Combine(dir, "en-US.restext"), "Start_001=Extracted greeting\n");
+            File.WriteAllText(Path.Combine(dir, "en-US.overrides.restext"), "Start_001=Hand-authored greeting\n");
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+            Assert.Equal("Hand-authored greeting", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
