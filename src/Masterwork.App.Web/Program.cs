@@ -14,7 +14,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
 // Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
 builder.Services.AddScoped<IAssetResolver, AssetResolver>();
-builder.Services.AddScoped<IIconTextExpander, IconTextExpander>();
+builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
 builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();

@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Masterwork.Extractor;
 
@@ -770,29 +771,71 @@ public class UnknownNode : MwsNode
 // Converts intermediate node fields (VarRandom, SortSpec, etc.) into v0.2 expression strings.
 // Used by TextNode.ToDict(), LetNode.ToDict(), and V2Serializer for EffectNode expansion.
 
-public static class MwsExprHelper
+public static partial class MwsExprHelper
 {
     public static string EscapeStr(string s) =>
         s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public static string ApplyInlineStyle(string template, string? style) => style switch
     {
-        "bold" => $"**{template}**",
-        "italic" => $"_{template}_",
+        "bold" => WrapEmphasis(template, "**"),
+        "italic" => WrapEmphasis(template, "_"),
         _ => template,
     };
 
+    // Wraps `text` in `marker` (e.g. "**" or "_"), keeping any leading/trailing whitespace outside
+    // the delimiters instead of inside them. CommonMark requires a valid opening delimiter not be
+    // followed by whitespace, and a valid closing delimiter not be preceded by it — Cradle's own
+    // bold/italic runs often include the space that separated them from neighboring plain text, so
+    // wrapping the raw run verbatim (e.g. "**Test markdown **") produces delimiters no standard
+    // markdown parser recognizes as emphasis at all.
+    public static string WrapEmphasis(string text, string marker)
+    {
+        var core = text.Trim();
+        if (core.Length == 0)
+        {
+            return text; // whitespace-only — nothing to emphasize
+        }
+
+        var lead = text[..(text.Length - text.TrimStart().Length)];
+        var trail = text[text.TrimEnd().Length..];
+        return $"{lead}{marker}{core}{marker}{trail}";
+    }
+
+    // Merges consecutive same-style runs into one buffer before wrapping, so a bold/italic span
+    // built from several runs (e.g. "Turn to " + bold("The Cost of Disease") + " book") gets exactly
+    // one pair of delimiters around its full text — and WrapEmphasis only ever sees the true
+    // leading/trailing edge of that span, not a mid-span run boundary, so it can correctly place
+    // whitespace outside the delimiters (see WrapEmphasis's remarks).
     public static string BuildValueFromRuns(List<TextRun> runs)
     {
         var sb = new StringBuilder();
-        bool inBold = false, inItalic = false;
+        string? currentStyle = null;
+        var buffer = new StringBuilder();
+
+        void FlushBuffer()
+        {
+            if (buffer.Length == 0)
+            {
+                return;
+            }
+
+            var text = buffer.ToString();
+            buffer.Clear();
+            sb.Append(currentStyle switch
+            {
+                "bold" => WrapEmphasis(text, "**"),
+                "italic" => WrapEmphasis(text, "_"),
+                _ => text,
+            });
+        }
 
         foreach (var run in runs)
         {
             if (run.AssetRef is not null)
             {
-                if (inBold) { sb.Append("**"); inBold = false; }
-                if (inItalic) { sb.Append("_"); inItalic = false; }
+                FlushBuffer();
+                currentStyle = null;
                 var slug = run.AssetRef.StartsWith("icon://") ? run.AssetRef["icon://".Length..] : run.AssetRef;
                 sb.Append($"{{icon:{slug}}}");
                 continue;
@@ -802,29 +845,27 @@ public static class MwsExprHelper
                 continue;
             }
 
-            bool needBold = run.Style == "bold";
-            bool needItalic = run.Style == "italic";
+            if (run.Style != currentStyle)
+            {
+                FlushBuffer();
+                currentStyle = run.Style;
+            }
 
-            if (inBold && !needBold) { sb.Append("**"); inBold = false; }
-            if (inItalic && !needItalic) { sb.Append("_"); inItalic = false; }
-            if (!inBold && needBold) { sb.Append("**"); inBold = true; }
-            if (!inItalic && needItalic) { sb.Append("_"); inItalic = true; }
-
-            sb.Append(run.Text);
+            buffer.Append(run.Text);
         }
 
-        if (inBold)
-        {
-            sb.Append("**");
-        }
-
-        if (inItalic)
-        {
-            sb.Append("_");
-        }
-
-        return sb.ToString();
+        FlushBuffer();
+        return CollapseAdjacentSpaces(sb.ToString());
     }
+
+    // WrapEmphasis moving a run's own leading/trailing whitespace outside its delimiters can land
+    // it right next to a space that already existed from a separate, unstyled run (e.g. an icon ref
+    // followed by its own plain-text space, immediately before a bold run whose leading space just
+    // got relocated there too) — collapse the resulting run of 2+ spaces/tabs into one.
+    [GeneratedRegex(@"[ \t]{2,}")]
+    private static partial Regex AdjacentSpaceRun();
+
+    public static string CollapseAdjacentSpaces(string s) => AdjacentSpaceRun().Replace(s, " ");
 
     public static string ValueToExpr(object v) => v switch
     {

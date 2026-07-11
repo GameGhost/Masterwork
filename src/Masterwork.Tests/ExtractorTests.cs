@@ -123,6 +123,41 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void MixedStyleRuns_TrailingSpaceInBoldRun_MovesOutsideClosingDelimiter()
+    {
+        // Regression test: ConsolidateTextNodes' own BuildTemplate has a *separate* implementation
+        // of the same runs-to-markdown logic as MwsExprHelper.BuildValueFromRuns (used when several
+        // sibling text() calls merge into one TextNode) — this exercises that path specifically,
+        // since real content (e.g. Fever1's "...**gain 1 **{icon:creepy_icon}.") showed it had the
+        // same whitespace-flanking bug even after BuildValueFromRuns itself was fixed.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("They will ");
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("lose a Servant");
+                }
+                yield return base.text(" and ");
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("gain 1 ");
+                }
+                yield return base.text("more.");
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        Assert.Equal("They will **lose a Servant** and **gain 1** more.", textNode.Template);
+    }
+
+    [Fact]
     public void VarInterpolation_EmitsTemplateSyntax()
     {
         var passages = Extract("""
@@ -300,6 +335,38 @@ public class ExtractorTests
 
         var heading = passages[0].Nodes.OfType<SectionHeadingNode>().First();
         Assert.Equal("Build a Hospital", heading.Text);
+    }
+
+    [Fact]
+    public void HeadingScope_IconThenSpaceRunThenLeadingSpaceBoldRun_CollapsesDoubleSpace()
+    {
+        // Regression test: BuildHeadingTemplate (used for "heading" styleScope, distinct from both
+        // MwsExprHelper.BuildValueFromRuns and ConsolidateTextNodes' BuildTemplate) has its own copy
+        // of the same runs-to-markdown logic — real content (e.g. "{icon:storybook}  **Suspicion**")
+        // showed it had the same double-space gap even after the other two copies were fixed.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("heading", true))
+                {
+                    yield return base.text("<sprite=\"Storybook\" index=0>");
+                    yield return base.text(" ");
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text(" Suspicion");
+                    }
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        var heading = passages[0].Nodes.OfType<SectionHeadingNode>().First();
+        Assert.Equal("{icon:storybook} **Suspicion**", heading.Text);
     }
 
     // ── Cradle cleanup filtering ───────────────────────────────────────────

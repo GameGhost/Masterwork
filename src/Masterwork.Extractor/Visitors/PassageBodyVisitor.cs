@@ -2385,11 +2385,11 @@ public class PassageBodyVisitor
                 {
                     if (run.Style == "bold")
                     {
-                        sb.Append($"**{run.Text}**");
+                        sb.Append(MwsExprHelper.WrapEmphasis(run.Text, "**"));
                     }
                     else if (run.Style == "italic")
                     {
-                        sb.Append($"_{run.Text}_");
+                        sb.Append(MwsExprHelper.WrapEmphasis(run.Text, "_"));
                     }
                     else
                     {
@@ -2398,7 +2398,7 @@ public class PassageBodyVisitor
                 }
             }
         }
-        return sb.ToString().Trim();
+        return MwsExprHelper.CollapseAdjacentSpaces(sb.ToString().Trim());
     }
 
     private UnknownNode Unknown(SyntaxNode node)

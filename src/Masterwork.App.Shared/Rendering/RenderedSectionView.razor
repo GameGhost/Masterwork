@@ -2,7 +2,7 @@
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 @using Masterwork.App.Shared.Services
-@inject IIconTextExpander IconTextExpander
+@inject IFormattedTextExpander FormattedTextExpander
 
 <section class="mws-section style-@(Node.Style ?? "default")">
     @if (Node.Title is not null)
@@ -33,6 +33,6 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _titleMarkup = await IconTextExpander.ExpandAsync(Node.Title);
+        _titleMarkup = await FormattedTextExpander.ExpandAsync(Node.Title);
     }
 }

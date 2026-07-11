@@ -26,7 +26,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
         // Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
         builder.Services.AddScoped<IAssetResolver, AssetResolver>();
-        builder.Services.AddScoped<IIconTextExpander, IconTextExpander>();
+        builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
         builder.Services.AddScoped<IModuleStore, FileModuleStore>();
         builder.Services.AddScoped<GameSessionState>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();

@@ -127,6 +127,11 @@ The `value` field on `text` nodes, and any field containing user-visible text, s
   value: 'Turn to **The Cost of Disease** section. _(All tied players gain this bonus.)_'
 ```
 
+Delimiters must not have whitespace immediately inside them — `**bold **` (space before the closing
+`**`) or `** bold**` (space after the opening `**`) aren't recognized as emphasis by a standard
+markdown parser and render as literal asterisks. Put the space outside instead: `**bold** ` /
+` **bold**`.
+
 ### Variable References
 
 `{varName}` — resolved from the current scope (session variables and let variables).

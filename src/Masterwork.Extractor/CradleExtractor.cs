@@ -2006,17 +2006,39 @@ public partial class CradleExtractor
         return significant.All(r => r.Style == first) ? first : null;
     }
 
+    // Merges consecutive runs sharing the same *effective* style into one buffer before wrapping —
+    // same shape as MwsExprHelper.BuildValueFromRuns, plus the dominant-style skip (a run whose
+    // style matches `dominantStyle` is left unwrapped here, since that style is instead hoisted
+    // onto the merged TextNode's own Style field — see ComputeDominantStyle/UniformBoldScope test).
     private static string BuildTemplate(IEnumerable<TextRun> runs, string? dominantStyle)
     {
         var sb = new StringBuilder();
-        bool inBold = false, inItalic = false;
+        string? currentStyle = null;
+        var buffer = new StringBuilder();
+
+        void FlushBuffer()
+        {
+            if (buffer.Length == 0)
+            {
+                return;
+            }
+
+            var text = buffer.ToString();
+            buffer.Clear();
+            sb.Append(currentStyle switch
+            {
+                "bold" => MwsExprHelper.WrapEmphasis(text, "**"),
+                "italic" => MwsExprHelper.WrapEmphasis(text, "_"),
+                _ => text,
+            });
+        }
 
         foreach (var run in runs)
         {
             if (run.AssetRef is not null)
             {
-                if (inBold) { sb.Append("**"); inBold = false; }
-                if (inItalic) { sb.Append("_"); inItalic = false; }
+                FlushBuffer();
+                currentStyle = null;
                 var slug = run.AssetRef.StartsWith("icon://") ? run.AssetRef["icon://".Length..] : run.AssetRef;
                 sb.Append($"{{icon:{slug}}}");
                 continue;
@@ -2026,30 +2048,19 @@ public partial class CradleExtractor
                 continue;
             }
 
-            // Dominant style is already expressed at the node level — don't repeat it inline
+            // Dominant style is already expressed at the node level — don't repeat it inline.
             var effective = run.Style == dominantStyle ? null : run.Style;
-            bool needBold = effective == "bold";
-            bool needItalic = effective == "italic";
+            if (effective != currentStyle)
+            {
+                FlushBuffer();
+                currentStyle = effective;
+            }
 
-            if (inBold && !needBold) { sb.Append("**"); inBold = false; }
-            if (inItalic && !needItalic) { sb.Append("_"); inItalic = false; }
-            if (!inBold && needBold) { sb.Append("**"); inBold = true; }
-            if (!inItalic && needItalic) { sb.Append("_"); inItalic = true; }
-
-            sb.Append(run.Text);
+            buffer.Append(run.Text);
         }
 
-        if (inBold)
-        {
-            sb.Append("**");
-        }
-
-        if (inItalic)
-        {
-            sb.Append("_");
-        }
-
-        return sb.ToString();
+        FlushBuffer();
+        return MwsExprHelper.CollapseAdjacentSpaces(sb.ToString());
     }
 
     public Dictionary<string, VarDef> GetDiscoveredVariables() => _variables;

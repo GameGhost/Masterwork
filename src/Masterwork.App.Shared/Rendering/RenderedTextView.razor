@@ -2,7 +2,7 @@
 @using Masterwork.Engine.Rendering
 @using Masterwork.App.Shared.Services
 @using Masterwork.ModuleFormat
-@inject IIconTextExpander IconTextExpander
+@inject IFormattedTextExpander FormattedTextExpander
 
 <p class="mws-text@AlignClass style-@(Node.Style ?? "default")">@_rendered</p>
 
@@ -24,6 +24,6 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _rendered = await IconTextExpander.ExpandAsync(Node.Value);
+        _rendered = await FormattedTextExpander.ExpandAsync(Node.Value);
     }
 }

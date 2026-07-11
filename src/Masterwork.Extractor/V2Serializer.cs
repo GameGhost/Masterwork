@@ -892,7 +892,7 @@ public static partial class V2Serializer
         var nodes = new List<Dictionary<string, object?>>();
         if (sn.Title is not null)
         {
-            nodes.Add(new() { ["type"] = "text", ["value"] = $"**{sn.Title}**" });
+            nodes.Add(new() { ["type"] = "text", ["value"] = MwsExprHelper.WrapEmphasis(sn.Title, "**") });
         }
 
         if (sn.Text is not null)
@@ -927,7 +927,7 @@ public static partial class V2Serializer
         var content = new List<Dictionary<string, object?>>();
         if (sn.Title is not null)
         {
-            content.Add(new() { ["type"] = "text", ["value"] = $"**{sn.Title}**" });
+            content.Add(new() { ["type"] = "text", ["value"] = MwsExprHelper.WrapEmphasis(sn.Title, "**") });
         }
 
         if (sn.Text is not null)
