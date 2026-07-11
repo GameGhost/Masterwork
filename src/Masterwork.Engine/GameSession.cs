@@ -183,7 +183,10 @@ public sealed class GameSession
     /// <c>target</c>), and navigates — all as a single transaction. The snapshot's timeline label is,
     /// in priority order: a preempting <c>goto</c>'s own <c>snapshot_label</c>; else the popup's own
     /// <c>snapshot</c> label; else the destination passage's <c>title</c> (see
-    /// <see cref="ResolvePassageTitle"/>). When <see langword="false"/> (Cancel), the popup's sandbox
+    /// <see cref="ResolvePassageTitle"/>). If neither a <c>goto</c> nor <c>target</c> resolves a
+    /// destination, there's nothing to navigate to — the popup just closes in place (state already
+    /// committed above) without re-rendering the current passage, since a re-render would re-run its
+    /// whole node list for no reason. When <see langword="false"/> (Cancel), the popup's sandbox
     /// is discarded entirely: no commit, no <c>onclose</c>, no navigation — the caller doesn't even
     /// need to call this for Cancel, since nothing session-side needs to happen (see
     /// <see cref="RenderedPopup"/>'s remarks); it's provided for symmetry.
@@ -212,7 +215,17 @@ public sealed class GameSession
 
         _store.RestoreSession(popup.Sandbox.SessionSnapshot());
 
-        var targetId = pendingGoto ?? (popup.Target is null ? Current.PassageId : ResolveTarget(popup.Target));
+        if (pendingGoto is null && popup.Target is null)
+        {
+            // Nothing to navigate to — Okay just closes the popup. Don't re-render the current
+            // passage: that would re-run its whole node list, which can re-trigger guard
+            // conditions (re-showing this same popup) or re-draw random values, for no reason
+            // since nothing about the passage itself is meant to change here.
+            ViewState.Reset();
+            return Task.FromResult(CurrentRender);
+        }
+
+        var targetId = pendingGoto ?? ResolveTarget(popup.Target!);
         var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? popup.SnapshotLabel;
 
         var result = popup.StateAffecting

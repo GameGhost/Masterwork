@@ -210,6 +210,14 @@ body {
     justify-content: space-between;
     gap: 0.5rem;
     margin-bottom: 1rem;
+    /* Stays above every overlay (popup backdrop, options dialog) and above scrolled passage
+       content — the back button, rewind scrubber, and options button must stay reachable no
+       matter what's showing on top of the passage itself. */
+    position: sticky;
+    top: 0;
+    z-index: 1200;
+    background: #fff;
+    padding: 0.5rem 0;
 }
 
 .mws-play-chrome .mws-timeline {

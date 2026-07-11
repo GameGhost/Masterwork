@@ -1043,6 +1043,63 @@ public class GameSessionTests
         Assert.False(session.Current.Variables.TryGetValue("round", out var v) && v.AsInt() == 99);
     }
 
+    [Fact]
+    public async Task PopupAccept_NoTargetOrOnclose_ClosesWithoutReRenderingPassage()
+    {
+        // A popup with no target/onclose has nothing to navigate to — Okay should still commit its
+        // sandboxed state (the 'round' assign below) to the live store, but must not re-render the
+        // current passage: doing so would re-run its whole node list for no reason, and — if this
+        // popup were guarded by a conditional the way Cradle's "setup" popups are — could even
+        // re-trigger the guard and show the same popup again. The committed state isn't reflected
+        // in session.Current.Variables until the *next* snapshot (that's an existing, separate
+        // property — see Popup_ContentEvaluatedEagerly_NotYetCommittedToLiveStore) — so this proves
+        // the merge happened by following a link afterward and checking the new snapshot instead.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              layout: 'setup'
+              content:
+              - type: 'assign'
+                var: 'round'
+                expr: '99'
+              okay: 'Accept'
+            - type: 'link'
+              label: 'Continue'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var beforeRender = session.CurrentRender;
+        var popup = beforeRender.Actions.OfType<RenderedPopup>().Single();
+        session.ViewState.ExpandedPopups.Add(popup.Id);
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Same(beforeRender, result);
+        Assert.Equal("P1", result.PassageId);
+        Assert.Single(session.Timeline);
+        Assert.DoesNotContain(popup.Id, session.ViewState.ExpandedPopups);
+
+        var link = result.Actions.OfType<RenderedLink>().Single();
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(99L, session.Current.Variables["round"].AsInt());
+    }
+
     // ── Popup-content input (action lookup, validity, Okay/Cancel) ────────────
 
     [Fact]
