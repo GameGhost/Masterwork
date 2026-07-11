@@ -28,7 +28,9 @@ public class ExtractionReport
     public int VariablesDiscovered { get; set; }
     public int UnknownNodeCount => _flags.Count(f => f.Kind == "unknown_node");
 
-    // Set before Write() so the report can generate relative-path links.
+    // Set before Write() so the report can generate relative-path links. OutputDirPath is the
+    // directory the report .md file itself will be written to (the basis for every relative link
+    // it emits, including PassageFiles entries) — not necessarily the passages output directory.
     public string? SourceFilePath { get; set; }
     public string? OutputDirPath { get; set; }
     // Human-readable module name shown in the report header.

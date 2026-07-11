@@ -39,6 +39,7 @@ dotnet run --project src/Masterwork.Extractor -- <input> <passages-out-dir> [opt
 | `--sprite-map <json>` | Path to a `TheCostOfDisease_ItemObtain.json`-style file mapping sprite indices to asset slugs. Required for The Cost of Disease; not needed for the other scenarios. |
 | `--variables-out <dir>` | Where `_variables.yaml` is written. Defaults to `<passages-out-dir>`. |
 | `--restext-out <dir>` | Where `en-US.restext` is written. Defaults to `<passages-out-dir>`. |
+| `--common-restext <file>` | Path to a manually curated `Key=Value` restext file. When a string is promoted to a Common key (used in 2+ passages), a matching curated ID (by exact text) is used instead of an auto-generated `Common_NNN` one, so override/manually-written passages have a stable name to reference instead of one that can shift on every re-extraction. Curated IDs never matched during extraction are omitted from the output restext file and reported as warnings. Purely an extractor-time input — `ModuleLoader` never reads this file. |
 | `--include-debug` | Include passages gated behind the `devpage` debug flag. Excluded by default. |
 | `--dry-run` | Parse and report without writing any output files. |
 | `--seed-analysis` | Emit a seed key dependency report alongside the extraction output. |
@@ -95,7 +96,7 @@ For each run, the output directory contains:
 | `{NNN}-{PassageId}.mws.yaml` | One file per passage in MWS v0.3 format, numbered by source order |
 | `_variables.yaml` | All discovered session variables with inferred types |
 | `en-US.restext` | All extracted human-readable strings, one `Key=Value` per line |
-| `_extraction-report.md` | Summary table, warnings, unknown nodes, isolated passages, input prompts |
+| `_extraction-report.md` | Summary table, warnings, unknown nodes, isolated passages, input prompts. Written next to the source `.cs` file(s), not `<passages-out-dir>` — it's read while working on the Cradle source, so it belongs next to it. |
 
 ### `_variables.yaml` format
 

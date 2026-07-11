@@ -10,7 +10,11 @@ namespace Masterwork.Extractor;
 /// Key assignment is two-phase:
 ///   Phase 1 (CollectPassage calls) — keys are {PassageId}_{NNN}; global dedup prevents duplicates.
 ///   Phase 2 (BuildRenameMap + ApplyRenames) — keys used in 2+ passages are renamed to Common_{NNN}
-///     and their entries moved to a "(Common)" group prepended to Passages.
+///     and their entries moved to a "(Common)" group prepended to Passages. A caller-supplied
+///     curated ID (see the constructor's curatedRestext parameter) takes priority over the
+///     auto-generated Common_{NNN} name whenever its value matches — this is the one place IDs are
+///     otherwise unstable across re-extractions, since the counter's assignment order depends on
+///     passage traversal order. ReportUnusedCuratedIds flags any curated entry that never matched.
 /// </summary>
 public sealed partial class RestextCollector
 {
@@ -27,6 +31,14 @@ public sealed partial class RestextCollector
     private string _passageId = "";
     private int _counter;
 
+    // Manually curated Common IDs (value → key), keyed by the exact display text. When a string is
+    // promoted to a Common key (used in 2+ passages — see BuildRenameMap), a matching curated ID is
+    // used instead of the next auto-generated Common_NNN, so override/manually-written passages can
+    // reference a name that doesn't shift on every re-extraction.
+    private readonly IReadOnlyDictionary<string, string> _curatedKeyToValue;
+    private readonly Dictionary<string, string> _curatedValueToKey;
+    private readonly HashSet<string> _curatedUsedKeys = new(StringComparer.Ordinal);
+
     // Tracks keys newly created from assign/let node extractions (not display-text fields).
     // Used by RestoreNonTemplateAssignments to prune entries whose variable is never used in templates.
     private sealed class AssignedKeyRecord(string value)
@@ -41,9 +53,17 @@ public sealed partial class RestextCollector
     }
     private readonly Dictionary<string, AssignedKeyRecord> _newAssignmentKeys = [];
 
-    public RestextCollector(IEnumerable<string>? passageIds = null)
+    public RestextCollector(IEnumerable<string>? passageIds = null, IReadOnlyDictionary<string, string>? curatedRestext = null)
     {
         _passageIds = passageIds is null ? [] : new HashSet<string>(passageIds, StringComparer.Ordinal);
+        _curatedKeyToValue = curatedRestext ?? new Dictionary<string, string>();
+        _curatedValueToKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in _curatedKeyToValue)
+        {
+            // Last one wins on a duplicate value — the losing key is then reported unused, which
+            // correctly flags the ambiguity for the curated file's author to resolve.
+            _curatedValueToKey[value] = key;
+        }
     }
 
     // Called once per passage before serialization.
@@ -99,20 +119,46 @@ public sealed partial class RestextCollector
 
     // ── Phase 2: rename multi-passage keys to Common_NNN ──────────────────
 
-    // Returns a map of old key → Common_NNN for every key referenced in 2+ passages.
-    // Call after all CollectPassage calls are done.
+    // Returns a map of old key → Common_NNN (or a matching curated ID) for every key referenced in
+    // 2+ passages. Call after all CollectPassage calls are done.
     public Dictionary<string, string> BuildRenameMap()
     {
+        var keyToValue = BuildCommentMap();
         var renames = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (key, passages) in _keyPassages.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
-            if (passages.Count > 1)
+            if (passages.Count <= 1)
+            {
+                continue;
+            }
+
+            if (_curatedValueToKey.TryGetValue(keyToValue[key], out var curatedKey))
+            {
+                renames[key] = curatedKey;
+                _curatedUsedKeys.Add(curatedKey);
+            }
+            else
             {
                 renames[key] = $"Common_{_commonCounter:D3}";
                 _commonCounter++;
             }
         }
         return renames;
+    }
+
+    // Logs a warning for every curated ID that never matched any extracted string this run — these
+    // are silently dropped from the output restext file (only entries actually produced by
+    // extraction are written), so this is the only place that surfaces the gap.
+    public void ReportUnusedCuratedIds(ExtractionReport report)
+    {
+        foreach (var (key, value) in _curatedKeyToValue.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!_curatedUsedKeys.Contains(key))
+            {
+                report.AddWarning("[restext]",
+                    $"Curated restext ID '{key}' (\"{value}\") was not used during extraction — omitted from en-US.restext.");
+            }
+        }
     }
 
     // Applies the rename map to the internal _passages structure:

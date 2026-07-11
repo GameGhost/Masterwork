@@ -10,6 +10,9 @@ public class ExtractionOptions
     public string? VariablesOutDir { get; set; }
     // Where en-US.restext is written. Defaults to PassagesOutDir when not set via --restext-out.
     public string? RestextOutDir { get; set; }
+    // Path to a manually curated Key=Value restext file. Values that match extracted Common strings
+    // use the curated key instead of an auto-generated Common_NNN one (see RestextCollector).
+    public string? CommonRestextPath { get; set; }
     public string? ModuleId { get; set; }
     public string? ModuleTitle { get; set; }
     public string? SpriteMapPath { get; set; }

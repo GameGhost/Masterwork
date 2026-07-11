@@ -68,10 +68,15 @@ partial class Program
             moduleTitle = string.Concat(stem.Select((c, i) => i > 0 && char.IsUpper(c) ? " " + c : c.ToString()));
         }
 
+        // The extraction report is written alongside the source file(s), not the passages output —
+        // it's read while working on the Cradle source, so it belongs next to it. All relative links
+        // the report emits (source location, passage files) are computed from this directory.
+        var sourceDir = Path.GetDirectoryName(Path.GetFullPath(sourceFiles[0]))!;
+
         var report = new ExtractionReport
         {
             SourceFilePath = sourceFiles.Count == 1 ? sourceFiles[0] : null,
-            OutputDirPath = Path.GetFullPath(opts.PassagesOutDir),
+            OutputDirPath = sourceDir,
             ModuleTitle = moduleTitle,
         };
         var extractor = new CradleExtractor(opts, spriteMapper, report);
@@ -117,6 +122,13 @@ partial class Program
             report.Settings["Extra breaks"] = opts.Breaks.ToString().ToLowerInvariant();
         }
 
+        IReadOnlyDictionary<string, string>? curatedRestext = null;
+        if (opts.CommonRestextPath is not null)
+        {
+            curatedRestext = new RestextFile().Parse(File.ReadAllText(opts.CommonRestextPath));
+            report.Settings["Common restext"] = opts.CommonRestextPath;
+        }
+
         Console.WriteLine("Extracting...");
         var passages = extractor.Extract(sourceFiles);
 
@@ -156,7 +168,7 @@ partial class Program
             .WithEventEmitter(next => new SingleQuotedStringValueEmitter(next))
             .Build();
 
-        var restext = new RestextCollector(passages.Select(p => p.PassageId));
+        var restext = new RestextCollector(passages.Select(p => p.PassageId), curatedRestext);
 
         // Build passage → relative YAML filename map for navigation target annotations
         var passageFileMap = new Dictionary<string, string>(passages.Count, StringComparer.Ordinal);
@@ -165,6 +177,10 @@ partial class Program
             var pfx = p.PassageIndex.HasValue ? $"{p.PassageIndex.Value:D5}-" : "";
             passageFileMap[p.PassageId] = $"./{pfx}{SanitizeFileName(p.PassageId)}.mws.yaml";
         }
+
+        // The report now lives next to the source, not the passages dir — PassageFiles links need
+        // this prefix so they still resolve from the report's actual location.
+        var passagesRelFromReport = Path.GetRelativePath(sourceDir, Path.GetFullPath(opts.PassagesOutDir)).Replace('\\', '/');
 
         // Filter trailing and non-rendered-sandwiched breaks from all passages.
         if (opts.Breaks != BreaksMode.Emit)
@@ -197,7 +213,9 @@ partial class Program
         {
             var prefix = passage.PassageIndex.HasValue ? $"{passage.PassageIndex.Value:D5}-" : "";
             var fileName = $"{prefix}{SanitizeFileName(passage.PassageId)}.mws.yaml";
-            report.PassageFiles[passage.PassageId] = fileName;
+            report.PassageFiles[passage.PassageId] = passagesRelFromReport.Length == 0 || passagesRelFromReport == "."
+                ? fileName
+                : $"{passagesRelFromReport}/{fileName}";
             report.AddTaggedPassage(passage.PassageId, passage.Tags);
             var outPath = Path.Combine(opts.PassagesOutDir, fileName);
             var relSourcePath = passage.SourceFile is not null
@@ -275,13 +293,15 @@ partial class Program
 
         // Write restext locale file
         restext.ReportDeduplicationStats(report);
+        restext.ReportUnusedCuratedIds(report);
         WriteRestextFile(restext, restextOutDir);
 
         // Write variables manifest
         WriteVarsManifest(vars, variablesOutDir, serializer);
 
-        // Write extraction report
-        var reportPath = Path.Combine(opts.PassagesOutDir, "_extraction-report.md");
+        // Write extraction report — lives next to the source (see sourceDir above), not the
+        // passages output.
+        var reportPath = Path.Combine(sourceDir, "_extraction-report.md");
         report.SetVariables(vars);
         report.Write(reportPath);
 
@@ -349,6 +369,8 @@ partial class Program
                     opts.VariablesOutDir = args[++i]; break;
                 case "--restext-out" when i + 1 < args.Length:
                     opts.RestextOutDir = args[++i]; break;
+                case "--common-restext" when i + 1 < args.Length:
+                    opts.CommonRestextPath = args[++i]; break;
                 case "--restext-exclude-tag" when i + 1 < args.Length:
                     opts.RestextExcludeTags.Add(args[++i]); break;
                 case "--restext-exclude-id" when i + 1 < args.Length:
@@ -761,6 +783,9 @@ partial class Program
             directly in a module's passages-override/ folder; ModuleLoader applies them at load
             time (base passages first, then overrides by passage_id).
 
+            _extraction-report.md is always written next to the source file(s), not to
+            <passages-out-dir>.
+
             Options:
               --module-id <id>        Module ID (e.g. original.cost_of_disease)
               --module-title <title>  Human-readable title
@@ -770,6 +795,15 @@ partial class Program
               --seed-analysis         Emit seed dependency report
               --variables-out <dir>   Where _variables.yaml is written (default: passages-out-dir)
               --restext-out <dir>     Where en-US.restext is written (default: passages-out-dir)
+              --common-restext <file>
+                                      Path to a manually curated Key=Value restext file. When a
+                                      string is promoted to a Common key, a matching curated ID
+                                      (by exact text) is used instead of an auto-generated
+                                      Common_NNN one, for stable references from override/
+                                      manually-written passages. Curated IDs never matched during
+                                      extraction are omitted from the output and reported as
+                                      warnings. Not consumed by ModuleLoader at all — this is
+                                      purely an extractor-time input.
               --restext-exclude-tag <tag>
                                       Exclude passages with this tag from restext extraction;
                                       may be specified multiple times (e.g. --restext-exclude-tag notext)
