@@ -148,6 +148,8 @@ public sealed partial class RestextResolver : IRestextResolver
 
     private static string EscapeForExpr(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
-    [GeneratedRegex(@"restext://([A-Za-z][A-Za-z0-9_]*)")]
+    // Keys may start with '_' — RestextCollector.SanitizeForRestextKey prepends '_' when a
+    // passage_id doesn't start with a letter (e.g. "1sttime-Suspicion" → "_1sttime_Suspicion_001").
+    [GeneratedRegex(@"restext://([A-Za-z_][A-Za-z0-9_]*)")]
     private static partial Regex RestextRefRegex();
 }

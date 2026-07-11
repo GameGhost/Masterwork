@@ -311,6 +311,35 @@ public class ModuleLoaderTests
         Assert.Equal("Brand new line", module.Locale["Start_003"]);
     }
 
+    // RestextCollector.SanitizeForRestextKey prepends '_' to a restext key when the source
+    // passage_id doesn't start with a letter (e.g. "1sttime-Suspicion" → "_1sttime_Suspicion_001").
+    // RestextResolver's own restext://Key regex must accept that shape too, or the reference is
+    // left unresolved as a literal "restext://..." string in the rendered passage.
+    [Fact]
+    public void LoadFromSources_RestextKeyStartsWithUnderscore_ResolvesCorrectly()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.3'
+                passage_id: '1sttime-Suspicion'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes:
+                - type: 'text'
+                  value: 'restext://_1sttime_Suspicion_001'
+                """,
+            ],
+            restextText: "_1sttime_Suspicion_001=Place the Suspicion marker.\n");
+
+        var passage = module.Passages["1sttime-Suspicion"];
+        var text = Assert.IsType<TextNode>(passage.Nodes[0]);
+        Assert.Equal("Place the Suspicion marker.", text.Value);
+    }
+
     [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {
