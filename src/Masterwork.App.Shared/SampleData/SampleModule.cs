@@ -1,7 +1,7 @@
 namespace Masterwork.App.Shared.SampleData;
 
 /// <summary>
-/// A small, hand-authored MWS v0.3 scenario (not derived from any copyrighted source), pre-loaded
+/// A small, hand-authored MWS v0.4 scenario (not derived from any copyrighted source), pre-loaded
 /// into the app as a permanent, non-deletable entry in <see cref="Masterwork.App.Shared.Services.EmbeddedModuleStore"/>.
 /// Originally just an engine test fixture (Phase 2), it doubles as a feature showcase and the
 /// primary vehicle for testing app-shell mechanics that need real, playable content — the
@@ -21,7 +21,7 @@ public static class SampleModule
     public static readonly IReadOnlyList<string> PassageYamls =
     [
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'Start'
         tags:
         - 'Begins-Here'
@@ -54,35 +54,37 @@ public static class SampleModule
           else:
           - type: 'text'
             value: 'The town is on edge. Whatever lives in the well is close to the surface now.'
-        - type: 'paragraph_break'
+        - type: 'break'
+          style: 'paragraph'
         - type: 'section'
           title: 'About this scenario'
           content:
           - type: 'text'
             value: 'This is a small hand-authored demo scenario used to exercise the engine end-to-end. It is not derived from the original game.'
-        - type: 'paragraph_break'
-        - type: 'navigation'
+        - type: 'break'
+          style: 'paragraph'
+        - type: 'link'
           label: 'Visit the old well'
           target: 'Well'
-          state_affecting: true
-        - type: 'navigation'
+          snapshot: true
+        - type: 'link'
           label: 'Take the survey'
           target: 'Survey'
-          state_affecting: true
-        - type: 'navigation'
+          snapshot: true
+        - type: 'link'
           label: 'Listen to the rumors'
           target: 'Rumors'
-          state_affecting: true
+          snapshot: true
         - type: 'conditional'
           if: 'wellVisits >= 3'
           then:
-          - type: 'navigation'
+          - type: 'link'
             label: 'Confront what waits in the well'
             target: 'Ending'
-            state_affecting: true
+            snapshot: true
         """,
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'Well'
         layout: 'event'
         nodes:
@@ -119,27 +121,28 @@ public static class SampleModule
           id: 'visited_well'
           display: 'Visited the well'
           diagnostic: 'checkpoint:well'
-        - type: 'navigation'
+        - type: 'link'
           label: 'Step back'
           target: 'Start'
-          state_affecting: true
+          snapshot: true
         """,
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'Survey'
         layout: 'narration'
         nodes:
         - type: 'text'
           value: 'Before we continue, a quick survey.'
         - type: 'input'
-          label: 'Take the survey'
-          text: 'How many people are in your group?'
-          input: 'number'
+          label: 'How many people are in your group?'
           var: 'surveyCount'
-          onsubmit: 'SurveyResult'
+        - type: 'link'
+          label: 'Submit'
+          target: 'SurveyResult'
+          snapshot: true
         """,
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'SurveyResult'
         layout: 'narration'
         nodes:
@@ -147,26 +150,26 @@ public static class SampleModule
           value: 'Thanks! You said there are {surveyCount} people in your group.'
         - type: 'popup'
           label: 'What happens next?'
-          button: 'Got it'
-          state_affecting: false
+          cancel: 'Got it'
+          snapshot: false
           content:
           - type: 'text'
             value: 'This is a generic popup with no named layout — just its content nodes and a dismiss button.'
         - type: 'popup'
           label: 'Cast your vote'
           layout: 'voting'
-          state_affecting: true
-          onclose: 'Start'
+          snapshot: true
+          target: 'Start'
           content:
           - type: 'text'
             value: 'Everyone vote now!'
-        - type: 'navigation'
+        - type: 'link'
           label: 'Return to town'
           target: 'Start'
-          state_affecting: true
+          snapshot: true
         """,
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'Rumors'
         layout: 'narration'
         nodes:
@@ -180,13 +183,13 @@ public static class SampleModule
           - type: 'text'
             value: '{rumor}'
           - type: 'break'
-        - type: 'navigation'
+        - type: 'link'
           label: 'Head back to the square'
           target: 'Start'
-          state_affecting: true
+          snapshot: true
         """,
         """
-        format: 'mws/0.3'
+        format: 'mws/0.4'
         passage_id: 'Ending'
         layout: 'narration'
         ending: true

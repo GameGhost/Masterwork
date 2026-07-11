@@ -17,4 +17,7 @@ public sealed record TextNode : Node
 
     /// <summary>Let-var names consumed by this text, for editor grouping.</summary>
     public IReadOnlyList<string> Lets { get; init; } = [];
+
+    /// <summary>Open, module-extensible visual style vocabulary, styled entirely by module CSS.</summary>
+    public string? Style { get; init; }
 }

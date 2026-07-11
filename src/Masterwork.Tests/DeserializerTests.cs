@@ -34,7 +34,6 @@ public class DeserializerTests
             - type: 'text'
               value: 'hi'
             - type: 'break'
-            - type: 'paragraph_break'
             - type: 'image'
               asset: 'icon://foo'
             - type: 'let'
@@ -43,20 +42,17 @@ public class DeserializerTests
             - type: 'assign'
               var: 'y'
               expr: '2'
-            - type: 'navigation'
+            - type: 'link'
               label: 'go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             - type: 'popup'
               label: 'open'
               content: []
-              state_affecting: true
+              snapshot: true
             - type: 'input'
               label: 'ask'
-              text: 'enter'
-              input: 'string'
               var: 'z'
-              onsubmit: 'P2'
             - type: 'goto'
               target: 'P2'
             - type: 'include_passage'
@@ -81,7 +77,7 @@ public class DeserializerTests
 
         var types = passage.Nodes.Select(n => n.Type).ToList();
         Assert.Equal([
-            "text", "break", "paragraph_break", "image", "let", "assign", "navigation",
+            "text", "break", "image", "let", "assign", "link",
             "popup", "input", "goto", "include_passage", "section", "conditional",
             "switch", "foreach", "checkpoint", "record",
         ], types);
@@ -108,6 +104,32 @@ public class DeserializerTests
         Assert.Null(cond.Else);
         var text = Assert.IsType<TextNode>(cond.Conditions[0].Then.Single());
         Assert.Equal("first round", text.Value);
+    }
+
+    [Fact]
+    public void ConditionalFlatWithElse_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'conditional'
+              if: 'nameA == ""'
+              then:
+              - type: 'text'
+                value: 'enter name'
+              else:
+              - type: 'text'
+                value: 'welcome back'
+            """);
+
+        var cond = Assert.IsType<ConditionalNode>(passage.Nodes.Single());
+        Assert.Single(cond.Conditions);
+        Assert.Equal("nameA == \"\"", cond.Conditions[0].If);
+        Assert.Equal("enter name", Assert.IsType<TextNode>(cond.Conditions[0].Then.Single()).Value);
+        Assert.NotNull(cond.Else);
+        Assert.Equal("welcome back", Assert.IsType<TextNode>(cond.Else!.Single()).Value);
     }
 
     [Fact]
@@ -235,7 +257,7 @@ public class DeserializerTests
             nodes:
             - type: 'popup'
               label: 'open'
-              state_affecting: true
+              snapshot: true
               content:
               - type: 'text'
                 value: 'popup body'
@@ -253,17 +275,17 @@ public class DeserializerTests
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
               onclick:
               - type: 'assign'
                 var: 'x'
                 expr: '1'
             """);
 
-        var nav = Assert.IsType<NavigationNode>(passage.Nodes.Single());
+        var nav = Assert.IsType<LinkNode>(passage.Nodes.Single());
         Assert.Single(nav.OnClick);
         Assert.IsType<AssignNode>(nav.OnClick[0]);
     }
@@ -276,14 +298,107 @@ public class DeserializerTests
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'go'
               target: '${nextPsg}'
-              state_affecting: true
+              snapshot: true
             """);
 
-        var nav = Assert.IsType<NavigationNode>(passage.Nodes.Single());
+        var nav = Assert.IsType<LinkNode>(passage.Nodes.Single());
         Assert.Contains("${", nav.Target);
+    }
+
+    [Fact]
+    public void LinkSnapshot_Absent_DefaultsToFalseWithNoLabel()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+            """);
+
+        var link = Assert.IsType<LinkNode>(passage.Nodes.Single());
+        Assert.False(link.StateAffecting);
+        Assert.Null(link.SnapshotLabel);
+    }
+
+    [Fact]
+    public void LinkSnapshot_Bool_ParsesAsStateAffectingWithNoLabel()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+              snapshot: true
+            """);
+
+        var link = Assert.IsType<LinkNode>(passage.Nodes.Single());
+        Assert.True(link.StateAffecting);
+        Assert.Null(link.SnapshotLabel);
+    }
+
+    [Fact]
+    public void LinkSnapshot_StringValue_ImpliesStateAffectingAndSetsLabel()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+              snapshot: 'You chose to lie'
+            """);
+
+        var link = Assert.IsType<LinkNode>(passage.Nodes.Single());
+        Assert.True(link.StateAffecting);
+        Assert.Equal("You chose to lie", link.SnapshotLabel);
+    }
+
+    [Fact]
+    public void PopupSnapshot_StringValue_ImpliesStateAffectingAndSetsLabel()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              okay: 'Continue'
+              target: 'P2'
+              snapshot: 'popup label'
+              content: []
+            """);
+
+        var popup = Assert.IsType<PopupNode>(passage.Nodes.Single());
+        Assert.True(popup.StateAffecting);
+        Assert.Equal("popup label", popup.SnapshotLabel);
+    }
+
+    [Fact]
+    public void GotoSnapshotLabel_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'goto'
+              target: 'P2'
+              snapshot_label: 'goto label'
+            """);
+
+        var go = Assert.IsType<GotoNode>(passage.Nodes.Single());
+        Assert.Equal("goto label", go.SnapshotLabel);
     }
 
     [Fact]

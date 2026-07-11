@@ -2,7 +2,7 @@
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-<section class="mws-section">
+<section class="mws-section style-@(Node.Style ?? "default")">
     @if (Node.Title is not null)
     {
         <h3>@Node.Title</h3>

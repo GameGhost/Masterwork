@@ -13,9 +13,9 @@ namespace Masterwork.ModuleFormat;
 /// <remarks>
 /// Two resolution modes:
 /// <list type="bullet">
-/// <item>Display fields (<c>text.value</c>, <c>navigation.label</c>, <c>section.title</c>, ...): substituted as-is.</item>
+/// <item>Display fields (<c>text.value</c>, <c>link.label</c>, <c>section.title</c>, ...): substituted as-is.</item>
 /// <item>
-/// Expression fields (<c>let</c>/<c>assign.expr</c>, <c>conditional.if</c>, <c>navigation.target</c>
+/// Expression fields (<c>let</c>/<c>assign.expr</c>, <c>conditional.if</c>, <c>link.target</c>
 /// when dynamic, ...): the resolved value is spliced into a double-quoted string literal, so
 /// embedded <c>"</c> must be escaped as <c>\"</c> to keep the expression syntactically valid.
 /// </item>
@@ -57,6 +57,7 @@ public sealed partial class RestextResolver : IRestextResolver
     private Node ResolveNode(Node node, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) => node switch
     {
         TextNode t => t with { Value = ResolveDisplay(t.Value, locale, warnings)! },
+        ImageNode im => im with { Title = ResolveDisplay(im.Title, locale, warnings) },
         SectionNode s => s with
         {
             Title = ResolveDisplay(s.Title, locale, warnings),
@@ -64,26 +65,32 @@ public sealed partial class RestextResolver : IRestextResolver
         },
         LetNode l => l with { Expr = ResolveExpr(l.Expr, locale, warnings) },
         AssignNode a => a with { Expr = ResolveExpr(a.Expr, locale, warnings) },
-        NavigationNode n => n with
+        LinkNode n => n with
         {
             Label = ResolveDisplay(n.Label, locale, warnings)!,
             Target = ResolveExpr(n.Target, locale, warnings),
             OnClick = ResolveNodeList(n.OnClick, locale, warnings),
+            SnapshotLabel = ResolveDisplay(n.SnapshotLabel, locale, warnings),
         },
         PopupNode p => p with
         {
             Label = ResolveDisplay(p.Label, locale, warnings),
             Content = ResolveNodeList(p.Content, locale, warnings),
-            OnClose = ResolveExpr(p.OnClose, locale, warnings),
+            Okay = ResolveDisplay(p.Okay, locale, warnings),
+            Cancel = ResolveDisplay(p.Cancel, locale, warnings),
+            Target = ResolveExpr(p.Target, locale, warnings),
+            OnClose = ResolveNodeList(p.OnClose, locale, warnings),
+            SnapshotLabel = ResolveDisplay(p.SnapshotLabel, locale, warnings),
         },
         InputNode i => i with
         {
             Label = ResolveDisplay(i.Label, locale, warnings)!,
-            Text = ResolveDisplay(i.Text, locale, warnings)!,
-            OnSubmit = ResolveExpr(i.OnSubmit, locale, warnings),
         },
-        PromptNode pr => pr with { Text = ResolveDisplay(pr.Text, locale, warnings)! },
-        GotoNode g => g with { Target = ResolveExpr(g.Target, locale, warnings) },
+        GotoNode g => g with
+        {
+            Target = ResolveExpr(g.Target, locale, warnings),
+            SnapshotLabel = ResolveDisplay(g.SnapshotLabel, locale, warnings),
+        },
         IncludePassageNode ip => ip with { Target = ResolveExpr(ip.Target, locale, warnings) },
         ConditionalNode c => c with
         {

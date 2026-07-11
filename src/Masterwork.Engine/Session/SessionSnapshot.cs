@@ -22,9 +22,6 @@ public sealed record SessionSnapshot
     /// <summary>Per-seed-key occurrence counters as of just before <see cref="PassageId"/> rendered — see <see cref="SessionPrng"/>.</summary>
     public required IReadOnlyDictionary<string, int> SeedOccurrences { get; init; }
 
-    /// <summary>The value submitted, for an <see cref="SnapshotKind.InputReceived"/> snapshot.</summary>
-    public StoryValue? SubmittedInput { get; init; }
-
     /// <summary>Human-readable label for the timeline scrubber, if any.</summary>
     public string? DisplayLabel { get; init; }
 

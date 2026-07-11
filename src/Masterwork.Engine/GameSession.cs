@@ -9,10 +9,15 @@ namespace Masterwork.Engine;
 
 /// <summary>
 /// The main entry point for playing a loaded module. The engine is pull-based: the App calls
-/// <see cref="FollowLinkAsync"/> / <see cref="SubmitInputAsync"/> / <see cref="OpenPopupAsync"/> /
-/// <see cref="ClosePopupAsync"/> and gets back typed render results. Timeline state is the only
-/// durable state; passage-scoped let variables and <see cref="SessionViewState"/> are transient
-/// and never persisted.
+/// <see cref="FollowLinkAsync"/> / <see cref="ClosePopupAsync"/> and gets back typed render
+/// results. Opening/closing a popup's display is not an engine concept at all — a
+/// <see cref="Rendering.RenderedPopup"/> already carries its rendered content (see its remarks), so
+/// showing one is a pure UI state toggle; only committing it via Accept goes through
+/// <see cref="ClosePopupAsync"/>. Likewise <c>input</c> nodes have no submit action of their own —
+/// their values are committed as part of whichever <see cref="FollowLinkAsync"/>/<see cref="ClosePopupAsync"/>
+/// call follows them, via <see cref="UpdateInputDraft"/>-tracked drafts in <see cref="ViewState"/>.
+/// Timeline state is the only durable state; passage-scoped let variables and
+/// <see cref="SessionViewState"/> are transient and never persisted.
 /// </summary>
 public sealed class GameSession
 {
@@ -26,9 +31,6 @@ public sealed class GameSession
     private readonly List<SessionSnapshot> _timeline = [];
     private readonly List<PassageRenderResult> _cachedRenders = [];
     private HashSet<string> _visitedPassageIds = [];
-    private PendingPopup? _pendingPopup;
-
-    private sealed record PendingPopup(string ActionId, VariableStore Sandbox, string? OnClose, bool StateAffecting);
 
     /// <summary>The full history of snapshots recorded so far, including any rewound-past future.</summary>
     public IReadOnlyList<SessionSnapshot> Timeline => _timeline;
@@ -89,7 +91,7 @@ public sealed class GameSession
             ?? throw new InvalidOperationException("No start passage specified and the module has no 'Begins-Here' passage.");
 
         _logger.LogDebug("Starting session at passage '{StartPassageId}' with master seed {MasterSeed}", startId, masterSeed);
-        PushAndRender(startId, SnapshotKind.GameStart, submittedInput: null, displayLabel: null, diagnosticLabel: null);
+        PushAndRender(startId, SnapshotKind.GameStart, displayLabel: null, diagnosticLabel: null);
     }
 
     // Restores a session from a save. Fully correct for ordinary snapshots (whose captured state
@@ -139,79 +141,133 @@ public sealed class GameSession
 
     // ── Player actions ───────────────────────────────────────────────────────
 
-    /// <summary>Follows a <see cref="RenderedNavigation"/> action: runs its <c>onclick</c> nodes, resolves its target, and navigates (creating a timeline snapshot if the navigation is state-affecting).</summary>
+    /// <summary>
+    /// Follows a <see cref="RenderedLink"/> action: commits every currently-showing <c>input</c>'s
+    /// draft value to its bound variable, runs the link's <c>onclick</c> nodes, resolves its target
+    /// (a <c>goto</c> among <c>onclick</c> preempts it), and navigates — all as a single snapshot
+    /// when the link is state-affecting. The snapshot's timeline label is, in priority order: a
+    /// preempting <c>goto</c>'s own <c>snapshot_label</c>; else the link's own <c>snapshot</c> label;
+    /// else the destination passage's <c>title</c> (see <see cref="ResolvePassageTitle"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A currently-showing input doesn't have a valid value.</exception>
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
     {
         _logger.LogDebug("Following link '{ActionId}'", actionId);
-        var nav = FindAction<RenderedNavigation>(actionId);
+        var link = FindAction<RenderedLink>(actionId);
 
-        if (nav.OnClickRaw.Count > 0)
+        CommitInputs(CurrentRender.Actions, _store);
+
+        string? pendingGoto = null;
+        string? pendingGotoLabel = null;
+        if (link.OnClickRaw.Count > 0)
         {
-            _passageRenderer.RenderNodeList(nav.OnClickRaw, _store, _module);
+            var onClickResult = _passageRenderer.RenderNodeList(link.OnClickRaw, _store, _module);
+            pendingGoto = onClickResult.PendingGoto;
+            pendingGotoLabel = onClickResult.PendingGotoLabel;
         }
 
-        var targetId = ResolveTarget(nav.Target);
+        var targetId = pendingGoto ?? ResolveTarget(link.Target);
+        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? link.SnapshotLabel;
 
-        var result = nav.StateAffecting
-            ? PushAndRender(targetId, SnapshotKind.Choice, submittedInput: null, nav.TimelineLabel, diagnosticLabel: null)
+        var result = link.StateAffecting
+            ? PushAndRender(targetId, SnapshotKind.Choice, displayLabel, diagnosticLabel: null)
             : RenderInPlace(targetId);
 
-        return Task.FromResult(result);
-    }
-
-    /// <summary>Stores the submitted value into a <see cref="RenderedInput"/> action's variable, creates an <see cref="SnapshotKind.InputReceived"/> snapshot, and navigates to its <c>onsubmit</c> target.</summary>
-    public Task<PassageRenderResult> SubmitInputAsync(string actionId, object value)
-    {
-        _logger.LogDebug("Submitting input '{ActionId}'", actionId);
-        var input = FindAction<RenderedInput>(actionId);
-        var exprValue = input.InputType == InputValueType.Number
-            ? StoryValue.Of(Convert.ToInt64(value))
-            : StoryValue.Of(value.ToString() ?? "");
-        _store.SetSessionVariable(input.Var, exprValue);
-
-        var targetId = ResolveTarget(input.OnSubmit);
-        var result = PushAndRender(targetId, SnapshotKind.InputReceived, exprValue, displayLabel: null, diagnosticLabel: null);
         return Task.FromResult(result);
     }
 
     /// <summary>
-    /// Opens a <see cref="RenderedPopup"/> action. Evaluates the popup's content against a sandbox
-    /// copy of the store — state changes stay pending until <see cref="ClosePopupAsync"/> commits
-    /// them, per the popup transaction model.
+    /// Closes a <see cref="RenderedPopup"/> via its Okay/Cancel action. When <paramref name="accept"/>
+    /// is <see langword="true"/> (Okay), commits its pending input drafts and state changes to the
+    /// live store, runs <c>onclose</c> against them (a <c>goto</c> among <c>onclose</c> preempts
+    /// <c>target</c>), and navigates — all as a single transaction. The snapshot's timeline label is,
+    /// in priority order: a preempting <c>goto</c>'s own <c>snapshot_label</c>; else the popup's own
+    /// <c>snapshot</c> label; else the destination passage's <c>title</c> (see
+    /// <see cref="ResolvePassageTitle"/>). When <see langword="false"/> (Cancel), the popup's sandbox
+    /// is discarded entirely: no commit, no <c>onclose</c>, no navigation — the caller doesn't even
+    /// need to call this for Cancel, since nothing session-side needs to happen (see
+    /// <see cref="RenderedPopup"/>'s remarks); it's provided for symmetry.
     /// </summary>
-    public Task<PopupRenderResult> OpenPopupAsync(string actionId)
+    /// <exception cref="InvalidOperationException">No popup with <paramref name="actionId"/> exists in <see cref="CurrentRender"/>, or (on Okay) a pending input doesn't have a valid value.</exception>
+    public Task<PassageRenderResult> ClosePopupAsync(string actionId, bool accept)
     {
-        _logger.LogDebug("Opening popup '{ActionId}'", actionId);
+        _logger.LogDebug("Closing popup '{ActionId}' ({Outcome})", actionId, accept ? "okay" : "cancel");
         var popup = FindAction<RenderedPopup>(actionId);
-        ViewState.ExpandedPopups.Add(actionId);
 
-        var sandbox = _store.Clone();
-        var content = _passageRenderer.RenderNodeList(popup.RawContent, sandbox, _module);
-        _pendingPopup = new PendingPopup(actionId, sandbox, popup.OnClose, popup.StateAffecting);
-
-        return Task.FromResult(new PopupRenderResult(content));
-    }
-
-    /// <summary>Closes the currently open popup, committing its pending state changes and navigating to its <c>onclose</c> target as a single transaction.</summary>
-    /// <exception cref="InvalidOperationException">No popup with <paramref name="actionId"/> is currently open.</exception>
-    public Task<PassageRenderResult> ClosePopupAsync(string actionId)
-    {
-        _logger.LogDebug("Closing popup '{ActionId}'", actionId);
-        if (_pendingPopup is not { } pending || pending.ActionId != actionId)
+        if (!accept)
         {
-            throw new InvalidOperationException($"Popup '{actionId}' is not open.");
+            return Task.FromResult(CurrentRender);
         }
 
-        _store.RestoreSession(pending.Sandbox.SessionSnapshot());
-        _pendingPopup = null;
-        ViewState.ExpandedPopups.Remove(actionId);
+        CommitInputs(popup.Actions, popup.Sandbox);
 
-        var targetId = pending.OnClose is null ? Current.PassageId : ResolveTarget(pending.OnClose);
+        string? pendingGoto = null;
+        string? pendingGotoLabel = null;
+        if (popup.OnCloseRaw.Count > 0)
+        {
+            var onCloseResult = _passageRenderer.RenderNodeList(popup.OnCloseRaw, popup.Sandbox, _module);
+            pendingGoto = onCloseResult.PendingGoto;
+            pendingGotoLabel = onCloseResult.PendingGotoLabel;
+        }
 
-        var result = pending.StateAffecting
-            ? PushAndRender(targetId, SnapshotKind.Choice, submittedInput: null, displayLabel: null, diagnosticLabel: null)
+        _store.RestoreSession(popup.Sandbox.SessionSnapshot());
+
+        var targetId = pendingGoto ?? (popup.Target is null ? Current.PassageId : ResolveTarget(popup.Target));
+        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? popup.SnapshotLabel;
+
+        var result = popup.StateAffecting
+            ? PushAndRender(targetId, SnapshotKind.Choice, displayLabel, diagnosticLabel: null)
             : RenderInPlace(targetId);
         return Task.FromResult(result);
+    }
+
+    /// <summary>Whether <paramref name="input"/>'s current draft satisfies its implicit-required/min/max constraints.</summary>
+    public bool IsInputValid(RenderedInput input)
+    {
+        if (!ViewState.InputDrafts.TryGetValue(input.Id, out var draft) || draft?.ToString() is not { Length: > 0 } text)
+        {
+            return false;
+        }
+
+        if (input.InputType != InputValueType.Number)
+        {
+            return true;
+        }
+
+        if (!long.TryParse(text, out var n))
+        {
+            return false;
+        }
+
+        return (input.Min is not { } min || n >= min) && (input.Max is not { } max || n <= max);
+    }
+
+    /// <summary>Whether every <see cref="RenderedInput"/> among <paramref name="actions"/> is valid — used to gate a passage's <c>link</c> buttons or a popup's Okay button.</summary>
+    public bool AreInputsValid(IEnumerable<RenderedAction> actions) => actions.OfType<RenderedInput>().All(IsInputValid);
+
+    /// <summary>Whether every <see cref="RenderedInput"/> in <see cref="CurrentRender"/> is valid.</summary>
+    public bool AreCurrentInputsValid() => AreInputsValid(CurrentRender.Actions);
+
+    // Commits every input among `actions` from its ViewState draft into `target`, per the "any link
+    // acts as a submit for every currently-showing input" model. Throws rather than silently
+    // skipping an invalid one — the App is expected to keep the triggering button disabled until
+    // AreInputsValid is true, so reaching here with an invalid draft is a defensive invariant, not a
+    // normal user-facing failure path.
+    private void CommitInputs(IEnumerable<RenderedAction> actions, VariableStore target)
+    {
+        foreach (var input in actions.OfType<RenderedInput>())
+        {
+            if (!IsInputValid(input))
+            {
+                throw new InvalidOperationException($"Input '{input.Id}' does not have a valid value.");
+            }
+
+            var text = ViewState.InputDrafts[input.Id].ToString()!;
+            var value = input.InputType == InputValueType.Number
+                ? StoryValue.Of(long.Parse(text))
+                : StoryValue.Of(text);
+            target.SetSessionVariable(input.Var, value);
+        }
     }
 
     /// <summary>Records an in-progress (not yet submitted) input value in <see cref="ViewState"/>.</summary>
@@ -271,7 +327,7 @@ public sealed class GameSession
     // ── Internals ────────────────────────────────────────────────────────────
 
     private PassageRenderResult PushAndRender(string passageId, SnapshotKind kind,
-        StoryValue? submittedInput, string? displayLabel, string? diagnosticLabel)
+        string? displayLabel, string? diagnosticLabel)
     {
         TruncateFuture();
 
@@ -281,8 +337,7 @@ public sealed class GameSession
             Kind = kind,
             Variables = _store.SessionSnapshot(),
             SeedOccurrences = _prng.SnapshotOccurrences(),
-            SubmittedInput = submittedInput,
-            DisplayLabel = displayLabel,
+            DisplayLabel = displayLabel ?? ResolvePassageTitle(passageId),
             DiagnosticLabel = diagnosticLabel,
         });
         HistoryIndex = _timeline.Count - 1;
@@ -293,7 +348,6 @@ public sealed class GameSession
 
         HandleCheckpoints(result);
         ViewState.Reset();
-        _pendingPopup = null;
         return result;
     }
 
@@ -306,7 +360,6 @@ public sealed class GameSession
         RecomputeVisitedFromTimeline();
         HandleCheckpoints(result);
         ViewState.Reset();
-        _pendingPopup = null;
         return result;
     }
 
@@ -336,14 +389,19 @@ public sealed class GameSession
                 Kind = SnapshotKind.Checkpoint,
                 Variables = _store.SessionSnapshot(),
                 SeedOccurrences = _prng.SnapshotOccurrences(),
-                SubmittedInput = null,
-                DisplayLabel = cp.Display,
+                DisplayLabel = cp.Display ?? ResolvePassageTitle(result.PassageId),
                 DiagnosticLabel = cp.Diagnostic,
             });
             _cachedRenders.Add(result);
             HistoryIndex = _timeline.Count - 1;
         }
     }
+
+    // The timeline scrubber's default label for any snapshot that doesn't specify its own
+    // (link.snapshot/popup.snapshot's string form, checkpoint.display): the destination passage's
+    // own title, falling back to its passage_id if the module doesn't set one.
+    private string ResolvePassageTitle(string passageId) =>
+        _module.Passages.TryGetValue(passageId, out var doc) ? doc.Title ?? passageId : passageId;
 
     private void TruncateFuture()
     {
@@ -372,7 +430,6 @@ public sealed class GameSession
         _prng.RestoreOccurrences(snapshot.SeedOccurrences);
         RecomputeVisitedFromTimeline();
         ViewState.Reset();
-        _pendingPopup = null;
 
         if (snapshot.Kind == SnapshotKind.Checkpoint)
         {
@@ -387,9 +444,14 @@ public sealed class GameSession
     private void RecomputeVisitedFromTimeline() =>
         _visitedPassageIds = [.. _timeline.Take(HistoryIndex + 1).Select(s => s.PassageId)];
 
+    // Searches CurrentRender's own actions, plus one level of nesting into every popup's own
+    // Actions (its content is rendered eagerly alongside the passage, so this is available
+    // regardless of whether that popup is actually open in the UI right now — see RenderedPopup's
+    // remarks).
     private T FindAction<T>(string actionId) where T : RenderedAction
     {
         var action = CurrentRender.Actions.FirstOrDefault(a => a.Id == actionId)
+            ?? CurrentRender.Actions.OfType<RenderedPopup>().SelectMany(p => p.Actions).FirstOrDefault(a => a.Id == actionId)
             ?? throw new InvalidOperationException($"No action '{actionId}' in the current passage render.");
         return action as T ?? throw new InvalidOperationException($"Action '{actionId}' is not a {typeof(T).Name}.");
     }

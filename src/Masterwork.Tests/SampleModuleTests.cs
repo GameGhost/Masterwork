@@ -32,41 +32,41 @@ public class SampleModuleTests
         Assert.Equal("hub", session.CurrentRender.Layout);
 
         // Well: text, checkpoint, navigation.
-        var wellNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Visit the old well");
+        var wellNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Visit the old well");
         var wellResult = await session.FollowLinkAsync(wellNav.Id);
         Assert.Equal("Well", wellResult.PassageId);
         Assert.Equal("event", wellResult.Layout);
         Assert.Single(wellResult.Checkpoints);
         Assert.Equal(SnapshotKind.Checkpoint, session.Timeline[^1].Kind);
 
-        var backToStart = wellResult.Actions.OfType<RenderedNavigation>().Single();
+        var backToStart = wellResult.Actions.OfType<RenderedLink>().Single();
         await session.FollowLinkAsync(backToStart.Id);
 
         // Survey: input.
-        var surveyNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Take the survey");
+        var surveyNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Take the survey");
         var surveyResult = await session.FollowLinkAsync(surveyNav.Id);
         var input = surveyResult.Actions.OfType<RenderedInput>().Single();
-        var surveyResultResult = await session.SubmitInputAsync(input.Id, 4L);
+        var submitLink = surveyResult.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "4");
+        var surveyResultResult = await session.FollowLinkAsync(submitLink.Id);
         Assert.Equal("SurveyResult", surveyResultResult.PassageId);
         Assert.Contains("4", surveyResultResult.Nodes.OfType<RenderedText>().First().Value);
 
         // SurveyResult: generic popup + voting-layout popup.
         var genericPopup = surveyResultResult.Actions.OfType<RenderedPopup>().Single(p => p.Layout is null);
-        var genericPopupOpen = await session.OpenPopupAsync(genericPopup.Id);
-        Assert.Single(genericPopupOpen.Content);
-        await session.ClosePopupAsync(genericPopup.Id);
+        Assert.Single(genericPopup.Content);
+        await session.ClosePopupAsync(genericPopup.Id, accept: false);
 
         var votingPopup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single(p => p.Layout == "voting");
-        await session.OpenPopupAsync(votingPopup.Id);
-        var afterVoteClose = await session.ClosePopupAsync(votingPopup.Id);
+        var afterVoteClose = await session.ClosePopupAsync(votingPopup.Id, accept: true);
         Assert.Equal("Start", afterVoteClose.PassageId);
 
         // Rumors: let + foreach over a shuffled array.
-        var rumorsNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Listen to the rumors");
+        var rumorsNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Listen to the rumors");
         var rumorsResult = await session.FollowLinkAsync(rumorsNav.Id);
         Assert.Equal("Rumors", rumorsResult.PassageId);
         Assert.Equal(3, rumorsResult.Nodes.OfType<RenderedText>().Count());
-        var backFromRumors = rumorsResult.Actions.OfType<RenderedNavigation>().Single();
+        var backFromRumors = rumorsResult.Actions.OfType<RenderedLink>().Single();
         await session.FollowLinkAsync(backFromRumors.Id);
     }
 
@@ -77,25 +77,25 @@ public class SampleModuleTests
         var session = new GameSession(module, masterSeed: 1);
 
         // Not yet visited: no route to the Ending.
-        Assert.DoesNotContain(session.CurrentRender.Actions.OfType<RenderedNavigation>(), a => a.Label.Contains("Confront"));
+        Assert.DoesNotContain(session.CurrentRender.Actions.OfType<RenderedLink>(), a => a.Label.Contains("Confront"));
         Assert.Contains(session.CurrentRender.Nodes.OfType<RenderedText>(), t => t.Value.Contains("quiet for as long as anyone remembers"));
 
         for (var visit = 1; visit <= 3; visit++)
         {
-            var wellNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label == "Visit the old well");
+            var wellNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Visit the old well");
             var wellResult = await session.FollowLinkAsync(wellNav.Id);
 
             // Exercises both random mechanisms: a shuffled-array pick (let) and rand_between (switch).
             Assert.Contains(wellResult.Nodes.OfType<RenderedText>(), t =>
                 t.Value.Contains("ice cold") || t.Value.Contains("frog") || t.Value.Contains("echo"));
 
-            var backNav = wellResult.Actions.OfType<RenderedNavigation>().Single();
+            var backNav = wellResult.Actions.OfType<RenderedLink>().Single();
             await session.FollowLinkAsync(backNav.Id);
             Assert.Equal((long)visit, session.Current.Variables["wellVisits"].AsInt());
         }
 
         Assert.False(session.CurrentRender.IsEnding);
-        var endingNav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single(a => a.Label.Contains("Confront"));
+        var endingNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label.Contains("Confront"));
         var endingResult = await session.FollowLinkAsync(endingNav.Id);
 
         Assert.Equal("Ending", endingResult.PassageId);

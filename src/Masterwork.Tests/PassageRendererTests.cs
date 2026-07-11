@@ -78,18 +78,20 @@ public class PassageRendererTests
     }
 
     [Fact]
-    public void ParagraphBreak_EmitsRenderedParagraphBreak()
+    public void ParagraphStyleBreak_EmitsRenderedBreakWithStyle()
     {
         var (passage, module, store) = Load("""
-            format: 'mws/0.3'
+            format: 'mws/0.4'
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'paragraph_break'
+            - type: 'break'
+              style: 'paragraph'
             """);
 
         var result = Render(passage, module, store);
-        Assert.IsType<RenderedParagraphBreak>(result.Nodes.Single());
+        var brk = Assert.IsType<RenderedBreak>(result.Nodes.Single());
+        Assert.Equal("paragraph", brk.Style);
     }
 
     [Fact]
@@ -573,21 +575,21 @@ public class PassageRendererTests
     // ── Navigation ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void Navigation_EmitsRenderedNavigation()
+    public void Navigation_EmitsRenderedLink()
     {
         var (passage, module, store) = Load("""
             format: 'mws/0.3'
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Click here'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """);
 
         var result = Render(passage, module, store);
-        var nav = Assert.IsType<RenderedNavigation>(result.Nodes.Single());
+        var nav = Assert.IsType<RenderedLink>(result.Nodes.Single());
         Assert.Equal("Click here", nav.Label);
         Assert.Equal("P2", nav.Target);
         Assert.True(nav.StateAffecting);
@@ -601,15 +603,15 @@ public class PassageRendererTests
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Click here'
               target: '${nextPsg}'
-              state_affecting: true
+              snapshot: true
             """);
         store.SetSessionVariable("nextPsg", StoryValue.Of("SomeOtherPassage"));
 
         var result = Render(passage, module, store);
-        var nav = Assert.IsType<RenderedNavigation>(result.Nodes.Single());
+        var nav = Assert.IsType<RenderedLink>(result.Nodes.Single());
         Assert.Equal("${nextPsg}", nav.Target);
     }
 
@@ -621,15 +623,15 @@ public class PassageRendererTests
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Click here'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """);
 
         var result = Render(passage, module, store);
         Assert.Single(result.Actions);
-        Assert.IsType<RenderedNavigation>(result.Actions.Single());
+        Assert.IsType<RenderedLink>(result.Actions.Single());
     }
 
     // ── Popup ────────────────────────────────────────────────────────────────
@@ -644,7 +646,7 @@ public class PassageRendererTests
             nodes:
             - type: 'popup'
               label: 'Open'
-              state_affecting: true
+              snapshot: true
               content: []
             """);
 
@@ -663,7 +665,7 @@ public class PassageRendererTests
             layout: 'narration'
             nodes:
             - type: 'popup'
-              state_affecting: true
+              snapshot: true
               content: []
             """);
 
@@ -674,16 +676,16 @@ public class PassageRendererTests
     }
 
     [Fact]
-    public void Popup_ContentNotEvaluatedAtRender()
+    public void Popup_ContentEvaluatedEagerlyAgainstSandbox_NotLiveStore()
     {
         var (passage, module, store) = Load("""
-            format: 'mws/0.3'
+            format: 'mws/0.4'
             passage_id: 'P1'
             layout: 'narration'
             nodes:
             - type: 'popup'
               label: 'Open'
-              state_affecting: true
+              snapshot: true
               content:
               - type: 'assign'
                 var: 'round'
@@ -691,7 +693,12 @@ public class PassageRendererTests
             """);
         store.SetSessionVariable("round", StoryValue.Of(1L));
 
-        Render(passage, module, store);
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+
+        // Evaluated eagerly, at render time, into the popup's own sandbox...
+        Assert.Equal(99L, popup.Sandbox.GetVariable("round").AsInt());
+        // ...but the live store stays untouched until the popup is actually accepted.
         Assert.Equal(1L, store.GetVariable("round").AsInt());
     }
 
@@ -705,7 +712,7 @@ public class PassageRendererTests
             nodes:
             - type: 'popup'
               layout: 'setup'
-              state_affecting: true
+              snapshot: true
               content: []
             """);
 
@@ -722,11 +729,11 @@ public class PassageRendererTests
             layout: 'narration'
             nodes:
             - type: 'popup'
-              state_affecting: true
+              snapshot: true
             """);
 
         var result = Render(passage, module, store);
-        Assert.Empty(Assert.IsType<RenderedPopup>(result.Nodes.Single()).RawContent);
+        Assert.Empty(Assert.IsType<RenderedPopup>(result.Nodes.Single()).Content);
     }
 
     // ── Goto ─────────────────────────────────────────────────────────────────

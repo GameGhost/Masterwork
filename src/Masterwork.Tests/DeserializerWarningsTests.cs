@@ -229,19 +229,21 @@ public class DeserializerWarningsTests
     [Fact]
     public void MalformedBoolField_ThrowsFriendlyError()
     {
+        // link/popup's own 'snapshot' field is deliberately NOT strict-bool-only anymore (see
+        // GetBoolOrLabel) — 'collapsed' is still a plain strict-bool field, so it's used here to
+        // keep covering the "malformed bool throws a friendly error" contract.
         var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
             """
-            format: 'mws/0.3'
+            format: 'mws/0.4'
             passage_id: 'P1'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
-              label: 'Go'
-              target: 'P2'
-              state_affecting: 'yes'
+            - type: 'section'
+              collapsed: 'yes'
+              content: []
             """,
         ]));
-        Assert.Contains("state_affecting", ex.Message);
+        Assert.Contains("collapsed", ex.Message);
         Assert.Contains("yes", ex.Message);
     }
 
@@ -311,51 +313,6 @@ public class DeserializerWarningsTests
         var text = Assert.IsType<TextNode>(Assert.Single(passage.Nodes));
         Assert.Null(text.Align);
         Assert.Contains(warnings.Items, w => w.Kind == "invalid_enum_value" && w.Message.Contains("centre"));
-    }
-
-    // ── InputValueType enum ──────────────────────────────────────────────────
-
-    [Theory]
-    [InlineData("string", InputValueType.String)]
-    [InlineData("number", InputValueType.Number)]
-    public void ValidInputType_ParsesToEnum(string raw, InputValueType expected)
-    {
-        var (passage, _) = LoadOne($$"""
-            format: 'mws/0.3'
-            passage_id: 'P1'
-            layout: 'narration'
-            nodes:
-            - type: 'input'
-              label: 'Enter'
-              text: 'enter a value'
-              input: '{{raw}}'
-              var: 'x'
-              onsubmit: 'P2'
-            """);
-
-        var input = Assert.IsType<InputNode>(Assert.Single(passage.Nodes));
-        Assert.Equal(expected, input.InputType);
-    }
-
-    [Fact]
-    public void InvalidInputType_Throws()
-    {
-        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
-            """
-            format: 'mws/0.3'
-            passage_id: 'P1'
-            layout: 'narration'
-            nodes:
-            - type: 'input'
-              label: 'Enter'
-              text: 'enter a value'
-              input: 'boolean'
-              var: 'x'
-              onsubmit: 'P2'
-            """,
-        ]));
-        Assert.Contains("input", ex.Message);
-        Assert.Contains("boolean", ex.Message);
     }
 
     // ── VariableManifest ─────────────────────────────────────────────────────

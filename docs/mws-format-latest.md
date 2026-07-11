@@ -1,4 +1,4 @@
-# Masterwork Script Format — v0.3 Reference
+# Masterwork Script Format — v0.4 Reference
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
 
@@ -9,7 +9,7 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: 'mws/0.3'
+format: 'mws/0.4'
 passage_id: 'Hospital1'
 title: 'The Hospital'
 tags:
@@ -27,7 +27,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/0.3` |
+| `format` | string | yes | Always `mws/0.4`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id` |
 | `tags` | list of strings | no | Source tags; drives layout inference |
@@ -237,7 +237,7 @@ onclose: '${nomore == 1 ? th < players ? "TownHallS1" : "TakeSides2" : round == 
 
 String literals *inside* an expression use C#-style double quotes (`"`), not single quotes. A single quote inside an expression string literal is `''` (doubled, because the whole field is YAML single-quoted). A double quote inside an expression string literal uses the standard `\"` escape.
 
-Fields that support expression values: `navigation.target`, `goto.target`, `popup.onclose`, `input.onsubmit`.
+Fields that support expression values: `link.target`, `popup.target`, `goto.target`.
 
 ### `let` / `assign` expr fields
 
@@ -454,6 +454,7 @@ Displays human-readable content.
 | `value` | string | yes | Formatted text (see §3) |
 | `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified`. Omit to use the locale default (RTL-aware) |
 | `lets` | list of strings | no | Names of `let` vars consumed by this value, for editor grouping |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
 
 ```yaml
 - type: 'text'
@@ -483,12 +484,15 @@ Displays a standalone image asset with optional size and alignment. Produced whe
 | `asset` | string | yes | Asset URI (e.g. `icon://scenariobox3d_war`) |
 | `size` | string | no | Size hint preserved as-is from the source `<size=N>` tag (units unspecified) |
 | `align` | string | no | Horizontal alignment: `left`, `center`, `right`, or `justified` |
+| `title` | string | no | Formatted title/alt text (see §3) — rendered as the HTML `title`/`alt` attribute |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
 
 ```yaml
 - type: 'image'
   asset: 'icon://scenariobox3d_war'
   size: '200'
   align: 'center'
+  title: 'A scene of war'
 ```
 
 ---
@@ -548,7 +552,7 @@ Defines a passage-scoped variable by evaluating an expression. Never persisted t
 
 ### `assign`
 
-Writes a value to a session variable. Persistent; all `assign` nodes encountered during passage execution are bundled with the following `navigation` into a single timeline snapshot.
+Writes a value to a session variable. Persistent; all `assign` nodes encountered during passage execution are bundled with the following `link` into a single timeline snapshot.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -579,42 +583,47 @@ Writes a value to a session variable. Persistent; all `assign` nodes encountered
 
 ---
 
-### `navigation`
+### `link`
 
-A player-clickable link that navigates to another passage. Bundles preceding `assign` nodes into a timeline snapshot.
+A player-clickable link that navigates to another passage. Bundles preceding `assign` nodes into a timeline snapshot. Disabled by the app until every `input` currently rendered in the passage has a valid value (see §6 `input`) — clicking it commits all of those input values to their bound variables before running `onclick` and resolving `target`, as part of the same snapshot.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `label` | string | yes | Link text (string formatting — see §3) |
-| `style` | string | no | Visual style: `link` (default) or `button` |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `link`, `button`) |
 | `target` | string | yes | Destination `passage_id`, or `'${expression}'` for a runtime-computed target (see §4) |
-| `state_affecting` | bool | yes | `true` creates a timeline snapshot |
-| `timeline_label` | string | no | Custom label for the timeline scrubber entry |
-| `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation |
+| `snapshot` | bool or string | no | Whether following this link creates a timeline snapshot. Defaults to `false` if absent. A string value means `true` *and* sets the timeline scrubber's label to that string in one step — overriding the destination passage's own `title` (the default label when `snapshot` is a bare `true`). A preempting `goto` inside `onclick` takes priority over this label — see `goto` below |
+| `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation. A `goto` among these preempts `target` |
 
-**Execution order when `onclick` is present:** on click, the engine executes all nodes in the `onclick` list first, then evaluates `target`. This matters when `target` is an expression referencing a variable and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
+**Execution order when `onclick` is present:** on click, pending `input` values are committed first, then the engine executes all nodes in the `onclick` list, then evaluates `target` (unless a `goto` inside `onclick` fired, which preempts it). This matters when `target` is an expression referencing a variable and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
 
 ```yaml
-- type: 'navigation'
+- type: 'link'
   label: 'restext://BattleTime_010' # "Click to begin the battle..."
   target: 'BattleCompleteReturn'
-  state_affecting: true
+  snapshot: true
+
+# With a custom timeline label — the string form of `snapshot` implies true
+- type: 'link'
+  label: 'Confront the mayor'
+  target: 'Confrontation'
+  snapshot: 'You chose to confront him'
 
 # With inline state change — target is a literal passage_id
-- type: 'navigation'
+- type: 'link'
   label: '2 Players'
   target: 'PlayerNameIntro'
-  state_affecting: true
+  snapshot: true
   onclick:
   - type: 'assign'
     var: 'players'
     expr: '2'
 
 # With dynamic target — onclick may assign the target variable before navigation
-- type: 'navigation'
+- type: 'link'
   label: '{nameA}'
   target: '${feverheartnextPsg}'
-  state_affecting: true
+  snapshot: true
   onclick:
   - type: 'assign'
     var: 'charity'
@@ -631,26 +640,55 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 
 ### `popup`
 
-A modal overlay, either click-triggered (has `label`) or auto-displayed when the passage renders (no `label`, layout controls display). Popup nodes cannot contain `assign` or navigation nodes.
+A modal overlay, either click-triggered (has `label`) or auto-displayed when the passage renders (no `label`, layout controls display). Content is evaluated eagerly, alongside the rest of the passage, against a sandboxed copy of the variable store — never the live one — so it may safely contain `assign` and `input` nodes (including a self-contained input flow: an `input` node plus an `okay` button) without those mutations reaching live state before the player actually accepts.
+
+Okay/Cancel dismissal mirrors `link`'s own `target`/`onclick` shape: `onclose` runs first (its own `goto`, if any, preempts `target`), then `target` resolves the destination. `target` and `onclose` are both independently optional even when `okay` is present — an Okay button with neither still commits any pending `input` values in `content`, but otherwise just closes the popup in place with no navigation and no further engine round-trip (e.g. a purely informational popup that only needs an acknowledgement button).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `label` | string | no | Button/link text that triggers the popup; omit for auto-display (layout-driven only) |
-| `style` | string | no | Visual style: `link` (default) or `button` |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `link`, `button`) |
 | `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
-| `content` | list | no | Content nodes for the popup body; for layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated at open time to bind layout properties |
-| `onclose` | string | no | Destination when dismissed or when layout-driven interaction completes — `passage_id` or `'${expression}'` (see §4) |
-| `button` | string | no | Dismiss button label; defaults to `"Close"` (no `onclose`) or `"Next"` (with `onclose`) |
+| `content` | list | no | Content nodes for the popup body — evaluated eagerly, at passage-render time (see the popup transaction model below). For layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated the same way to bind layout properties |
+| `okay` | string | no | Okay button label (string formatting — see §3); only rendered if present. Clicking it commits any pending `input` values in `content`, runs `onclose`, then resolves `target` |
+| `cancel` | string | no | Cancel button label; only rendered if present. Clicking it discards the popup's pending state entirely — no `onclose`, no `target`, no commit |
+| `onclose` | list | no | `let`, `assign`, and `conditional` nodes run when Okay is clicked, before `target` is resolved — same shape and timing as `link.onclick`. A `goto` among these preempts `target` |
+| `target` | string | no | Destination when Okay is clicked (unless preempted by a `goto` in `onclose`) — `passage_id` or `'${expression}'` (see §4) |
+| `snapshot` | bool or string | no | Whether closing this popup via Okay creates a timeline snapshot. Defaults to `false` if absent. A string value means `true` *and* sets the timeline scrubber's label to that string in one step — overriding the destination passage's own `title` (the default label when `snapshot` is a bare `true`). A preempting `goto` inside `onclose` takes priority over this label — see `goto` above |
 
-Standard popup with body content:
+**Popup transaction model:** the popup's `content` is rendered against a sandboxed copy of the variable store as soon as the passage renders — nothing is committed to the live store yet, and showing/hiding the popup is a pure display toggle that needs no further evaluation. Clicking Okay commits the sandbox's pending `input` values, runs `onclose` against it, merges it onto the live store, and navigates to the resolved destination, all as one transaction. Clicking Cancel discards the sandbox untouched. One trade-off: a popup's content is evaluated even if the player never opens or accepts it, so a seeded random draw inside `content` is "spent" regardless — this is safe because nothing else can mutate the live store while a popup sits unopened on an already-rendered passage.
+
+Standard popup with body content and an Okay button:
 ```yaml
 - type: 'popup'
   label: 'Setup Instructions'
   content:
   - type: 'text'
     value: 'Place the hospital token on space 1 of the hospital track.'
-  onclose: 'Hospital2'
-  button: 'Begin'
+  okay: 'Begin'
+  target: 'Hospital2'
+  snapshot: true
+```
+
+Popup collecting a value via an `input` inside its content — guarded so it only auto-displays once (see the synthetic `{var}_submitted` pattern the extractor uses for this shape):
+```yaml
+- type: 'conditional'
+  if: '!feverheart_submitted'
+  then:
+  - type: 'popup'
+    content:
+    - type: 'text'
+      value: 'Enter total hearts collected...'
+    - type: 'input'
+      label: 'Total hearts'
+      var: 'feverheart'
+    okay: 'Continue'
+    target: 'Feverheart'
+    snapshot: true
+    onclose:
+    - type: 'assign'
+      var: 'feverheart_submitted'
+      expr: 'true'
 ```
 
 Layout-driven popup — body owned by the layout, no content nodes:
@@ -658,8 +696,7 @@ Layout-driven popup — body owned by the layout, no content nodes:
 - type: 'popup'
   layout: 'voting'
   label: 'restext://S4Kill2_006'  # "Click to start the vote..."
-  state_affecting: false
-  onclose: 'S4Kill3'
+  target: 'S4Kill3'
 ```
 
 Layout-driven popup with property bindings — content nodes bind values to layout properties at open time:
@@ -667,8 +704,8 @@ Layout-driven popup with property bindings — content nodes bind values to layo
 - type: 'popup'
   layout: 'end_of_generation'
   label: 'restext://Common_190'  # "Click here at the end of the round..."
-  state_affecting: true
-  onclose: 'ATOWSabotageIntro1'
+  snapshot: true
+  target: 'ATOWSabotageIntro1'
   content:
   - type: 'let'
     var: 'title'
@@ -696,54 +733,41 @@ Auto-display layout popup — no `label`, shown immediately when the passage ren
 
 ### `input`
 
-A player-clickable form that collects a value and navigates on submit. Can be cancelled without state change.
+A player-fillable field, rendered inline wherever it appears — directly in a passage, or inside a `popup`'s `content`. Implicitly required: it starts empty and editable when live; when the timeline is rewound to view history, it shows disabled and populated from that snapshot instead. There is no `onsubmit`/submit action of its own — any `link` in the same passage (or a popup's `okay` button) stays disabled until every currently-showing `input` has a valid value, and following it commits all of them to their bound variables as part of its own snapshot (see §6 `link`/`popup`).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `label` | string | yes | Button/link text shown before the form opens (string formatting — see §3) |
-| `style` | string | no | Visual style: `link` (default) or `button` |
-| `text` | string | yes | Instruction text displayed inside the form (string formatting — see §3) |
-| `input` | string | yes | `string` or `number` |
-| `var` | string | yes | Session variable to receive the submitted value |
-| `onsubmit` | string | yes | Destination after submission — `passage_id` or `'${expression}'` (see §4) |
+| `label` | string | yes | Formatted label shown inline with the field (string formatting — see §3) |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
+| `var` | string | yes | Session variable to receive the value |
+| `min` | int | no | Minimum accepted value. Only meaningful when `var`'s declared type is numeric |
+| `max` | int | no | Maximum accepted value. Only meaningful when `var`'s declared type is numeric |
+
+The field's value type (text vs. number) is **not** declared on the node — it's derived from `var`'s own declared type in the module's variable manifest (an integer-typed variable gets a number field; anything else gets a text field). There's nowhere a mismatch between the two could come from, since they're the same value.
 
 ```yaml
+- type: 'text'
+  value: 'Count up all heart tokens collected by ALL players. Enter the total here.'
 - type: 'input'
-  label: 'Enter total hearts collected...'
-  text: 'Count up all heart tokens collected by ALL players. Enter the total here.'
-  input: 'number'
+  label: 'Total hearts collected'
   var: 'charitytotal'
-  onsubmit: 'Feverheart'
-```
-
----
-
-### `prompt`
-
-An inline prompt — interrupts passage rendering until the player submits. Cannot be cancelled. Execution resumes immediately after the node.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `text` | string | yes | Instruction text (string formatting — see §3) |
-| `input` | string | yes | `string` or `number` |
-| `var` | string | yes | Session variable to receive the submitted value |
-
-```yaml
-- type: 'prompt'
-  text: 'Enter player name A.'
-  input: 'string'
-  var: 'nameA'
+  min: 0
+- type: 'link'
+  label: 'Continue'
+  target: 'Feverheart'
+  snapshot: true
 ```
 
 ---
 
 ### `goto`
 
-Unconditional navigation — no player interaction, no timeline snapshot.
+Unconditional navigation — no player interaction, no timeline snapshot of its own. A `goto` placed inside a `link`'s `onclick` or a `popup`'s `onclose` is the one exception: it preempts that action's own `target`, and if that action's own `snapshot` is truthy, the `goto`'s own `snapshot_label` (if set) takes priority over the enclosing `link`/`popup`'s own label for the resulting snapshot — see `link`/`popup` above.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `target` | string | yes | Destination `passage_id`, or `'${expression}'` resolving to one (see §4) |
+| `snapshot_label` | string | no | Custom label for the timeline scrubber entry, when this `goto` preempts a state-affecting `link`/`popup`'s target (see above). No effect on a plain `goto`, which never creates a snapshot |
 
 ```yaml
 - type: 'goto'
@@ -777,7 +801,7 @@ A visually-distinct content container. Optionally titled and collapsible.
 |---|---|---|---|
 | `title` | string | no | Section heading (string formatting — see §3) |
 | `collapsed` | bool | no | If `true`, renders collapsed; player can expand. Default: `false` |
-| `style` | string | no | One of: `section` (default), `panel`, `well`, `quote`, `setup` |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `panel`, `well`, `quote`, `setup`) |
 | `content` | list | yes | Content nodes |
 
 ```yaml
@@ -786,17 +810,18 @@ A visually-distinct content container. Optionally titled and collapsible.
   content:
   - type: 'text'
     value: 'Each player may now purchase one building from the market.'
-  - type: 'navigation'
+  - type: 'link'
     label: 'Continue...'
     target: 'BuildPhase2'
-    state_affecting: true
+    snapshot: true
 
 - type: 'section'
   style: 'setup'
   content:
   - type: 'text'
     value: '**SETUP**'
-  - type: 'paragraph_break'
+  - type: 'break'
+    style: 'paragraph'
   - type: 'text'
     value: 'Place the hospital token on space 1 of the hospital track.'
 ```
@@ -809,12 +834,13 @@ Evaluates conditions in order; renders the first matching branch, or the `else` 
 
 Two forms are used depending on the number of branches:
 
-**Flat form** — exactly one if-branch and no else: condition and body sit directly on the node.
+**Flat form** — exactly one if-branch, with an optional `else`: condition and body sit directly on the node, no `conditions:` wrapper needed.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `if` | string | yes | Condition expression (see §4) |
 | `then` | list | yes | Nodes rendered when the condition is true |
+| `else` | list | no | Nodes rendered when the condition is false |
 
 ```yaml
 - type: 'conditional'
@@ -823,9 +849,18 @@ Two forms are used depending on the number of branches:
   - type: 'assign'
     var: 'phase'
     expr: '"late"'
+
+- type: 'conditional'
+  if: 'nameA == ""'
+  then:
+  - type: 'text'
+    value: 'Enter your name.'
+  else:
+  - type: 'text'
+    value: 'Welcome back, {nameA}.'
 ```
 
-**Multi-branch form** — two or more if-branches, or any if-branch with an `else`: branches are in a `conditions` list.
+**Multi-branch form** — two or more if-branches: branches are in a `conditions` list.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -923,18 +958,19 @@ Records that the player has reached a named milestone. References an achievement
 
 A line break within a content block.
 
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
+
 ```yaml
 - type: 'break'
 ```
 
----
-
-### `paragraph_break`
-
-A paragraph separator.
+A paragraph separator (a larger visual gap than a plain break) is a `break` with `style: 'paragraph'` — module CSS decides what `style-paragraph` actually looks like; the engine doesn't distinguish them structurally.
 
 ```yaml
-- type: 'paragraph_break'
+- type: 'break'
+  style: 'paragraph'
 ```
 
 ---
@@ -964,16 +1000,17 @@ A generation-end sequence uses `section` for the summary and `checkpoint` for th
   content:
   - type: 'text'
     value: '**End of Generation 2**'
-  - type: 'paragraph_break'
+  - type: 'break'
+    style: 'paragraph'
   - type: 'text'
     value: 'Resolve all pending experiments before continuing.'
 - type: 'checkpoint'
   id: 'generation_2_complete'
   display: 'Generation 2'
-- type: 'navigation'
+- type: 'link'
   label: 'Continue to Generation 3'
   target: 'Gen3Start'
-  state_affecting: true
+  snapshot: true
 ```
 
 ---
@@ -1032,22 +1069,22 @@ popups:
 Layout-driven popups follow a different lifecycle from content popups:
 
 1. The engine evaluates any `let`, `conditional`, and `switch` nodes in the popup's `content` list. The resulting variable values are bound to the layout's named properties before display.
-2. The layout renders its own body using those properties. Standard content nodes (`text`, `navigation`, etc.) are not displayed.
+2. The layout renders its own body using those properties. Standard content nodes (`text`, `link`, etc.) are not displayed.
 3. The layout controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
-4. On completion, the engine navigates to `onclose` (if set) as a state-affecting transition. When `passageName` is a computed layout property (from a conditional `let: passageName`), the layout uses that value for navigation instead.
+4. On completion, the engine runs `onclose` (if any) and navigates to `target` (if set) as a state-affecting transition, same as an ordinary popup's Okay button (see §6 `popup`). When `passageName` is a computed layout property (from a conditional `let: passageName`), the layout uses that value for navigation instead.
 
 **Built-in popup layouts for MFW modules** (`MFW_Common_Assets`):
 
 | Layout name | Display trigger | Properties | Description |
 |---|---|---|---|
-| `voting` | Click (`label` required) | — | Countdown timer → simultaneous reveal of voting tokens; navigates `onclose` on "Bid Complete" |
-| `bidding` | Click (`label` required) | — | Countdown timer → simultaneous reveal of bid amounts; navigates `onclose` on "Bid Complete" |
-| `end_of_generation` | Auto or click | `title`, `completedRound`, `generation`, `passageName` | Full-screen End-of-Generation summary modal; updates progress bar if `completedRound ≥ 0`; navigates `onclose` or `passageName` on confirm |
+| `voting` | Click (`label` required) | — | Countdown timer → simultaneous reveal of voting tokens; navigates to `target` on "Bid Complete" |
+| `bidding` | Click (`label` required) | — | Countdown timer → simultaneous reveal of bid amounts; navigates to `target` on "Bid Complete" |
+| `end_of_generation` | Auto or click | `title`, `completedRound`, `generation`, `passageName` | Full-screen End-of-Generation summary modal; updates progress bar if `completedRound ≥ 0`; navigates `target` or `passageName` on confirm |
 | `setup` | Click (`label` required) | `_SetupImage` | Item-obtain setup panel; displays a setup image and instruction text with an ACCEPT button |
 
 For `voting` and `bidding`: both display a 3-count countdown (`1, 2, 3, Reveal`), then surface a "Reveal" button. The close/navigate action is hidden until players tap "Reveal". The distinction between modes is the animation and prompt text — the mechanics are identical.
 
-For `end_of_generation`: displays the `title` string and the passage `text` node(s) as the instruction body. The `completedRound` value (≥ 0) updates the app progress bar; `-1` skips the update. The modal can be triggered automatically (no `label`, used for top-level `S_OnEndOfGeneration` calls) or by a click (with `label`, used for `S_OnSetSpecialSetup` in expand-link fragments). Navigation target is `onclose` when set as a literal, or the `passageName` property (bound by conditional nodes in `nodes`) when computed at runtime.
+For `end_of_generation`: displays the `title` string and the passage `text` node(s) as the instruction body. The `completedRound` value (≥ 0) updates the app progress bar; `-1` skips the update. The modal can be triggered automatically (no `label`, used for top-level `S_OnEndOfGeneration` calls) or by a click (with `label`, used for `S_OnSetSpecialSetup` in expand-link fragments). Navigation target is `target` when set as a literal, or the `passageName` property (bound by conditional nodes in `nodes`) when computed at runtime.
 
 ---
 
@@ -1153,7 +1190,7 @@ A passage from *A Time of War*:
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: 'mws/0.3'
+format: 'mws/0.4'
 passage_id: 'BattleTime'
 title: 'BattleTime'
 layout: 'narration'
@@ -1193,7 +1230,8 @@ nodes:
   value: '{_rnd_BattleTime_1}'
   lets:
   - '_rnd_BattleTime_1'
-- type: 'paragraph_break'
+- type: 'break'
+  style: 'paragraph'
 # ATimeOfWar.cs:9288
 - type: 'text'
   value: 'restext://BattleTime_005' # "**To Battle**"
@@ -1201,15 +1239,16 @@ nodes:
 # ATimeOfWar.cs:9292
 - type: 'text'
   value: 'restext://BattleTime_006' # "All players take all their {icon:s3_weapontoken} tokens..."
-- type: 'paragraph_break'
+- type: 'break'
+  style: 'paragraph'
 # ATimeOfWar.cs:9320
-- type: 'navigation'
+- type: 'link'
   label: 'restext://BattleTime_010' # "Click to begin the battle..."
   target: 'BattleCompleteReturn'
-  state_affecting: true
+  snapshot: true
 - type: 'break'
 ```
 
 ---
 
-*MWS format v0.3 — Masterwork project.*
+*MWS format v0.4 — Masterwork project.*

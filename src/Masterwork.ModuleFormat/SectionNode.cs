@@ -9,7 +9,7 @@ public sealed record SectionNode : Node
     /// <summary>Optional section title, formatted like <see cref="TextNode.Value"/>.</summary>
     public string? Title { get; init; }
 
-    /// <summary>One of <c>section</c> (default), <c>panel</c>, <c>well</c>, <c>quote</c>, <c>setup</c> — an open, module-extensible vocabulary.</summary>
+    /// <summary>Open, module-extensible visual style vocabulary, styled entirely by module CSS.</summary>
     public string? Style { get; init; }
 
     /// <summary>Whether the section starts collapsed in the UI.</summary>

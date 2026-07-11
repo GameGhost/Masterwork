@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Masterwork.ModuleFormat;
 
 namespace Masterwork.Extractor;
 
@@ -6,10 +7,14 @@ namespace Masterwork.Extractor;
 /// Carries optional source-location context into the serializer.
 /// SourceRelativePath: relative path from the output dir to the .cs source file, e.g. "../file.cs".
 /// PassageFileMap: maps passage IDs to relative YAML filenames, e.g. "./00042-Name.mws.yaml".
+/// Variables: the module's discovered-variables dictionary (mutable, shared with the caller) —
+/// <see cref="V2Serializer.TransformInputAction"/> registers a synthetic guard variable into it
+/// while serializing an <c>OnGenerationBtn</c>-derived input popup (see its remarks).
 /// </summary>
 public record SerializationContext(
     string? SourceRelativePath,
-    IReadOnlyDictionary<string, string>? PassageFileMap
+    IReadOnlyDictionary<string, string>? PassageFileMap,
+    Dictionary<string, VarDef>? Variables = null
 );
 
 /// <summary>
@@ -34,7 +39,7 @@ public static partial class V2Serializer
 
         var d = new Dictionary<string, object?>
         {
-            ["format"] = "mws/0.3",
+            ["format"] = "mws/0.4",
             ["passage_id"] = passage.PassageId,
         };
         if (!string.IsNullOrEmpty(passage.Title) && passage.Title != passage.PassageId)
@@ -139,6 +144,30 @@ public static partial class V2Serializer
                 continue;
             }
 
+            // Pair a standalone ViewItemObtain.SetupPassagename assignment (SetupNotificationNode)
+            // with the styleScope("setupStyleEvnt", ...) block immediately following it at the top
+            // level of a passage. Cradle sets SetupPassagename right before that block to configure
+            // where the block's own popup navigates to on Accept — it isn't a standalone
+            // notification. (When the same pair instead appears inside a link(...)'s callback
+            // fragment, FragmentStitchPass folds them into an ExpandLinkNode and TransformPopup
+            // already merges them correctly; this handles the top-level case that bypasses that path.)
+            if (node is SetupNotificationNode standaloneSn)
+            {
+                var j = i + 1;
+                while (j < nodes.Count && nodes[j] is BreakNode or ParagraphBreakNode)
+                {
+                    j++;
+                }
+
+                if (j < nodes.Count && nodes[j] is SetupBlockNode pairedBlock)
+                {
+                    AddSrcSentinel(result, standaloneSn.SourceLine, ctx);
+                    result.Add(TransformSetupNotificationBlock(standaloneSn, pairedBlock, ctx));
+                    i = j;
+                    continue;
+                }
+            }
+
             // GotoMenuNode — app navigation is not a module concern; drop
             if (node is GotoMenuNode)
             {
@@ -224,16 +253,19 @@ public static partial class V2Serializer
                     : TransformPopup(expand, ctx);
                 break;
             case InputPromptNode input:
-                yield return TransformInputAction(input);
+                yield return TransformInputAction(input, ctx);
                 break;
             case GotoNode go:
                 yield return TransformGoto(go, ctx);
                 break;
             case SetupBlockNode setup:
             {
-                // Standalone setupStyle in a main passage → auto-display popup (no label, no onclose).
+                // Standalone setupStyle in a main passage → auto-display popup (no label, no target).
                 // Inside an expand-link fragment, SetupBlockNode is handled by TransformPopup instead.
-                var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
+                // Still needs an Okay button — this popup style always has an acknowledgement button
+                // in the original app, even with no destination passage (okay/target/onclose are all
+                // independently optional, so the popup just closes in place with no engine round-trip).
+                var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup", ["okay"] = "Accept" };
                 var sNodes = TransformNodeList(setup.Nodes, ctx);
                 if (sNodes.Count > 0)
                     {
@@ -263,7 +295,7 @@ public static partial class V2Serializer
                 yield return new() { ["type"] = "break" };
                 break;
             case ParagraphBreakNode:
-                yield return new() { ["type"] = "paragraph_break" };
+                yield return new() { ["type"] = "break", ["style"] = "paragraph" };
                 break;
             case CommentedBreakNode cb:
                 yield return new() { ["_commented_break"] = cb.IsParagraph ? "paragraph_break" : "break" };
@@ -410,16 +442,14 @@ public static partial class V2Serializer
     {
         var d = new Dictionary<string, object?>
         {
-            ["type"] = "navigation",
+            ["type"] = "link",
             ["label"] = link.Label,
             ["target"] = link.Target,
         };
         AddLinkHint(d, link.Target, ctx);
-        d["state_affecting"] = link.StateAffecting;
-        if (link.TimelineLabel is not null)
-        {
-            d["timeline_label"] = link.TimelineLabel;
-        }
+        // Unified field: a string implies snapshot=true and doubles as the label, so only emit the
+        // separate bool when there's no label to fold it into.
+        d["snapshot"] = link.TimelineLabel is not null ? link.TimelineLabel : link.StateAffecting;
 
         if (link.Nodes.Count > 0)
         {
@@ -452,10 +482,10 @@ public static partial class V2Serializer
         {
             var d = new Dictionary<string, object?>
             {
-                ["type"] = "navigation",
+                ["type"] = "link",
                 ["label"] = label,
                 ["target"] = singleGoto.Target,
-                ["state_affecting"] = stateAffecting,
+                ["snapshot"] = stateAffecting,
             };
             AddLinkHint(d, singleGoto.Target, ctx);
             return d;
@@ -501,7 +531,7 @@ public static partial class V2Serializer
             return cd;
         }
         // Fallback: shouldn't be reached given IsNavigationOnly precondition
-        return new Dictionary<string, object?> { ["type"] = "navigation", ["label"] = label, ["target"] = "", ["state_affecting"] = stateAffecting };
+        return new Dictionary<string, object?> { ["type"] = "link", ["label"] = label, ["target"] = "", ["snapshot"] = stateAffecting };
     }
 
     // ── Popup ─────────────────────────────────────────────────────────────
@@ -595,10 +625,22 @@ public static partial class V2Serializer
         d["label"] = expand.Label;
         if (onclose is not null)
         {
-            d["onclose"] = onclose;
+            // v0.3's bare-string `onclose` was purely a navigation target — v0.4 splits that into
+            // `target` (navigation) vs. `onclose` (a node list of logic run before it). This
+            // extraction path never produced onclose logic, only a destination, so it maps to `target`.
+            d["target"] = onclose;
+            d["okay"] = "Close";
             AddLinkHint(d, onclose, ctx);
         }
-        d["state_affecting"] = expand.StateAffecting;
+        else if (layout == "setup")
+        {
+            // A "setup" popup (ViewItemObtain notification) always has an acknowledgement button in
+            // the original app, even when this occurrence has no destination passage (SetupNotificationNode.NextPassage
+            // is null — the popup just closes in place, no engine round-trip needed since okay/target/onclose
+            // are all independently optional).
+            d["okay"] = "Accept";
+        }
+        d["snapshot"] = expand.StateAffecting;
 
         var transformed = TransformNodeList(childNodes, ctx);
         if (transformed.Count > 0)
@@ -611,22 +653,46 @@ public static partial class V2Serializer
 
     // ── Input action ──────────────────────────────────────────────────────
 
-    private static Dictionary<string, object?> TransformInputAction(InputPromptNode input)
+    // v0.1's InputPromptNode always came from Cradle's `OnGenerationBtn` idiom (a self-navigating
+    // "show a popup, take one value, resume the same passage" pattern — see PassageBodyVisitor's
+    // IsInputPromptIf/TryDetectInputPrompt). v0.4 has no standalone submit-triggered input action —
+    // this maps it onto the general input-inside-popup mechanism: a guarded, auto-display popup
+    // (guarded so it only shows once — testing the input's own variable for emptiness would be
+    // ambiguous, e.g. 0 is a legitimate real answer for a number input, so a synthetic
+    // `{var}_submitted` boolean is declared and guards it instead), containing the original prompt
+    // text and the input field, with Okay setting the guard and returning to the source passage.
+    private static Dictionary<string, object?> TransformInputAction(InputPromptNode input, SerializationContext? ctx = null)
     {
-        var d = new Dictionary<string, object?>
+        var guardVar = $"{input.StoreIn}_submitted";
+        ctx?.Variables?.TryAdd(guardVar, new VarDef { Name = guardVar, VarType = VarKind.Boolean });
+
+        var popup = new Dictionary<string, object?>
         {
-            ["type"] = "input",
-            ["label"] = input.PromptId,
-            ["text"] = input.Text,
-            ["input"] = input.InputType,
-            ["var"] = input.StoreIn,
+            ["type"] = "popup",
+            ["content"] = new List<Dictionary<string, object?>>
+            {
+                new() { ["type"] = "text", ["value"] = input.Text },
+                new() { ["type"] = "input", ["label"] = input.PromptId, ["var"] = input.StoreIn },
+            },
+            ["okay"] = "Continue",
+            ["onclose"] = new List<Dictionary<string, object?>>
+            {
+                new() { ["type"] = "assign", ["var"] = guardVar, ["expr"] = "true" },
+            },
+            ["snapshot"] = true,
         };
         if (input.ResumePassage is not null)
         {
-            d["onsubmit"] = input.ResumePassage;
+            popup["target"] = input.ResumePassage;
+            AddLinkHint(popup, input.ResumePassage, ctx);
         }
 
-        return d;
+        return new Dictionary<string, object?>
+        {
+            ["type"] = "conditional",
+            ["if"] = $"!{guardVar}",
+            ["then"] = new List<Dictionary<string, object?>> { popup },
+        };
     }
 
     // ── Goto ──────────────────────────────────────────────────────────────
@@ -809,12 +875,12 @@ public static partial class V2Serializer
             var label = modal.Instruction ?? "Continue";
             var navD = new Dictionary<string, object?>
             {
-                ["type"] = "navigation",
+                ["type"] = "link",
                 ["label"] = label,
                 ["target"] = modal.Next,
             };
             AddLinkHint(navD, modal.Next, ctx);
-            navD["state_affecting"] = true;
+            navD["snapshot"] = true;
             yield return navD;
         }
     }
@@ -840,14 +906,55 @@ public static partial class V2Serializer
         {
             var navD = new Dictionary<string, object?>
             {
-                ["type"] = "navigation",
+                ["type"] = "link",
                 ["label"] = "Continue",
                 ["target"] = sn.NextPassage,
             };
             AddLinkHint(navD, sn.NextPassage, ctx);
-            navD["state_affecting"] = true;
+            navD["snapshot"] = true;
             yield return navD;
         }
+    }
+
+    // Merges a standalone SetupPassagename assignment with the styleScope("setupStyleEvnt", ...)
+    // block immediately following it (see the call site comment in TransformNodeList) into one
+    // auto-display popup (no label). "Accept" is this popup style's Okay label in the original
+    // app — distinct from the ViewItemObtain-pickup-notification's own "Close" label, which is
+    // handled separately by TransformPopup for the inside-a-link-fragment case.
+    private static Dictionary<string, object?> TransformSetupNotificationBlock(
+        SetupNotificationNode sn, SetupBlockNode setupBlock, SerializationContext? ctx = null)
+    {
+        var content = new List<Dictionary<string, object?>>();
+        if (sn.Title is not null)
+        {
+            content.Add(new() { ["type"] = "text", ["value"] = $"**{sn.Title}**" });
+        }
+
+        if (sn.Text is not null)
+        {
+            content.Add(new() { ["type"] = "text", ["value"] = sn.Text });
+        }
+
+        content.AddRange(TransformNodeList(setupBlock.Nodes, ctx));
+
+        var d = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
+        if (content.Count > 0)
+        {
+            d["content"] = content;
+        }
+
+        // Okay is always present for this layout — Cradle's own "setup" popup always has an
+        // acknowledgement button, even when there's no explicit destination passage (it just falls
+        // through to whatever renders next, since target/onclose are independently optional).
+        d["okay"] = "Accept";
+        if (sn.NextPassage is not null)
+        {
+            d["target"] = sn.NextPassage;
+            AddLinkHint(d, sn.NextPassage, ctx);
+            d["snapshot"] = true;
+        }
+
+        return d;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

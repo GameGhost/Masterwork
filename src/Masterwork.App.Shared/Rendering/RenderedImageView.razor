@@ -5,11 +5,11 @@
 
 @if (_url is not null)
 {
-    <img src="@_url" alt="@Node.Asset" title="@Node.Asset" class="mws-image" />
+    <img src="@_url" alt="@(Node.Title ?? Node.Asset)" title="@(Node.Title ?? Node.Asset)" class="mws-image style-@(Node.Style ?? "default")" />
 }
 else
 {
-    <div class="mws-image-missing" title="@Node.Asset">[missing image: @Node.Asset]</div>
+    <div class="mws-image-missing style-@(Node.Style ?? "default")" title="@(Node.Title ?? Node.Asset)">[missing image: @Node.Asset]</div>
 }
 
 @code {

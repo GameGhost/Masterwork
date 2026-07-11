@@ -7,7 +7,7 @@
 @using Masterwork.ModuleFormat
 @inject IAssetResolver AssetResolver
 
-<p class="mws-text@AlignClass">@_rendered</p>
+<p class="mws-text@AlignClass style-@(Node.Style ?? "default")">@_rendered</p>
 
 @code {
     /// <summary>The text node to render.</summary>

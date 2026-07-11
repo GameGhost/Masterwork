@@ -1,34 +1,40 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
+@using System.Runtime.CompilerServices
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
+@* @key must identify each node instance uniquely within this render (so Blazor doesn't reuse a
+   component instance — and skip its OnInitialized[Async] — across genuinely different content; see
+   the RenderedPopupView auto-display bug this fixed). RenderedNode subtypes are records, so using a
+   node directly as the key would use *value* equality: two structurally-identical-but-distinct
+   nodes (e.g. two sibling {type: 'break', style: 'paragraph'} nodes, which carry no other data)
+   would collide as "the same key" and Blazor throws. RuntimeHelpers.GetHashCode gives a
+   per-object-instance identity hash instead, sidestepping the record's overridden equality. *@
 @foreach (var node in Nodes)
 {
+    var key = RuntimeHelpers.GetHashCode(node);
     @switch (node)
     {
         case RenderedText text:
-            <RenderedTextView Node="text" />
+            <RenderedTextView @key="key" Node="text" />
             break;
-        case RenderedBreak:
-            <RenderedBreakView />
-            break;
-        case RenderedParagraphBreak:
-            <RenderedParagraphBreakView />
+        case RenderedBreak brk:
+            <RenderedBreakView @key="key" Node="brk" />
             break;
         case RenderedImage image:
-            <RenderedImageView Node="image" />
+            <RenderedImageView @key="key" Node="image" />
             break;
         case RenderedSection section:
-            <RenderedSectionView Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
-        case RenderedNavigation nav:
-            <RenderedNavigationView Node="nav" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        case RenderedLink link:
+            <RenderedLinkView @key="key" Node="link" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedInput input:
-            <RenderedInputView Node="input" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedInputView @key="key" Node="input" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedPopup popup:
-            <RenderedPopupView Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedPopupView @key="key" Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
     }
 }

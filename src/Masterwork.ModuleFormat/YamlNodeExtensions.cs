@@ -21,9 +21,11 @@ namespace Masterwork.ModuleFormat;
 /// the same default as if the field were simply absent.
 /// </item>
 /// <item>
-/// <c>state_affecting</c>/<c>debug</c>/<c>collapsed</c> etc. that hold non-boolean text also
-/// throw <see cref="MwsParseException"/> — a silently-wrong default here would corrupt
+/// <c>debug</c>/<c>collapsed</c> etc. that hold non-boolean text also throw
+/// <see cref="MwsParseException"/> — a silently-wrong default here would corrupt
 /// navigation/timeline semantics, so this is treated as a hard error rather than a warning.
+/// <c>link</c>/<c>popup</c>'s own <c>snapshot</c> field is the deliberate exception: any non-bool
+/// text is accepted as a custom timeline label (see <see cref="GetBoolOrLabel"/>).
 /// </item>
 /// </list>
 /// </remarks>
@@ -95,6 +97,24 @@ internal static class YamlNodeExtensions
     }
 
     /// <summary>
+    /// Reads a field that's either a bare boolean or an arbitrary string, returning
+    /// <paramref name="defaultValue"/> (with no label) if absent. A string value means
+    /// <see langword="true"/> for behavior, with the string itself as the label — used by
+    /// <c>link</c>/<c>popup</c>'s <c>snapshot</c> field to fold a custom timeline label into the
+    /// same flag that decides whether a snapshot is created at all.
+    /// </summary>
+    public static (bool Value, string? Label) GetBoolOrLabel(this YamlMappingNode map, string key, YamlParseContext ctx, bool defaultValue = false)
+    {
+        var raw = map.GetString(key, ctx);
+        if (raw is null)
+        {
+            return (defaultValue, null);
+        }
+
+        return bool.TryParse(raw, out var value) ? (value, null) : (true, raw);
+    }
+
+    /// <summary>
     /// Reads an optional integer field, returning <see langword="null"/> if absent.
     /// </summary>
     /// <exception cref="MwsParseException">The field is present but not a valid integer.</exception>
@@ -107,6 +127,26 @@ internal static class YamlNodeExtensions
         }
 
         if (int.TryParse(raw, out var value))
+        {
+            return value;
+        }
+
+        throw new MwsParseException($"{ctx.Source}: field '{key}' must be an integer but found '{raw}'");
+    }
+
+    /// <summary>
+    /// Reads an optional 64-bit integer field, returning <see langword="null"/> if absent.
+    /// </summary>
+    /// <exception cref="MwsParseException">The field is present but not a valid integer.</exception>
+    public static long? GetLong(this YamlMappingNode map, string key, YamlParseContext ctx)
+    {
+        var raw = map.GetString(key, ctx);
+        if (raw is null)
+        {
+            return null;
+        }
+
+        if (long.TryParse(raw, out var value))
         {
             return value;
         }

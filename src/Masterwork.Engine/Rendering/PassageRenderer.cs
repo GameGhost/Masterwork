@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Masterwork.Engine.Rendering;
 
 /// <summary>
-/// <inheritdoc cref="IPassageRenderer"/> Popup content is left unevaluated (see the popup
-/// transaction model — content is only rendered when the popup opens); <see cref="RenderNodeList"/>
-/// is the entry point used for that deferred render, and for <c>include_passage</c>.
+/// <inheritdoc cref="IPassageRenderer"/> Popup content is rendered eagerly, alongside the rest of
+/// the passage, against a private sandbox clone of the store (see <see cref="RenderedPopup"/>'s
+/// remarks) — <see cref="RenderNodeList"/> is the entry point used for that, and for
+/// <c>include_passage</c>.
 /// </summary>
 public sealed class PassageRenderer : IPassageRenderer
 {
@@ -54,19 +55,24 @@ public sealed class PassageRenderer : IPassageRenderer
     }
 
     /// <inheritdoc/>
-    public IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module) =>
-        RenderNodes(nodes, new RenderContext(store, module));
+    public NodeListRenderResult RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module, string actionIdPrefix = "")
+    {
+        var ctx = new RenderContext(store, module, actionIdPrefix);
+        var rendered = RenderNodes(nodes, ctx);
+        return new NodeListRenderResult(rendered, ctx.Actions, ctx.PendingGoto, ctx.PendingGotoLabel);
+    }
 
-    private sealed class RenderContext(VariableStore store, LoadedModule module)
+    private sealed class RenderContext(VariableStore store, LoadedModule module, string actionIdPrefix = "")
     {
         public VariableStore Store { get; } = store;
         public LoadedModule Module { get; } = module;
         public List<RenderedAction> Actions { get; } = [];
         public List<RenderedCheckpoint> Checkpoints { get; } = [];
         public string? PendingGoto { get; set; }
+        public string? PendingGotoLabel { get; set; }
 
         private int _actionCounter;
-        public string NextActionId(string prefix) => $"{prefix}_{_actionCounter++}";
+        public string NextActionId(string prefix) => $"{actionIdPrefix}{prefix}_{_actionCounter++}";
     }
 
     private List<RenderedNode> RenderNodes(IReadOnlyList<Node> nodes, RenderContext ctx)
@@ -88,19 +94,16 @@ public sealed class PassageRenderer : IPassageRenderer
         switch (node)
         {
             case TextNode t:
-                output.Add(new RenderedText(ctx.Store.ExpandTemplate(t.Value), t.Align));
+                output.Add(new RenderedText(ctx.Store.ExpandTemplate(t.Value), t.Align) { Style = t.Style });
                 break;
-            case BreakNode:
-                output.Add(new RenderedBreak());
-                break;
-            case ParagraphBreakNode:
-                output.Add(new RenderedParagraphBreak());
+            case BreakNode b:
+                output.Add(new RenderedBreak { Style = b.Style });
                 break;
             case ImageNode img:
-                output.Add(new RenderedImage(img.Asset, img.Size, img.Align));
+                output.Add(new RenderedImage(img.Asset, img.Size, img.Align) { Title = ExpandOrNull(img.Title, ctx.Store), Style = img.Style });
                 break;
             case SectionNode s:
-                output.Add(new RenderedSection(ExpandOrNull(s.Title, ctx.Store), s.Style, s.Collapsed, RenderNodes(s.Content, ctx)));
+                output.Add(new RenderedSection(ExpandOrNull(s.Title, ctx.Store), s.Collapsed, RenderNodes(s.Content, ctx)) { Style = s.Style });
                 break;
             case LetNode let:
                 ctx.Store.SetLetVariable(let.Var, _evaluator.Evaluate(let.Expr, ctx.Store));
@@ -108,8 +111,8 @@ public sealed class PassageRenderer : IPassageRenderer
             case AssignNode assign:
                 ctx.Store.SetSessionVariable(assign.Var, _evaluator.Evaluate(assign.Expr, ctx.Store));
                 break;
-            case NavigationNode nav:
-                RenderNavigation(nav, ctx, output);
+            case LinkNode link:
+                RenderLink(link, ctx, output);
                 break;
             case PopupNode popup:
                 RenderPopup(popup, ctx, output);
@@ -119,6 +122,7 @@ public sealed class PassageRenderer : IPassageRenderer
                 break;
             case GotoNode go:
                 ctx.PendingGoto = ResolveTargetNow(go.Target, ctx);
+                ctx.PendingGotoLabel = ExpandOrNull(go.SnapshotLabel, ctx.Store);
                 break;
             case IncludePassageNode inc:
                 var targetId = ResolveTargetNow(inc.Target, ctx);
@@ -158,24 +162,20 @@ public sealed class PassageRenderer : IPassageRenderer
                 // Achievement triggers are deferred to Phase 3; no-op at runtime.
                 _logger.LogDebug("Skipping 'record' node (achievement triggers deferred to Phase 3): {Id}", rec.Id);
                 break;
-            case PromptNode:
-                // Spec'd but not yet emitted by the extractor; no real passages exercise this path.
-                _logger.LogDebug("Skipping 'prompt' node (not yet implemented)");
-                break;
         }
     }
 
-    private void RenderNavigation(NavigationNode nav, RenderContext ctx, List<RenderedNode> output)
+    private void RenderLink(LinkNode link, RenderContext ctx, List<RenderedNode> output)
     {
-        var rendered = new RenderedNavigation
+        var rendered = new RenderedLink
         {
-            Id = ctx.NextActionId("nav"),
-            Label = ctx.Store.ExpandTemplate(nav.Label),
-            Style = nav.Style,
-            Target = nav.Target,
-            StateAffecting = nav.StateAffecting,
-            TimelineLabel = nav.TimelineLabel,
-            OnClickRaw = nav.OnClick,
+            Id = ctx.NextActionId("link"),
+            Style = link.Style,
+            Label = ctx.Store.ExpandTemplate(link.Label),
+            Target = link.Target,
+            StateAffecting = link.StateAffecting,
+            SnapshotLabel = ExpandOrNull(link.SnapshotLabel, ctx.Store),
+            OnClickRaw = link.OnClick,
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -183,17 +183,29 @@ public sealed class PassageRenderer : IPassageRenderer
 
     private void RenderPopup(PopupNode popup, RenderContext ctx, List<RenderedNode> output)
     {
+        // Rendered eagerly (not deferred until the popup opens) against a sandboxed clone, so
+        // showing/hiding the popup is a pure UI concern — see RenderedPopup's remarks. The sandbox
+        // isn't merged into the live store until GameSession.ClosePopupAsync commits it on Accept.
+        var id = ctx.NextActionId("popup");
+        var sandbox = ctx.Store.Clone();
+        var contentResult = RenderNodeList(popup.Content, sandbox, ctx.Module, actionIdPrefix: $"{id}_");
+
         var rendered = new RenderedPopup
         {
-            Id = ctx.NextActionId("popup"),
-            Label = ExpandOrNull(popup.Label, ctx.Store),
+            Id = id,
             Style = popup.Style,
+            Label = ExpandOrNull(popup.Label, ctx.Store),
             Layout = popup.Layout,
             AutoDisplay = popup.Label is null,
-            RawContent = popup.Content,
-            OnClose = popup.OnClose,
-            Button = popup.Button,
+            Content = contentResult.Nodes,
+            Actions = contentResult.Actions,
+            Sandbox = sandbox,
+            Okay = ExpandOrNull(popup.Okay, ctx.Store),
+            Cancel = ExpandOrNull(popup.Cancel, ctx.Store),
+            OnCloseRaw = popup.OnClose,
+            Target = popup.Target,
             StateAffecting = popup.StateAffecting,
+            SnapshotLabel = ExpandOrNull(popup.SnapshotLabel, ctx.Store),
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -204,15 +216,30 @@ public sealed class PassageRenderer : IPassageRenderer
         var rendered = new RenderedInput
         {
             Id = ctx.NextActionId("input"),
-            Label = ctx.Store.ExpandTemplate(input.Label),
             Style = input.Style,
-            Text = ctx.Store.ExpandTemplate(input.Text),
-            InputType = input.InputType,
+            Label = ctx.Store.ExpandTemplate(input.Label),
             Var = input.Var,
-            OnSubmit = input.OnSubmit,
+            InputType = ResolveInputType(input.Var, ctx),
+            Min = input.Min,
+            Max = input.Max,
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
+    }
+
+    // input's value type has no YAML field of its own — it's derived from the bound variable's own
+    // declared type, since the two must agree anyway (there's nowhere else a mismatch could come
+    // from). A variable that isn't declared at all falls back to String rather than a hard load
+    // error, matching this codebase's general warn-and-degrade-gracefully pattern.
+    private InputValueType ResolveInputType(string varName, RenderContext ctx)
+    {
+        if (!ctx.Module.Variables.TryGetValue(varName, out var varDef))
+        {
+            _logger.LogWarning("input node binds to undeclared variable '{VarName}'; defaulting to string input", varName);
+            return InputValueType.String;
+        }
+
+        return varDef.VarType == VarKind.Integer ? InputValueType.Number : InputValueType.String;
     }
 
     private void RenderForEach(ForEachNode fe, RenderContext ctx, List<RenderedNode> output)
@@ -277,11 +304,10 @@ public sealed class PassageRenderer : IPassageRenderer
     // constant/comment on GameSession.ResolveTarget (masterwork-plan-rev14.md Q24).
     private const string ModuleEntrypointTarget = "${module::entrypoint}";
 
-    // Resolves a target/onclose/onsubmit field immediately: strips the "${...}" wrapper and
-    // evaluates it if present, otherwise treats it as a literal passage_id. Used for `goto` and
-    // `include_passage`, which must resolve at render time. navigation.Target, input.Onsubmit and
-    // popup.Onclose stay raw in the rendered output — the App resolves them at follow/submit/close
-    // time (see RenderedNavigation.Target and friends).
+    // Resolves a target field immediately: strips the "${...}" wrapper and evaluates it if present,
+    // otherwise treats it as a literal passage_id. Used for `goto` and `include_passage`, which must
+    // resolve at render time. link.Target and popup.Target stay raw in the rendered output —
+    // GameSession resolves them at follow/close time (see RenderedLink.Target and friends).
     private string ResolveTargetNow(string raw, RenderContext ctx) =>
         raw switch
         {

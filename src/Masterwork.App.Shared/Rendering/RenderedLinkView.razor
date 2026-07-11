@@ -1,15 +1,15 @@
-﻿@namespace Masterwork.App.Shared.Rendering
+@namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-<button type="button" class="mws-nav style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@IsRewound" @onclick="HandleClick">
+<button type="button" class="mws-link style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@(IsRewound || !Session.AreCurrentInputsValid())" @onclick="HandleClick">
     @Node.Label
 </button>
 
 @code {
-    /// <summary>The navigation node to render.</summary>
+    /// <summary>The link node to render.</summary>
     [Parameter, EditorRequired]
-    public RenderedNavigation Node { get; set; } = null!;
+    public RenderedLink Node { get; set; } = null!;
 
     /// <summary>The active session — following the link calls <see cref="GameSession.FollowLinkAsync"/> directly.</summary>
     [Parameter, EditorRequired]
@@ -25,7 +25,7 @@
 
     private async Task HandleClick()
     {
-        if (IsRewound)
+        if (IsRewound || !Session.AreCurrentInputsValid())
         {
             return;
         }

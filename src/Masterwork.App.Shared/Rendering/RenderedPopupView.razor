@@ -1,4 +1,4 @@
-﻿@namespace Masterwork.App.Shared.Rendering
+@namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
@@ -11,21 +11,28 @@
 }
 else
 {
-    <div class="mws-popup-overlay layout-@(Node.Layout ?? "default")">
+    <div class="mws-popup-overlay layout-@(Node.Layout ?? "default") style-@(Node.Style ?? "default")">
         @switch (Node.Layout)
         {
             case "voting":
-                <VotingPopupContent Content="_content" Label="Cast your vote" Session="Session" OnClosed="Close" />
+                <VotingPopupContent Content="Node.Content" Label="Cast your vote" Session="Session" OnClosed="Accept" />
                 break;
             case "bidding":
-                <VotingPopupContent Content="_content" Label="Place your bid" Session="Session" OnClosed="Close" />
+                <VotingPopupContent Content="Node.Content" Label="Place your bid" Session="Session" OnClosed="Accept" />
                 break;
             default:
                 @* end_of_generation / setup / no named layout: rendered as plain content for now —
                    named-layout-specific chrome (progress bar binding, ACCEPT button styling, etc.)
                    is a follow-up; see masterwork-plan Q11. *@
-                <NodeListView Nodes="_content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
-                <button type="button" @onclick="Close">@(Node.Button ?? "Close")</button>
+                <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                @if (Node.Okay is not null)
+                {
+                    <button type="button" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
+                }
+                @if (Node.Cancel is not null)
+                {
+                    <button type="button" @onclick="Cancel">@Node.Cancel</button>
+                }
                 break;
         }
     </div>
@@ -36,7 +43,7 @@ else
     [Parameter, EditorRequired]
     public RenderedPopup Node { get; set; } = null!;
 
-    /// <summary>The active session — opening/closing calls <see cref="GameSession.OpenPopupAsync"/>/<see cref="GameSession.ClosePopupAsync"/> directly.</summary>
+    /// <summary>The active session — Accept calls <see cref="GameSession.ClosePopupAsync"/> directly; opening/cancelling never needs an engine call (see <see cref="RenderedPopup"/>'s remarks).</summary>
     [Parameter, EditorRequired]
     public GameSession Session { get; set; } = null!;
 
@@ -48,34 +55,35 @@ else
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
 
-    private IReadOnlyList<RenderedNode> _content = [];
-
     private bool IsOpen => Session.ViewState.ExpandedPopups.Contains(Node.Id);
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         if (Node.AutoDisplay && !IsRewound && !IsOpen)
         {
-            await Open();
+            Open();
         }
     }
 
-    private async Task Open()
+    private void Open()
     {
         if (IsRewound)
         {
             return;
         }
 
-        var result = await Session.OpenPopupAsync(Node.Id);
-        _content = result.Content;
-        StateHasChanged();
+        Session.ViewState.ExpandedPopups.Add(Node.Id);
     }
 
-    private async Task Close()
+    private async Task Accept()
     {
-        await Session.ClosePopupAsync(Node.Id);
-        _content = [];
+        await Session.ClosePopupAsync(Node.Id, accept: true);
+        await OnStateChanged.InvokeAsync();
+    }
+
+    private async Task Cancel()
+    {
+        Session.ViewState.ExpandedPopups.Remove(Node.Id);
         await OnStateChanged.InvokeAsync();
     }
 }

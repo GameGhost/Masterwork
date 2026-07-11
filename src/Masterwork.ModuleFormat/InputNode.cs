@@ -1,26 +1,33 @@
 namespace Masterwork.ModuleFormat;
 
-/// <summary>A player-clickable form that collects a value and can be cancelled. The <c>type: input</c> node.</summary>
+/// <summary>
+/// A player-fillable field, rendered inline wherever it appears (in a passage or inside a
+/// <c>popup</c>'s content). Implicitly required — the field starts empty and any <c>link</c> in the
+/// same passage (or a popup's <c>okay</c> action) stays disabled until every <c>input</c> currently
+/// showing has a valid value, at which point following that link commits all of them to their
+/// bound variables as part of its own snapshot. The <c>type: input</c> node.
+/// </summary>
 public sealed record InputNode : Node
 {
     /// <inheritdoc/>
     public override string Type => "input";
 
-    /// <summary>Formatted label for the button/link that opens the form.</summary>
+    /// <summary>Formatted label shown inline with the field.</summary>
     public required string Label { get; init; }
 
-    /// <summary>One of <c>link</c> or <c>button</c> — an open, module-extensible vocabulary.</summary>
+    /// <summary>Open, module-extensible visual style vocabulary, styled entirely by module CSS.</summary>
     public string? Style { get; init; }
 
-    /// <summary>Formatted instruction text shown inside the form.</summary>
-    public required string Text { get; init; }
-
-    /// <summary>The kind of value collected. Unrecognized values are a hard module load error — see <see cref="Masterwork.ModuleFormat.InputValueType"/>.</summary>
-    public required InputValueType InputType { get; init; }
-
-    /// <summary>Session variable that receives the submitted value.</summary>
+    /// <summary>
+    /// Session variable that receives the value. The field's value type (string vs. number) is
+    /// derived from this variable's own declared type — there is no separate type declaration on
+    /// the node itself.
+    /// </summary>
     public required string Var { get; init; }
 
-    /// <summary>Target passage_id, or <c>"${expr}"</c>, navigated to after submission.</summary>
-    public required string OnSubmit { get; init; }
+    /// <summary>Minimum accepted value. Only meaningful when <see cref="Var"/>'s declared type is numeric; otherwise ignored.</summary>
+    public long? Min { get; init; }
+
+    /// <summary>Maximum accepted value. Only meaningful when <see cref="Var"/>'s declared type is numeric; otherwise ignored.</summary>
+    public long? Max { get; init; }
 }

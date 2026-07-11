@@ -122,6 +122,11 @@ partial class Program
 
         Console.WriteLine($"Extracted {passages.Count} passages.");
 
+        // Fetched now (not after serialization) so the mutable dictionary can be threaded into each
+        // passage's SerializationContext below — TransformInputAction registers synthetic guard
+        // variables into it while serializing OnGenerationBtn-derived input popups.
+        var vars = extractor.GetDiscoveredVariables();
+
         // Flag passages with no inbound references
         var referencedIds = CollectReferencedPassageIds(passages);
         var isolated = passages
@@ -200,7 +205,8 @@ partial class Program
                 : null;
             var ctx = new SerializationContext(
                 SourceRelativePath: relSourcePath,
-                PassageFileMap: passageFileMap
+                PassageFileMap: passageFileMap,
+                Variables: vars
             );
             var dict = V2Serializer.ToDict(passage, ctx);
             if (!excludedFromRestext.Contains(passage.PassageId))
@@ -272,7 +278,6 @@ partial class Program
         WriteRestextFile(restext, restextOutDir);
 
         // Write variables manifest
-        var vars = extractor.GetDiscoveredVariables();
         WriteVarsManifest(vars, variablesOutDir, serializer);
 
         // Write extraction report

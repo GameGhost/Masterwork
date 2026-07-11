@@ -1,2 +1,10 @@
-﻿@namespace Masterwork.App.Shared.Rendering
-<br />
+@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+
+<br class="mws-break style-@(Node.Style ?? "default")" />
+
+@code {
+    /// <summary>The break node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedBreak Node { get; set; } = null!;
+}

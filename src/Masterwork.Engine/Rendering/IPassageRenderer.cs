@@ -17,8 +17,12 @@ public interface IPassageRenderer
     PassageRenderResult Render(MwsPassageDoc passage, VariableStore store, LoadedModule module, IReadOnlySet<string> visitedPassageIds);
 
     /// <summary>
-    /// Renders a raw node list in isolation — used for popup content on open, and internally for
-    /// <c>include_passage</c> inlining.
+    /// Renders a raw node list in isolation — used for popup content on open, a <c>link</c>'s
+    /// <c>onclick</c>, a popup's <c>onclose</c>, and <c>include_passage</c> inlining.
     /// </summary>
-    IReadOnlyList<RenderedNode> RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module);
+    /// <param name="actionIdPrefix">
+    /// Prefixed onto every action ID produced by this render, so IDs from a nested render (e.g.
+    /// popup content) can't collide with the enclosing passage's own action IDs.
+    /// </param>
+    NodeListRenderResult RenderNodeList(IReadOnlyList<Node> nodes, VariableStore store, LoadedModule module, string actionIdPrefix = "");
 }

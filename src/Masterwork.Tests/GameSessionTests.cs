@@ -21,10 +21,10 @@ public class GameSessionTests
             nodes:
             - type: 'text'
               value: 'Welcome'
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -52,10 +52,10 @@ public class GameSessionTests
             - type: 'assign'
               var: 'round'
               expr: '1'
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -67,10 +67,10 @@ public class GameSessionTests
               expr: '2'
             - type: 'text'
               value: 'Round {round}'
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P3'
-              state_affecting: true
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -82,9 +82,9 @@ public class GameSessionTests
             """,
         ]);
         var session = new GameSession(module, masterSeed: 1);
-        var nav1 = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var nav1 = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         await session.FollowLinkAsync(nav1);
-        var nav2 = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var nav2 = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         await session.FollowLinkAsync(nav2);
         return (session, module);
     }
@@ -102,10 +102,11 @@ public class GameSessionTests
             nodes:
             - type: 'input'
               label: 'Enter name'
-              text: 'Type your name'
-              input: 'string'
               var: 'playerName'
-              onsubmit: 'P2'
+            - type: 'link'
+              label: 'Submit'
+              target: 'P2'
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -116,6 +117,48 @@ public class GameSessionTests
               value: 'Hello {playerName}'
             """,
         ]);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    private static GameSession MakePopupWithInputSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Open'
+              snapshot: true
+              target: 'P2'
+              okay: 'Continue'
+              content:
+              - type: 'input'
+                label: 'Score'
+                var: 'score'
+                min: 0
+                max: 10
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Score was {score}'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              score:
+                type: 'int'
+                default: 0
+            """);
         return new GameSession(module, masterSeed: 1);
     }
 
@@ -135,8 +178,8 @@ public class GameSessionTests
               expr: '1'
             - type: 'popup'
               label: 'Open'
-              state_affecting: true
-              onclose: 'P2'
+              snapshot: true
+              target: 'P2'
               content:
               - type: 'assign'
                 var: 'round'
@@ -185,7 +228,7 @@ public class GameSessionTests
     public async Task FollowLink_StateAffecting_CreatesSnapshot()
     {
         var (session, _) = MakeSimpleSession();
-        var navId = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         await session.FollowLinkAsync(navId);
         Assert.Equal(1, session.HistoryIndex);
         Assert.Equal(2, session.Timeline.Count);
@@ -210,10 +253,10 @@ public class GameSessionTests
             - 'Begins-Here'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P2'
-              state_affecting: false
+              snapshot: false
             """,
             """
             format: 'mws/0.3'
@@ -223,7 +266,7 @@ public class GameSessionTests
             """,
         ]);
         var session = new GameSession(module, masterSeed: 1);
-        var navId = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         var countBefore = session.Timeline.Count;
 
         await session.FollowLinkAsync(navId);
@@ -235,9 +278,171 @@ public class GameSessionTests
     public async Task FollowLink_RendersNewPassage()
     {
         var (session, _) = MakeSimpleSession();
-        var navId = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         var result = await session.FollowLinkAsync(navId);
         Assert.Equal("P2", result.PassageId);
+    }
+
+    [Fact]
+    public async Task FollowLink_StateAffecting_DisplayLabel_DefaultsToDestinationPassageTitle()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'The Second Passage'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("The Second Passage", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task FollowLink_StateAffecting_DisplayLabel_FallsBackToPassageId_WhenNoTitle()
+    {
+        var (session, _) = MakeSimpleSession();
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("P2", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task FollowLink_TimelineLabel_OverridesDestinationPassageTitle()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: 'You chose to lie'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'The Second Passage'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("You chose to lie", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task FollowLink_PreemptingGotoTimelineLabel_OverridesLinkTimelineLabel()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: 'link label'
+              onclick:
+              - type: 'goto'
+                target: 'P3'
+                snapshot_label: 'goto label'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P3'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        var result = await session.FollowLinkAsync(navId);
+
+        Assert.Equal("P3", result.PassageId);
+        Assert.Equal("goto label", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task FollowLink_PreemptingGotoWithNoLabel_FallsBackToLinkTimelineLabel()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: 'link label'
+              onclick:
+              - type: 'goto'
+                target: 'P3'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P3'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        var result = await session.FollowLinkAsync(navId);
+
+        Assert.Equal("P3", result.PassageId);
+        Assert.Equal("link label", session.Current.DisplayLabel);
     }
 
     [Fact]
@@ -252,10 +457,10 @@ public class GameSessionTests
             - 'Begins-Here'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: '${nextPsg}'
-              state_affecting: true
+              snapshot: true
               onclick:
               - type: 'assign'
                 var: 'nextPsg'
@@ -271,7 +476,7 @@ public class GameSessionTests
             """,
         ]);
         var session = new GameSession(module, masterSeed: 1);
-        var navId = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
 
         var result = await session.FollowLinkAsync(navId);
 
@@ -296,10 +501,10 @@ public class GameSessionTests
             - type: 'assign'
               var: 'b'
               expr: '2'
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -309,7 +514,7 @@ public class GameSessionTests
             """,
         ]);
         var session = new GameSession(module, masterSeed: 1);
-        var navId = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single().Id;
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
         var countBefore = session.Timeline.Count;
 
         await session.FollowLinkAsync(navId);
@@ -438,7 +643,7 @@ public class GameSessionTests
         var (session, _) = await MakeThreeStepSessionAsync();
         session.StepBack();
         session.ResumeFromHere();
-        var nav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single();
+        var nav = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
         var countBefore = session.Timeline.Count;
 
         await session.FollowLinkAsync(nav.Id);
@@ -512,10 +717,10 @@ public class GameSessionTests
               id: 'cp1'
               display: 'Round 1 Complete'
               diagnostic: 'round_1_done'
-            - type: 'navigation'
+            - type: 'link'
               label: 'Go'
               target: 'P2'
-              state_affecting: true
+              snapshot: true
             """,
             """
             format: 'mws/0.3'
@@ -580,30 +785,51 @@ public class GameSessionTests
     }
 
     [Fact]
-    public async Task SubmitInput_StoresValueInVar()
+    public async Task FollowLink_CommitsInputDraftToVar()
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input.Id, "Alice");
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+
+        await session.FollowLinkAsync(link.Id);
+
         Assert.Equal("Alice", session.Current.Variables["playerName"].AsString());
     }
 
     [Fact]
-    public async Task SubmitInput_CreatesInputReceivedSnapshot()
+    public async Task FollowLink_WithInputCommit_CreatesChoiceSnapshot()
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input.Id, "Alice");
-        Assert.Equal(SnapshotKind.InputReceived, session.Current.Kind);
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(SnapshotKind.Choice, session.Current.Kind);
     }
 
     [Fact]
-    public async Task SubmitInput_NavigatesToOnsubmit()
+    public async Task FollowLink_WithInputCommit_NavigatesToTarget()
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        var result = await session.SubmitInputAsync(input.Id, "Alice");
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+
+        var result = await session.FollowLinkAsync(link.Id);
+
         Assert.Equal("P2", result.PassageId);
+    }
+
+    [Fact]
+    public async Task FollowLink_WithInvalidInput_Throws()
+    {
+        var session = MakeInputSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.FollowLinkAsync(link.Id));
     }
 
     [Fact]
@@ -611,7 +837,9 @@ public class GameSessionTests
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input.Id, "Alice");
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+        await session.FollowLinkAsync(link.Id);
 
         session.StepBack();
 
@@ -623,12 +851,16 @@ public class GameSessionTests
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input.Id, "Alice");
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+        await session.FollowLinkAsync(link.Id);
         session.StepBack();
         session.ResumeFromHere();
 
         var input2 = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input2.Id, "Bob");
+        var link2 = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input2.Id, "Bob");
+        await session.FollowLinkAsync(link2.Id);
 
         Assert.Equal("Bob", session.Current.Variables["playerName"].AsString());
     }
@@ -638,7 +870,9 @@ public class GameSessionTests
     {
         var session = MakeInputSession();
         var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
-        await session.SubmitInputAsync(input.Id, "Alice");
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "Alice");
+        await session.FollowLinkAsync(link.Id);
 
         session.StepBack();
         session.StepForward();
@@ -648,15 +882,6 @@ public class GameSessionTests
     }
 
     // ── View state ───────────────────────────────────────────────────────────
-
-    [Fact]
-    public async Task ExpandPopup_SetInViewState()
-    {
-        var session = MakePopupSession();
-        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
-        await session.OpenPopupAsync(popup.Id);
-        Assert.Contains(popup.Id, session.ViewState.ExpandedPopups);
-    }
 
     [Fact]
     public async Task ViewState_ResetOnStepBack()
@@ -670,14 +895,125 @@ public class GameSessionTests
     // ── Popup transaction ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Popup_ContentEvaluatedOnOpen()
+    public async Task PopupAccept_StateAffecting_DisplayLabel_DefaultsToDestinationPassageTitle()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              target: 'P2'
+              okay: 'Continue'
+              content: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'The Second Passage'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("The Second Passage", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task PopupAccept_TimelineLabel_OverridesDestinationPassageTitle()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: 'popup label'
+              target: 'P2'
+              okay: 'Continue'
+              content: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'The Second Passage'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("popup label", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public async Task PopupAccept_PreemptingGotoTimelineLabel_OverridesPopupTimelineLabel()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: 'popup label'
+              target: 'P2'
+              okay: 'Continue'
+              content: []
+              onclose:
+              - type: 'goto'
+                target: 'P3'
+                snapshot_label: 'goto label'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P3'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("P3", result.PassageId);
+        Assert.Equal("goto label", session.Current.DisplayLabel);
+    }
+
+    [Fact]
+    public void Popup_ContentEvaluatedEagerly_NotYetCommittedToLiveStore()
     {
         var session = MakePopupSession();
         var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
 
-        var opened = await session.OpenPopupAsync(popup.Id);
-
-        Assert.Contains(opened.Content, n => n is RenderedText t && t.Value == "popup body");
+        // Available immediately — no engine call needed to "open" the popup.
+        Assert.Contains(popup.Content, n => n is RenderedText t && t.Value == "popup body");
         // Not yet committed to the live store: the GameStart snapshot predates P1's own render
         // (so it may not have "round" at all yet), but it must not show the popup's pending value.
         Assert.False(session.Current.Variables.TryGetValue("round", out var v) && v.AsInt() == 99);
@@ -688,12 +1024,105 @@ public class GameSessionTests
     {
         var session = MakePopupSession();
         var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
-        await session.OpenPopupAsync(popup.Id);
 
-        var result = await session.ClosePopupAsync(popup.Id);
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
 
         Assert.Equal("P2", result.PassageId);
         Assert.Equal(99L, session.Current.Variables["round"].AsInt());
+    }
+
+    [Fact]
+    public async Task Popup_CancelDiscardsStateAndDoesNotNavigate()
+    {
+        var session = MakePopupSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: false);
+
+        Assert.Equal("P1", result.PassageId);
+        Assert.False(session.Current.Variables.TryGetValue("round", out var v) && v.AsInt() == 99);
+    }
+
+    // ── Popup-content input (action lookup, validity, Okay/Cancel) ────────────
+
+    [Fact]
+    public async Task PopupContentInput_IsReachableViaClosePopup()
+    {
+        // Regression test for the popup-content action-lookup bug: FindAction<T> must search a
+        // popup's own actions, not just the passage-level ones, since popup content (including any
+        // input nodes it contains) is rendered against its own sandboxed action-ID space.
+        var session = MakePopupWithInputSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var input = Assert.Single(popup.Actions.OfType<RenderedInput>());
+        session.UpdateInputDraft(input.Id, "5");
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("P2", result.PassageId);
+        Assert.Equal(5L, session.Current.Variables["score"].AsInt());
+    }
+
+    [Fact]
+    public async Task PopupOkay_WithoutInputDraft_Throws()
+    {
+        var session = MakePopupWithInputSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => session.ClosePopupAsync(popup.Id, accept: true));
+    }
+
+    [Fact]
+    public async Task PopupCancel_DoesNotRequireValidInput()
+    {
+        var session = MakePopupWithInputSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: false);
+
+        Assert.Equal("P1", result.PassageId);
+    }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("10", true)]
+    [InlineData("-1", false)]
+    [InlineData("11", false)]
+    [InlineData("not a number", false)]
+    [InlineData(null, false)]
+    public void IsInputValid_EnforcesMinMax(string? draft, bool expectedValid)
+    {
+        var session = MakePopupWithInputSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var input = Assert.Single(popup.Actions.OfType<RenderedInput>());
+        if (draft is not null)
+        {
+            session.UpdateInputDraft(input.Id, draft);
+        }
+
+        Assert.Equal(expectedValid, session.IsInputValid(input));
+    }
+
+    [Fact]
+    public void AreCurrentInputsValid_FalseUntilInputFilled_TrueAfter()
+    {
+        var session = MakeInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+
+        Assert.False(session.AreCurrentInputsValid());
+
+        session.UpdateInputDraft(input.Id, "Alice");
+
+        Assert.True(session.AreCurrentInputsValid());
+    }
+
+    [Fact]
+    public void FollowLink_DerivesNumberInputType_FromDeclaredVariableType()
+    {
+        var session = MakePopupWithInputSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var input = Assert.Single(popup.Actions.OfType<RenderedInput>());
+
+        Assert.Equal(InputValueType.Number, input.InputType);
     }
 
     // ── Save/restore ─────────────────────────────────────────────────────────
@@ -711,6 +1140,40 @@ public class GameSessionTests
         Assert.NotNull(roundTripped);
         Assert.Equal(save.HistoryIndex, roundTripped!.HistoryIndex);
         Assert.Equal(save.Timeline.Count, roundTripped.Timeline.Count);
+    }
+
+    [Fact]
+    public async Task Serialize_WritesSnapshotKindByName()
+    {
+        // SnapshotKind is [JsonConverter(typeof(JsonStringEnumConverter))] specifically so future
+        // enum member additions/removals can't silently shift what an old save's stored value
+        // means (see SnapshotKind's remarks) — pin the on-the-wire shape so a regression back to
+        // plain-int serialization is caught here rather than as a corrupted save in the field.
+        var (session, _) = await MakeThreeStepSessionAsync();
+        var json = JsonSerializer.Serialize(session.Serialize());
+
+        Assert.Contains("\"Kind\":\"GameStart\"", json);
+        Assert.Contains("\"Kind\":\"Choice\"", json);
+    }
+
+    [Fact]
+    public void Deserialize_PreV04IntBasedSnapshotKind_SilentlyReinterpreted()
+    {
+        // Pins a real gap, not a fix: a pre-MWS-v0.4 autosave's SnapshotKind was a plain ordinal
+        // (GameStart=0, Choice=1, InputReceived=2, Checkpoint=3). Removing InputReceived shifted
+        // Checkpoint from 3 to 2. JsonStringEnumConverter only restricts *writing* to strings — on
+        // *read* it still accepts a raw number and casts it straight to the enum with no bounds
+        // check, so a stale Kind:3 does NOT throw; it deserializes as an out-of-range SnapshotKind
+        // value with no name. This test exists so a future "let's just add strict validation"
+        // attempt has a concrete case to verify against, not because the gap is closed.
+        var staleJson = """
+            {"MasterSeed":1,"HistoryIndex":0,"Timeline":[{"PassageId":"P1","Kind":3,"Variables":{},"SeedOccurrences":{}}]}
+            """;
+
+        var save = JsonSerializer.Deserialize<SessionSave>(staleJson);
+
+        Assert.NotNull(save);
+        Assert.False(Enum.IsDefined(save!.Timeline[0].Kind));
     }
 
     [Fact]

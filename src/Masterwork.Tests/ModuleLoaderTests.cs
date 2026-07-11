@@ -32,17 +32,17 @@ public class ModuleLoaderTests
             passage_id: 'Onboarding'
             layout: 'narration'
             nodes:
-            - type: 'navigation'
+            - type: 'link'
               label: 'Continue'
               target: '${module::entrypoint}'
-              state_affecting: true
+              snapshot: true
             """,
         ]);
 
         var merged = loader.MergeDependency(module, onboarding);
         var session = new GameSession(merged, masterSeed: 1, startPassageIdOverride: "Onboarding");
 
-        var nav = session.CurrentRender.Actions.OfType<RenderedNavigation>().Single();
+        var nav = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
         var result = await session.FollowLinkAsync(nav.Id);
 
         Assert.Equal("ModuleStart", result.PassageId);

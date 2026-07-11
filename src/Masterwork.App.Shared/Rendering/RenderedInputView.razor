@@ -1,71 +1,51 @@
-﻿@namespace Masterwork.App.Shared.Rendering
+@namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 @using Masterwork.ModuleFormat
 
-<div class="mws-input">
-    @if (!_open)
-    {
-        <button type="button" disabled="@IsRewound" @onclick="() => _open = true">@Node.Label</button>
-    }
-    else
-    {
-        <p>@Node.Text</p>
-        <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
-               value="@_draftText"
-               disabled="@IsRewound"
-               @oninput="HandleInput" />
-        <button type="button" disabled="@IsRewound" @onclick="Submit">Submit</button>
-    }
-</div>
+<label class="mws-input style-@(Node.Style ?? "default")">
+    @Node.Label
+    <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
+           min="@Node.Min" max="@Node.Max"
+           value="@_value"
+           disabled="@IsRewound"
+           @oninput="HandleInput" />
+</label>
 
 @code {
     /// <summary>The input node to render.</summary>
     [Parameter, EditorRequired]
     public RenderedInput Node { get; set; } = null!;
 
-    /// <summary>The active session — submitting calls <see cref="GameSession.SubmitInputAsync"/> directly.</summary>
+    /// <summary>The active session — the value is tracked as a draft via <see cref="GameSession.UpdateInputDraft"/> until a link/popup-Okay commits it.</summary>
     [Parameter, EditorRequired]
     public GameSession Session { get; set; } = null!;
 
-    /// <summary>Frozen (disabled) while the timeline is rewound; drafts aren't restored to the exact historical value yet — see masterwork-plan Q11.</summary>
+    /// <summary>When rewound, shows the historical value from the snapshot instead of a live editable draft.</summary>
     [Parameter]
     public bool IsRewound { get; set; }
 
-    /// <summary>Invoked after the value is submitted.</summary>
+    /// <summary>
+    /// Invoked after every keystroke so sibling components (e.g. a <c>link</c>'s disabled state,
+    /// which depends on <see cref="GameSession.AreCurrentInputsValid"/>) re-render — Blazor only
+    /// auto-re-renders the component whose own event handler fired, not siblings.
+    /// </summary>
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
 
-    private bool _open;
-    private string _draftText = "";
+    private string _value = "";
 
     protected override void OnParametersSet()
     {
-        if (Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var draft))
-        {
-            _draftText = draft.ToString() ?? "";
-        }
+        _value = IsRewound
+            ? Session.Current.Variables.TryGetValue(Node.Var, out var historical) ? historical.AsString() : ""
+            : Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var draft) ? draft.ToString() ?? "" : "";
     }
 
-    private void HandleInput(ChangeEventArgs e)
+    private async Task HandleInput(ChangeEventArgs e)
     {
-        _draftText = e.Value?.ToString() ?? "";
-        Session.UpdateInputDraft(Node.Id, _draftText);
-    }
-
-    private async Task Submit()
-    {
-        if (IsRewound)
-        {
-            return;
-        }
-
-        object value = Node.InputType == InputValueType.Number
-            ? (long.TryParse(_draftText, out var n) ? n : 0L)
-            : _draftText;
-
-        await Session.SubmitInputAsync(Node.Id, value);
-        _open = false;
+        _value = e.Value?.ToString() ?? "";
+        Session.UpdateInputDraft(Node.Id, _value);
         await OnStateChanged.InvokeAsync();
     }
 }

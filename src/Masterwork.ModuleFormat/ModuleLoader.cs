@@ -239,7 +239,7 @@ public sealed class ModuleLoader : IModuleLoader
         {
             switch (node)
             {
-                case NavigationNode n:
+                case LinkNode n:
                     CheckTarget(passageId, n.Target, passages, warnings);
                     CheckNodeListReferences(passageId, n.OnClick, passages, warnings);
                     break;
@@ -250,15 +250,13 @@ public sealed class ModuleLoader : IModuleLoader
                     CheckTarget(passageId, ip.Target, passages, warnings);
                     break;
                 case PopupNode p:
-                    if (p.OnClose is not null)
+                    if (p.Target is not null)
                     {
-                        CheckTarget(passageId, p.OnClose, passages, warnings);
+                        CheckTarget(passageId, p.Target, passages, warnings);
                     }
 
+                    CheckNodeListReferences(passageId, p.OnClose, passages, warnings);
                     CheckNodeListReferences(passageId, p.Content, passages, warnings);
-                    break;
-                case InputNode i:
-                    CheckTarget(passageId, i.OnSubmit, passages, warnings);
                     break;
                 case SectionNode s:
                     CheckNodeListReferences(passageId, s.Content, passages, warnings);

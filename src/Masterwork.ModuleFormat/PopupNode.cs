@@ -2,7 +2,10 @@ namespace Masterwork.ModuleFormat;
 
 /// <summary>
 /// A modal overlay, either click-triggered (<see cref="Label"/> set) or auto-displayed
-/// (<see cref="Label"/> absent). The <c>type: popup</c> node.
+/// (<see cref="Label"/> absent). The <c>type: popup</c> node. Its <see cref="Okay"/>/<see cref="Cancel"/>
+/// dismissal mirrors <see cref="LinkNode"/>'s own <c>onclick</c>/<c>target</c> shape: <see cref="OnClose"/>
+/// runs first (its own <c>goto</c>, if any, preempts <see cref="Target"/>), then <see cref="Target"/>
+/// resolves the destination.
 /// </summary>
 public sealed record PopupNode : Node
 {
@@ -12,24 +15,51 @@ public sealed record PopupNode : Node
     /// <summary>Formatted trigger label; omitted for an auto-displayed popup.</summary>
     public string? Label { get; init; }
 
-    /// <summary>One of <c>link</c> or <c>button</c> — an open, module-extensible vocabulary.</summary>
+    /// <summary>Open, module-extensible visual style vocabulary, styled entirely by module CSS.</summary>
     public string? Style { get; init; }
 
     /// <summary>Named layout that takes over the popup's full UI (e.g. <c>voting</c>, <c>setup</c>), if any.</summary>
     public string? Layout { get; init; }
 
     /// <summary>
-    /// Content nodes — left unevaluated by the renderer; only evaluated (against a sandboxed
-    /// store) when the popup is actually opened by the player.
+    /// Content nodes — evaluated eagerly alongside the rest of the passage, against a sandboxed
+    /// store, so showing the popup is a pure UI concern (see <c>Masterwork.Engine.Rendering.RenderedPopup</c>'s
+    /// remarks). May contain <c>input</c> nodes.
     /// </summary>
     public IReadOnlyList<Node> Content { get; init; } = [];
 
-    /// <summary>Target passage_id, or <c>"${expr}"</c>, navigated to when the popup closes.</summary>
-    public string? OnClose { get; init; }
+    /// <summary>
+    /// Formatted Okay button label; only rendered if present. Committing input drafts + running
+    /// <see cref="OnClose"/> + resolving <see cref="Target"/> only happens when Okay is clicked.
+    /// Both <see cref="OnClose"/> and <see cref="Target"/> are optional — if neither is set, Okay
+    /// still commits any input drafts but otherwise just closes the popup with no navigation and
+    /// no engine round-trip beyond that commit (e.g. a purely informational popup that only needs
+    /// an acknowledgement button).
+    /// </summary>
+    public string? Okay { get; init; }
 
-    /// <summary>Dismiss button label, if any.</summary>
-    public string? Button { get; init; }
+    /// <summary>Formatted Cancel button label; only rendered if present. Discards pending state — no <see cref="OnClose"/>, no <see cref="Target"/>, no commit.</summary>
+    public string? Cancel { get; init; }
 
-    /// <summary>Whether closing this popup creates a new timeline snapshot.</summary>
+    /// <summary>
+    /// Nodes executed when Okay is clicked, before <see cref="Target"/> is resolved — same shape
+    /// and timing as <see cref="LinkNode.OnClick"/>. A <c>goto</c> among these preempts <see cref="Target"/>.
+    /// </summary>
+    public IReadOnlyList<Node> OnClose { get; init; } = [];
+
+    /// <summary>Target passage_id, or <c>"${expr}"</c>, navigated to when Okay is clicked (unless preempted by a <c>goto</c> in <see cref="OnClose"/>).</summary>
+    public string? Target { get; init; }
+
+    /// <summary>Whether closing this popup via Okay creates a new timeline snapshot — parsed from <c>snapshot</c> (see <see cref="SnapshotLabel"/>).</summary>
     public bool StateAffecting { get; init; }
+
+    /// <summary>
+    /// Display label for the timeline scrubber entry created when Okay is clicked; overrides the
+    /// destination passage's own <c>title</c> (the default). Set by writing a string (instead of a
+    /// bare bool) to <c>snapshot</c> — that string is both the label and an implicit <c>true</c> for
+    /// <see cref="StateAffecting"/>. A <c>goto</c> inside <see cref="OnClose"/> that preempts
+    /// <see cref="Target"/> takes priority over this, if that <c>goto</c> sets its own
+    /// <c>snapshot_label</c> — see <see cref="GotoNode.SnapshotLabel"/>.
+    /// </summary>
+    public string? SnapshotLabel { get; init; }
 }

@@ -11,7 +11,7 @@ namespace Masterwork.ModuleFormat;
 /// </summary>
 public sealed class PassageYamlParser : IPassageYamlParser
 {
-    private const string ExpectedFormat = "mws/0.3";
+    private const string ExpectedFormat = "mws/0.4";
 
     private readonly ILogger<PassageYamlParser> _logger;
 
@@ -123,8 +123,9 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     Value = map.GetRequiredString("value", ctx),
                     Align = ParseAlignment(map, ctx, "align"),
                     Lets = map.GetStringList("lets", ctx),
+                    Style = map.GetString("style", ctx),
                 };
-                map.WarnUnmatchedFields(ctx, "'text' node", "type", "value", "align", "lets");
+                map.WarnUnmatchedFields(ctx, "'text' node", "type", "value", "align", "lets", "style");
                 return result;
             }
             case "image":
@@ -134,16 +135,18 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     Asset = map.GetRequiredString("asset", ctx),
                     Size = map.GetString("size", ctx),
                     Align = ParseAlignment(map, ctx, "align"),
+                    Title = map.GetString("title", ctx),
+                    Style = map.GetString("style", ctx),
                 };
-                map.WarnUnmatchedFields(ctx, "'image' node", "type", "asset", "size", "align");
+                map.WarnUnmatchedFields(ctx, "'image' node", "type", "asset", "size", "align", "title", "style");
                 return result;
             }
             case "break":
-                map.WarnUnmatchedFields(ctx, "'break' node", "type");
-                return new BreakNode();
-            case "paragraph_break":
-                map.WarnUnmatchedFields(ctx, "'paragraph_break' node", "type");
-                return new ParagraphBreakNode();
+            {
+                var result = new BreakNode { Style = map.GetString("style", ctx) };
+                map.WarnUnmatchedFields(ctx, "'break' node", "type", "style");
+                return result;
+            }
             case "section":
             {
                 var result = new SectionNode
@@ -168,35 +171,40 @@ public sealed class PassageYamlParser : IPassageYamlParser
                 map.WarnUnmatchedFields(ctx, "'assign' node", "type", "var", "expr");
                 return result;
             }
-            case "navigation":
+            case "link":
             {
-                var result = new NavigationNode
+                var (stateAffecting, snapshotLabel) = map.GetBoolOrLabel("snapshot", ctx);
+                var result = new LinkNode
                 {
                     Label = map.GetRequiredString("label", ctx),
                     Style = map.GetString("style", ctx),
                     Target = map.GetRequiredString("target", ctx),
-                    StateAffecting = map.GetBool("state_affecting", ctx, defaultValue: true),
-                    TimelineLabel = map.GetString("timeline_label", ctx),
-                    OnClick = BuildNodeList(map.TryGet("onclick"), ctx, "'navigation' node onclick"),
+                    StateAffecting = stateAffecting,
+                    SnapshotLabel = snapshotLabel,
+                    OnClick = BuildNodeList(map.TryGet("onclick"), ctx, "'link' node onclick"),
                 };
-                map.WarnUnmatchedFields(ctx, "'navigation' node",
-                    "type", "label", "style", "target", "state_affecting", "timeline_label", "onclick");
+                map.WarnUnmatchedFields(ctx, "'link' node",
+                    "type", "label", "style", "target", "snapshot", "onclick");
                 return result;
             }
             case "popup":
             {
+                var (stateAffecting, snapshotLabel) = map.GetBoolOrLabel("snapshot", ctx);
                 var result = new PopupNode
                 {
                     Label = map.GetString("label", ctx),
                     Style = map.GetString("style", ctx),
                     Layout = map.GetString("layout", ctx),
                     Content = BuildNodeList(map.TryGet("content"), ctx, "'popup' node content"),
-                    OnClose = map.GetString("onclose", ctx),
-                    Button = map.GetString("button", ctx),
-                    StateAffecting = map.GetBool("state_affecting", ctx),
+                    Okay = map.GetString("okay", ctx),
+                    Cancel = map.GetString("cancel", ctx),
+                    OnClose = BuildNodeList(map.TryGet("onclose"), ctx, "'popup' node onclose"),
+                    Target = map.GetString("target", ctx),
+                    StateAffecting = stateAffecting,
+                    SnapshotLabel = snapshotLabel,
                 };
                 map.WarnUnmatchedFields(ctx, "'popup' node",
-                    "type", "label", "style", "layout", "content", "onclose", "button", "state_affecting");
+                    "type", "label", "style", "layout", "content", "okay", "cancel", "onclose", "target", "snapshot");
                 return result;
             }
             case "input":
@@ -205,29 +213,21 @@ public sealed class PassageYamlParser : IPassageYamlParser
                 {
                     Label = map.GetRequiredString("label", ctx),
                     Style = map.GetString("style", ctx),
-                    Text = map.GetRequiredString("text", ctx),
-                    InputType = ParseInputValueType(map, ctx, "input"),
                     Var = map.GetRequiredString("var", ctx),
-                    OnSubmit = map.GetRequiredString("onsubmit", ctx),
+                    Min = map.GetLong("min", ctx),
+                    Max = map.GetLong("max", ctx),
                 };
-                map.WarnUnmatchedFields(ctx, "'input' node", "type", "label", "style", "text", "input", "var", "onsubmit");
-                return result;
-            }
-            case "prompt":
-            {
-                var result = new PromptNode
-                {
-                    Text = map.GetRequiredString("text", ctx),
-                    InputType = ParseInputValueType(map, ctx, "input"),
-                    Var = map.GetRequiredString("var", ctx),
-                };
-                map.WarnUnmatchedFields(ctx, "'prompt' node", "type", "text", "input", "var");
+                map.WarnUnmatchedFields(ctx, "'input' node", "type", "label", "style", "var", "min", "max");
                 return result;
             }
             case "goto":
             {
-                var result = new GotoNode { Target = map.GetRequiredString("target", ctx) };
-                map.WarnUnmatchedFields(ctx, "'goto' node", "type", "target");
+                var result = new GotoNode
+                {
+                    Target = map.GetRequiredString("target", ctx),
+                    SnapshotLabel = map.GetString("snapshot_label", ctx),
+                };
+                map.WarnUnmatchedFields(ctx, "'goto' node", "type", "target", "snapshot_label");
                 return result;
             }
             case "include_passage":
@@ -276,16 +276,19 @@ public sealed class PassageYamlParser : IPassageYamlParser
 
     private static ConditionalNode BuildConditional(YamlMappingNode map, YamlParseContext ctx)
     {
-        // Flat form: if: + then: directly on the node.
+        // Flat form: if: + then: directly on the node, with an optional else: sibling — for a
+        // single condition, this reads the same as the multi-branch form but without the
+        // conditions: wrapper boilerplate.
         var flatIf = map.GetString("if", ctx);
         if (flatIf is not null)
         {
+            var flatElseNode = map.TryGet("else");
             var flatResult = new ConditionalNode
             {
                 Conditions = [new ConditionalBranch { If = flatIf, Then = BuildNodeList(map.TryGet("then"), ctx, "'conditional' node then") }],
-                Else = null,
+                Else = flatElseNode is null ? null : BuildNodeList(flatElseNode, ctx, "'conditional' node else"),
             };
-            map.WarnUnmatchedFields(ctx, "'conditional' node", "type", "if", "then");
+            map.WarnUnmatchedFields(ctx, "'conditional' node", "type", "if", "then", "else");
             return flatResult;
         }
 
@@ -367,18 +370,5 @@ public sealed class PassageYamlParser : IPassageYamlParser
         }
 
         return value;
-    }
-
-    // input.input / prompt.input has no sensible fallback — an unrecognized value here would
-    // silently pick a wrong input widget for the player, so this is a hard module load error.
-    private static InputValueType ParseInputValueType(YamlMappingNode map, YamlParseContext ctx, string key)
-    {
-        var raw = map.GetRequiredString(key, ctx);
-        return raw switch
-        {
-            "string" => InputValueType.String,
-            "number" => InputValueType.Number,
-            _ => throw new MwsParseException($"{ctx.Source}: field '{key}' has invalid input type '{raw}' (expected 'string' or 'number')"),
-        };
     }
 }

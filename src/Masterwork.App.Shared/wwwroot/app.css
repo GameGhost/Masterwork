@@ -70,7 +70,8 @@ h1:focus {
 .mws-text.align-right { text-align: right; }
 .mws-text.align-justified { text-align: justify; }
 
-.mws-paragraph-break {
+.mws-break.style-paragraph {
+    display: block;
     height: 1rem;
 }
 
@@ -80,14 +81,14 @@ h1:focus {
     border-left: 3px solid #ddd;
 }
 
-.mws-nav {
+.mws-link {
     display: inline-block;
     margin: 0.25rem 0.5rem 0.25rem 0;
     padding: 0.4rem 0.9rem;
     cursor: pointer;
 }
 
-.mws-nav.state-affecting {
+.mws-link.state-affecting {
     font-weight: 600;
 }
 

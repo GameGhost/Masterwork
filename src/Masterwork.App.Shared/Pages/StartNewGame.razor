@@ -211,7 +211,19 @@
             return;
         }
 
-        var save = JsonSerializer.Deserialize<SessionSave>(json);
+        SessionSave? save;
+        try
+        {
+            save = JsonSerializer.Deserialize<SessionSave>(json);
+        }
+        catch (JsonException)
+        {
+            // An autosave from an incompatible/older save-format revision — treat exactly like no
+            // autosave existing rather than crashing the app on a stale format the player can't do
+            // anything about (see SnapshotKind's remarks for a concrete example of how this happens).
+            save = null;
+        }
+
         if (save is null)
         {
             await StartFreshAsync(module, _selectedLanguage);

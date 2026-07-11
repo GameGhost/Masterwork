@@ -195,6 +195,13 @@
             // strings stay in code" rule) even though it surfaces in this user-facing dialog.
             _resumeError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeError_Exception, ex.Message);
         }
+        catch (JsonException ex)
+        {
+            // A save from an incompatible/older save-format revision (see SnapshotKind's remarks
+            // for a concrete example) — surfaced the same way as any other resume failure rather
+            // than crashing the app on data the player can't do anything about.
+            _resumeError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeError_Exception, ex.Message);
+        }
     }
 
     private async Task Export(SaveEntry entry)

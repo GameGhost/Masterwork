@@ -53,7 +53,7 @@ public sealed partial class RestextCollector
     // so {varName} patterns in documentation text don't prevent RestoreNonTemplateAssignments.
     public void CollectPassage(string passageId, string fileName, Dictionary<string, object?> passageDict, bool isTemplate = true)
     {
-        _passageId = passageId;
+        _passageId = SanitizeForRestextKey(passageId);
         _counter = 1;
         _current = [];
 
@@ -196,7 +196,7 @@ public sealed partial class RestextCollector
     {
         foreach (var (passageId, dict) in passages)
         {
-            _passageId = passageId;
+            _passageId = SanitizeForRestextKey(passageId);
             ScanConditionLiteralsInNodeList(dict.GetValueOrDefault("nodes"));
         }
     }
@@ -356,14 +356,17 @@ public sealed partial class RestextCollector
             TryScanStringField(d, "value");
             TryScanStringField(d, "title");
             TryScanStringField(d, "text");
-            TryScanStringField(d, "timeline_label");
+            TryScanStringField(d, "snapshot"); // link/popup's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
+            TryScanStringField(d, "snapshot_label"); // goto's own field
             TryScanStringField(d, "display");
             TryScanStringField(d, "name");
-            TryScanStringField(d, "button");
+            TryScanStringField(d, "okay");
+            TryScanStringField(d, "cancel");
         }
 
         ScanConditionLiteralsInNodeList(d.GetValueOrDefault("content"));
         ScanConditionLiteralsInNodeList(d.GetValueOrDefault("onclick"));
+        ScanConditionLiteralsInNodeList(d.GetValueOrDefault("onclose"));
         ScanConditionLiteralsInNodeList(d.GetValueOrDefault("do"));
         ScanConditionLiteralsInNodeList(d.GetValueOrDefault("nodes")); // switch case bodies
     }
@@ -455,14 +458,17 @@ public sealed partial class RestextCollector
             TryReplaceStringField(d, "value");
             TryReplaceStringField(d, "title");
             TryReplaceStringField(d, "text");
-            TryReplaceStringField(d, "timeline_label");
+            TryReplaceStringField(d, "snapshot"); // link/popup's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
+            TryReplaceStringField(d, "snapshot_label"); // goto's own field
             TryReplaceStringField(d, "display");
             TryReplaceStringField(d, "name");
-            TryReplaceStringField(d, "button");
+            TryReplaceStringField(d, "okay");
+            TryReplaceStringField(d, "cancel");
         }
 
         ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("content"));
         ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("onclick"));
+        ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("onclose"));
         ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("do"));
         ApplyConditionReplacementsInNodeList(d.GetValueOrDefault("nodes")); // switch case bodies
     }
@@ -530,14 +536,19 @@ public sealed partial class RestextCollector
             case "text":
                 WalkTextNode(d);
                 break;
-            case "navigation":
+            case "link":
                 ExtractField(d, "label");
                 break;
             case "popup":
                 ExtractField(d, "label");
+                ExtractField(d, "okay");
+                ExtractField(d, "cancel");
                 break;
             case "input":
-                ExtractField(d, "text");
+                ExtractField(d, "label");
+                break;
+            case "image":
+                ExtractField(d, "title");
                 break;
             case "section":
                 ExtractField(d, "title");
@@ -550,7 +561,8 @@ public sealed partial class RestextCollector
 
         // Recurse into all container children, regardless of type.
         WalkNodeList(d.GetValueOrDefault("content"));                       // popup, section
-        WalkNodeList(d.GetValueOrDefault("onclick"));                       // navigation
+        WalkNodeList(d.GetValueOrDefault("onclick"));                       // link
+        WalkNodeList(d.GetValueOrDefault("onclose"));                       // popup
         WalkNodeList(d.GetValueOrDefault("do"));                            // foreach
         WalkNodeList(d.GetValueOrDefault("else"));                          // conditional
         WalkNodeList(d.GetValueOrDefault("default"));                       // switch
@@ -763,6 +775,22 @@ public sealed partial class RestextCollector
         s.Any(char.IsLetterOrDigit) || PlaceholderRegex().IsMatch(s);
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    // Restext keys must match [a-zA-Z_][a-zA-Z0-9_]* (RestextResolver's restext://Key regex
+    // requires exactly this shape). Passage IDs themselves are left untouched everywhere else —
+    // navigation targets, file names, etc. all still use the raw Cradle-derived ID, spaces/hyphens
+    // and all — this sanitization applies only to the passage-ID prefix used when building a
+    // restext key, so a key derived from e.g. "TCOD-TownName" or "TITLE SCREEN" is well-formed.
+    private static string SanitizeForRestextKey(string passageId)
+    {
+        var sanitized = InvalidKeyCharRegex().Replace(passageId, "_");
+        return sanitized.Length > 0 && (char.IsAsciiLetter(sanitized[0]) || sanitized[0] == '_')
+            ? sanitized
+            : "_" + sanitized;
+    }
+
+    [GeneratedRegex(@"[^A-Za-z0-9_]")]
+    private static partial Regex InvalidKeyCharRegex();
 
     // A single {var} reference with no other content — skip extraction.
     private static readonly Regex SingleVarRegex = SingleVarPattern();
