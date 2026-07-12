@@ -174,9 +174,4 @@
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer ▶</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Retour au présent</value></data>
   <data name="TimelineScrubber_RestartFromHere" xml:space="preserve"><value>Recommencer à partir d'ici</value></data>
-
-  <data name="AudioTestPanel_Heading" xml:space="preserve"><value>Test audio (synthétisé — pas encore de vrais éléments)</value></data>
-  <data name="AudioTestPanel_PlayBgm" xml:space="preserve"><value>Jouer une tonalité de test (musique)</value></data>
-  <data name="AudioTestPanel_StopBgm" xml:space="preserve"><value>Arrêter la musique</value></data>
-  <data name="AudioTestPanel_PlaySfx" xml:space="preserve"><value>Jouer un bip de test (effet sonore)</value></data>
 </root>

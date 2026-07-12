@@ -174,9 +174,4 @@
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Forward ▶</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Return to present</value></data>
   <data name="TimelineScrubber_RestartFromHere" xml:space="preserve"><value>Restart from here</value></data>
-
-  <data name="AudioTestPanel_Heading" xml:space="preserve"><value>Audio test (synthesized — no real assets yet)</value></data>
-  <data name="AudioTestPanel_PlayBgm" xml:space="preserve"><value>Play test BGM tone</value></data>
-  <data name="AudioTestPanel_StopBgm" xml:space="preserve"><value>Stop BGM</value></data>
-  <data name="AudioTestPanel_PlaySfx" xml:space="preserve"><value>Play test SFX blip</value></data>
 </root>
