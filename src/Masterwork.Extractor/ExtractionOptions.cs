@@ -16,6 +16,10 @@ public class ExtractionOptions
     public string? ModuleId { get; set; }
     public string? ModuleTitle { get; set; }
     public string? SpriteMapPath { get; set; }
+    // Path to a JSON map of passage name -> { layout, progress }: layout overrides InferLayout's
+    // tag-based result; progress becomes a synthetic `_ProgressRound` assign wherever the source
+    // has a matching PassageTracker.instance.CheckProgress(passageName, ...) call. See ProgressMapper.
+    public string? ProgressMapPath { get; set; }
     public bool IncludeDebug { get; set; }
     public bool DryRun { get; set; }
     public bool SeedAnalysis { get; set; }

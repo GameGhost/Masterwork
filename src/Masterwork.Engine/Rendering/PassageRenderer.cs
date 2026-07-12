@@ -41,17 +41,50 @@ public sealed class PassageRenderer : IPassageRenderer
 
         var ctx = new RenderContext(store, module);
         var nodes = RenderNodes(passage.Nodes, ctx);
+        var chrome = RenderChrome(passage.Layout, store, module, actionIdPrefix: $"{passage.PassageId}_chrome_", ctx.Actions);
 
         return new PassageRenderResult(
             PassageId: passage.PassageId,
             Layout: passage.Layout,
+            Title: ExpandOrNull(passage.Title, ctx.Store),
+            Subtitle: ExpandOrNull(passage.Subtitle, ctx.Store),
             LocationName: passage.Location?.Name,
             LocationIcon: passage.Location?.Icon,
             Nodes: nodes,
             Actions: ctx.Actions,
             Checkpoints: ctx.Checkpoints,
             PendingGoto: ctx.PendingGoto,
-            IsEnding: passage.Ending);
+            IsEnding: passage.Ending,
+            Chrome: chrome);
+    }
+
+    // Renders a module's layout chrome (see LayoutChromeDoc) for `layout`, against `store` — the
+    // live store for a passage, or a popup's sandbox clone for a popup — through the exact same
+    // RenderNodeList entry point already used for popup header/content, so chrome nodes get full
+    // conditional/switch/expression support with zero new rendering primitives. Actions found within
+    // are appended to `actionsSink` (the caller decides where chrome actions should live: the
+    // passage's own top-level Actions, or a popup's own Actions, gated behind that popup being
+    // open — see RenderPopup). Absent from the module's LayoutChrome table (the common case for most
+    // layouts) is not an error — just four empty regions.
+    private RenderedLayoutChrome RenderChrome(
+        string layout, VariableStore store, LoadedModule module, string actionIdPrefix, List<RenderedAction> actionsSink)
+    {
+        if (!module.LayoutChrome.TryGetValue(layout, out var chrome))
+        {
+            return RenderedLayoutChrome.Empty;
+        }
+
+        var header = RenderNodeList(chrome.Header, store, module, $"{actionIdPrefix}header_");
+        var footer = RenderNodeList(chrome.Footer, store, module, $"{actionIdPrefix}footer_");
+        var before = RenderNodeList(chrome.BeforeContent, store, module, $"{actionIdPrefix}before_");
+        var after = RenderNodeList(chrome.AfterContent, store, module, $"{actionIdPrefix}after_");
+
+        actionsSink.AddRange(header.Actions);
+        actionsSink.AddRange(footer.Actions);
+        actionsSink.AddRange(before.Actions);
+        actionsSink.AddRange(after.Actions);
+
+        return new RenderedLayoutChrome(header.Nodes, footer.Nodes, before.Nodes, after.Nodes);
     }
 
     /// <inheritdoc/>
@@ -190,6 +223,10 @@ public sealed class PassageRenderer : IPassageRenderer
         var sandbox = ctx.Store.Clone();
         var headerResult = RenderNodeList(popup.Header, sandbox, ctx.Module, actionIdPrefix: $"{id}_header_");
         var contentResult = RenderNodeList(popup.Content, sandbox, ctx.Module, actionIdPrefix: $"{id}_");
+        var popupActions = new List<RenderedAction>([.. headerResult.Actions, .. contentResult.Actions]);
+        var chrome = popup.Layout is null
+            ? RenderedLayoutChrome.Empty
+            : RenderChrome(popup.Layout, sandbox, ctx.Module, actionIdPrefix: $"{id}_chrome_", popupActions);
 
         var rendered = new RenderedPopup
         {
@@ -200,7 +237,8 @@ public sealed class PassageRenderer : IPassageRenderer
             AutoDisplay = popup.Label is null,
             Header = headerResult.Nodes,
             Content = contentResult.Nodes,
-            Actions = [.. headerResult.Actions, .. contentResult.Actions],
+            Actions = popupActions,
+            Chrome = chrome,
             Sandbox = sandbox,
             Okay = ExpandOrNull(popup.Okay, ctx.Store),
             Cancel = ExpandOrNull(popup.Cancel, ctx.Store),

@@ -37,6 +37,7 @@ dotnet run --project src/Masterwork.Extractor -- <input> <passages-out-dir> [opt
 | `--module-title <title>` | Human-readable module title (used in the extraction report header). If omitted, derived from the source filename by splitting on capital letters. |
 | `--module-id <id>` | Module identifier string (reserved for future use in the manifest). |
 | `--sprite-map <json>` | Path to a `TheCostOfDisease_ItemObtain.json`-style file mapping sprite indices to asset slugs. Required for The Cost of Disease; not needed for the other scenarios. |
+| `--progress-map <json>` | Path to a `{ "PassageName": { "layout": "...", "progress": N }, ... }` JSON map. `layout` overrides `InferLayout`'s tag-based result for that passage; `progress` emits a synthetic `_ProgressRound` assign wherever the source has a matching `PassageTracker.instance.CheckProgress(passageName, ...)` call, and a `CheckProgress` call whose current-passage name has no entry at all in the map is reported as a warning. Optional — omitting it leaves layout inference and `CheckProgress` handling unchanged. The assign is emitted on the link that *leaves* the mapped passage (matching where `CheckProgress` is actually called in the source), so `_ProgressRound` reflects rounds *completed so far* — it's `0` throughout round 1 and only reaches the mapped round's own value once the player has already clicked past it, not while that round's content is being displayed. See `Masterwork-Design/Modules/progress-map.json` and `docs/mws-format-latest.md` §8 (including its timing note) for how a module turns `_ProgressRound` into an actual progress-bar display via `layouts/*.mws.yaml` chrome. |
 | `--variables-out <dir>` | Where `_variables.yaml` is written. Defaults to `<passages-out-dir>`. |
 | `--restext-out <dir>` | Where `en-US.restext` is written. Defaults to `<passages-out-dir>`. |
 | `--common-restext <file>` | Path to a manually curated `Key=Value` restext file. When a string is promoted to a Common key (used in 2+ passages), a matching curated ID (by exact text) is used instead of an auto-generated `Common_NNN` one, so override/manually-written passages have a stable name to reference instead of one that can shift on every re-extraction. Curated IDs never matched during extraction are omitted from the output restext file and reported as warnings. Purely an extractor-time input — `ModuleLoader` never reads this file. |
@@ -56,6 +57,7 @@ authoritative, up-to-date version of these commands.
 ```powershell
 $base      = "c:\Projects\Masterwork-Design\Reference\ScriptsComplete"
 $spritemap = "c:\Projects\Masterwork-Design\Reference\my-fathers-work-master-4\Assets\Resources\TheCostOfDisease_ItemObtain.json"
+$progressmap = "c:\Projects\Masterwork-Design\Modules\progress-map.json"
 $modules   = "c:\Projects\Masterwork-Design\Modules"
 
 # Fear of the Unknown (still flat output — not yet moved into Modules/)
@@ -77,7 +79,8 @@ dotnet run --project src/Masterwork.Extractor -- `
   --variables-out "$modules\cost-of-disease" `
   --restext-out "$modules\cost-of-disease" `
   --module-title "The Cost of Disease" `
-  --sprite-map $spritemap
+  --sprite-map $spritemap `
+  --progress-map $progressmap
 ```
 
 > **Note:** `--module-title` is required for A Time of War (auto-generation capitalises "Of") and The Cost of Disease (auto-generation produces "The Costof Disease").

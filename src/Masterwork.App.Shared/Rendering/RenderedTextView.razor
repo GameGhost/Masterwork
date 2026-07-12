@@ -4,7 +4,7 @@
 @using Masterwork.ModuleFormat
 @inject IFormattedTextExpander FormattedTextExpander
 
-<p class="mws-text@AlignClass style-@(Node.Style ?? "default")">@_rendered</p>
+<div class="mws-text@(AlignClass) style-@(Node.Style ?? "default")">@_rendered</div>
 
 @code {
     /// <summary>The text node to render.</summary>

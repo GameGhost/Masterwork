@@ -12,6 +12,9 @@ public sealed record MwsPassageDoc
     /// <summary>Display title; defaults to <see cref="PassageId"/> when absent.</summary>
     public string? Title { get; init; }
 
+    /// <summary>Optional subtitle shown alongside <see cref="Title"/> in the passage header.</summary>
+    public string? Subtitle { get; init; }
+
     /// <summary>One of <c>hub</c>, <c>event</c>, <c>narration</c>, <c>private</c>, <c>modal</c> — an open, module-extensible vocabulary.</summary>
     public required string Layout { get; init; }
 

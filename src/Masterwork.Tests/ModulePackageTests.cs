@@ -113,6 +113,51 @@ public class ModulePackageTests
     }
 
     [Fact]
+    public void ReadFromBytes_LayoutsFolder_RoundTripsAndLoads()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "layouts"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+                id: 'test.module'
+                title: 'Test Module'
+                version: '1.0.0'
+                """);
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub_early'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(dir, "layouts", "hub_early.mws.yaml"), """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'Chrome text'
+                """);
+
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+
+            Assert.Single(contents.LayoutYamls);
+            Assert.Contains("layout_id: 'hub_early'", contents.LayoutYamls[0]);
+
+            var module = new ModuleLoader().LoadFromSources(
+                contents.PassageYamls, layoutChromeYamls: contents.LayoutYamls);
+            var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
+            Assert.Equal("Chrome text", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ReadContents_LoadIntoModuleLoader_ProducesPlayableModule()
     {
         var dir = MakeSourceDirectory();

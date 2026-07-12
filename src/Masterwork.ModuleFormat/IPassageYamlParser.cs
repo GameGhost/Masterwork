@@ -17,4 +17,17 @@ public interface IPassageYamlParser
     /// The document is empty, or a required field is missing/malformed with no safe fallback.
     /// </exception>
     MwsPassageDoc ParsePassage(string yamlText, ModuleWarnings? warnings = null);
+
+    /// <summary>
+    /// Parses a <c>layouts/{id}.yaml</c> chrome file from raw YAML text.
+    /// </summary>
+    /// <param name="yamlText">The full contents of a <c>layouts/*.yaml</c> file.</param>
+    /// <param name="warnings">
+    /// Collector for non-fatal issues (unmatched fields, wrong-shaped fields, unknown node types,
+    /// stale format versions). Pass <see langword="null"/> to discard warnings.
+    /// </param>
+    /// <exception cref="MwsParseException">
+    /// The document is empty, or a required field is missing/malformed with no safe fallback.
+    /// </exception>
+    LayoutChromeDoc ParseLayoutChrome(string yamlText, ModuleWarnings? warnings = null);
 }

@@ -317,6 +317,40 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task FollowLink_StateAffecting_DisplayLabel_CombinesTitleAndSubtitle()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'YELLOW FEVER'
+            subtitle: 'Early Years'
+            layout: 'hub'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("YELLOW FEVER - Early Years", session.Current.DisplayLabel);
+    }
+
+    [Fact]
     public async Task FollowLink_StateAffecting_DisplayLabel_FallsBackToPassageId_WhenNoTitle()
     {
         var (session, _) = MakeSimpleSession();

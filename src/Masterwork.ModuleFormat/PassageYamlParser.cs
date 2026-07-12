@@ -63,6 +63,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
         {
             PassageId = root.GetRequiredString("passage_id", ctx),
             Title = root.GetString("title", ctx),
+            Subtitle = root.GetString("subtitle", ctx),
             Layout = root.GetRequiredString("layout", ctx),
             Tags = root.GetStringList("tags", ctx),
             Debug = root.GetBool("debug", ctx),
@@ -73,10 +74,49 @@ public sealed class PassageYamlParser : IPassageYamlParser
         };
 
         root.WarnUnmatchedFields(ctx, "passage header",
-            "format", "passage_id", "title", "tags", "layout", "debug", "location", "check_progress", "ending", "nodes");
+            "format", "passage_id", "title", "subtitle", "tags", "layout", "debug", "location", "check_progress", "ending", "nodes");
 
         _logger.LogDebug("Parsed passage '{PassageId}' with {NodeCount} top-level nodes", passage.PassageId, passage.Nodes.Count);
         return passage;
+    }
+
+    /// <inheritdoc/>
+    public LayoutChromeDoc ParseLayoutChrome(string yamlText, ModuleWarnings? warnings = null)
+    {
+        var ctx = new YamlParseContext(warnings, logger: _logger);
+
+        var stream = new YamlStream();
+        stream.Load(new StringReader(yamlText));
+        if (stream.Documents.Count == 0)
+        {
+            throw new MwsParseException("Empty YAML document");
+        }
+
+        var root = (YamlMappingNode)stream.Documents[0].RootNode;
+
+        ctx.Source = root.GetString("layout_id", ctx) is { Length: > 0 } id ? id : "(unknown layout)";
+        _logger.LogDebug("Parsing layout chrome '{LayoutId}'", ctx.Source);
+
+        var format = root.GetRequiredString("format", ctx);
+        if (format != ExpectedFormat)
+        {
+            ctx.Warn("unexpected_format_version", $"layout chrome declares format '{format}', expected '{ExpectedFormat}' — may be stale output from an older extractor/hand-authored file");
+        }
+
+        var chrome = new LayoutChromeDoc
+        {
+            LayoutId = root.GetRequiredString("layout_id", ctx),
+            Header = BuildNodeList(root.TryGet("header"), ctx, "layout chrome header"),
+            Footer = BuildNodeList(root.TryGet("footer"), ctx, "layout chrome footer"),
+            BeforeContent = BuildNodeList(root.TryGet("before_content"), ctx, "layout chrome before_content"),
+            AfterContent = BuildNodeList(root.TryGet("after_content"), ctx, "layout chrome after_content"),
+        };
+
+        root.WarnUnmatchedFields(ctx, "layout chrome",
+            "format", "layout_id", "header", "footer", "before_content", "after_content");
+
+        _logger.LogDebug("Parsed layout chrome '{LayoutId}'", chrome.LayoutId);
+        return chrome;
     }
 
     // Yields only the mapping children of `seq`, warning about (and skipping) anything else —

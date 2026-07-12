@@ -24,7 +24,16 @@ else
                 @* Purely structural — the app never inspects a node's style/layout to decide what
                    goes where. Header/Content/Footer are just three node-list regions the format
                    already gives us (RenderedPopup.Header/Content, Okay/Cancel); module CSS is
-                   entirely responsible for what each one looks like. *@
+                   entirely responsible for what each one looks like. Node.Chrome is the same idea
+                   one level up — module-authored regions matched by Node.Layout's name, nesting
+                   outside this popup's own structural regions (see PassageView.razor for the same
+                   composition order applied to passages). *@
+                @if (Node.Chrome.Header.Count > 0)
+                {
+                    <div class="mws-layout-header">
+                        <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                    </div>
+                }
                 <div class="mws-popup-container">
                     @if (Node.Header.Count > 0)
                     {
@@ -32,9 +41,21 @@ else
                             <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
                         </div>
                     }
+                    @if (Node.Chrome.BeforeContent.Count > 0)
+                    {
+                        <div class="mws-layout-before-content">
+                            <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        </div>
+                    }
                     <div class="mws-popup-content">
                         <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
                     </div>
+                    @if (Node.Chrome.AfterContent.Count > 0)
+                    {
+                        <div class="mws-layout-after-content">
+                            <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        </div>
+                    }
                     @if (Node.Okay is not null || Node.Cancel is not null)
                     {
                         <div class="mws-popup-footer">
@@ -49,6 +70,12 @@ else
                         </div>
                     }
                 </div>
+                @if (Node.Chrome.Footer.Count > 0)
+                {
+                    <div class="mws-layout-footer">
+                        <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                    </div>
+                }
                 break;
         }
     </div>

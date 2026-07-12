@@ -6,7 +6,10 @@ public class ExtractorTests
 {
     private static List<MwsPassage> Extract(string source) => Extract(source, out _);
 
-    private static List<MwsPassage> Extract(string source, out ExtractionReport report)
+    private static List<MwsPassage> Extract(string source, out ExtractionReport report) =>
+        Extract(source, ProgressMapper.Empty(), out report);
+
+    private static List<MwsPassage> Extract(string source, ProgressMapper progressMapper, out ExtractionReport report)
     {
         var tempFile = System.IO.Path.GetTempFileName() + ".cs";
         System.IO.File.WriteAllText(tempFile, source);
@@ -14,8 +17,19 @@ public class ExtractorTests
         {
             var opts = new ExtractionOptions { InputDir = tempFile, PassagesOutDir = "", IncludeDebug = true };
             report = new ExtractionReport();
-            var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report);
+            var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report, progressMapper);
             return extractor.Extract([tempFile]);
+        }
+        finally { System.IO.File.Delete(tempFile); }
+    }
+
+    private static ProgressMapper MakeProgressMapper(string json)
+    {
+        var tempFile = System.IO.Path.GetTempFileName() + ".json";
+        System.IO.File.WriteAllText(tempFile, json);
+        try
+        {
+            return ProgressMapper.FromJsonFile(tempFile);
         }
         finally { System.IO.File.Delete(tempFile); }
     }
@@ -80,6 +94,44 @@ public class ExtractorTests
         Assert.Equal("hub", passages[0].Layout);
     }
 
+    [Fact]
+    public void IntroTag_SetsIntroductionLayout()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1",
+                    new string[] { "INTRO" },
+                    new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield break;
+            }
+            """);
+
+        Assert.Equal("introduction", passages[0].Layout);
+    }
+
+    [Fact]
+    public void NoTags_StaysNarrationLayout()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1",
+                    new string[] { },
+                    new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield break;
+            }
+            """);
+
+        Assert.Equal("narration", passages[0].Layout);
+    }
+
     // ── Text extraction ────────────────────────────────────────────────────
 
     [Fact]
@@ -104,10 +156,13 @@ public class ExtractorTests
     [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
+        // Tagged "ck2" (event layout) so this leading bold text isn't intercepted by the
+        // hub/narration heading-hoist (TryHoistHeadingTitleSubtitle) — this test is about bold
+        // style application, not the heading feature; see HeadingHoist tests for that.
         var passages = Extract("""
             private void passage1_Init()
             {
-                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck2" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
@@ -532,10 +587,11 @@ public class ExtractorTests
     [Fact]
     public void UniformBoldScope_HoistsStyleToNode()
     {
+        // Tagged "ck2" (event layout) — see BoldStyleScope_AppliesBoldStyle's comment.
         var passages = Extract("""
             private void passage1_Init()
             {
-                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck2" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
@@ -553,6 +609,175 @@ public class ExtractorTests
         var textNode = passages[0].Nodes.OfType<TextNode>().First();
         Assert.Equal("bold", textNode.Style);
         Assert.Equal("All {name} bold", textNode.Template);
+    }
+
+    // ── Heading (title/subtitle) hoisting ────────────────────────────────────
+
+    [Fact]
+    public void HubLayout_SingleBoldLineNoDash_HoistsToTitleOnly()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Town Hall");
+                }
+                StyleScope styleScope = null;
+                yield return base.lineBreak();
+                yield return base.text("Welcome back.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Town Hall", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode t && t.Template == "The Town Hall");
+        var body = passages[0].Nodes.OfType<TextNode>().Single();
+        Assert.Equal("Welcome back.", body.Template);
+    }
+
+    [Fact]
+    public void NarrationLayout_SingleBoldLineWithDash_SplitsIntoTitleAndSubtitle()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("YELLOW FEVER - Early Years");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("YELLOW FEVER", passages[0].Title);
+        Assert.Equal("Early Years", passages[0].Subtitle);
+        Assert.Empty(passages[0].Nodes);
+    }
+
+    [Fact]
+    public void HubLayout_TwoBoldLinesSeparatedByBreak_HoistsEachLineSeparately()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Good Fight");
+                }
+                StyleScope styleScope1 = null;
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Early Years");
+                }
+                StyleScope styleScope2 = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Good Fight", passages[0].Title);
+        Assert.Equal("Early Years", passages[0].Subtitle);
+        Assert.Empty(passages[0].Nodes);
+    }
+
+    [Fact]
+    public void HubLayout_ThreeBoldLines_DoesNotHoist()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Line One");
+                }
+                StyleScope styleScope1 = null;
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Line Two");
+                }
+                StyleScope styleScope2 = null;
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Line Three");
+                }
+                StyleScope styleScope3 = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Equal(5, passages[0].Nodes.Count);
+    }
+
+    [Fact]
+    public void EventLayout_LeadingBoldLine_DoesNotHoist()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck2" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Not A Heading");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Single(passages[0].Nodes.OfType<TextNode>());
+    }
+
+    [Fact]
+    public void IntroductionLayout_SingleBoldLineWithDash_SplitsIntoTitleAndSubtitle()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "INTRO" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("A New Beginning - Generation 1");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("introduction", passages[0].Layout);
+        Assert.Equal("A New Beginning", passages[0].Title);
+        Assert.Equal("Generation 1", passages[0].Subtitle);
+        Assert.Empty(passages[0].Nodes);
     }
 
     // ── Random type normalization ──────────────────────────────────────────
@@ -1035,5 +1260,233 @@ public class ExtractorTests
 
         Assert.DoesNotContain(passages[0].Nodes, n => n is BreakNode or ParagraphBreakNode);
         Assert.Contains(passages[0].Nodes, n => n is GotoNode);
+    }
+
+    // ── --progress-map: layout override ──────────────────────────────────────
+
+    [Fact]
+    public void ProgressMap_LayoutEntry_OverridesTagBasedInference()
+    {
+        var mapper = MakeProgressMapper("""{ "P1": { "layout": "hub_early" } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield break;
+            }
+            """, mapper, out _);
+
+        Assert.Equal("hub_early", passages[0].Layout);
+    }
+
+    [Fact]
+    public void ProgressMap_LayoutOverride_StillHoistsHeadingFromUnderlyingTagCategory()
+    {
+        // Regression: heading-hoist eligibility must key off the tag-based category (hub/
+        // narration/introduction), not the final --progress-map-overridden layout value — a
+        // "hub" passage overridden to "hub_early" is still fundamentally hub-family and should
+        // still get its leading bold line hoisted into Title.
+        var mapper = MakeProgressMapper("""{ "P1": { "layout": "hub_early" } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("YELLOW FEVER - Early Years");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """, mapper, out _);
+
+        Assert.Equal("hub_early", passages[0].Layout);
+        Assert.Equal("YELLOW FEVER", passages[0].Title);
+        Assert.Equal("Early Years", passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void ProgressMap_PassageNotInMap_KeepsTagBasedInference()
+    {
+        var mapper = MakeProgressMapper("""{ "SomeOtherPassage": { "layout": "hub_early" } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield break;
+            }
+            """, mapper, out _);
+
+        Assert.Equal("hub", passages[0].Layout);
+    }
+
+    // ── --progress-map: _ProgressRound emission at CheckProgress sites ──────
+
+    [Fact]
+    public void CheckProgress_MappedProgressValue_EmitsProgressRoundAssign()
+    {
+        var mapper = MakeProgressMapper("""{ "P1": { "layout": "hub_early", "progress": 1 } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out _);
+
+        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>());
+        Assert.Equal(1, effect.VarSets!["_ProgressRound"]);
+        Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
+    }
+
+    [Fact]
+    public void CheckProgress_MappedProgressValue_RegistersProgressRoundVariable()
+    {
+        // A module referencing _ProgressRound (e.g. in layout chrome) would hit an undeclared
+        // variable otherwise — this assign is synthesized here, not discovered from any Vars.X
+        // reference in the source, so nothing else would register it.
+        var tempFile = System.IO.Path.GetTempFileName() + ".cs";
+        System.IO.File.WriteAllText(tempFile, """
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """);
+        try
+        {
+            var opts = new ExtractionOptions { InputDir = tempFile, PassagesOutDir = "", IncludeDebug = true };
+            var report = new ExtractionReport();
+            var mapper = MakeProgressMapper("""{ "P1": { "progress": 1 } }""");
+            var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report, mapper);
+            extractor.Extract([tempFile]);
+
+            var vars = extractor.GetDiscoveredVariables();
+            Assert.True(vars.ContainsKey("_ProgressRound"));
+            Assert.Equal(Masterwork.ModuleFormat.VarKind.Integer, vars["_ProgressRound"].VarType);
+        }
+        finally { System.IO.File.Delete(tempFile); }
+    }
+
+    [Fact]
+    public void CheckProgress_ExplicitNullProgress_AcknowledgedAsDeliberateNoOp_EmitsOnlyCheckProgressNode()
+    {
+        // Explicit "progress": null (present, but deliberately blank) is the map author's way of
+        // acknowledging a checkpoint with no value — distinct from omitting "progress" entirely,
+        // which still warns (see CheckProgress_PassageNotInMapAtAll_... and the layout-only case
+        // right below, neither of which has a "progress" key at all).
+        var mapper = MakeProgressMapper("""{ "P1": { "layout": "hub_early", "progress": null } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out var report);
+
+        Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
+        Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
+        Assert.Equal(0, report.UnknownNodeCount);
+        Assert.DoesNotContain("no entry in the progress map", WriteReport(report));
+    }
+
+    [Fact]
+    public void CheckProgress_LayoutOnlyEntryNoProgressKeyAtAll_StillWarns()
+    {
+        // A layout-only entry (no "progress" key at all — e.g. the real University1OLD/Prosperity3b
+        // stray entries in Modules/progress-map.json) isn't a deliberate "no progress" acknowledgment;
+        // if a CheckProgress call ever does hit this passage, that's a real gap worth flagging.
+        var mapper = MakeProgressMapper("""{ "P1": { "layout": "hub_early" } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out var report);
+
+        Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
+        Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
+        Assert.Contains("no entry in the progress map", WriteReport(report));
+    }
+
+    [Fact]
+    public void CheckProgress_PassageNotInMapAtAll_WarnsAndEmitsOnlyCheckProgressNode()
+    {
+        var mapper = MakeProgressMapper("""{ "SomeOtherPassage": { "progress": 1 } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out var report);
+
+        Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
+        Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
+        Assert.Contains("no entry in the progress map", WriteReport(report));
+    }
+
+    [Fact]
+    public void CheckProgress_NoProgressMapSupplied_BehaviorUnchangedAndNoWarning()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, out var report);
+
+        Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
+        Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
+        Assert.DoesNotContain("no entry in the progress map", WriteReport(report));
+    }
+
+    private static string WriteReport(ExtractionReport report)
+    {
+        var tempReportPath = System.IO.Path.GetTempFileName();
+        try
+        {
+            report.Write(tempReportPath);
+            return System.IO.File.ReadAllText(tempReportPath);
+        }
+        finally
+        {
+            System.IO.File.Delete(tempReportPath);
+        }
     }
 }

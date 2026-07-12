@@ -371,6 +371,31 @@ public class ModuleLoaderTests
     }
 
     [Fact]
+    public void LoadFromSources_PassageTitleAndSubtitleContainRestextRefs_ResolveLikeContent()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.4'
+                passage_id: 'P1'
+                title: 'restext://Title_001'
+                subtitle: 'restext://Subtitle_001'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes: []
+                """,
+            ],
+            restextText: "Title_001=YELLOW FEVER\nSubtitle_001=Early Years\n");
+
+        var passage = module.Passages["P1"];
+        Assert.Equal("YELLOW FEVER", passage.Title);
+        Assert.Equal("Early Years", passage.Subtitle);
+    }
+
+    [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {
         var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
@@ -394,6 +419,99 @@ public class ModuleLoaderTests
 
             var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
             Assert.Equal("Hand-authored greeting", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── Layout chrome ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void LoadFromSources_LayoutChromeYaml_KeyedByLayoutIdNotFilename()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'Early Years chrome'
+                """,
+            ]);
+
+        Assert.True(module.LayoutChrome.ContainsKey("hub_early"));
+        var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
+        Assert.Equal("Early Years chrome", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_NoLayoutChromeYamls_LayoutChromeIsEmpty()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(passageYamls: []);
+
+        Assert.Empty(module.LayoutChrome);
+    }
+
+    [Fact]
+    public void LoadFromSources_LayoutChromeContainsRestextRef_ResolvesLikePassageNodes()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            restextText: "Chrome_001=Resolved chrome text\n",
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'restext://Chrome_001'
+                """,
+            ]);
+
+        var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
+        Assert.Equal("Resolved chrome text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromDirectory_LayoutsFolder_DiscoveredAndLoaded()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        var layoutsDir = Path.Combine(dir, "layouts");
+        Directory.CreateDirectory(layoutsDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub_early'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(layoutsDir, "hub_early.mws.yaml"), """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'From layouts folder'
+                """);
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
+            Assert.Equal("From layouts folder", text.Value);
         }
         finally
         {

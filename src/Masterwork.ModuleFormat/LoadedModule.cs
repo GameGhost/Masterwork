@@ -21,4 +21,7 @@ public sealed class LoadedModule
 
     /// <summary>The passage tagged <c>Begins-Here</c> (case-insensitive), or <see langword="null"/> if none is tagged.</summary>
     public string? StartPassageId { get; init; }
+
+    /// <summary>Module-authored layout chrome (header/footer/before/after regions), keyed by layout id.</summary>
+    public required IReadOnlyDictionary<string, LayoutChromeDoc> LayoutChrome { get; init; }
 }

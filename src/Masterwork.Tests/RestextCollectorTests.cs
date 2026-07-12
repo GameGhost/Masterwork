@@ -62,6 +62,27 @@ public class RestextCollectorTests
         Assert.Equal("restext://Preparations_TCOD_001", nodes[0]["value"]);
     }
 
+    [Fact]
+    public void CollectPassage_TitleAndSubtitle_ExtractedAsRestextRefs()
+    {
+        var collector = new RestextCollector();
+        var dict = new Dictionary<string, object?>
+        {
+            ["title"] = "YELLOW FEVER",
+            ["subtitle"] = "Early Years",
+            ["nodes"] = new List<Dictionary<string, object?>>(),
+        };
+
+        collector.CollectPassage("Fever1", "000-Fever1.mws.yaml", dict);
+
+        Assert.Equal("restext://Fever1_001", dict["title"]);
+        Assert.Equal("restext://Fever1_002", dict["subtitle"]);
+        var entries = Assert.Single(collector.Passages).Entries;
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, e => e.Key == "Fever1_001" && e.Value == "YELLOW FEVER");
+        Assert.Contains(entries, e => e.Key == "Fever1_002" && e.Value == "Early Years");
+    }
+
     private static Dictionary<string, object?> TextPassageDict(string value) => new()
     {
         ["nodes"] = new List<Dictionary<string, object?>>

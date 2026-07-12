@@ -47,6 +47,11 @@ public static partial class V2Serializer
             d["title"] = passage.Title;
         }
 
+        if (!string.IsNullOrEmpty(passage.Subtitle))
+        {
+            d["subtitle"] = passage.Subtitle;
+        }
+
         if (passage.Tags.Length > 0)
         {
             d["tags"] = passage.Tags;

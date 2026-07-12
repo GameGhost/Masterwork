@@ -9,11 +9,14 @@ namespace Masterwork.Engine.Rendering;
 public sealed record PassageRenderResult(
     string PassageId,
     string Layout,
+    string? Title,
+    string? Subtitle,
     string? LocationName,
     string? LocationIcon,
     IReadOnlyList<RenderedNode> Nodes,
     IReadOnlyList<RenderedAction> Actions,
     IReadOnlyList<RenderedCheckpoint> Checkpoints,
     string? PendingGoto,
-    bool IsEnding
+    bool IsEnding,
+    RenderedLayoutChrome Chrome
 );

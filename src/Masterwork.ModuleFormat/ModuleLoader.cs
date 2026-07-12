@@ -46,7 +46,12 @@ public sealed class ModuleLoader : IModuleLoader
             ? Directory.EnumerateFiles(overrideDir, "*.mws.yaml").Select(File.ReadAllText)
             : null;
 
-        return LoadFromSources(passageYamls, variablesYaml, restextText, overridePassageYamls, restextOverrideText);
+        var layoutsDir = Path.Combine(directoryPath, "layouts");
+        var layoutChromeYamls = Directory.Exists(layoutsDir)
+            ? Directory.EnumerateFiles(layoutsDir, "*.mws.yaml").Select(File.ReadAllText)
+            : null;
+
+        return LoadFromSources(passageYamls, variablesYaml, restextText, overridePassageYamls, restextOverrideText, layoutChromeYamls);
     }
 
     // Finds the module's base restext file — preferring en-US.restext, falling back to whichever
@@ -81,7 +86,8 @@ public sealed class ModuleLoader : IModuleLoader
     /// <inheritdoc/>
     public LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
-        IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null)
+        IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
+        IEnumerable<string>? layoutChromeYamls = null)
     {
         var warnings = new ModuleWarnings();
 
@@ -126,6 +132,17 @@ public sealed class ModuleLoader : IModuleLoader
             }
         }
 
+        var layoutChrome = new Dictionary<string, LayoutChromeDoc>();
+        if (layoutChromeYamls is not null)
+        {
+            foreach (var yaml in layoutChromeYamls)
+            {
+                var raw = _passageParser.ParseLayoutChrome(yaml, warnings);
+                var resolved = _restextResolver.ResolveLayoutChrome(raw, locale, warnings);
+                layoutChrome[resolved.LayoutId] = resolved;
+            }
+        }
+
         var startPassageId = passages.Values
             .FirstOrDefault(p => p.Tags.Any(t => string.Equals(t, "Begins-Here", System.StringComparison.OrdinalIgnoreCase)))
             ?.PassageId;
@@ -142,6 +159,7 @@ public sealed class ModuleLoader : IModuleLoader
             Locale = locale,
             Warnings = warnings,
             StartPassageId = startPassageId,
+            LayoutChrome = layoutChrome,
         };
     }
 
@@ -208,6 +226,12 @@ public sealed class ModuleLoader : IModuleLoader
             variables[name] = def; // module's own declarations win on collision
         }
 
+        var layoutChrome = new Dictionary<string, LayoutChromeDoc>(dependency.LayoutChrome);
+        foreach (var (id, chrome) in module.LayoutChrome)
+        {
+            layoutChrome[id] = chrome; // module's own chrome wins on collision
+        }
+
         _logger.LogDebug(
             "Merged dependency into module: {DependencyPassageCount} dependency passages, {DependencyVarCount} dependency variables",
             dependency.Passages.Count, dependency.Variables.Count);
@@ -219,6 +243,7 @@ public sealed class ModuleLoader : IModuleLoader
             Locale = module.Locale,
             Warnings = module.Warnings,
             StartPassageId = module.StartPassageId,
+            LayoutChrome = layoutChrome,
         };
     }
 

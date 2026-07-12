@@ -34,6 +34,27 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void Subtitle_EmitsSubtitleField()
+    {
+        var passage = new MwsPassage { PassageId = "P1", Title = "The Title", Subtitle = "The Subtitle" };
+
+        var d = V2Serializer.ToDict(passage);
+
+        Assert.Equal("The Title", d["title"]);
+        Assert.Equal("The Subtitle", d["subtitle"]);
+    }
+
+    [Fact]
+    public void NoSubtitle_OmitsSubtitleField()
+    {
+        var passage = new MwsPassage { PassageId = "P1" };
+
+        var d = V2Serializer.ToDict(passage);
+
+        Assert.False(d.ContainsKey("subtitle"));
+    }
+
+    [Fact]
     public void ParagraphBreak_EmitsBreakWithParagraphStyle()
     {
         var passage = new MwsPassage

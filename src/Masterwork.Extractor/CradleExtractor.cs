@@ -16,6 +16,7 @@ public partial class CradleExtractor
     private static partial Regex SwitchCondRegex();
     private readonly ExtractionOptions _opts;
     private readonly SpriteMapper _spriteMapper;
+    private readonly ProgressMapper _progressMapper;
     private readonly ExtractionReport _report;
 
     // passage index → (name, tags[], sourceFile)
@@ -31,11 +32,13 @@ public partial class CradleExtractor
     // Source file paths that are complete (class + VarDefs included) vs. partial (method-only)
     private readonly HashSet<string> _completeFiles = [];
 
-    public CradleExtractor(ExtractionOptions opts, SpriteMapper spriteMapper, ExtractionReport report)
+    public CradleExtractor(ExtractionOptions opts, SpriteMapper spriteMapper, ExtractionReport report,
+        ProgressMapper? progressMapper = null)
     {
         _opts = opts;
         _spriteMapper = spriteMapper;
         _report = report;
+        _progressMapper = progressMapper ?? ProgressMapper.Empty();
     }
 
     public List<MwsPassage> Extract(IEnumerable<string> sourceFiles)
@@ -575,7 +578,7 @@ public partial class CradleExtractor
             var isCompleteFile = _completeFiles.Contains(mainMethod.SyntaxTree.FilePath);
             var mainMethodLine = isCompleteFile ? line0 + 1 : line0 - 1;
 
-            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report, _variables, isCompleteFile);
+            var visitor = new PassageBodyVisitor(name, _spriteMapper, _report, _variables, isCompleteFile, _progressMapper);
             var nodes = mainMethod.Body is not null
                 ? visitor.VisitBlock(mainMethod.Body)
                 : [];
@@ -584,10 +587,22 @@ public partial class CradleExtractor
             // Pass the full _fragmentMethods table so cross-passage fragments can be resolved
             // (e.g. passage35_Fragment_3 called from passage32 — Cradle counter artifact).
             var localFrags = _fragmentMethods.TryGetValue(idx, out var lf) ? lf : [];
-            StitchFragments(name, nodes, localFrags, _fragmentMethods, _spriteMapper, _report, _variables);
+            StitchFragments(name, nodes, localFrags, _fragmentMethods, _spriteMapper, _report, _variables, _progressMapper);
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
+            // Heading eligibility is decided from the tag-based category (hub/narration/introduction)
+            // even when --progress-map overrides the final layout value to something more specific
+            // (e.g. "hub_early") — the override changes which chrome/CSS applies, not whether this is
+            // fundamentally a hub-family passage with a leading title block to hoist.
+            var inferredLayout = InferLayout(tags);
+            var layout = _progressMapper.TryGetLayoutOverride(name) ?? inferredLayout;
+            var (headingTitle, headingSubtitle, nodesAfterHeading) = TryHoistHeadingTitleSubtitle(nodes, inferredLayout);
+            if (headingTitle is not null)
+            {
+                nodes = nodesAfterHeading;
+            }
+
             var safeName = name.Replace(" ", "_").Replace("-", "_");
             var rndSeq = FindNextRndSeq(nodes, safeName);
             nodes = HoistAssignAndSwitchPlayerNames(nodes, safeName, ref rndSeq);
@@ -610,9 +625,10 @@ public partial class CradleExtractor
             {
                 PassageIndex = idx,
                 PassageId = name,
-                Title = name,
+                Title = headingTitle ?? name,
+                Subtitle = headingSubtitle,
                 Tags = tags,
-                Layout = InferLayout(tags),
+                Layout = layout,
                 Nodes = nodes,
                 Debug = isDebug,
                 SourceFile = sourceFile,
@@ -630,7 +646,8 @@ public partial class CradleExtractor
         Dictionary<int, Dictionary<int, MethodDeclarationSyntax>> allFrags,
         SpriteMapper spriteMapper,
         ExtractionReport report,
-        IReadOnlyDictionary<string, VarDef>? variables = null)
+        Dictionary<string, VarDef>? variables = null,
+        ProgressMapper? progressMapper = null)
     {
         // Walk the node tree and replace pending fragment stubs in ExpandLinkNodes
         for (int i = 0; i < nodes.Count; i++)
@@ -664,14 +681,14 @@ public partial class CradleExtractor
                     {
                         var fragIsComplete = fragMethod.SyntaxTree.GetRoot() is CompilationUnitSyntax cu2 &&
                             cu2.Members.OfType<ClassDeclarationSyntax>().Any();
-                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report, variables, fragIsComplete);
+                        var fragVisitor = new PassageBodyVisitor(passageName, spriteMapper, report, variables, fragIsComplete, progressMapper);
                         var fragNodes = fragMethod.Body is not null
                             ? fragVisitor.VisitBlock(fragMethod.Body)
                             : [];
                         expand.ExpandNodes.Clear();
                         expand.ExpandNodes.AddRange(fragNodes);
                         // Recurse into the stitched content — it may contain nested fragments
-                        StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables);
+                        StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
                         // Navigation terminals: GotoNode or CheckProgressNode at the end
                         // → convert the expand-link to a plain navigation LinkNode.
                         // CheckProgress always records state, so force state_affecting = true
@@ -713,7 +730,7 @@ public partial class CradleExtractor
                 else
                 {
                     // Not a stub — still recurse in case there are nested ExpandLinkNodes
-                    StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables);
+                    StitchFragments(passageName, expand.ExpandNodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
                 }
             }
             // Recurse into container nodes
@@ -721,27 +738,27 @@ public partial class CradleExtractor
             {
                 foreach (var branch in cond.Branches)
                 {
-                    StitchFragments(passageName, branch.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                    StitchFragments(passageName, branch.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
                 }
             }
             else if (nodes[i] is SwitchNode sw)
             {
                 foreach (var c in sw.Cases)
                 {
-                    StitchFragments(passageName, c.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                    StitchFragments(passageName, c.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
                 }
             }
             else if (nodes[i] is ForeachNode fe)
             {
-                StitchFragments(passageName, fe.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                StitchFragments(passageName, fe.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
             }
             else if (nodes[i] is SectionBodyNode section)
             {
-                StitchFragments(passageName, section.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                StitchFragments(passageName, section.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
             }
             else if (nodes[i] is SetupBlockNode setup)
             {
-                StitchFragments(passageName, setup.Nodes, localFrags, allFrags, spriteMapper, report, variables);
+                StitchFragments(passageName, setup.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
             }
         }
     }
@@ -861,7 +878,74 @@ public partial class CradleExtractor
             return "event";
         }
 
+        // Cradle tag "INTRO" marks a generation-opening passage — visually distinct in the
+        // reference app from ordinary narration (see masterwork-plan notes on layout survey).
+        if (tags.Any(t => t.Equals("INTRO", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "introduction";
+        }
+
         return "narration";
+    }
+
+    // ── Heading (title/subtitle) hoisting ─────────────────────────────────────
+    // For hub/narration/introduction passages, a leading bold-styled block is treated as the
+    // passage's own heading (title/subtitle) rather than ordinary body text — matches how the
+    // reference app renders these as a distinct header. Only recognizes the two shapes actually
+    // seen in the source: one bold line (optionally "Title - Subtitle"), or two bold lines
+    // separated by a single break. Anything else about the leading content — three+ bold lines,
+    // mixed styles, non-text content first — is left completely untouched and extracted as normal
+    // body nodes.
+    [GeneratedRegex(@"^(.*?)\s+-\s+(.*)$")]
+    private static partial Regex HeadingDashSplit();
+
+    private static (string? Title, string? Subtitle, List<MwsNode> Remaining) TryHoistHeadingTitleSubtitle(
+        List<MwsNode> nodes, string layout)
+    {
+        if (layout != "hub" && layout != "narration" && layout != "introduction")
+        {
+            return (null, null, nodes);
+        }
+
+        if (nodes is not [TextNode { Style: "bold", Template.Length: > 0 } first, ..])
+        {
+            return (null, null, nodes);
+        }
+
+        // Two-line case: bold text, one break, bold text — but not a third bold line following
+        // that (the heading is recognized only when it has exactly 1 or 2 lines).
+        if (nodes.Count >= 3 &&
+            nodes[1] is BreakNode or ParagraphBreakNode &&
+            nodes[2] is TextNode { Style: "bold", Template.Length: > 0 } second)
+        {
+            var hasThirdLine = nodes.Count >= 5 &&
+                nodes[3] is BreakNode or ParagraphBreakNode &&
+                nodes[4] is TextNode { Style: "bold" };
+            return hasThirdLine
+                ? (null, null, nodes)
+                : (first.Template.Trim(), second.Template.Trim(), nodes.Skip(3).ToList());
+        }
+
+        // Single-line case: "Title - Subtitle" splits on the first standalone " - "; otherwise
+        // the whole line becomes the title with no subtitle.
+        var (title, subtitle) = SplitHeadingLine(first.Template);
+        return (title, subtitle, nodes.Skip(1).ToList());
+    }
+
+    private static (string Title, string? Subtitle) SplitHeadingLine(string text)
+    {
+        var trimmed = text.Trim();
+        var m = HeadingDashSplit().Match(trimmed);
+        if (m.Success)
+        {
+            var titlePart = m.Groups[1].Value.Trim();
+            var subtitlePart = m.Groups[2].Value.Trim();
+            if (titlePart.Length > 0 && subtitlePart.Length > 0)
+            {
+                return (titlePart, subtitlePart);
+            }
+        }
+        return (trimmed, null);
     }
 
     // ── Text consolidation post-pass ─────────────────────────────────────────

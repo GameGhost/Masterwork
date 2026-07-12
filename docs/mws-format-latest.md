@@ -29,12 +29,24 @@ nodes:
 |---|---|---|---|
 | `format` | string | yes | Always `mws/0.4`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
 | `passage_id` | string | yes | Canonical passage identifier |
-| `title` | string | no | Display title; defaults to `passage_id` |
+| `title` | string | no | Display title; defaults to `passage_id`. For `hub`/`narration` passages, the extractor hoists this from the source's leading bold-styled text block (see below) instead of leaving it as an ordinary body node |
+| `subtitle` | string | no | Optional subtitle shown alongside `title` in the passage header. Populated the same way as `title` — either the second line of a two-line bold heading, or the part after " - " in a single-line "Title - Subtitle" heading |
 | `tags` | list of strings | no | Source tags; drives layout inference |
 | `layout` | string | yes | An open, module-extensible vocabulary. Built-in values: `hub`, `event`, `narration` (see below) |
 | `debug` | bool | no | `true` for developer-only passages excluded from player builds |
 | `location` | object | no | Location shown in app header. Fields: `name` (string), `icon` (asset URI) |
 | `check_progress` | string | no | `passage_id` that must have been visited before this passage is valid to render |
+
+For `hub`/`narration`/`introduction` passages, the extractor recognizes a leading bold-styled text block as the
+passage's heading rather than emitting it as ordinary body text, per these rules: a single bold
+line splits on the first standalone `" - "` into `title`/`subtitle` (no `-` → the whole line becomes
+`title` with no `subtitle`); two consecutive bold lines separated by a single `break` become `title`
+and `subtitle` verbatim (the break itself is discarded, not preserved as body content). Any other
+shape — three or more bold lines, mixed-style leading text, non-text content first — is left
+untouched and extracted as normal nodes. This detection only ever looks at the very first block of
+the passage; a bold run anywhere else in the body is unaffected. The app renders `title`/`subtitle`
+in a dedicated header region above the passage body (see `Masterwork.App.Shared`'s `PassageView`),
+and the timeline scrubber's default snapshot label uses `"{title} - {subtitle}"` when both are set.
 
 ### Layout Values
 
@@ -43,10 +55,15 @@ nodes:
 | `hub` | Generation hub — sections with headings, collapsible bodies, multiple optional links |
 | `event` | Full-page event card — narrative text with prominent bottom links |
 | `narration` | Story passage; minimal chrome |
+| `introduction` | Generation-opening passage (Cradle tag `INTRO`) — visually distinct from ordinary narration in the reference app |
+
+`layout` is an open vocabulary beyond this built-in list — a module's own `--progress-map` (see
+`docs/extractor.md`) can override a passage's layout entirely, e.g. Cost of Disease splits `hub`
+into `hub_early`/`hub_middle`/`hub_late` for its three distinct per-round hub screens (see §8).
 
 These are the only values the engine's own passage chrome renders specially; any other string is accepted and rendered generically (with a `layout-{value}` CSS class for module/asset-pack theming), since `layout` is deliberately an open vocabulary a module can extend. A generation-end summary is handled by `popup` nodes with `layout: end_of_generation` (see §9), which is unrelated to a passage-level `modal` layout. A module wanting a "reveal to one player" moment can compose one from ordinary `conditional`/`input`/`assign` nodes.
 
-The passage `layout` selects the chrome from the module manifest or engine built-in defaults. Module-specific chrome is defined in the module manifest (see §9).
+The passage `layout` is a CSS/structural hook, not a manifest-declared chrome definition — see §8 "Module Layout/Chrome" for how module CSS and, optionally, a `layouts/{id}.yaml` chrome file give it visual meaning.
 
 ---
 
@@ -1035,62 +1052,80 @@ Extracted passage files include YAML comments injected by the extractor. These a
 
 ## 8. Module Layout/Chrome
 
-The `layout` field selects visual chrome from the module manifest or the engine's built-in defaults. Modules can define custom chrome in their manifest:
+### Layout as a structural/CSS hook
+
+`layout` (on both passages and popups) is an open, module-extensible string. The app never
+branches on its value to decide *what* to render — it always renders the same purely structural
+regions (a passage's node list; a popup's `header`/`content`/`okay`/`cancel`) — the value is only
+ever carried through as a `layout-{value}` CSS class for module stylesheets to target. `voting` and
+`bidding` are the one exception: the app renders a bespoke countdown-then-reveal component
+(`VotingPopupContent`) for those two popup layout values specifically. Every other layout value —
+`hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/anything
+module-defined on popups — renders through the fully generic path; all visual differentiation comes
+from module CSS keyed on the `layout-{value}` class (see `Masterwork.App.Shared`'s
+`PassageView.razor`/`RenderedPopupView.razor`, and e.g.
+`Masterwork-Design/Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`
+rules for a worked example). There is no manifest-declared `layouts:`/`popups:` registry — layout
+values are just strings the extractor and a module's own CSS agree on.
+
+### Layout chrome (`layouts/{id}.mws.yaml`)
+
+A module can attach optional node-list regions to a layout name, rendered around a passage's or
+popup's own content without the app ever inspecting what those regions contain or what the layout
+name means. One file per layout, in a `layouts/` folder alongside `passages/`/`passages-override/`:
 
 ```yaml
-# Module manifest
-layouts:
-  generation_end:
-    base: modal
-    chrome: EndOfGeneration
+# layouts/hub_early.mws.yaml
+format: 'mws/0.4'
+layout_id: 'hub_early'
+header:
+- type: 'image'
+  asset: 'image://progress/step{_ProgressRound}'
+before_content: []
+after_content: []
+footer: []
 ```
 
-A passage then uses:
+`layout_id` is authoritative (not the filename, though they should match by convention — a mismatch
+is a soft warning, not an error). All four regions — `header`, `footer`, `before_content`,
+`after_content` — are optional node lists using the exact same vocabulary as a passage's own
+`nodes:`, including `conditional`/`switch`/`let`/`assign`, evaluated against live variable state at
+render time exactly like a passage body is. A layout name with no matching `layouts/*.yaml` file
+simply renders no chrome — the normal case for most layout names.
 
-```yaml
-layout: generation_end
+Composition order, whether the layout name came from a passage or a popup:
+
+```
+header                                (outermost — above the passage's title/subtitle, or popup's own header)
+passage's title/subtitle, or popup's own header region
+before_content
+passage's nodes, or popup's content
+after_content
+[popup's own footer: okay/cancel buttons]
+footer                                (outermost — below everything else)
 ```
 
-Custom layout/chrome allows module and asset pack authors to style passage types, popups, inputs, and UI elements without changing passage content.
+Because the lookup is unconditional, a module *can* attach chrome to `voting`/`bidding` too — but
+since those two render entirely through their own bespoke component, any chrome attached there
+isn't currently displayed.
 
-### Popup Layout Definitions
+Chrome logic is expected to read ordinary session variables the extractor or module content sets —
+there is no engine-reserved variable name for this. For example, the Cost of Disease extractor
+populates a `_ProgressRound` variable (an int, 1–9) at the passage-tracker checkpoints the reference
+app uses to advance its own progress bar (see `--progress-map` in `docs/extractor.md`); a
+`layouts/hub_early.mws.yaml`/`hub_middle.mws.yaml`/`hub_late.mws.yaml` chrome file is what actually turns that
+into a visible progress indicator, entirely as module content — the engine and app have no built-in
+notion of "a progress bar" at all.
 
-A `popup` node's optional `layout` field names a layout definition that takes over the popup's entire visual treatment — including its own animations, UI controls, and interaction model. The layout definition is declared in the module manifest or in a shared asset pack that the module depends on.
-
-```yaml
-# In the module manifest or asset pack manifest
-popups:
-  voting:
-    description: Simultaneous-reveal voting popup
-    asset_pack: MFW_Common_Assets
-    interaction: bidding_countdown  # built-in interaction type
-    mode: voting
-  bidding:
-    description: Simultaneous-reveal bidding popup
-    asset_pack: MFW_Common_Assets
-    interaction: bidding_countdown
-    mode: bidding
-```
-
-Layout-driven popups follow a different lifecycle from content popups:
-
-1. The engine evaluates any `let`, `conditional`, and `switch` nodes in the popup's `content` list. The resulting variable values are bound to the layout's named properties before display.
-2. The layout renders its own body using those properties. Standard content nodes (`text`, `link`, etc.) are not displayed.
-3. The layout controls when the close/confirm action becomes available (e.g. after an animation or countdown completes).
-4. On completion, the engine runs `onclose` (if any) and navigates to `target` (if set) as a state-affecting transition, same as an ordinary popup's Okay button (see §6 `popup`). When `passageName` is a computed layout property (from a conditional `let: passageName`), the layout uses that value for navigation instead.
-
-**Built-in popup layouts for MFW modules** (`MFW_Common_Assets`):
-
-| Layout name | Display trigger | Properties | Description |
-|---|---|---|---|
-| `voting` | Click (`label` required) | — | Countdown timer → simultaneous reveal of voting tokens; navigates to `target` on "Bid Complete" |
-| `bidding` | Click (`label` required) | — | Countdown timer → simultaneous reveal of bid amounts; navigates to `target` on "Bid Complete" |
-| `end_of_generation` | Auto or click | `title`, `completedRound`, `generation`, `passageName` | Full-screen End-of-Generation summary modal; updates progress bar if `completedRound ≥ 0`; navigates `target` or `passageName` on confirm |
-| `setup` | Click (`label` required) | `_SetupImage` | Item-obtain setup panel; displays a setup image and instruction text with an ACCEPT button |
-
-For `voting` and `bidding`: both display a 3-count countdown (`1, 2, 3, Reveal`), then surface a "Reveal" button. The close/navigate action is hidden until players tap "Reveal". The distinction between modes is the animation and prompt text — the mechanics are identical.
-
-For `end_of_generation`: displays the `title` string and the passage `text` node(s) as the instruction body. The `completedRound` value (≥ 0) updates the app progress bar; `-1` skips the update. The modal can be triggered automatically (no `label`, used for top-level `S_OnEndOfGeneration` calls) or by a click (with `label`, used for `S_OnSetSpecialSetup` in expand-link fragments). Navigation target is `target` when set as a literal, or the `passageName` property (bound by conditional nodes in `nodes`) when computed at runtime.
+**Timing note**: the assign lives on the `CheckProgress` call site, which in the source is attached
+to the link that *leaves* a round's hub passage — not to the hub passage itself. So `_ProgressRound`
+only advances on that transition, not on hub entry: while playing round *N*'s content (for
+*N* = 1–9), the variable still holds whatever the *previous* round's transition set it to (`0` while
+playing round 1, since no checkpoint has fired yet). It only reaches `9` once the player leaves round
+9's hub — i.e. on the way *into* end-of-game/scoring, not while round 9 is still being played. Chrome
+authored against this variable should treat it as "rounds completed so far," not "the round currently
+being displayed" — e.g. a hub screen wanting to show "you are entering round N" would need
+`_ProgressRound + 1`, not the raw value.
 
 ---
 

@@ -42,7 +42,8 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
             ? contents.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
         var loadedModule = loader.LoadFromSources(
-            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride);
+            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride,
+            contents.LayoutYamls);
         return LoadedModuleContent.FromPackage(contents, loadedModule);
     }
 

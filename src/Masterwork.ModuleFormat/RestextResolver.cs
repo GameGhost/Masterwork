@@ -43,11 +43,25 @@ public sealed partial class RestextResolver : IRestextResolver
         return passage with
         {
             Title = ResolveDisplay(passage.Title, locale, warnings),
+            Subtitle = ResolveDisplay(passage.Subtitle, locale, warnings),
             Location = passage.Location is null ? null : passage.Location with
             {
                 Name = ResolveDisplay(passage.Location.Name, locale, warnings),
             },
             Nodes = ResolveNodeList(passage.Nodes, locale, warnings),
+        };
+    }
+
+    /// <inheritdoc/>
+    public LayoutChromeDoc ResolveLayoutChrome(LayoutChromeDoc chrome, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings = null)
+    {
+        _logger.LogDebug("Resolving restext references for layout chrome '{LayoutId}'", chrome.LayoutId);
+        return chrome with
+        {
+            Header = ResolveNodeList(chrome.Header, locale, warnings),
+            Footer = ResolveNodeList(chrome.Footer, locale, warnings),
+            BeforeContent = ResolveNodeList(chrome.BeforeContent, locale, warnings),
+            AfterContent = ResolveNodeList(chrome.AfterContent, locale, warnings),
         };
     }
 

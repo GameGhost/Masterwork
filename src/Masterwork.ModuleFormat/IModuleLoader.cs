@@ -43,9 +43,14 @@ public interface IModuleLoader
     /// <paramref name="restextText"/>'s entries after parsing: a matching key replaces the base
     /// value, a new key is added.
     /// </param>
+    /// <param name="layoutChromeYamls">
+    /// Raw <c>layouts/*.yaml</c> text, one entry per layout chrome file, keyed by each file's own
+    /// <c>layout_id</c> (not filename) once loaded.
+    /// </param>
     LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
-        IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null);
+        IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
+        IEnumerable<string>? layoutChromeYamls = null);
 
     /// <summary>
     /// Merges a dependency (typically an asset pack) into <paramref name="module"/> — its passages

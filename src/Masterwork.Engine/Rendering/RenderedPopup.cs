@@ -72,4 +72,13 @@ public sealed record RenderedPopup : RenderedAction
     /// <c>snapshot_label</c>.
     /// </summary>
     public string? SnapshotLabel { get; init; }
+
+    /// <summary>
+    /// Module-authored layout chrome for <see cref="Layout"/>, if any — rendered against
+    /// <see cref="Sandbox"/> the same way <see cref="Header"/>/<see cref="Content"/> are. Always
+    /// present (never null); empty when the module has no chrome registered for this layout name,
+    /// including for the built-in <c>voting</c>/<c>bidding</c> layouts, which render their own
+    /// bespoke UI and never reference this. Its actions are already merged into <see cref="Actions"/>.
+    /// </summary>
+    public required RenderedLayoutChrome Chrome { get; init; }
 }

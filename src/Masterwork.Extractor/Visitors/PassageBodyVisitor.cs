@@ -14,6 +14,7 @@ public class PassageBodyVisitor
 {
     private readonly string _passageName;
     private readonly SpriteMapper _spriteMapper;
+    private readonly ProgressMapper _progressMapper;
     private readonly ExtractionReport _report;
 
     // Current accumulated text runs — flushed into a TextNode at the next non-text node
@@ -52,21 +53,27 @@ public class PassageBodyVisitor
     // Vars variables set to int arrays in this passage: varName → int values (for localIntList matching)
     private readonly Dictionary<string, List<int>> _passageIntArrayVars = new(StringComparer.Ordinal);
 
-    // Known variable types — used to validate int.Parse() arithmetic stripping
-    private readonly IReadOnlyDictionary<string, VarDef>? _variables;
+    // Known variable types — used to validate int.Parse() arithmetic stripping. Also the
+    // registration target for synthetic variables this visitor invents itself (e.g. _ProgressRound
+    // below) — mutable (not IReadOnlyDictionary) for exactly that, mirroring how
+    // V2Serializer.TransformInputAction registers its own synthetic guard variable via the same
+    // shared dictionary threaded through SerializationContext.Variables.
+    private readonly Dictionary<string, VarDef>? _variables;
 
     // Line-number offset applied in GetLine: +1 for complete files (0-indexed Roslyn → 1-indexed),
     // -1 for partial/wrapped files (Roslyn sees 2 prepended wrapper lines, net offset is -1).
     private readonly int _lineOffset;
 
     public PassageBodyVisitor(string passageName, SpriteMapper spriteMapper, ExtractionReport report,
-        IReadOnlyDictionary<string, VarDef>? variables = null, bool isCompleteFile = false)
+        Dictionary<string, VarDef>? variables = null, bool isCompleteFile = false,
+        ProgressMapper? progressMapper = null)
     {
         _passageName = passageName;
         _spriteMapper = spriteMapper;
         _report = report;
         _variables = variables;
         _lineOffset = isCompleteFile ? 1 : -1;
+        _progressMapper = progressMapper ?? ProgressMapper.Empty();
     }
 
     public List<MwsNode> VisitBlock(BlockSyntax block) =>
@@ -693,24 +700,49 @@ public class PassageBodyVisitor
         // PassageTracker.instance.CheckProgress(current, target)
         if (expr is InvocationExpressionSyntax cpInv && IsCheckProgress(cpInv, out var cp))
         {
+            // --progress-map: prepend a synthetic _ProgressRound assign when the current passage has
+            // a mapped value — kept BEFORE cp/the goto node(s) below (not after) so whichever of
+            // those remains the list's own last element for StitchFragments' termination-detection
+            // (expand.ExpandNodes[^1] is CheckProgressNode/GotoNode) — see the plan notes on why
+            // ordering here isn't cosmetic.
+            List<MwsNode> progressPrefix = [];
+            if (_progressMapper.TryGetProgressValue(cp!.CurrentPassage, out var progressValue))
+            {
+                if (progressValue is int p)
+                {
+                    // Register the synthetic variable so it lands in _variables.yaml — otherwise a
+                    // module referencing it (e.g. layout chrome) would hit an undeclared variable,
+                    // since this assign is invented here, not discovered from any Vars.X reference in
+                    // the source. Same TryAdd-into-shared-dictionary pattern as
+                    // V2Serializer.TransformInputAction's synthetic guard variable.
+                    _variables?.TryAdd("_ProgressRound", new VarDef { Name = "_ProgressRound", VarType = VarKind.Integer });
+                    progressPrefix.Add(new EffectNode { VarSets = new() { ["_ProgressRound"] = p } });
+                }
+            }
+            else if (_progressMapper.IsConfigured)
+            {
+                _report.AddWarning(_passageName,
+                    $"CheckProgress(\"{cp.CurrentPassage}\", ...) has no entry in the progress map", sourceLine: GetLine(cpInv));
+            }
+
             // If target was unresolvable (computed local var), check _localVars and _localPassageConditionals.
             // When resolved, return conditional GotoNodes instead of a CheckProgressNode so that the
             // enclosing expand-link can be converted to navigation by V2Serializer.
-            if (string.IsNullOrEmpty(cp!.TargetPassage) && cpInv.ArgumentList.Arguments.Count > 1 &&
+            if (string.IsNullOrEmpty(cp.TargetPassage) && cpInv.ArgumentList.Arguments.Count > 1 &&
                 cpInv.ArgumentList.Arguments[1].Expression is IdentifierNameSyntax cpTargetId)
             {
                 var targetVar = cpTargetId.Identifier.Text;
                 if (_localVars.TryGetValue(targetVar, out var literalTarget) && !string.IsNullOrEmpty(literalTarget))
                 {
-                    return [new GotoNode { Target = literalTarget }];
+                    return [.. progressPrefix, new GotoNode { Target = literalTarget }];
                 }
 
                 if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
                 {
-                    return BuildGotoNodesFromLetConditionals(psnNodes);
+                    return [.. progressPrefix, .. BuildGotoNodesFromLetConditionals(psnNodes)];
                 }
             }
-            return [cp!];
+            return [.. progressPrefix, cp];
         }
 
         // PassageTracker.instance.SetLocationIndicatorIcon(...) — usually paired with

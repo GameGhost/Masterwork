@@ -24,6 +24,35 @@ public class DeserializerTests
     }
 
     [Fact]
+    public void Passage_UsesTitleAndSubtitleFields()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            title: 'The Title'
+            subtitle: 'The Subtitle'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        Assert.Equal("The Title", passage.Title);
+        Assert.Equal("The Subtitle", passage.Subtitle);
+    }
+
+    [Fact]
+    public void Passage_NoSubtitleField_DefaultsToNull()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        Assert.Null(passage.Subtitle);
+    }
+
+    [Fact]
     public void AllNodeTypes_Deserialize()
     {
         var passage = ParseOne("""
@@ -678,5 +707,48 @@ public class DeserializerTests
             """);
 
         Assert.False(passage.Ending);
+    }
+
+    // ── Layout chrome ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ParseLayoutChrome_AllFourRegions_Deserialize()
+    {
+        var chrome = new PassageYamlParser().ParseLayoutChrome("""
+            format: 'mws/0.4'
+            layout_id: 'hub_early'
+            header:
+            - type: 'text'
+              value: 'header text'
+            footer:
+            - type: 'text'
+              value: 'footer text'
+            before_content:
+            - type: 'text'
+              value: 'before text'
+            after_content:
+            - type: 'text'
+              value: 'after text'
+            """);
+
+        Assert.Equal("hub_early", chrome.LayoutId);
+        Assert.Equal("header text", Assert.IsType<TextNode>(chrome.Header.Single()).Value);
+        Assert.Equal("footer text", Assert.IsType<TextNode>(chrome.Footer.Single()).Value);
+        Assert.Equal("before text", Assert.IsType<TextNode>(chrome.BeforeContent.Single()).Value);
+        Assert.Equal("after text", Assert.IsType<TextNode>(chrome.AfterContent.Single()).Value);
+    }
+
+    [Fact]
+    public void ParseLayoutChrome_NoRegions_AllDefaultToEmpty()
+    {
+        var chrome = new PassageYamlParser().ParseLayoutChrome("""
+            format: 'mws/0.4'
+            layout_id: 'hub_early'
+            """);
+
+        Assert.Empty(chrome.Header);
+        Assert.Empty(chrome.Footer);
+        Assert.Empty(chrome.BeforeContent);
+        Assert.Empty(chrome.AfterContent);
     }
 }

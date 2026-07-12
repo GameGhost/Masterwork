@@ -14,7 +14,46 @@
 }
 
 <div class="mws-passage layout-@Result.Layout">
-    <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+    @* Layout chrome (Result.Chrome) is purely structural — module-authored regions matched by
+       Result.Layout's name, rendered wherever their list is non-empty. The app never inspects what
+       a chrome region contains or what the layout name means (see docs/mws-format-latest.md). *@
+    @if (Result.Chrome.Header.Count > 0)
+    {
+        <div class="mws-layout-header">
+            <NodeListView Nodes="Result.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        </div>
+    }
+    @if (Result.Title is not null)
+    {
+        <header class="mws-passage-header">
+            <h1 class="mws-passage-title">@Result.Title</h1>
+            @if (Result.Subtitle is not null)
+            {
+                <p class="mws-passage-subtitle">@Result.Subtitle</p>
+            }
+        </header>
+    }
+    @if (Result.Chrome.BeforeContent.Count > 0)
+    {
+        <div class="mws-layout-before-content">
+            <NodeListView Nodes="Result.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        </div>
+    }
+    <div class="mws-passage-body">
+        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+    </div>
+    @if (Result.Chrome.AfterContent.Count > 0)
+    {
+        <div class="mws-layout-after-content">
+            <NodeListView Nodes="Result.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        </div>
+    }
+    @if (Result.Chrome.Footer.Count > 0)
+    {
+        <div class="mws-layout-footer">
+            <NodeListView Nodes="Result.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        </div>
+    }
 </div>
 
 @code {

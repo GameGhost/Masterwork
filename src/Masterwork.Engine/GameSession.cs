@@ -412,9 +412,17 @@ public sealed class GameSession
 
     // The timeline scrubber's default label for any snapshot that doesn't specify its own
     // (link.snapshot/popup.snapshot's string form, checkpoint.display): the destination passage's
-    // own title, falling back to its passage_id if the module doesn't set one.
-    private string ResolvePassageTitle(string passageId) =>
-        _module.Passages.TryGetValue(passageId, out var doc) ? doc.Title ?? passageId : passageId;
+    // own title (plus subtitle, joined as "{title} - {subtitle}", when both are set), falling back
+    // to its passage_id if the module doesn't set a title.
+    private string ResolvePassageTitle(string passageId)
+    {
+        if (!_module.Passages.TryGetValue(passageId, out var doc) || doc.Title is null)
+        {
+            return passageId;
+        }
+
+        return doc.Subtitle is not null ? $"{doc.Title} - {doc.Subtitle}" : doc.Title;
+    }
 
     private void TruncateFuture()
     {

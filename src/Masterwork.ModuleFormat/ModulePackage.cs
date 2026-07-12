@@ -19,16 +19,18 @@ public sealed record ModulePackageContents(
     IReadOnlyList<string> PassageYamls,
     IReadOnlyDictionary<string, byte[]> Assets,
     IReadOnlyList<string> OverridePassageYamls,
-    IReadOnlyDictionary<string, string> RestextOverridesByLocale
+    IReadOnlyDictionary<string, string> RestextOverridesByLocale,
+    IReadOnlyList<string> LayoutYamls
 );
 
 /// <summary>
 /// Reads/writes the <c>.mwm</c> zip format. Layout mirrors what the extractor and
 /// <c>Masterwork-Design/Modules/&lt;id&gt;</c> module directories already produce: extractor-owned
 /// passages under <c>passages/</c> (or flat at the root, for older packages built before that split),
-/// hand-authored replacements/additions under <c>passages-override/</c>, <c>_variables.yaml</c> and
-/// <c>manifest.yaml</c> at the root, and an <c>assets/</c> folder for whatever an asset pack
-/// contributes (Milestone C). Any root-level <c>{locale}.restext</c> file is picked up — a module
+/// hand-authored replacements/additions under <c>passages-override/</c>, module-authored layout
+/// chrome under <c>layouts/</c>, <c>_variables.yaml</c> and <c>manifest.yaml</c> at the root, and an
+/// <c>assets/</c> folder for whatever an asset pack contributes (Milestone C). Any root-level
+/// <c>{locale}.restext</c> file is picked up — a module
 /// can ship as many as it has translations for (<c>en-US.restext</c>, <c>es.restext</c>, ...) — and a
 /// sibling <c>{locale}.overrides.restext</c>, if present, is exposed separately in
 /// <see cref="ModulePackageContents.RestextOverridesByLocale"/> for the same add/override-by-key
@@ -49,6 +51,7 @@ public static class ModulePackage
         var passageYamls = new List<string>();
         var overridePassageYamls = new List<string>();
         var assets = new Dictionary<string, byte[]>();
+        var layoutYamls = new List<string>();
 
         foreach (var entry in archive.Entries)
         {
@@ -93,6 +96,11 @@ public static class ModulePackage
             {
                 overridePassageYamls.Add(ReadText(entry));
             }
+            else if (path.StartsWith("layouts/", StringComparison.OrdinalIgnoreCase) &&
+                     path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+            {
+                layoutYamls.Add(ReadText(entry));
+            }
             else if (path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
             {
                 assets[path] = ReadBytes(entry);
@@ -100,7 +108,7 @@ public static class ModulePackage
         }
 
         return new ModulePackageContents(
-            manifestYaml, variablesYaml, restextByLocale, passageYamls, assets, overridePassageYamls, restextOverridesByLocale);
+            manifestYaml, variablesYaml, restextByLocale, passageYamls, assets, overridePassageYamls, restextOverridesByLocale, layoutYamls);
     }
 
     /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes.</summary>

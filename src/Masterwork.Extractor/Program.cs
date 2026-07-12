@@ -59,6 +59,10 @@ partial class Program
             ? SpriteMapper.FromJsonFile(opts.SpriteMapPath)
             : SpriteMapper.Empty();
 
+        var progressMapper = opts.ProgressMapPath is not null
+            ? ProgressMapper.FromJsonFile(opts.ProgressMapPath)
+            : ProgressMapper.Empty();
+
         // Derive a human-readable module title: prefer explicit --module-title, fall back to source filename.
         var moduleTitle = opts.ModuleTitle;
         if (string.IsNullOrEmpty(moduleTitle) && sourceFiles.Count == 1)
@@ -79,7 +83,7 @@ partial class Program
             OutputDirPath = sourceDir,
             ModuleTitle = moduleTitle,
         };
-        var extractor = new CradleExtractor(opts, spriteMapper, report);
+        var extractor = new CradleExtractor(opts, spriteMapper, report, progressMapper);
 
         // Record command-line settings for the extraction report.
         if (opts.ModuleTitle is { Length: > 0 } mt)
@@ -95,6 +99,11 @@ partial class Program
         if (opts.SpriteMapPath is not null)
         {
             report.Settings["Sprite map"] = Path.GetFileName(opts.SpriteMapPath);
+        }
+
+        if (opts.ProgressMapPath is not null)
+        {
+            report.Settings["Progress map"] = Path.GetFileName(opts.ProgressMapPath);
         }
 
         if (opts.RestextExcludeTags.Count > 0)
@@ -359,6 +368,8 @@ partial class Program
                     opts.ModuleTitle = args[++i]; break;
                 case "--sprite-map" when i + 1 < args.Length:
                     opts.SpriteMapPath = args[++i]; break;
+                case "--progress-map" when i + 1 < args.Length:
+                    opts.ProgressMapPath = args[++i]; break;
                 case "--include-debug":
                     opts.IncludeDebug = true; break;
                 case "--dry-run":
@@ -790,6 +801,10 @@ partial class Program
               --module-id <id>        Module ID (e.g. original.cost_of_disease)
               --module-title <title>  Human-readable title
               --sprite-map <json>     Path to ItemObtain JSON for sprite → asset_ref mapping
+              --progress-map <json>   Path to a passage-name → {layout, progress} JSON map: layout
+                                      overrides InferLayout's tag-based result; progress emits a
+                                      synthetic _ProgressRound assign at matching
+                                      PassageTracker.instance.CheckProgress(...) call sites
               --include-debug         Include devpage-gated debug passages
               --dry-run               Parse and report without writing files
               --seed-analysis         Emit seed dependency report

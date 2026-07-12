@@ -10,6 +10,7 @@ public class MwsPassage
     public string Format { get; set; } = "mws/0.3";
     public string PassageId { get; set; } = "";
     public string Title { get; set; } = "";
+    public string? Subtitle { get; set; }
     public string[] Tags { get; set; } = [];
     public string Layout { get; set; } = "narration";
     public List<MwsNode> Nodes { get; set; } = [];

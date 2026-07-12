@@ -46,7 +46,8 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
             ? contents.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
         var module = loader.LoadFromSources(
-            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride);
+            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride,
+            contents.LayoutYamls);
         return LoadedModuleContent.FromPackage(contents, module);
     }
 

@@ -9,7 +9,8 @@ namespace Masterwork.Tests;
 public class PassageRendererTests
 {
     private static (MwsPassageDoc passage, LoadedModule module, VariableStore store) Load(
-        string mainYaml, string? variablesYaml = null, IEnumerable<string>? others = null, string mainId = "P1")
+        string mainYaml, string? variablesYaml = null, IEnumerable<string>? others = null, string mainId = "P1",
+        IEnumerable<string>? layoutChromeYamls = null)
     {
         var yamls = new List<string> { mainYaml };
         if (others is not null)
@@ -17,7 +18,7 @@ public class PassageRendererTests
             yamls.AddRange(others);
         }
 
-        var module = new ModuleLoader().LoadFromSources(yamls, variablesYaml);
+        var module = new ModuleLoader().LoadFromSources(yamls, variablesYaml, layoutChromeYamls: layoutChromeYamls);
         var store = new VariableStore(module.Variables, new SessionPrng(1));
         return (module.Passages[mainId], module, store);
     }
@@ -965,6 +966,218 @@ public class PassageRendererTests
 
         var result = Render(passage, module, store);
         Assert.Null(result.LocationName);
+    }
+
+    // ── Title / subtitle header ────────────────────────────────────────────────
+
+    [Fact]
+    public void TitleAndSubtitle_ExposedInResult()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            title: 'YELLOW FEVER'
+            subtitle: 'Early Years'
+            layout: 'hub'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("YELLOW FEVER", result.Title);
+        Assert.Equal("Early Years", result.Subtitle);
+    }
+
+    [Fact]
+    public void NoTitle_IsNull()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Null(result.Title);
+        Assert.Null(result.Subtitle);
+    }
+
+    [Fact]
+    public void Title_ExpandsVariableTemplates()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            title: 'Hello {townname}'
+            layout: 'hub'
+            nodes: []
+            """,
+            variablesYaml: """
+                standard_variables: []
+                variables:
+                  townname:
+                    type: 'string'
+                    default: 'Millbrook'
+                """);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("Hello Millbrook", result.Title);
+    }
+
+    // ── Layout chrome ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void MatchingLayoutChrome_RendersIntoFourDistinctRegions()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub_early'
+            nodes:
+            - type: 'text'
+              value: 'body'
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'header text'
+                footer:
+                - type: 'text'
+                  value: 'footer text'
+                before_content:
+                - type: 'text'
+                  value: 'before text'
+                after_content:
+                - type: 'text'
+                  value: 'after text'
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+
+        Assert.Equal("header text", Assert.IsType<RenderedText>(result.Chrome.Header.Single()).Value);
+        Assert.Equal("footer text", Assert.IsType<RenderedText>(result.Chrome.Footer.Single()).Value);
+        Assert.Equal("before text", Assert.IsType<RenderedText>(result.Chrome.BeforeContent.Single()).Value);
+        Assert.Equal("after text", Assert.IsType<RenderedText>(result.Chrome.AfterContent.Single()).Value);
+        Assert.Equal("body", Assert.IsType<RenderedText>(result.Nodes.Single()).Value);
+    }
+
+    [Fact]
+    public void NoMatchingLayoutChrome_ChromeIsEmpty()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+
+        Assert.Empty(result.Chrome.Header);
+        Assert.Empty(result.Chrome.Footer);
+        Assert.Empty(result.Chrome.BeforeContent);
+        Assert.Empty(result.Chrome.AfterContent);
+    }
+
+    [Fact]
+    public void LayoutChromeLink_ActionMergedIntoPassageActionsWithNonCollidingId()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub_early'
+            nodes:
+            - type: 'link'
+              label: 'Body link'
+              target: 'P1'
+              snapshot: false
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'link'
+                  label: 'Chrome link'
+                  target: 'P1'
+                  snapshot: false
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+
+        var chromeLink = Assert.IsType<RenderedLink>(result.Chrome.Header.Single());
+        var bodyLink = Assert.IsType<RenderedLink>(result.Nodes.Single());
+        Assert.NotEqual(chromeLink.Id, bodyLink.Id);
+        Assert.Contains(result.Actions, a => a.Id == chromeLink.Id);
+        Assert.Contains(result.Actions, a => a.Id == bodyLink.Id);
+    }
+
+    [Fact]
+    public void PopupWithMatchingLayoutChrome_RendersAgainstSandboxAndMergesActions()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              layout: 'setup'
+              snapshot: true
+              content: []
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'setup'
+                header:
+                - type: 'link'
+                  label: 'Chrome link'
+                  target: 'P1'
+                  snapshot: false
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+
+        var chromeLink = Assert.IsType<RenderedLink>(popup.Chrome.Header.Single());
+        Assert.Contains(popup.Actions, a => a.Id == chromeLink.Id);
+        // Popup chrome is scoped to the popup, not merged into the outer passage's own Actions.
+        Assert.DoesNotContain(result.Actions, a => a.Id == chromeLink.Id);
+    }
+
+    [Fact]
+    public void PopupWithNoLayout_ChromeIsEmpty()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              content: []
+            """);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+
+        Assert.Empty(popup.Chrome.Header);
+        Assert.Empty(popup.Chrome.Footer);
+        Assert.Empty(popup.Chrome.BeforeContent);
+        Assert.Empty(popup.Chrome.AfterContent);
     }
 
     // ── Ending header ────────────────────────────────────────────────────────

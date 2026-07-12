@@ -50,6 +50,7 @@ h1:focus {
 
 .mws-passage {
     padding: 1rem;
+    margin: 0.5em;
 }
 
 /* hub: a calmer, card-like frame for home-base passages */
@@ -65,14 +66,69 @@ h1:focus {
     padding-left: 1.25rem;
 }
 
+/* Extractor-hoisted title/subtitle (hub/narration passages only — see CradleExtractor's
+   TryHoistHeadingTitleSubtitle) get their own header region ahead of the node-driven body. */
+.mws-passage-header {
+    margin-bottom: 0.75rem;
+}
+
+.mws-passage-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.mws-passage-subtitle {
+    margin: 0.15rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+/* Module-authored layout chrome (layouts/{id}.yaml, matched by a passage's or popup's own layout
+   name — see LoadedModule.LayoutChrome/RenderedLayoutChrome). Bare structural hooks only, same
+   treatment as .mws-location-header — a module's own CSS is entirely responsible for how these
+   look; the app never branches on what layout they belong to or what they contain. */
+.mws-layout-header,
+.mws-layout-footer,
+.mws-layout-before-content,
+.mws-layout-after-content {
+    display: block;
+}
+
+/* text/link default to inline flow — a passage's own explicit 'break' nodes are what create line
+   separation (see .mws-break below), not the node's own display box. This mirrors how the format
+   is actually authored: the extractor emits an explicit break between every line/paragraph of
+   text rather than relying on block-level text nodes to self-separate. */
+.mws-text {
+    display: inline;
+}
+
+/* text-align only has an effect on a block formatting context, so an explicitly aligned text node
+   is the one deliberate override to the inline default above — it needs its own line to align
+   within. Unaligned text stays inline and flows with its neighbors. */
+.mws-text.align-left,
+.mws-text.align-center,
+.mws-text.align-right,
+.mws-text.align-justified {
+    display: block;
+}
+
 .mws-text.align-left { text-align: left; }
 .mws-text.align-center { text-align: center; }
 .mws-text.align-right { text-align: right; }
 .mws-text.align-justified { text-align: justify; }
 
-.mws-break.style-paragraph {
+/* Bare break = <br>-equivalent: a line break only, no added vertical spacing (the element's a
+   <div>, so this is just the do-nothing default — no rule needed here). */
+.mws-break{
     display: block;
-    height: 1rem;
+}
+
+/* style="paragraph" = a paragraph boundary: vertical spacing on top of the line break, roughly
+   what two adjacent <p> margins would collapse to. */
+.mws-break.style-paragraph {
+    margin-top: 0.75rem;
 }
 
 .mws-section {
@@ -81,11 +137,30 @@ h1:focus {
     border-left: 3px solid #ddd;
 }
 
+/* Links default to inline text-link styling, not button chrome — a <button> element is used for
+   click/keyboard semantics, but visually it should read as a hyperlink within flowing text.
+   Modules that want a prominent button-style choice opt in via style="button" (see e.g.
+   .mws-link.style-button in a module's own stylesheet). */
 .mws-link {
-    display: inline-block;
-    margin: 0.25rem 0.5rem 0.25rem 0;
-    padding: 0.4rem 0.9rem;
+    display: inline;
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    color: #1a56db;
+    text-decoration: underline;
     cursor: pointer;
+}
+
+.mws-link:hover:not(:disabled) {
+    color: #123f9e;
+}
+
+.mws-link:disabled {
+    color: #888;
+    text-decoration: none;
+    cursor: default;
 }
 
 .mws-link.state-affecting {
@@ -235,7 +310,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 1200;
-    background: #fff;
+    background: transparent;
     padding: 0.5rem 0;
 }
 
@@ -512,6 +587,7 @@ body {
    in the MAUI head's wwwroot/index.html). */
 body {
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    margin: 0;
 }
 
 @media (min-width: 48rem) {

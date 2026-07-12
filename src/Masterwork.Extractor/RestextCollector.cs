@@ -77,7 +77,9 @@ public sealed partial class RestextCollector
         _counter = 1;
         _current = [];
 
-        // v0.2: location.name is a passage-level header, not a node
+        // Passage-level headers, not nodes.
+        ExtractField(passageDict, "title");
+        ExtractField(passageDict, "subtitle");
         if (passageDict.TryGetValue("location", out var locObj) && locObj is Dictionary<string, object?> loc)
         {
             ExtractField(loc, "name");
