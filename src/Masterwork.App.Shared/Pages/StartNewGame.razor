@@ -267,7 +267,7 @@
         _uploadError = null;
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
             var bytes = memory.ToArray();
