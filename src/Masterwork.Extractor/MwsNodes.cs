@@ -146,6 +146,10 @@ public class ImageNode : MwsNode
     public string? Size { get; set; }
     // Optional horizontal alignment from source <align=...> tag.
     public string? Align { get; set; }
+    // Open, module-styled vocabulary — e.g. "setup-image" for a Vars._SetupImage-derived image,
+    // which V2Serializer also uses to route this node into the enclosing popup's header: list
+    // instead of content: (see TransformPopup/TransformSetupNotificationBlock).
+    public string? Style { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -158,6 +162,11 @@ public class ImageNode : MwsNode
         if (Align is not null)
         {
             d["align"] = Align;
+        }
+
+        if (Style is not null)
+        {
+            d["style"] = Style;
         }
 
         return d;

@@ -268,6 +268,50 @@ public class DeserializerTests
     }
 
     [Fact]
+    public void Popup_UsesHeaderField()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              header:
+              - type: 'image'
+                asset: 'image://setup/StorybookToken'
+                style: 'setup-image'
+              content:
+              - type: 'text'
+                value: 'popup body'
+            """);
+
+        var popup = Assert.IsType<PopupNode>(passage.Nodes.Single());
+        var header = Assert.Single(popup.Header);
+        var image = Assert.IsType<ImageNode>(header);
+        Assert.Equal("image://setup/StorybookToken", image.Asset);
+        Assert.Equal("setup-image", image.Style);
+        Assert.Single(popup.Content);
+    }
+
+    [Fact]
+    public void Popup_NoHeaderField_DefaultsToEmpty()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              content:
+              - type: 'text'
+                value: 'popup body'
+            """);
+
+        var popup = Assert.IsType<PopupNode>(passage.Nodes.Single());
+        Assert.Empty(popup.Header);
+    }
+
+    [Fact]
     public void Navigation_WithOnclick_Deserializes()
     {
         var passage = ParseOne("""

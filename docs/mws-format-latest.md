@@ -654,6 +654,7 @@ Okay/Cancel dismissal mirrors `link`'s own `target`/`onclick` shape: `onclose` r
 | `label` | string | no | Button/link text that triggers the popup; omit for auto-display (layout-driven only) |
 | `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `link`, `button`) |
 | `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
+| `header` | list | no | Optional nodes rendered in a separate structural region, before `content` — evaluated eagerly the same way. Purely structural: the format doesn't prescribe what a header contains or how it's positioned, that's entirely up to module CSS. The extractor uses this for a Cradle `setupStyle` block's image, for example, but any node list is valid |
 | `content` | list | no | Content nodes for the popup body — evaluated eagerly, at passage-render time (see the popup transaction model below). For layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated the same way to bind layout properties |
 | `okay` | string | no | Okay button label (string formatting — see §3); only rendered if present. Clicking it commits any pending `input` values in `content`, runs `onclose`, then resolves `target` |
 | `cancel` | string | no | Cancel button label; only rendered if present. Clicking it discards the popup's pending state entirely — no `onclose`, no `target`, no commit |

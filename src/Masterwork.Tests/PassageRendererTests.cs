@@ -736,6 +736,90 @@ public class PassageRendererTests
         Assert.Empty(Assert.IsType<RenderedPopup>(result.Nodes.Single()).Content);
     }
 
+    [Fact]
+    public void Popup_NoHeader_EmitsEmptyHeaderList()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              content: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Empty(Assert.IsType<RenderedPopup>(result.Nodes.Single()).Header);
+    }
+
+    [Fact]
+    public void Popup_HeaderAndContent_RenderIntoDistinctLists()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              header:
+              - type: 'image'
+                asset: 'image://setup/StorybookToken'
+                style: 'setup-image'
+              content:
+              - type: 'text'
+                value: 'body text'
+            """);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+
+        var headerImage = Assert.IsType<RenderedImage>(Assert.Single(popup.Header));
+        Assert.Equal("image://setup/StorybookToken", headerImage.Asset);
+        var contentText = Assert.IsType<RenderedText>(Assert.Single(popup.Content));
+        Assert.Equal("body text", contentText.Value);
+    }
+
+    [Fact]
+    public void Popup_HeaderAndContentInputs_GetNonCollidingActionIds()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              header:
+              - type: 'input'
+                label: 'Header input'
+                var: 'headerVar'
+              content:
+              - type: 'input'
+                label: 'Content input'
+                var: 'contentVar'
+            """,
+            variablesYaml: """
+                standard_variables: []
+                variables:
+                  headerVar:
+                    type: 'string'
+                    default: ''
+                  contentVar:
+                    type: 'string'
+                    default: ''
+                """);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+
+        var headerInputId = Assert.IsType<RenderedInput>(Assert.Single(popup.Header)).Id;
+        var contentInputId = Assert.IsType<RenderedInput>(Assert.Single(popup.Content)).Id;
+        Assert.NotEqual(headerInputId, contentInputId);
+        Assert.Equal(2, popup.Actions.Count);
+    }
+
     // ── Goto ─────────────────────────────────────────────────────────────────
 
     [Fact]

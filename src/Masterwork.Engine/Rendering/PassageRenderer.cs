@@ -188,6 +188,7 @@ public sealed class PassageRenderer : IPassageRenderer
         // isn't merged into the live store until GameSession.ClosePopupAsync commits it on Accept.
         var id = ctx.NextActionId("popup");
         var sandbox = ctx.Store.Clone();
+        var headerResult = RenderNodeList(popup.Header, sandbox, ctx.Module, actionIdPrefix: $"{id}_header_");
         var contentResult = RenderNodeList(popup.Content, sandbox, ctx.Module, actionIdPrefix: $"{id}_");
 
         var rendered = new RenderedPopup
@@ -197,8 +198,9 @@ public sealed class PassageRenderer : IPassageRenderer
             Label = ExpandOrNull(popup.Label, ctx.Store),
             Layout = popup.Layout,
             AutoDisplay = popup.Label is null,
+            Header = headerResult.Nodes,
             Content = contentResult.Nodes,
-            Actions = contentResult.Actions,
+            Actions = [.. headerResult.Actions, .. contentResult.Actions],
             Sandbox = sandbox,
             Okay = ExpandOrNull(popup.Okay, ctx.Store),
             Cancel = ExpandOrNull(popup.Cancel, ctx.Store),

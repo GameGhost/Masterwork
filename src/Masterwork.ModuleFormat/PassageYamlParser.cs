@@ -195,6 +195,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     Label = map.GetString("label", ctx),
                     Style = map.GetString("style", ctx),
                     Layout = map.GetString("layout", ctx),
+                    Header = BuildNodeList(map.TryGet("header"), ctx, "'popup' node header"),
                     Content = BuildNodeList(map.TryGet("content"), ctx, "'popup' node content"),
                     Okay = map.GetString("okay", ctx),
                     Cancel = map.GetString("cancel", ctx),
@@ -204,7 +205,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     SnapshotLabel = snapshotLabel,
                 };
                 map.WarnUnmatchedFields(ctx, "'popup' node",
-                    "type", "label", "style", "layout", "content", "okay", "cancel", "onclose", "target", "snapshot");
+                    "type", "label", "style", "layout", "header", "content", "okay", "cancel", "onclose", "target", "snapshot");
                 return result;
             }
             case "input":

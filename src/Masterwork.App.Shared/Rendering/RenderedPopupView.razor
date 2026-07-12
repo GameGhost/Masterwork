@@ -21,18 +21,34 @@ else
                 <VotingPopupContent Content="Node.Content" Label="Place your bid" Session="Session" OnClosed="Accept" />
                 break;
             default:
-                @* end_of_generation / setup / no named layout: rendered as plain content for now —
-                   named-layout-specific chrome (progress bar binding, ACCEPT button styling, etc.)
-                   is a follow-up; see masterwork-plan Q11. *@
-                <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
-                @if (Node.Okay is not null)
-                {
-                    <button type="button" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
-                }
-                @if (Node.Cancel is not null)
-                {
-                    <button type="button" @onclick="Cancel">@Node.Cancel</button>
-                }
+                @* Purely structural — the app never inspects a node's style/layout to decide what
+                   goes where. Header/Content/Footer are just three node-list regions the format
+                   already gives us (RenderedPopup.Header/Content, Okay/Cancel); module CSS is
+                   entirely responsible for what each one looks like. *@
+                <div class="mws-popup-container">
+                    @if (Node.Header.Count > 0)
+                    {
+                        <div class="mws-popup-header">
+                            <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        </div>
+                    }
+                    <div class="mws-popup-content">
+                        <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                    </div>
+                    @if (Node.Okay is not null || Node.Cancel is not null)
+                    {
+                        <div class="mws-popup-footer">
+                            @if (Node.Okay is not null)
+                            {
+                                <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
+                            }
+                            @if (Node.Cancel is not null)
+                            {
+                                <button type="button" class="mws-popup-cancel" @onclick="Cancel">@Node.Cancel</button>
+                            }
+                        </div>
+                    }
+                </div>
                 break;
         }
     </div>

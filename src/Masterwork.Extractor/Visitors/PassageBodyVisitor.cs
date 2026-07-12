@@ -893,6 +893,15 @@ public class PassageBodyVisitor
             right = outerParen.Expression;
         }
 
+        // Vars._SetupImage = "X" (or a two-branch string-literal ternary) — Cradle's setup-popup
+        // corner image, consumed only by the Unity view itself (never read back by any passage
+        // logic). Emitted as an image node instead of a dead assign; V2Serializer routes it into
+        // the enclosing popup's header: list via its Style ("setup-image" — see ImageNode.Style).
+        if (varName == "_SetupImage" && TryProcessSetupImageAssignment(right, out var setupImageNode))
+        {
+            return setupImageNode;
+        }
+
         // Direct literal assignment
         if (right is LiteralExpressionSyntax lit2)
         {
@@ -2301,6 +2310,55 @@ public class PassageBodyVisitor
                 assign.Right.ToString(), GetLine(assign.Right));
         }
         return true;
+    }
+
+    // Handles the two shapes Vars._SetupImage is actually assigned in this source: a plain string
+    // literal, or a two-branch ternary between two string literals. image.asset has no dynamic/
+    // ${expr} evaluation at the engine level (unlike e.g. link.target), so a ternary expands into a
+    // ConditionalNode with one ImageNode per branch instead of asking for that engine capability
+    // for a single occurrence. Any other shape is left unhandled (returns false) so the caller falls
+    // through to the ordinary assignment handling — but is still reported, so an unrecognized shape
+    // shows up in the extraction report instead of silently producing a dead assign.
+    private bool TryProcessSetupImageAssignment(ExpressionSyntax right, out MwsNode? node)
+    {
+        var literal = GetStringValue(right);
+        if (literal is not null)
+        {
+            node = new ImageNode { AssetRef = $"image://setup/{literal}", Style = "setup-image" };
+            return true;
+        }
+
+        if (right is ConditionalExpressionSyntax ternary)
+        {
+            var whenTrue = GetStringValue(ternary.WhenTrue);
+            var whenFalse = GetStringValue(ternary.WhenFalse);
+            if (whenTrue is not null && whenFalse is not null)
+            {
+                var condition = SimplifyCondition(ternary.Condition.ToString());
+                node = new ConditionalNode
+                {
+                    Branches =
+                    [
+                        new ConditionalBranch
+                        {
+                            Condition = condition,
+                            Nodes = [new ImageNode { AssetRef = $"image://setup/{whenTrue}", Style = "setup-image" }],
+                        },
+                        new ConditionalBranch
+                        {
+                            Else = true,
+                            Nodes = [new ImageNode { AssetRef = $"image://setup/{whenFalse}", Style = "setup-image" }],
+                        },
+                    ],
+                };
+                return true;
+            }
+        }
+
+        _report.AddWarning(_passageName, "_SetupImage uses an unrecognized expression shape (not a string literal or a two-branch string ternary)",
+            right.ToString(), GetLine(right));
+        node = null;
+        return false;
     }
 
     private static bool IsIgnorableCall(InvocationExpressionSyntax inv)

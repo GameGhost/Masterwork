@@ -75,6 +75,7 @@ public sealed partial class RestextResolver : IRestextResolver
         PopupNode p => p with
         {
             Label = ResolveDisplay(p.Label, locale, warnings),
+            Header = ResolveNodeList(p.Header, locale, warnings),
             Content = ResolveNodeList(p.Content, locale, warnings),
             Okay = ResolveDisplay(p.Okay, locale, warnings),
             Cancel = ResolveDisplay(p.Cancel, locale, warnings),

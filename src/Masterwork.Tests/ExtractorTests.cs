@@ -4,14 +4,16 @@ namespace Masterwork.Tests;
 
 public class ExtractorTests
 {
-    private static List<MwsPassage> Extract(string source)
+    private static List<MwsPassage> Extract(string source) => Extract(source, out _);
+
+    private static List<MwsPassage> Extract(string source, out ExtractionReport report)
     {
         var tempFile = System.IO.Path.GetTempFileName() + ".cs";
         System.IO.File.WriteAllText(tempFile, source);
         try
         {
             var opts = new ExtractionOptions { InputDir = tempFile, PassagesOutDir = "", IncludeDebug = true };
-            var report = new ExtractionReport();
+            report = new ExtractionReport();
             var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report);
             return extractor.Extract([tempFile]);
         }
@@ -238,6 +240,86 @@ public class ExtractorTests
         var effect = passages[0].Nodes.OfType<EffectNode>().First();
         Assert.NotNull(effect.VarSets);
         Assert.Equal(1, effect.VarSets!["round"]);
+    }
+
+    [Fact]
+    public void SetupImageAssignment_StringLiteral_EmitsImageNode()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars._SetupImage = "StorybookToken";
+                yield break;
+            }
+            """);
+
+        var image = Assert.IsType<ImageNode>(passages[0].Nodes.Single());
+        Assert.Equal("image://setup/StorybookToken", image.AssetRef);
+        Assert.Equal("setup-image", image.Style);
+    }
+
+    [Fact]
+    public void SetupImageAssignment_Ternary_EmitsConditionalNodeWithTwoImageNodes()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars._SetupImage = this.Vars.society == "Fraternity of Hunters" ? "S1_HunterToken" : "S1_WolfToken";
+                yield break;
+            }
+            """);
+
+        var cond = Assert.IsType<ConditionalNode>(passages[0].Nodes.Single());
+        Assert.Equal(2, cond.Branches.Count);
+
+        var thenBranch = Assert.Single(cond.Branches, b => b.Else != true);
+        var thenImage = Assert.IsType<ImageNode>(Assert.Single(thenBranch.Nodes));
+        Assert.Equal("image://setup/S1_HunterToken", thenImage.AssetRef);
+        Assert.Equal("setup-image", thenImage.Style);
+
+        var elseBranch = Assert.Single(cond.Branches, b => b.Else == true);
+        var elseImage = Assert.IsType<ImageNode>(Assert.Single(elseBranch.Nodes));
+        Assert.Equal("image://setup/S1_WolfToken", elseImage.AssetRef);
+    }
+
+    [Fact]
+    public void SetupImageAssignment_UnrecognizedShape_FallsBackAndWarns()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars._SetupImage = this.Vars.someRef;
+                yield break;
+            }
+            """, out var report);
+
+        // Not a literal or a two-branch string ternary — falls back to ordinary assignment
+        // handling (a dead EffectNode, same as before this feature existed), not an ImageNode.
+        Assert.DoesNotContain(passages[0].Nodes, n => n is ImageNode or ConditionalNode);
+
+        var tempReportPath = System.IO.Path.GetTempFileName();
+        try
+        {
+            report.Write(tempReportPath);
+            var written = System.IO.File.ReadAllText(tempReportPath);
+            Assert.Contains("_SetupImage uses an unrecognized expression shape", written);
+        }
+        finally
+        {
+            System.IO.File.Delete(tempReportPath);
+        }
     }
 
     [Fact]

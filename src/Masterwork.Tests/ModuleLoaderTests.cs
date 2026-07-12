@@ -341,6 +341,36 @@ public class ModuleLoaderTests
     }
 
     [Fact]
+    public void LoadFromSources_PopupHeaderContainsRestextRef_ResolvesLikeContent()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.4'
+                passage_id: 'P1'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes:
+                - type: 'popup'
+                  header:
+                  - type: 'image'
+                    asset: 'image://setup/StorybookToken'
+                    style: 'setup-image'
+                    title: 'restext://Header_001'
+                  content: []
+                """,
+            ],
+            restextText: "Header_001=Storybook token\n");
+
+        var popup = Assert.IsType<PopupNode>(module.Passages["P1"].Nodes[0]);
+        var image = Assert.IsType<ImageNode>(Assert.Single(popup.Header));
+        Assert.Equal("Storybook token", image.Title);
+    }
+
+    [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {
         var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));

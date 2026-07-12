@@ -22,6 +22,15 @@ public sealed record PopupNode : Node
     public string? Layout { get; init; }
 
     /// <summary>
+    /// Optional nodes rendered in a separate structural region, before <see cref="Content"/> —
+    /// e.g. the extractor places a Cradle <c>setupStyle</c> block's image here. Evaluated eagerly
+    /// alongside <see cref="Content"/>, against the same sandboxed store. Purely structural: the
+    /// format doesn't prescribe what a header contains or how it's positioned — that's entirely up
+    /// to module CSS. The App renders whatever's here without inspecting it.
+    /// </summary>
+    public IReadOnlyList<Node> Header { get; init; } = [];
+
+    /// <summary>
     /// Content nodes — evaluated eagerly alongside the rest of the passage, against a sandboxed
     /// store, so showing the popup is a pure UI concern (see <c>Masterwork.Engine.Rendering.RenderedPopup</c>'s
     /// remarks). May contain <c>input</c> nodes.

@@ -73,6 +73,27 @@ public class AssetResolverTests
     }
 
     [Fact]
+    public async Task BundleLocalImage_SubpathSlug_ResolvesToDataUri()
+    {
+        // image://setup/StorybookToken (a subpath slug) should resolve the same way as a flat
+        // slug — the lookup key is built by plain concatenation ($"assets/{folder}/{slug}{ext}"),
+        // so a slug containing '/' just addresses a nested asset path with no special handling.
+        var bytes = Encoding.UTF8.GetBytes("fake png bytes");
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new Dictionary<string, byte[]> { ["assets/images/setup/StorybookToken.png"] = bytes },
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("image://setup/StorybookToken");
+
+        Assert.Equal($"data:image/png;base64,{Convert.ToBase64String(bytes)}", url);
+    }
+
+    [Fact]
     public async Task BundleLocalTakesPrecedenceOverTestPack()
     {
         var state = new GameSessionState();

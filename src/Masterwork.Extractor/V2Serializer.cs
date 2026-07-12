@@ -266,7 +266,14 @@ public static partial class V2Serializer
                 // in the original app, even with no destination passage (okay/target/onclose are all
                 // independently optional, so the popup just closes in place with no engine round-trip).
                 var pd = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup", ["okay"] = "Accept" };
-                var sNodes = TransformNodeList(setup.Nodes, ctx);
+                var (setupHeaderNodes, setupContentNodes) = SplitPopupHeaderNodes(setup.Nodes);
+                var sHeader = TransformNodeList(setupHeaderNodes, ctx);
+                if (sHeader.Count > 0)
+                    {
+                        pd["header"] = sHeader;
+                    }
+
+                    var sNodes = TransformNodeList(setupContentNodes, ctx);
                 if (sNodes.Count > 0)
                     {
                         pd["content"] = sNodes;
@@ -349,6 +356,11 @@ public static partial class V2Serializer
         if (img.Align is not null)
         {
             d["align"] = img.Align;
+        }
+
+        if (img.Style is not null)
+        {
+            d["style"] = img.Style;
         }
 
         return d;
@@ -540,6 +552,70 @@ public static partial class V2Serializer
     [GeneratedRegex(@"ViewBiddingSystem\.instance\.OnShowBidding\(""([^""]+)"",\s*BiddingSystem\.(\w+)\)")]
     private static partial Regex BiddingCallPattern();
 
+    private static bool IsSetupImageNode(MwsNode n) => n is ImageNode { Style: "setup-image" };
+
+    private static bool StartsWithSetupImage(ConditionalBranch b) =>
+        b.Nodes is [var first, ..] && IsSetupImageNode(first);
+
+    // Splits a popup's raw child-node list into (header, content). Three shapes route (part of)
+    // themselves to header, each preserving relative order:
+    //   - A bare setup-image ImageNode (TryProcessSetupImageAssignment's literal case) — moves
+    //     entirely to header.
+    //   - A ConditionalNode whose every branch's *only* node is a setup-image ImageNode (the
+    //     ternary case) — moves entirely to header; nothing is left behind for content.
+    //   - A ConditionalNode where *some* branches start with a setup-image ImageNode followed by
+    //     more content — by far the most common real shape, since Cradle typically sets
+    //     _SetupImage as the first statement of a branch alongside branch-specific body text. Not
+    //     every branch necessarily qualifies (e.g. one branch might instead be an entirely
+    //     different nested popup with its own header) — split into two parallel conditionals
+    //     sharing the same conditions: a header conditional (empty branch where the source branch
+    //     didn't qualify) and a content conditional holding whatever's left of each branch.
+    // Anything else stays in content as-is.
+    private static (List<MwsNode> Header, List<MwsNode> Content) SplitPopupHeaderNodes(List<MwsNode> nodes)
+    {
+        List<MwsNode>? header = null;
+        var content = new List<MwsNode>(nodes.Count);
+        foreach (var n in nodes)
+        {
+            if (IsSetupImageNode(n))
+            {
+                (header ??= []).Add(n);
+                continue;
+            }
+
+            if (n is ConditionalNode cond && cond.Branches.Count > 0 &&
+                cond.Branches.Any(StartsWithSetupImage))
+            {
+                (header ??= []).Add(new ConditionalNode
+                {
+                    Branches = cond.Branches.Select(b => new ConditionalBranch
+                    {
+                        Condition = b.Condition,
+                        Else = b.Else,
+                        Nodes = StartsWithSetupImage(b) ? [b.Nodes[0]] : [],
+                    }).ToList(),
+                });
+
+                var remainingBranches = cond.Branches.Select(b => new ConditionalBranch
+                {
+                    Condition = b.Condition,
+                    Else = b.Else,
+                    Nodes = StartsWithSetupImage(b) ? b.Nodes.Skip(1).ToList() : b.Nodes,
+                }).ToList();
+                if (remainingBranches.Any(b => b.Nodes.Count > 0))
+                {
+                    content.Add(new ConditionalNode { Branches = remainingBranches });
+                }
+
+                continue;
+            }
+
+            content.Add(n);
+        }
+
+        return (header ?? [], content);
+    }
+
     private static Dictionary<string, object?> TransformPopup(ExpandLinkNode expand, SerializationContext? ctx = null)
     {
         // Scan children for layout markers:
@@ -642,7 +718,14 @@ public static partial class V2Serializer
         }
         d["snapshot"] = expand.StateAffecting;
 
-        var transformed = TransformNodeList(childNodes, ctx);
+        var (headerNodes, contentNodes) = SplitPopupHeaderNodes(childNodes);
+        var transformedHeader = TransformNodeList(headerNodes, ctx);
+        if (transformedHeader.Count > 0)
+        {
+            d["header"] = transformedHeader;
+        }
+
+        var transformed = TransformNodeList(contentNodes, ctx);
         if (transformed.Count > 0)
         {
             d["content"] = transformed;
@@ -935,9 +1018,16 @@ public static partial class V2Serializer
             content.Add(new() { ["type"] = "text", ["value"] = sn.Text });
         }
 
-        content.AddRange(TransformNodeList(setupBlock.Nodes, ctx));
+        var (headerNodes, contentNodes) = SplitPopupHeaderNodes(setupBlock.Nodes);
+        content.AddRange(TransformNodeList(contentNodes, ctx));
 
         var d = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
+        var transformedHeader = TransformNodeList(headerNodes, ctx);
+        if (transformedHeader.Count > 0)
+        {
+            d["header"] = transformedHeader;
+        }
+
         if (content.Count > 0)
         {
             d["content"] = content;

@@ -21,11 +21,18 @@ public sealed record RenderedPopup : RenderedAction
     /// <summary><see langword="true"/> when this popup has no trigger label and displays automatically.</summary>
     public bool AutoDisplay { get; init; }
 
+    /// <summary>
+    /// The popup's rendered header nodes, if any — a separate structural region shown before
+    /// <see cref="Content"/>. Purely structural: the App renders whatever's here without
+    /// inspecting it (see <c>Masterwork.ModuleFormat.PopupNode.Header</c>'s remarks).
+    /// </summary>
+    public required IReadOnlyList<RenderedNode> Header { get; init; }
+
     /// <summary>The popup's rendered content, ready to display without any further engine call.</summary>
     public required IReadOnlyList<RenderedNode> Content { get; init; }
 
     /// <summary>
-    /// Interactive actions (e.g. <c>input</c> nodes) found within <see cref="Content"/> — used to
+    /// Interactive actions (e.g. <c>input</c> nodes) found within <see cref="Header"/> or <see cref="Content"/> — used to
     /// gate the Okay button via <see cref="GameSession.AreInputsValid"/> and to commit their values
     /// on Accept, the same way <see cref="Masterwork.Engine.PassageRenderResult"/>'s own
     /// <c>Actions</c> work for the enclosing passage.
