@@ -31,6 +31,9 @@ public abstract record Expr
     /// <summary>A binary operator application (arithmetic, comparison, or logical).</summary>
     public sealed record Binary(string Op, Expr Left, Expr Right) : Expr;
 
+    /// <summary>A ternary conditional, e.g. <c>round == 1 ? "Fever1" : "Fever2"</c>. Right-associative, so chained ternaries in <see cref="WhenFalse"/> read as an if/else-if chain.</summary>
+    public sealed record Ternary(Expr Condition, Expr WhenTrue, Expr WhenFalse) : Expr;
+
     /// <summary>A method call on a string or array value, e.g. <c>arr.shuffled("key")</c>.</summary>
     public sealed record MethodCall(Expr Target, string Method, IReadOnlyList<Expr> Args) : Expr;
 

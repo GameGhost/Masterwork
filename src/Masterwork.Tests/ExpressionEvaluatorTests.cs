@@ -199,6 +199,39 @@ public class ExpressionEvaluatorTests
         Assert.Equal(["B", "C", "A"], result.Select(v => v.AsRecord()["player_name"].AsString()));
     }
 
+    // ── Ternary conditional ──────────────────────────────────────────────────
+
+    [Fact]
+    public void Ternary_TrueBranch() =>
+        Assert.Equal("yes", Eval("round == 1 ? \"yes\" : \"no\"", Vars(("round", StoryValue.Of(1L)))).AsString());
+
+    [Fact]
+    public void Ternary_FalseBranch() =>
+        Assert.Equal("no", Eval("round == 1 ? \"yes\" : \"no\"", Vars(("round", StoryValue.Of(2L)))).AsString());
+
+    [Fact]
+    public void Ternary_ShortCircuits_OnlyEvaluatesTakenBranch() =>
+        Assert.Equal("yes", Eval("true ? \"yes\" : throw_if_evaluated").AsString());
+
+    // Reproduces the exact shape extracted from Cost of Disease's computed popup targets
+    // (e.g. Gen1CreepyYes.mws.yaml) — a right-associative chain reading as if/else-if.
+    [Fact]
+    public void Ternary_ChainedRightAssociative_PicksFirstMatch()
+    {
+        var expr = "round == 1 ? \"Fever1\" : round == 2 ? \"Fever2\" : \"Fever3\"";
+        Assert.Equal("Fever1", Eval(expr, Vars(("round", StoryValue.Of(1L)))).AsString());
+        Assert.Equal("Fever2", Eval(expr, Vars(("round", StoryValue.Of(2L)))).AsString());
+        Assert.Equal("Fever3", Eval(expr, Vars(("round", StoryValue.Of(3L)))).AsString());
+    }
+
+    [Fact]
+    public void Ternary_InsideParentheses() =>
+        Assert.Equal(6L, Eval("(true ? 1 : 2) + (false ? 3 : 5)").AsInt());
+
+    [Fact]
+    public void Ternary_AsFunctionArgument() =>
+        Assert.Equal(5L, Eval("max(round == 1 ? 5 : 1, 2)", Vars(("round", StoryValue.Of(1L)))).AsInt());
+
     // ── Complex / nested expressions ────────────────────────────────────────
 
     [Fact]

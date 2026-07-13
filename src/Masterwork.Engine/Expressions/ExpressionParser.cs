@@ -26,7 +26,7 @@ public sealed class ExpressionParser : IExpressionParser
         _logger.LogDebug("Parsing expression: {Source}", source);
         var tokens = Lexer.Tokenize(source);
         var parser = new Parser(tokens);
-        var expr = parser.ParseOr();
+        var expr = parser.ParseTernary();
         parser.ExpectEof();
         return expr;
     }
@@ -110,7 +110,7 @@ public sealed class ExpressionParser : IExpressionParser
                     }
                 }
 
-                if ("(){}[].,:!<>+-*/%^".IndexOf(c) >= 0)
+                if ("(){}[].,:?!<>+-*/%^".IndexOf(c) >= 0)
                 {
                     tokens.Add(new Token(TokenKind.Punct, c.ToString()));
                     i++;
@@ -152,7 +152,27 @@ public sealed class ExpressionParser : IExpressionParser
             }
         }
 
-        public Expr ParseOr()
+        // Loosest-binding operator — sits above ParseOr in the precedence chain. Right-associative:
+        // WhenFalse itself recurses through ParseTernary, so "a ? b : c ? d : e" reads as
+        // "a ? b : (c ? d : e)" — an if/else-if chain, matching C# ternary semantics and letting the
+        // extractor emit Cradle's own ternary chains near-verbatim (see e.g. PassageBodyVisitor's
+        // IsSetupPassagenameAssignment fallback).
+        public Expr ParseTernary()
+        {
+            var cond = ParseOr();
+            if (!IsPunct("?"))
+            {
+                return cond;
+            }
+
+            Advance();
+            var whenTrue = ParseTernary();
+            Expect(":");
+            var whenFalse = ParseTernary();
+            return new Expr.Ternary(cond, whenTrue, whenFalse);
+        }
+
+        private Expr ParseOr()
         {
             var left = ParseAnd();
             while (IsPunct("||"))
@@ -309,11 +329,11 @@ public sealed class ExpressionParser : IExpressionParser
             var args = new List<Expr>();
             if (!IsPunct(")"))
             {
-                args.Add(ParseOr());
+                args.Add(ParseTernary());
                 while (IsPunct(","))
                 {
                     Advance();
-                    args.Add(ParseOr());
+                    args.Add(ParseTernary());
                 }
             }
             Expect(")");
@@ -353,7 +373,7 @@ public sealed class ExpressionParser : IExpressionParser
                     return new Expr.VarRef(tok.Text);
                 case TokenKind.Punct when tok.Text == "(":
                     Advance();
-                    var inner = ParseOr();
+                    var inner = ParseTernary();
                     Expect(")");
                     return inner;
                 case TokenKind.Punct when tok.Text == "[":
@@ -387,9 +407,9 @@ public sealed class ExpressionParser : IExpressionParser
             if (IsPunct(".."))
             {
                 Advance();
-                return new ArrayElement.Spread(ParseOr());
+                return new ArrayElement.Spread(ParseTernary());
             }
-            return new ArrayElement.Item(ParseOr());
+            return new ArrayElement.Item(ParseTernary());
         }
 
         private Expr ParseRecordLiteral()
@@ -413,7 +433,7 @@ public sealed class ExpressionParser : IExpressionParser
         {
             var name = ExpectIdent();
             Expect(":");
-            props[name] = ParseOr();
+            props[name] = ParseTernary();
         }
     }
 }

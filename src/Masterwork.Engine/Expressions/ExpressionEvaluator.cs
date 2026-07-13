@@ -57,6 +57,7 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         Expr.IndexAccess ix => EvalIndex(ix, ctx),
         Expr.Unary u => EvalUnary(u, ctx),
         Expr.Binary b => EvalBinary(b, ctx),
+        Expr.Ternary t => Evaluate(t.Condition, ctx).AsBool() ? Evaluate(t.WhenTrue, ctx) : Evaluate(t.WhenFalse, ctx),
         Expr.MethodCall m => EvalMethod(m, ctx),
         Expr.FunctionCall f => EvalFunction(f, ctx),
         Expr.ArrayLiteral a => EvalArrayLiteral(a, ctx),
