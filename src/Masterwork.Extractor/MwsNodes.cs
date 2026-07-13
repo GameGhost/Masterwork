@@ -179,12 +179,20 @@ public class ImageNode : MwsNode
 public class BreakNode : MwsNode
 {
     public override string Type => "break";
+    // True when this break was emitted while a bold/italic styleScope was still open (i.e. a
+    // lineBreak() call nested inside the same using block as the text around it) — distinguishes
+    // "one heading's own internal line break" from "a break between two unrelated statements" for
+    // CradleExtractor.TryHoistHeadingTitleSubtitle. Extraction metadata only, not serialized.
+    public bool WithinStyleScope { get; set; }
     public override Dictionary<string, object?> ToDict() => new() { ["type"] = Type };
 }
 
 public class ParagraphBreakNode : MwsNode
 {
     public override string Type => "paragraph_break";
+    // See BreakNode.WithinStyleScope — true only when every break merged into this one was itself
+    // within the same open styleScope.
+    public bool WithinStyleScope { get; set; }
     public override Dictionary<string, object?> ToDict() => new() { ["type"] = Type };
 }
 

@@ -626,10 +626,12 @@ public static partial class V2Serializer
         // Scan children for layout markers:
         //   • UnknownNode with BiddingCallPattern  → layout: voting/bidding + onclose
         //   • EogSetupMarkerNode                  → layout: end_of_generation + property nodes
+        //   • EndOfRoundMarkerNode                → layout: end_of_round + target/okay/onclose
         //   • SetupNotificationNode               → layout: setup + onclose (ViewItemObtain popup)
         //   • SetupBlockNode                      → unwrap body nodes directly (no section wrapper)
         string? layout = null, onclose = null;
         EogSetupMarkerNode? eogMarker = null;
+        EndOfRoundMarkerNode? eorMarker = null;
         var childNodes = new List<MwsNode>(expand.ExpandNodes.Count);
         foreach (var child in expand.ExpandNodes)
         {
@@ -652,6 +654,12 @@ public static partial class V2Serializer
                     onclose = eog.PassageName;
                 }
 
+                continue;
+            }
+            if (child is EndOfRoundMarkerNode eor)
+            {
+                eorMarker = eor;
+                layout = "end_of_round";
                 continue;
             }
             // ViewItemObtain setup popup: the SetupNotificationNode carries the onclose passage name.
@@ -697,6 +705,29 @@ public static partial class V2Serializer
             childNodes.InsertRange(0, eogPropNodes);
         }
 
+        // Prepend the end-of-round body text (ViewEndOfRound.SetEndOfRound's bodyText/bodyText2)
+        // before any other popup content.
+        if (eorMarker is not null)
+        {
+            var eorTextNodes = new List<MwsNode>();
+            if (eorMarker.Body is not null)
+            {
+                eorTextNodes.Add(new TextNode { Template = eorMarker.Body });
+            }
+
+            if (eorMarker.Body is not null && eorMarker.Body2 is not null)
+            {
+                eorTextNodes.Add(new ParagraphBreakNode());
+            }
+
+            if (eorMarker.Body2 is not null)
+            {
+                eorTextNodes.Add(new TextNode { Template = eorMarker.Body2 });
+            }
+
+            childNodes.InsertRange(0, eorTextNodes);
+        }
+
         var d = new Dictionary<string, object?> { ["type"] = "popup" };
         if (layout is not null)
         {
@@ -704,7 +735,21 @@ public static partial class V2Serializer
         }
 
         d["label"] = expand.Label;
-        if (onclose is not null)
+        if (eorMarker is not null)
+        {
+            // Unlike the other markers' onclose, this one needs real logic (the _ProgressRound
+            // assign moved out of the popup's own content by CradleExtractor.StitchFragments), not
+            // just a bare navigation target — so it's built directly rather than through the
+            // string-onclose path below.
+            d["target"] = eorMarker.NextPassage;
+            d["okay"] = "End of Round";
+            d["onclose"] = new List<Dictionary<string, object?>>
+            {
+                new() { ["type"] = "assign", ["var"] = "_ProgressRound", ["expr"] = eorMarker.ProgressValue.ToString() },
+            };
+            AddLinkHint(d, eorMarker.NextPassage, ctx);
+        }
+        else if (onclose is not null)
         {
             // v0.3's bare-string `onclose` was purely a navigation target — v0.4 splits that into
             // `target` (navigation) vs. `onclose` (a node list of logic run before it). This
@@ -721,7 +766,18 @@ public static partial class V2Serializer
             // are all independently optional).
             d["okay"] = "Accept";
         }
-        d["snapshot"] = expand.StateAffecting;
+        else if (layout == "end_of_generation")
+        {
+            // EogSetupMarkerNode's own S_OnSetSpecialSetup path (unlike the plain S_OnEndOfGeneration
+            // one in TransformEndOfGeneration) can also land here with no PassageName/target — same
+            // "no footer at all" trap without an explicit okay (see TransformEndOfGeneration's note).
+            d["okay"] = "Confirm";
+        }
+
+        // CheckProgress always records state, so force snapshot regardless of the source link's own
+        // enchant command (None vs Replace) — matches the forcing StitchFragments used to apply when
+        // this collapsed to a plain navigation LinkNode instead of a popup.
+        d["snapshot"] = eorMarker is not null || expand.StateAffecting;
 
         var (headerNodes, contentNodes) = SplitPopupHeaderNodes(childNodes);
         var transformedHeader = TransformNodeList(headerNodes, ctx);
@@ -921,6 +977,13 @@ public static partial class V2Serializer
         {
             ["type"] = "popup",
             ["layout"] = "end_of_generation",
+            // Every real occurrence auto-displays with no target/onclose (ViewEndOfGeneration.
+            // OnConfirmBtn only navigates when PassageName was set by the separate
+            // S_OnSetSpecialSetup path — see EogSetupMarkerNode/TransformPopup's own "end_of_generation"
+            // layout branch for that one) — without an okay button this popup could never be dismissed
+            // (RenderedPopupView renders no footer at all when both Okay and Cancel are null). The
+            // reference app's Accept button reads "CONFIRM" (Main.unity GameObject 2047491225).
+            ["okay"] = "Confirm",
             ["content"] = nodes,
         };
         return d;

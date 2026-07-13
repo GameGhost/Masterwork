@@ -9,7 +9,7 @@ namespace Masterwork.Extractor;
 // masterwork-plan notes on the progress-bar survey for the reference-app mechanism this reproduces.
 public class ProgressMapper
 {
-    private sealed record Entry(string? Layout, int? Progress, bool HasProgressField);
+    private sealed record Entry(string? Layout, int? Progress, bool HasProgressField, string? EndOfRoundBody, string? EndOfRoundBody2);
 
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
 
@@ -50,7 +50,14 @@ public class ProgressMapper
                 var hasProgressField = value.TryGetProperty("progress", out var p);
                 int? progress = hasProgressField && p.ValueKind == JsonValueKind.Number ? p.GetInt32() : null;
 
-                mapper._entries[prop.Name] = new Entry(layout, progress, hasProgressField);
+                string? eorBody = value.TryGetProperty("end_of_round_body", out var b) && b.ValueKind == JsonValueKind.String
+                    ? b.GetString()
+                    : null;
+                string? eorBody2 = value.TryGetProperty("end_of_round_body2", out var b2) && b2.ValueKind == JsonValueKind.String
+                    ? b2.GetString()
+                    : null;
+
+                mapper._entries[prop.Name] = new Entry(layout, progress, hasProgressField, eorBody, eorBody2);
             }
 
             Console.WriteLine($"Progress map loaded: {mapper._entries.Count} entries from '{Path.GetFileName(jsonPath)}'");
@@ -82,4 +89,11 @@ public class ProgressMapper
         progress = null;
         return false;
     }
+
+    // End-of-round popup body text for `passageName` (the reference app's ViewEndOfRound.
+    // SetEndOfRound bodyText/bodyText2, e.g. "The Early Years of the First Generation has ended...").
+    // Both come back null when the entry has neither field — the normal case for entries that only
+    // carry layout/progress, e.g. the two legacy stray names with no end-of-round popup at all.
+    public (string? Body, string? Body2) TryGetEndOfRoundText(string passageName) =>
+        _entries.TryGetValue(passageName, out var entry) ? (entry.EndOfRoundBody, entry.EndOfRoundBody2) : (null, null);
 }

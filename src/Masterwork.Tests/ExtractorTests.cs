@@ -154,6 +154,29 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void InlineHtmlBoldTag_ConvertsToMarkdownBold()
+    {
+        // Regression: a literal <b>...</b> tag embedded directly in a text() string argument (as
+        // opposed to Cradle's own styleScope("bold", true) idiom) used to be silently stripped by
+        // SpriteMapper's HTML-tag cleanup instead of converted — losing the bold formatting
+        // entirely. 27 real occurrences of inline <b>/<i> tags exist in the Cost of Disease source.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("Return all <b>Dubious Bartering</b> cards to the box.");
+                yield break;
+            }
+            """);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        Assert.Equal("Return all **Dubious Bartering** cards to the box.", textNode.Template);
+    }
+
+    [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
         // Tagged "ck2" (event layout) so this leading bold text isn't intercepted by the
@@ -375,6 +398,147 @@ public class ExtractorTests
         {
             System.IO.File.Delete(tempReportPath);
         }
+    }
+
+    [Fact]
+    public void SetupImageAssignment_BetweenTextCalls_MergesSentenceAroundImage()
+    {
+        // Regression: ForScience.mws.yaml — Vars._SetupImage sitting between two text() calls that
+        // form one sentence used to break the text-consolidation merge group (the image node isn't
+        // a TextNode/LetNode, so ConsolidateTextNodes flushed on it), extracting "The " as its own
+        // orphaned segment. The image is routed to the popup header regardless of its position in
+        // the content list (SplitPopupHeaderNodes), so it never needed to interrupt the sentence.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("The ");
+                this.Vars._SetupImage = "Creepy_Icon";
+                yield return base.text("least player loses.");
+                yield break;
+            }
+            """);
+
+        var image = Assert.Single(passages[0].Nodes.OfType<ImageNode>());
+        Assert.Equal("setup-image", image.Style);
+        var text = Assert.Single(passages[0].Nodes.OfType<TextNode>());
+        Assert.Equal("The least player loses.", text.Template);
+    }
+
+    // ── Sentence fragmented by complementary-range conditionals ─────────────
+
+    [Fact]
+    public void ComplementaryNumericRangeConditionals_SandwichedByText_MergeIntoOneConditional()
+    {
+        // Regression: EquitableValues.mws.yaml / UniEvent2-Failure.mws.yaml — Cradle's
+        // `if (Vars.players <= 3) {...} if (Vars.players >= 4) {...}` idiom (two adjacent bare ifs,
+        // not if/else) used to pick alternate wording mid-sentence extracted as 4 disjoint segments
+        // (prefix text, conditional, conditional, suffix text) that read as a broken fragment. Since
+        // the two conditions are a provably exhaustive, non-overlapping range split on the same
+        // variable, they merge into one if/else-if ConditionalNode with the prefix/suffix text
+        // folded into each branch, producing two complete sentences.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("The ");
+                if (this.Vars.players <= 3)
+                {
+                    yield return base.text("player with the fewest VP gains 1");
+                }
+                if (this.Vars.players >= 4)
+                {
+                    yield return base.text("2 players with the fewest VP gain 1");
+                }
+                yield return base.text(" of their Servants from Lost.");
+                yield break;
+            }
+            """);
+
+        var cond = Assert.IsType<ConditionalNode>(passages[0].Nodes.Single());
+        Assert.Equal(2, cond.Branches.Count);
+
+        var branchLe3 = Assert.Single(cond.Branches, b => b.Condition == "players <= 3");
+        var text1 = Assert.IsType<TextNode>(Assert.Single(branchLe3.Nodes));
+        Assert.Equal("The player with the fewest VP gains 1 of their Servants from Lost.", text1.Template);
+
+        var branchGe4 = Assert.Single(cond.Branches, b => b.Condition == "players >= 4");
+        var text2 = Assert.IsType<TextNode>(Assert.Single(branchGe4.Nodes));
+        Assert.Equal("The 2 players with the fewest VP gain 1 of their Servants from Lost.", text2.Template);
+    }
+
+    [Fact]
+    public void NonComplementaryConditionals_DifferentVariables_NeverMerged()
+    {
+        // Regression guard: DevEventCure.mws.yaml / Gen1Creepy-ConcealExpose.mws.yaml use the same
+        // "text, bare if, bare if, text" shape, but on two DIFFERENT variables (wolves/hunters) that
+        // aren't provably mutually exclusive — both could be true (or neither), so merging into an
+        // if/else-if would silently drop a clause the source always shows. Must stay two separate
+        // conditionals with the surrounding text untouched.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("An envoy from the ");
+                if (this.Vars.wolves == "evil")
+                {
+                    yield return base.text("Order of St. Hubertus");
+                }
+                if (this.Vars.hunters == "evil")
+                {
+                    yield return base.text("Fraternity of Hunters");
+                }
+                yield return base.text(" arrived.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal(2, passages[0].Nodes.OfType<ConditionalNode>().Count());
+        Assert.Contains(passages[0].Nodes, n => n is TextNode t && t.Template == "An envoy from the ");
+        Assert.Contains(passages[0].Nodes, n => n is TextNode t && t.Template == " arrived.");
+    }
+
+    [Fact]
+    public void NonComplementaryConditionals_ThreeIndependentBranches_NeverMerged()
+    {
+        // Regression guard: END-UniGood.mws.yaml — three independent boolean flags, each
+        // additively appending its own clause (0-3 may fire), not a two-way split. Must be left
+        // as three separate conditionals.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("The town ");
+                if (this.Vars.cured == 1)
+                {
+                    yield return base.text("was cured");
+                }
+                if (this.Vars.uni == "yes")
+                {
+                    yield return base.text("built a university");
+                }
+                if (this.Vars.ultimate == "yes")
+                {
+                    yield return base.text("achieved perfection");
+                }
+                yield return base.text(" in the end.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal(3, passages[0].Nodes.OfType<ConditionalNode>().Count());
     }
 
     [Fact]
@@ -642,6 +806,29 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void HubLayout_SingleBoldLineWithTrailingColon_TrimsColonFromTitle()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Town Hall:");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Town Hall", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+    }
+
+    [Fact]
     public void NarrationLayout_SingleBoldLineWithDash_SplitsIntoTitleAndSubtitle()
     {
         var passages = Extract("""
@@ -666,8 +853,13 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void HubLayout_TwoBoldLinesSeparatedByBreak_HoistsEachLineSeparately()
+    public void HubLayout_SecondSeparateBoldScope_NeverHoistedAsSubtitle()
     {
+        // Regression: Gen1-CreepyTrackRes.mws.yaml and others got a false subtitle from a SECOND,
+        // unrelated bold styleScope (e.g. "Carefully hand this storybook to X...") that happened to
+        // sit right after a single break following the title's own bold scope. Post-consolidation
+        // this reads identically to a genuine two-line heading, so the fix is to never hoist a
+        // second bold block at all — only the source's first bold styleScope is ever the heading.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -677,26 +869,29 @@ public class ExtractorTests
             {
                 using (base.styleScope("bold", true))
                 {
-                    yield return base.text("The Good Fight");
+                    yield return base.text("A Seedy Arrangement");
                 }
                 StyleScope styleScope1 = null;
                 yield return base.lineBreak();
                 using (base.styleScope("bold", true))
                 {
-                    yield return base.text("Early Years");
+                    yield return base.text("Carefully hand this storybook device to the target player.");
                 }
                 StyleScope styleScope2 = null;
+                yield return base.lineBreak();
                 yield break;
             }
             """);
 
-        Assert.Equal("The Good Fight", passages[0].Title);
-        Assert.Equal("Early Years", passages[0].Subtitle);
-        Assert.Empty(passages[0].Nodes);
+        Assert.Equal("A Seedy Arrangement", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        var body = passages[0].Nodes.OfType<TextNode>().Single();
+        Assert.Equal("Carefully hand this storybook device to the target player.", body.Template);
+        Assert.Equal("bold", body.Style);
     }
 
     [Fact]
-    public void HubLayout_ThreeBoldLines_DoesNotHoist()
+    public void HubLayout_ThreeSeparateBoldScopes_OnlyFirstHoisted()
     {
         var passages = Extract("""
             private void passage1_Init()
@@ -726,9 +921,44 @@ public class ExtractorTests
             }
             """);
 
-        Assert.Equal("P1", passages[0].Title);
+        Assert.Equal("Line One", passages[0].Title);
         Assert.Null(passages[0].Subtitle);
-        Assert.Equal(5, passages[0].Nodes.Count);
+        Assert.Equal(["Line Two", "Line Three"], passages[0].Nodes.OfType<TextNode>().Select(t => t.Template));
+    }
+
+    [Fact]
+    public void IntroductionLayout_TwoBoldLinesInSameScope_HoistsToTitleAndSubtitle()
+    {
+        // Regression: Scenario5Start.mws.yaml (source lines 2246-2251) is a single
+        // `using (styleScope("bold", true))` block containing two text() calls separated by an
+        // internal lineBreak() — post-consolidation this looks identical to
+        // HubLayout_SecondSeparateBoldScope_NeverHoistedAsSubtitle's TWO SEPARATE scopes, but the
+        // break here never leaves the scope, so it must still be hoisted as title+subtitle.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "INTRO" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("GENERATION I:");
+                    yield return base.lineBreak();
+                    yield return base.text("Yellow Fever");
+                }
+                StyleScope styleScope = null;
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.text("The siblings' arrival to claim their considerable inheritance...");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("GENERATION I", passages[0].Title);
+        Assert.Equal("Yellow Fever", passages[0].Subtitle);
+        var body = passages[0].Nodes.OfType<TextNode>().Single();
+        Assert.Equal("The siblings' arrival to claim their considerable inheritance...", body.Template);
     }
 
     [Fact]
@@ -1074,6 +1304,37 @@ public class ExtractorTests
         Assert.Equal("Remove all player pieces and end the generation.", eog.Message);
     }
 
+    [Fact]
+    public void EndOfGenerationNullConditionalInvoke_ConvertsRichTextTags()
+    {
+        // Regression: this is the actual shape Cost of Disease's complete-class source uses
+        // (ViewEndOfGeneration.S_OnEndOfGeneration?.Invoke(s, N), not the delegate-variable form
+        // above) — a separate code path that assigned the raw message straight to
+        // EndOfGenerationNode.Message without ever calling BuildEogMessageTemplate, so <b>/<sprite>
+        // tags reached restext completely unconverted (real occurrence: Directive_EndGeneration_
+        // DubiousBartering in en-US.common.restext).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Fate1"] = new StoryPassage("Fate1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                string s = "Return all <b>Dubious Bartering</b> cards. Return any remaining <sprite=\"StorybookToken\" index=0> tokens.";
+                ViewEndOfGeneration.S_OnEndOfGeneration?.Invoke(s, 3);
+                yield break;
+            }
+            """);
+
+        var eog = passages[0].Nodes.OfType<EndOfGenerationNode>().First();
+        Assert.Equal(3, eog.Generation);
+        Assert.DoesNotContain("<b>", eog.Message);
+        Assert.DoesNotContain("</b>", eog.Message);
+        Assert.DoesNotContain("<sprite", eog.Message);
+        Assert.Contains("**Dubious Bartering**", eog.Message);
+        Assert.Contains("{icon:", eog.Message);
+    }
+
     // ── Array operations ───────────────────────────────────────────────────
 
     [Fact]
@@ -1169,8 +1430,17 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void RandomPlusVar_EmitsLetThenVarSets()
+    public void RandomPlusVar_EmitsLetThenVarMath()
     {
+        // Regression: this used to emit VarSets with {var}-braced display-template syntax
+        // ("{heart} + {_rnd_...}") — invalid inside an expr field, which is always a bare
+        // expression, never {}-wrapped (see mws-format-latest.md §4). RestextCollector's
+        // "template string" heuristic silently promoted that whole braced string to a restext://
+        // key (since it looks exactly like an ordinary display-text template), and at module-load
+        // time RestextResolver substitutes the value back in verbatim with the braces still there
+        // — the engine's expression parser then chokes on the leading '{' as a malformed record
+        // literal. Real-world crash: S5Fate2.mws.yaml's hearttotal assign. Must be VarMath (a bare
+        // arithmetic expr) instead, so RestextCollector never sees anything to promote.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -1190,11 +1460,42 @@ public class ExtractorTests
         Assert.Equal<int?>(6, let.Random.Max);
 
         var effect = nodes.OfType<EffectNode>().First();
-        Assert.NotNull(effect.VarSets);
-        Assert.True(effect.VarSets!.ContainsKey("hearttotal"));
-        var heartotalVal = (string)effect.VarSets["hearttotal"]!;
-        Assert.Contains("{heart}", heartotalVal);
-        Assert.Contains(let.Var, heartotalVal);
+        Assert.Null(effect.VarSets);
+        Assert.NotNull(effect.VarMath);
+        Assert.True(effect.VarMath!.ContainsKey("hearttotal"));
+        var heartotalMath = effect.VarMath["hearttotal"];
+        Assert.DoesNotContain("{", heartotalMath);
+        Assert.DoesNotContain("}", heartotalMath);
+        Assert.Contains("heart", heartotalMath);
+        Assert.Contains(let.Var, heartotalMath);
+    }
+
+    [Fact]
+    public void ThreeOrMoreVarSumChain_EmitsVarMath()
+    {
+        // Same bug shape as RandomPlusVar_EmitsLetThenVarMath, different code path: a chain of 3+
+        // bare variable references summed together used to emit VarSets with a {var}+{var}+{var}
+        // braced template, invalid inside an expr field. No known real occurrence in Cost of
+        // Disease today, but the fix mirrors the random+var case for consistency.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.total = this.Vars.a + this.Vars.b + this.Vars.c;
+                yield break;
+            }
+            """);
+
+        var effect = passages[0].Nodes.OfType<EffectNode>().First();
+        Assert.Null(effect.VarSets);
+        Assert.NotNull(effect.VarMath);
+        var totalMath = effect.VarMath!["total"];
+        Assert.DoesNotContain("{", totalMath);
+        Assert.DoesNotContain("}", totalMath);
+        Assert.Equal("= a + b + c", totalMath);
     }
 
     [Fact]
@@ -1474,6 +1775,70 @@ public class ExtractorTests
         Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
         Assert.Single(passages[0].Nodes.OfType<CheckProgressNode>());
         Assert.DoesNotContain("no entry in the progress map", WriteReport(report));
+    }
+
+    [Fact]
+    public void CheckProgress_MappedEndOfRoundText_ExpandLinkBecomesEndOfRoundPopup()
+    {
+        // Regression: the reference app shows an acknowledgement popup here (PassageTracker.
+        // CheckProgress -> ViewEndOfRound.SetEndOfRound) before navigating on to the next passage —
+        // there's no Cradle passage modeling it (ReminderroundEnd is explicitly commented as a
+        // prototype-only stand-in never used by the final app logic). Without --progress-map
+        // end-of-round text, this is the exact real "click here to continue to the next round..."
+        // link + fragment idiom used throughout Cost of Disease (e.g. Fever1 -> FeverServe1); with
+        // it, the expand-link must become a popup instead of collapsing to a plain navigation link.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "layout": "hub_early",
+                "progress": 1,
+                "end_of_round_body": "The Early Years has ended.",
+                "end_of_round_body2": "Perform all End of Round actions."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue to the next round...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out _);
+
+        // Must NOT collapse to a plain navigation LinkNode — that would silently skip the popup.
+        Assert.Empty(passages[0].Nodes.OfType<LinkNode>());
+        var expand = Assert.Single(passages[0].Nodes.OfType<ExpandLinkNode>());
+        Assert.DoesNotContain(expand.ExpandNodes, n => n is CheckProgressNode);
+        Assert.DoesNotContain(expand.ExpandNodes, n => n is EffectNode);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_round", node["layout"]);
+        Assert.Equal("P2", node["target"]);
+        Assert.Equal("End of Round", node["okay"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        Assert.Equal("The Early Years has ended.", content[0]["value"]);
+        Assert.Equal("break", content[1]["type"]);
+        Assert.Equal("paragraph", content[1]["style"]);
+        Assert.Equal("Perform all End of Round actions.", content[2]["value"]);
+
+        var onclose = (List<Dictionary<string, object?>>)node["onclose"]!;
+        var assign = Assert.Single(onclose);
+        Assert.Equal("assign", assign["type"]);
+        Assert.Equal("_ProgressRound", assign["var"]);
+        Assert.Equal("1", assign["expr"]);
     }
 
     private static string WriteReport(ExtractionReport report)

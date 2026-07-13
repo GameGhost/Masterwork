@@ -272,7 +272,7 @@ public class PassageBodyVisitor
         return methodName switch
         {
             "text" => ProcessTextInvocation(inv),
-            "lineBreak" => [new BreakNode()],
+            "lineBreak" => [new BreakNode { WithinStyleScope = _styleStack.Count > 0 }],
             "link" => [ProcessLink(inv)],
             "passage" => ProcessPassageInclusionNodes(inv),
             "abort" => ProcessAbort(inv),
@@ -806,7 +806,7 @@ public class PassageBodyVisitor
                 int.TryParse(condGenLit.Token.ValueText, out condGen);
             }
 
-            return [new EndOfGenerationNode { Generation = condGen, Message = condMsg }];
+            return [new EndOfGenerationNode { Generation = condGen, Message = BuildEogMessageTemplate(condMsg) }];
         }
 
         // ViewEndOfGeneration.S_OnSetSpecialSetup?.Invoke(title, completedRound, passageName, bodyText)
@@ -1038,7 +1038,15 @@ public class PassageBodyVisitor
                 }
             }
 
-            // random(min, max) + var  or  var + random(min, max)  →  let _rnd = range, varName = {addend} + {_rnd}
+            // random(min, max) + var  or  var + random(min, max)  →  let _rnd = range, varName = _rnd + addend.
+            // Numeric arithmetic — must use VarMath (a bare expr like "heart + _rnd_0"), never
+            // VarSets: VarSets' {var} display-brace syntax is only valid in display fields, not
+            // assign/let's expr (which is always a bare expression — see mws-format-latest.md §4).
+            // A {var}+{var} string here would either get misparsed as a record literal by the
+            // engine's expression parser, or (if it contains any literal text/becomes multi-token)
+            // get silently promoted whole to a restext:// key by RestextCollector's "template
+            // string" heuristic, then substituted back verbatim at load time with the braces still
+            // in it — see GameSession's ExprParseException regression test for the exact crash.
             if (bin.OperatorToken.Text == "+")
             {
                 InvocationExpressionSyntax? randInv = null;
@@ -1059,12 +1067,12 @@ public class PassageBodyVisitor
                         Var = rndName,
                         Random = new VarRandom { RandomType = "range", Min = rMin, Max = rMax },
                     }];
-                    string addendStr = IsVarAccess(addend, out var addVar) ? $"{{{addVar}}}"
+                    string addendExpr = IsVarAccess(addend, out var addVar) ? addVar!
                         : addend is LiteralExpressionSyntax addLit ? addLit.Token.ValueText
                         : addend.ToString();
                     return new EffectNode
                     {
-                        VarSets = new() { [varName!] = $"{addendStr} + {{{rndName}}}" }
+                        VarMath = new() { [varName!] = $"= {addendExpr} + {rndName}" }
                     };
                 }
 
@@ -1072,7 +1080,7 @@ public class PassageBodyVisitor
                 var sumVars = new List<string>();
                 if (TryExtractVarAddChain(bin, sumVars) && sumVars.Count >= 3)
                 {
-                    return new EffectNode { VarSets = new() { [varName!] = string.Join(" + ", sumVars.Select(v => $"{{{v}}}")) } };
+                    return new EffectNode { VarMath = new() { [varName!] = $"= {string.Join(" + ", sumVars)}" } };
                 }
             }
 

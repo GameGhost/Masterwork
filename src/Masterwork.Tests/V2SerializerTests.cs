@@ -71,6 +71,27 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void EndOfGeneration_EmitsConfirmOkayButton()
+    {
+        // Regression: this popup auto-displays (no label) with no target/onclose of its own — without
+        // an explicit okay button, RenderedPopupView renders no footer at all and the popup could
+        // never be dismissed. The reference app's own button reads "CONFIRM" (Main.unity GameObject
+        // 2047491225, ViewEndOfGeneration's Accept button).
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes = [new EndOfGenerationNode { Generation = 1, Message = "Generation One has ended." }],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_generation", node["layout"]);
+        Assert.Equal("Confirm", node["okay"]);
+    }
+
+    [Fact]
     public void InputPrompt_EmitsGuardedAutoPopupConditional()
     {
         var passage = new MwsPassage

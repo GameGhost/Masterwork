@@ -15,10 +15,22 @@ public class SpriteMapper
         @"<sprite\s*=\s*""?([^""\s>]+)""?\s*(?:index\s*=\s*\d+)?\s*/?>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    // HTML-like layout/formatting tags to strip
+    // HTML-like layout/formatting tags. Captures the tag name so ConvertOrStripTag can decide
+    // whether it maps to MWS markdown (b/i) or has no MWS equivalent and is dropped (everything else).
     private static readonly Regex HtmlTag = new(
-        @"</?(?:line-height|align|size|color|b|i)[^>]*>",
+        @"</?(line-height|align|size|color|b|i)[^>]*>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // <b>/</b> -> ** and <i>/</i> -> _ (MWS markdown-style bold/italic — matches whatever Cradle's
+    // own styleScope("bold"/"italic") idiom produces elsewhere); every other tag
+    // (line-height/align/size/color) has no MWS equivalent and is dropped. Applies uniformly to
+    // both the opening and closing tag, which is exactly what a symmetric markdown delimiter needs.
+    private static string ConvertOrStripTag(Match m) => m.Groups[1].Value.ToLowerInvariant() switch
+    {
+        "b" => "**",
+        "i" => "_",
+        _ => "",
+    };
 
     public static SpriteMapper Empty() => new();
 
@@ -88,6 +100,33 @@ public class SpriteMapper
         return mapper;
     }
 
+    // Resolves a <sprite="AtlasName"> reference to an icon:// URI: direct sprite-map lookup first,
+    // then — only if that atlas name ends in "Token" — a retry against the name with that suffix
+    // stripped (e.g. "StorybookToken" isn't itself a sprite-map entry, but it's the same game piece
+    // as "Storybook", which is; some call sites in the source reference it with the suffix, some
+    // without). Falls back to a raw slug of the original atlas name when neither matches. Narrowly
+    // scoped to an exact "Token" suffix specifically so it doesn't touch names that merely contain
+    // "Token" without being an alias of a shorter known identifier (e.g. "S1_HeartToken" has no
+    // "S1_Heart" sprite-map entry to fall back to, so it's unaffected and keeps its own slug).
+    private string ResolveSpriteUri(string atlasName)
+    {
+        if (_spriteToUri.TryGetValue(atlasName, out var mapped))
+        {
+            return mapped;
+        }
+
+        if (atlasName.EndsWith("Token", StringComparison.OrdinalIgnoreCase))
+        {
+            var withoutSuffix = atlasName[..^"Token".Length];
+            if (_spriteToUri.TryGetValue(withoutSuffix, out var mappedWithoutSuffix))
+            {
+                return mappedWithoutSuffix;
+            }
+        }
+
+        return $"icon://{SlugifyName(atlasName)}";
+    }
+
     // Returns null if text has no special tags (most text nodes).
     // Returns the parsed runs if there are sprite refs or style markup.
     public List<(string? Text, string? AssetRef)>? TryParseRichText(string raw)
@@ -103,7 +142,7 @@ public class SpriteMapper
         {
             if (m.Index > pos)
             {
-                var textSegment = HtmlTag.Replace(raw[pos..m.Index], "").Trim();
+                var textSegment = HtmlTag.Replace(raw[pos..m.Index], ConvertOrStripTag).Trim();
                 if (!string.IsNullOrEmpty(textSegment))
                 {
                     runs.Add((textSegment, null));
@@ -111,15 +150,12 @@ public class SpriteMapper
             }
             // Atlas name from <sprite="AtlasName" index=N> — try lookup, fall back to slug
             var atlasName = m.Groups[1].Value;
-            var uri = _spriteToUri.TryGetValue(atlasName, out var mapped)
-                ? mapped
-                : $"icon://{SlugifyName(atlasName)}";
-            runs.Add((null, uri));
+            runs.Add((null, ResolveSpriteUri(atlasName)));
             pos = m.Index + m.Length;
         }
         if (pos < raw.Length)
         {
-            var remaining = HtmlTag.Replace(raw[pos..], "").Trim();
+            var remaining = HtmlTag.Replace(raw[pos..], ConvertOrStripTag).Trim();
             if (!string.IsNullOrEmpty(remaining))
             {
                 runs.Add((remaining, null));
@@ -128,8 +164,9 @@ public class SpriteMapper
         return runs;
     }
 
-    // Strip HTML-like layout tags from plain text (spaces preserved — caller uses IsNullOrWhiteSpace)
-    public string StripLayoutTags(string raw) => HtmlTag.Replace(raw, "");
+    // Converts HTML-like layout/formatting tags to their MWS markdown equivalent where one exists
+    // (b/i), strips the rest (spaces preserved — caller uses IsNullOrWhiteSpace).
+    public string StripLayoutTags(string raw) => HtmlTag.Replace(raw, ConvertOrStripTag);
 
     // Returns true when raw is entirely an HTML-like layout tag with no other content,
     // and is not a sprite tag. Used to detect standalone per-call tokens like <align="center">.

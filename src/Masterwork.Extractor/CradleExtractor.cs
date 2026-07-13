@@ -704,8 +704,40 @@ public partial class CradleExtractor
                             else if (expand.ExpandNodes[^1] is CheckProgressNode cpTerm &&
                                      !string.IsNullOrEmpty(cpTerm.TargetPassage))
                             {
-                                termTarget = cpTerm.TargetPassage;
-                                termStateAffecting = true;
+                                // --progress-map: when this CheckProgress's source passage has curated
+                                // end-of-round popup text, the reference app shows an acknowledgement
+                                // popup here (PassageTracker.CheckProgress -> ViewEndOfRound.SetEndOfRound),
+                                // not a silent click-through — leave `expand` as an ExpandLinkNode (swap
+                                // in a marker node instead of collapsing to LinkNode below) so
+                                // V2Serializer.TransformPopup renders it as a layout: end_of_round popup.
+                                var (eorBody, eorBody2) = progressMapper?.TryGetEndOfRoundText(cpTerm.CurrentPassage)
+                                    ?? (null, null);
+                                if (eorBody is not null)
+                                {
+                                    progressMapper!.TryGetProgressValue(cpTerm.CurrentPassage, out var progressValue);
+                                    expand.ExpandNodes.RemoveAt(expand.ExpandNodes.Count - 1);
+                                    // The _ProgressRound assign PassageBodyVisitor prepended right before
+                                    // the CheckProgressNode moves into the popup's onclose instead of
+                                    // sitting in its content — drop it here, V2Serializer re-adds it.
+                                    if (expand.ExpandNodes is [.., EffectNode { VarSets.Count: 1 } lastEffect] &&
+                                        lastEffect.VarSets!.ContainsKey("_ProgressRound"))
+                                    {
+                                        expand.ExpandNodes.RemoveAt(expand.ExpandNodes.Count - 1);
+                                    }
+
+                                    expand.ExpandNodes.Add(new EndOfRoundMarkerNode
+                                    {
+                                        NextPassage = cpTerm.TargetPassage,
+                                        ProgressValue = progressValue ?? 0,
+                                        Body = eorBody,
+                                        Body2 = eorBody2,
+                                    });
+                                }
+                                else
+                                {
+                                    termTarget = cpTerm.TargetPassage;
+                                    termStateAffecting = true;
+                                }
                             }
                         }
                         if (termTarget is not null)
@@ -889,13 +921,24 @@ public partial class CradleExtractor
     }
 
     // ── Heading (title/subtitle) hoisting ─────────────────────────────────────
-    // For hub/narration/introduction passages, a leading bold-styled block is treated as the
-    // passage's own heading (title/subtitle) rather than ordinary body text — matches how the
-    // reference app renders these as a distinct header. Only recognizes the two shapes actually
-    // seen in the source: one bold line (optionally "Title - Subtitle"), or two bold lines
-    // separated by a single break. Anything else about the leading content — three+ bold lines,
-    // mixed styles, non-text content first — is left completely untouched and extracted as normal
-    // body nodes.
+    // For hub/narration/introduction passages, a single leading bold-styled block is treated as
+    // the passage's own heading (title/subtitle) rather than ordinary body text — matches how the
+    // reference app renders these as a distinct header. Two shapes both count as a legitimate
+    // title+subtitle heading:
+    //   1. One bold line with a "Title - Subtitle" split (e.g. Fever1's "YELLOW FEVER - Early
+    //      Years", HunterConfrontation's "The Grand Contest - April, 1902").
+    //   2. Two bold text() calls separated by a lineBreak() *inside the same open styleScope*
+    //      (e.g. Scenario5Start: "GENERATION I:" / lineBreak() / "Yellow Fever", all inside one
+    //      `using (styleScope("bold", true))` block).
+    // Only the source's FIRST bold styleScope block is ever considered. A bold block that starts
+    // a NEW, separate styleScope after a break is never folded in as a subtitle — post-
+    // consolidation it looks identical to shape 2 in the node list, but `WithinStyleScope` on the
+    // intervening break (set at AST-walk time in PassageBodyVisitor, before that distinction is
+    // lost) tells them apart. Checked against every real occurrence in Cost of Disease: a bold
+    // block starting a new scope after a break is always a separate, unrelated sentence (an
+    // instruction like "Carefully hand this storybook to X...", a question, a second prompt),
+    // never a genuine continuation of the heading — see Gen1-CreepyTrackRes.mws.yaml for a worked
+    // example of the bug this avoids.
     [GeneratedRegex(@"^(.*?)\s+-\s+(.*)$")]
     private static partial Regex HeadingDashSplit();
 
@@ -912,22 +955,20 @@ public partial class CradleExtractor
             return (null, null, nodes);
         }
 
-        // Two-line case: bold text, one break, bold text — but not a third bold line following
-        // that (the heading is recognized only when it has exactly 1 or 2 lines).
-        if (nodes.Count >= 3 &&
-            nodes[1] is BreakNode or ParagraphBreakNode &&
-            nodes[2] is TextNode { Style: "bold", Template.Length: > 0 } second)
+        // Shape 2: title + subtitle as two bold lines joined by a break that stayed inside the
+        // same styleScope. A third bold line right after (even scope-internal) disqualifies the
+        // hoist — that's more than a simple two-line heading and is left for the body to render.
+        if (nodes is [_, BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true },
+                TextNode { Style: "bold", Template.Length: > 0 } second, .. var rest]
+            && rest is not [BreakNode, TextNode { Style: "bold" }, ..])
         {
-            var hasThirdLine = nodes.Count >= 5 &&
-                nodes[3] is BreakNode or ParagraphBreakNode &&
-                nodes[4] is TextNode { Style: "bold" };
-            return hasThirdLine
-                ? (null, null, nodes)
-                : (first.Template.Trim(), second.Template.Trim(), nodes.Skip(3).ToList());
+            return (TrimHeadingText(first.Template), TrimHeadingText(second.Template), rest);
         }
 
-        // Single-line case: "Title - Subtitle" splits on the first standalone " - "; otherwise
-        // the whole line becomes the title with no subtitle.
+        // Shape 1: "Title - Subtitle" splits on the first standalone " - "; otherwise the whole
+        // line becomes the title with no subtitle. Whatever follows (including a break directly
+        // after this node) is left exactly as-is in the remaining body — not trimmed or merged
+        // further.
         var (title, subtitle) = SplitHeadingLine(first.Template);
         return (title, subtitle, nodes.Skip(1).ToList());
     }
@@ -938,15 +979,20 @@ public partial class CradleExtractor
         var m = HeadingDashSplit().Match(trimmed);
         if (m.Success)
         {
-            var titlePart = m.Groups[1].Value.Trim();
-            var subtitlePart = m.Groups[2].Value.Trim();
+            var titlePart = TrimHeadingText(m.Groups[1].Value);
+            var subtitlePart = TrimHeadingText(m.Groups[2].Value);
             if (titlePart.Length > 0 && subtitlePart.Length > 0)
             {
                 return (titlePart, subtitlePart);
             }
         }
-        return (trimmed, null);
+        return (TrimHeadingText(trimmed), null);
     }
+
+    // Strips whitespace and stray ':' characters (e.g. a bold "GENERATION I:" line preceding a
+    // subtitle) from extracted title/subtitle text. Runs whitespace-trim again after stripping
+    // colons in case removing them exposes new leading/trailing whitespace.
+    private static string TrimHeadingText(string text) => text.Trim().Trim(':').Trim();
 
     // ── Text consolidation post-pass ─────────────────────────────────────────
     // Merges consecutive text/icon TextNodes into a single template string.
@@ -1043,13 +1089,200 @@ public partial class CradleExtractor
             }
         }
         FlushGroup();
-        return MergeInterstitialAssigns(HoistAndMergeSwitchLets(ConsolidateSwitches(ConsolidateBreaks(result))));
+        return MergeInterstitialAssigns(MergeComplementaryConditionalTextFragments(
+            HoistAndMergeSwitchLets(ConsolidateSwitches(ConsolidateBreaks(result)))));
     }
 
-    // Scans for [TextNode+][PureAssignEffect+][TextNode+] runs and, when hoisting the assigns
-    // is safe (the pre-assign texts don't reference the assigned variables), emits the assigns
-    // first and merges all texts into one node. Runs after ConsolidateSwitches so conditional
-    // blocks have already been promoted above the text/assign sequence.
+    // Scans for [TextNode+][single-branch text-only ConditionalNode]{2}[TextNode+] runs where the
+    // two conditionals' conditions are a provably exhaustive, non-overlapping numeric-range
+    // partition of the same variable (e.g. Cradle's `if (Vars.players <= 3) {...} if (Vars.players
+    // >= 4) {...}`, used to pick alternate wording for a clause in the middle of one sentence) and
+    // merges them into a single if/else-if ConditionalNode, folding the surrounding lead-in/lead-out
+    // text into each branch — producing two complete sentences instead of a prefix/conditional/
+    // conditional/suffix sequence that reads as a broken fragment when rendered as separate nodes.
+    // Deliberately narrow: exactly two branches, same variable, complementary ranges, text-only
+    // branch content, non-empty text on both sides. A survey of every occurrence of "text, 2+
+    // adjacent bare single-branch conditionals, text" in Cost of Disease found real cases that must
+    // NOT be merged this way — e.g. DevEventCure/Gen1Creepy-ConcealExpose's `wolves == "evil"` /
+    // `hunters == "evil"` (different variables, not proven mutually exclusive — both could be true,
+    // in which case an if/else-if merge would silently drop one clause instead of showing both as
+    // the source does) and END-UniGood's three independent boolean flags (additive, not a two-way
+    // split). Anything outside the narrow "same var, complementary numeric range" shape is left
+    // alone rather than risk that. See EquitableValues.mws.yaml / UniEvent2-Failure.mws.yaml for the
+    // real occurrences this fixes.
+    private static List<MwsNode> MergeComplementaryConditionalTextFragments(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>(nodes.Count);
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (nodes[i] is not TextNode)
+            {
+                result.Add(nodes[i++]);
+                continue;
+            }
+
+            int prefixStart = i;
+            int prefixEnd = i;
+            while (prefixEnd < nodes.Count && nodes[prefixEnd] is TextNode)
+            {
+                prefixEnd++;
+            }
+
+            if (TryMergeConditionalTextFragment(nodes, prefixStart, prefixEnd, out var merged, out var consumedEnd))
+            {
+                result.Add(merged);
+                i = consumedEnd;
+                continue;
+            }
+
+            for (int k = prefixStart; k < prefixEnd; k++)
+            {
+                result.Add(nodes[k]);
+            }
+
+            i = prefixEnd;
+        }
+        return result;
+    }
+
+    private static bool TryMergeConditionalTextFragment(
+        List<MwsNode> nodes, int prefixStart, int prefixEnd, out ConditionalNode merged, out int consumedEnd)
+    {
+        merged = null!;
+        consumedEnd = prefixEnd;
+
+        if (prefixEnd + 1 >= nodes.Count ||
+            !IsSingleBranchTextOnlyConditional(nodes[prefixEnd], out var branchA, out var condA) ||
+            !IsSingleBranchTextOnlyConditional(nodes[prefixEnd + 1], out var branchB, out var condB) ||
+            (prefixEnd + 2 < nodes.Count && nodes[prefixEnd + 2] is ConditionalNode) ||
+            !AreComplementaryNumericRanges(condA, condB))
+        {
+            return false;
+        }
+
+        int suffixStart = prefixEnd + 2;
+        int suffixEnd = suffixStart;
+        while (suffixEnd < nodes.Count && nodes[suffixEnd] is TextNode)
+        {
+            suffixEnd++;
+        }
+
+        // Require text on both sides — a conditional pair with nothing following isn't a
+        // "fragment in the middle," it's an ordinary trailing optional clause.
+        if (suffixEnd == suffixStart)
+        {
+            return false;
+        }
+
+        var prefixTexts = nodes[prefixStart..prefixEnd].Cast<TextNode>().ToList();
+        var suffixTexts = nodes[suffixStart..suffixEnd].Cast<TextNode>().ToList();
+
+        var mergedBranchA = new ConditionalBranch
+        {
+            Condition = condA,
+            Nodes = [MergeTextNodesForFragment(prefixTexts.Concat(branchA!.Nodes.Cast<TextNode>()).Concat(suffixTexts))],
+        };
+        var mergedBranchB = new ConditionalBranch
+        {
+            Condition = condB,
+            Nodes = [MergeTextNodesForFragment(prefixTexts.Concat(branchB!.Nodes.Cast<TextNode>()).Concat(suffixTexts))],
+        };
+
+        merged = new ConditionalNode
+        {
+            Branches = [mergedBranchA, mergedBranchB],
+            SourceLine = prefixTexts[0].SourceLine,
+        };
+        consumedEnd = suffixEnd;
+        return true;
+    }
+
+    private static bool IsSingleBranchTextOnlyConditional(
+        MwsNode node, out ConditionalBranch? branch, out string? condition)
+    {
+        branch = null;
+        condition = null;
+        if (node is not ConditionalNode { Branches: [var b] } || b.Else == true || b.Condition is null ||
+            b.Nodes.Count == 0 || !b.Nodes.All(n => n is TextNode))
+        {
+            return false;
+        }
+
+        branch = b;
+        condition = b.Condition;
+        return true;
+    }
+
+    // True when condA/condB are simple comparisons ("var OP N") on the same variable whose implied
+    // integer ranges are complementary and non-overlapping — i.e. together they cover every integer,
+    // each exactly once (e.g. "players <= 3" / "players >= 4", or "players < 4" / "players > 3").
+    private static bool AreComplementaryNumericRanges(string? condA, string? condB)
+    {
+        if (condA is null || condB is null) return false;
+        var a = SwitchCondRegex().Match(condA);
+        var b = SwitchCondRegex().Match(condB);
+        if (!a.Success || !b.Success) return false;
+        if (a.Groups[1].Value != b.Groups[1].Value) return false;
+        if (!int.TryParse(a.Groups[3].Value, out var nA) || !int.TryParse(b.Groups[3].Value, out var nB)) return false;
+
+        var (loA, hiA) = ToInclusiveRange(a.Groups[2].Value, nA);
+        var (loB, hiB) = ToInclusiveRange(b.Groups[2].Value, nB);
+        if (loA is null && hiB is null)
+        {
+            return hiA is not null && loB is not null && hiA + 1 == loB;
+        }
+        if (loB is null && hiA is null)
+        {
+            return hiB is not null && loA is not null && hiB + 1 == loA;
+        }
+        return false;
+    }
+
+    // Converts a "var OP N" comparison into an inclusive [lo, hi] integer range (null = unbounded).
+    private static (int? Lo, int? Hi) ToInclusiveRange(string op, int n) => op switch
+    {
+        "<" => (null, n - 1),
+        "<=" => (null, n),
+        ">" => (n + 1, null),
+        ">=" => (n, null),
+        _ => (null, null),
+    };
+
+    private static TextNode MergeTextNodesForFragment(IEnumerable<TextNode> texts)
+    {
+        var list = texts.ToList();
+        var allRuns = new List<TextRun>();
+        foreach (var t in list)
+        {
+            if (t.Template is not null)
+            {
+                allRuns.Add(new TextRun { Text = t.Template, Style = t.Style });
+            }
+            else
+            {
+                allRuns.AddRange(t.Runs);
+            }
+        }
+        var dominantStyle = ComputeDominantStyle(allRuns);
+        var mergedTemplate = BuildTemplate(allRuns, dominantStyle).Replace("****", "").Replace("__", "");
+        return new TextNode
+        {
+            Template = mergedTemplate,
+            Style = dominantStyle,
+            SourceLine = list.FirstOrDefault()?.SourceLine,
+        };
+    }
+
+    // Scans for [TextNode+][Interstitial+][TextNode+] runs and, when hoisting the interstitials
+    // is safe, emits them first and merges all texts into one node. An "interstitial" is a node
+    // that produces no inline text of its own and can be freely relocated: a pure-assign EffectNode
+    // (safe as long as no pre-node text references the assigned variables), or a setup-image
+    // ImageNode (Vars._SetupImage — routed to the enclosing popup's header by SplitPopupHeaderNodes
+    // regardless of where in the content list it sits, so it never needed to interrupt the sentence
+    // it was written in the middle of; see PassageBodyVisitor's ProcessAssignment _SetupImage case).
+    // Runs after ConsolidateSwitches so conditional blocks have already been promoted above the
+    // text/interstitial sequence.
     private static List<MwsNode> MergeInterstitialAssigns(List<MwsNode> nodes)
     {
         var result = new List<MwsNode>(nodes.Count);
@@ -1065,15 +1298,15 @@ public partial class CradleExtractor
                 preEnd++;
             }
 
-            // Span of following pure assigns
-            int assignEnd = preEnd;
-            while (assignEnd < nodes.Count && IsPureAssignEffect(nodes[assignEnd]))
+            // Span of following interstitials
+            int interstitialEnd = preEnd;
+            while (interstitialEnd < nodes.Count && IsInterstitialHoistable(nodes[interstitialEnd]))
             {
-                assignEnd++;
+                interstitialEnd++;
             }
 
-            // Only merge when assigns are followed by at least one more text node
-            if (assignEnd == preEnd || assignEnd >= nodes.Count || nodes[assignEnd] is not TextNode)
+            // Only merge when interstitials are followed by at least one more text node
+            if (interstitialEnd == preEnd || interstitialEnd >= nodes.Count || nodes[interstitialEnd] is not TextNode)
             {
                 for (int k = i; k < preEnd; k++)
                 {
@@ -1084,9 +1317,11 @@ public partial class CradleExtractor
                 continue;
             }
 
-            // Safety check: none of the pre-assign texts may reference the assigned variables
-            var assigns = nodes[preEnd..assignEnd].Cast<EffectNode>().ToList();
-            var assignedVars = assigns.SelectMany(a => a.VarSets!.Keys).ToHashSet(StringComparer.Ordinal);
+            // Safety check: none of the pre-interstitial texts may reference variables the
+            // interstitials assign (setup-image ImageNodes assign nothing, so this is trivially
+            // satisfied whenever the span is image-only).
+            var interstitials = nodes[preEnd..interstitialEnd].ToList();
+            var assignedVars = interstitials.OfType<EffectNode>().SelectMany(a => a.VarSets!.Keys).ToHashSet(StringComparer.Ordinal);
             var preTexts = nodes[i..preEnd].Cast<TextNode>().ToList();
 
             if (preTexts.Any(t => TextNodeReferencesAny(t, assignedVars)))
@@ -1101,16 +1336,16 @@ public partial class CradleExtractor
             }
 
             // Gather post-text run
-            int postEnd = assignEnd;
+            int postEnd = interstitialEnd;
             while (postEnd < nodes.Count && nodes[postEnd] is TextNode)
             {
                 postEnd++;
             }
 
-            // Emit: assigns, then merged text (pre + post)
-            result.AddRange(assigns);
+            // Emit: interstitials, then merged text (pre + post)
+            result.AddRange(interstitials);
             var allRuns = new List<TextRun>();
-            foreach (var t in preTexts.Concat(nodes[assignEnd..postEnd].Cast<TextNode>()))
+            foreach (var t in preTexts.Concat(nodes[interstitialEnd..postEnd].Cast<TextNode>()))
             {
                 if (t.Template is not null)
                 {
@@ -1129,12 +1364,15 @@ public partial class CradleExtractor
             {
                 Template = mergedTemplate,
                 Style = dominantStyle,
-                SourceLine = preTexts.FirstOrDefault()?.SourceLine ?? assigns.FirstOrDefault()?.SourceLine,
+                SourceLine = preTexts.FirstOrDefault()?.SourceLine ?? interstitials.FirstOrDefault()?.SourceLine,
             });
             i = postEnd;
         }
         return result;
     }
+
+    private static bool IsInterstitialHoistable(MwsNode node) =>
+        IsPureAssignEffect(node) || node is ImageNode { Style: "setup-image" };
 
     // When every branch of a ConditionalNode contains exactly [LetNode(Random), TextNode({var})],
     // the conditional is "homogeneous random" — all branches produce the same kind of value and
@@ -1745,12 +1983,18 @@ public partial class CradleExtractor
             if (nodes[i] is BreakNode firstBreak)
             {
                 var sourceLine = firstBreak.SourceLine;
+                var withinStyleScope = firstBreak.WithinStyleScope;
                 int count = 1;
                 i++;
-                while (i < nodes.Count && nodes[i] is BreakNode) { count++; i++; }
+                while (i < nodes.Count && nodes[i] is BreakNode nextBreak)
+                {
+                    withinStyleScope &= nextBreak.WithinStyleScope;
+                    count++;
+                    i++;
+                }
                 result.Add(count >= 2
-                    ? new ParagraphBreakNode { SourceLine = sourceLine }
-                    : new BreakNode { SourceLine = sourceLine });
+                    ? new ParagraphBreakNode { SourceLine = sourceLine, WithinStyleScope = withinStyleScope }
+                    : new BreakNode { SourceLine = sourceLine, WithinStyleScope = withinStyleScope });
             }
             else
             {

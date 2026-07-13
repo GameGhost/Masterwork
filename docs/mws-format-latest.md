@@ -40,13 +40,19 @@ nodes:
 For `hub`/`narration`/`introduction` passages, the extractor recognizes a leading bold-styled text block as the
 passage's heading rather than emitting it as ordinary body text, per these rules: a single bold
 line splits on the first standalone `" - "` into `title`/`subtitle` (no `-` → the whole line becomes
-`title` with no `subtitle`); two consecutive bold lines separated by a single `break` become `title`
-and `subtitle` verbatim (the break itself is discarded, not preserved as body content). Any other
-shape — three or more bold lines, mixed-style leading text, non-text content first — is left
-untouched and extracted as normal nodes. This detection only ever looks at the very first block of
-the passage; a bold run anywhere else in the body is unaffected. The app renders `title`/`subtitle`
-in a dedicated header region above the passage body (see `Masterwork.App.Shared`'s `PassageView`),
-and the timeline scrubber's default snapshot label uses `"{title} - {subtitle}"` when both are set.
+`title` with no `subtitle`); two bold lines separated by a single `break` become `title` and
+`subtitle`, but only when that break sits *inside the same source styleScope* as both lines (a
+`lineBreak()` nested inside one `using (styleScope("bold", true))` block, not a break between two
+separate scopes). A break between two separate bold styleScopes is never folded in as a subtitle —
+the second scope is left as ordinary body text, since in every real occurrence that shape is an
+unrelated sentence (an instruction, a question), not a continuation of the heading. Whichever shape
+matches, leading/trailing whitespace and `:` characters are trimmed from `title`/`subtitle` text
+(e.g. a source line of `"GENERATION I:"` extracts as `title: 'GENERATION I'`). Any other shape —
+three or more bold lines, mixed-style leading text, non-text content first — is left untouched and
+extracted as normal nodes. This detection only ever looks at the very first block of the passage; a
+bold run anywhere else in the body is unaffected. The app renders `title`/`subtitle` in a dedicated
+header region above the passage body (see `Masterwork.App.Shared`'s `PassageView`), and the timeline
+scrubber's default snapshot label uses `"{title} - {subtitle}"` when both are set.
 
 ### Layout Values
 
@@ -332,7 +338,15 @@ Custom types support only `==` and `!=` (member equality). Compare individual pr
 a && b    a || b    !a
 ```
 
-Precedence (high to low): `!` → `* / %` → `+ -` → `< <= > >= == !=` → `&&` → `||`
+**Ternary conditional:**
+
+```
+cond ? whenTrue : whenFalse
+```
+
+Right-associative, so a chain reads as if/else-if: `a ? "X" : b ? "Y" : "Z"` means `a ? "X" : (b ? "Y" : "Z")`. Only the taken branch is evaluated (short-circuits, like `&&`/`||`). Valid anywhere a full expression is — including nested inside `(...)`, function-call arguments, array elements, and record property values.
+
+Precedence (high to low): `!` → `* / %` → `+ -` → `< <= > >= == !=` → `&&` → `||` → `?:`
 
 Use parentheses to override.
 
@@ -729,6 +743,7 @@ Layout-driven popup with property bindings — content nodes bind values to layo
   label: 'restext://Common_190'  # "Click here at the end of the round..."
   snapshot: true
   target: 'ATOWSabotageIntro1'
+  okay: 'Close'
   content:
   - type: 'let'
     var: 'title'
@@ -740,16 +755,43 @@ Layout-driven popup with property bindings — content nodes bind values to layo
     value: 'restext://Common_069'    # body instruction text
 ```
 
-Auto-display layout popup — no `label`, shown immediately when the passage renders:
+Auto-display layout popup — no `label`, shown immediately when the passage renders. Always carries an
+`okay` button even with no `target`/`onclose` of its own — without one there's no way to dismiss it,
+since a popup with neither `Okay` nor `Cancel` renders no footer at all:
 ```yaml
 - type: 'popup'
   layout: 'end_of_generation'
+  okay: 'Confirm'  # reference app's own button caption (Main.unity ViewEndOfGeneration Accept button)
   content:
   - type: 'text'
     value: 'restext://TowardsWar_002'  # EOG instruction text
   - type: 'let'
     var: 'generation'
     expr: '3'
+```
+
+End-of-round acknowledgement popup — the extractor synthesizes this from a `PassageTracker.instance.
+CheckProgress(current, next)` call site whose `current` passage has curated body text in
+`--progress-map` (see `docs/extractor.md`), replacing what would otherwise be a bare navigation link.
+The reference app (`ViewEndOfRound.SetEndOfRound`) shows this popup before advancing to `next`; the
+`_ProgressRound` assign that used to sit directly in the link's `onclick` moves into `onclose` instead,
+since it should only commit once the player has acknowledged the popup:
+```yaml
+- type: 'popup'
+  layout: 'end_of_round'
+  label: 'restext://Fever1_017'  # "Click here to continue to the next round..."
+  target: 'FeverServe1'
+  okay: 'restext://Common_008'   # "End of Round" (reference app's own button caption)
+  snapshot: true
+  onclose:
+  - type: 'assign'
+    var: '_ProgressRound'
+    expr: '1'
+  content:
+  - type: 'text'
+    value: 'restext://Fever1_019'   # "The Early Years of the First Generation has ended..."
+  - type: 'text'
+    value: 'restext://Common_010'   # "Then, perform all Start of Round actions..."
 ```
 
 ---
@@ -1064,7 +1106,7 @@ ever carried through as a `layout-{value}` CSS class for module stylesheets to t
 module-defined on popups — renders through the fully generic path; all visual differentiation comes
 from module CSS keyed on the `layout-{value}` class (see `Masterwork.App.Shared`'s
 `PassageView.razor`/`RenderedPopupView.razor`, and e.g.
-`Masterwork-Design/Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`
+`Masterwork-Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`
 rules for a worked example). There is no manifest-declared `layouts:`/`popups:` registry — layout
 values are just strings the extractor and a module's own CSS agree on.
 
@@ -1117,15 +1159,16 @@ app uses to advance its own progress bar (see `--progress-map` in `docs/extracto
 into a visible progress indicator, entirely as module content — the engine and app have no built-in
 notion of "a progress bar" at all.
 
-**Timing note**: the assign lives on the `CheckProgress` call site, which in the source is attached
-to the link that *leaves* a round's hub passage — not to the hub passage itself. So `_ProgressRound`
+**Timing note**: the assign lives in the `onclose` of the `layout: end_of_round` popup that replaces
+the link *leaving* a round's hub passage (see §7's `popup` examples) — not on the hub passage itself,
+and not committed until the player has acknowledged that popup's Okay button. So `_ProgressRound`
 only advances on that transition, not on hub entry: while playing round *N*'s content (for
 *N* = 1–9), the variable still holds whatever the *previous* round's transition set it to (`0` while
 playing round 1, since no checkpoint has fired yet). It only reaches `9` once the player leaves round
-9's hub — i.e. on the way *into* end-of-game/scoring, not while round 9 is still being played. Chrome
-authored against this variable should treat it as "rounds completed so far," not "the round currently
-being displayed" — e.g. a hub screen wanting to show "you are entering round N" would need
-`_ProgressRound + 1`, not the raw value.
+9's hub and dismisses that popup — i.e. on the way *into* end-of-game/scoring, not while round 9 is
+still being played. Chrome authored against this variable should treat it as "rounds completed so
+far," not "the round currently being displayed" — e.g. a hub screen wanting to show "you are entering
+round N" would need `_ProgressRound + 1`, not the raw value.
 
 ---
 

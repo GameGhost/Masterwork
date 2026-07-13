@@ -25,7 +25,7 @@ public sealed record ModulePackageContents(
 
 /// <summary>
 /// Reads/writes the <c>.mwm</c> zip format. Layout mirrors what the extractor and
-/// <c>Masterwork-Design/Modules/&lt;id&gt;</c> module directories already produce: extractor-owned
+/// <c>Masterwork-Modules/&lt;id&gt;</c> module directories already produce: extractor-owned
 /// passages under <c>passages/</c> (or flat at the root, for older packages built before that split),
 /// hand-authored replacements/additions under <c>passages-override/</c>, module-authored layout
 /// chrome under <c>layouts/</c>, <c>_variables.yaml</c> and <c>manifest.yaml</c> at the root, and an

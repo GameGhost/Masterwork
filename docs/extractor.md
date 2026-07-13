@@ -37,7 +37,7 @@ dotnet run --project src/Masterwork.Extractor -- <input> <passages-out-dir> [opt
 | `--module-title <title>` | Human-readable module title (used in the extraction report header). If omitted, derived from the source filename by splitting on capital letters. |
 | `--module-id <id>` | Module identifier string (reserved for future use in the manifest). |
 | `--sprite-map <json>` | Path to a `TheCostOfDisease_ItemObtain.json`-style file mapping sprite indices to asset slugs. Required for The Cost of Disease; not needed for the other scenarios. |
-| `--progress-map <json>` | Path to a `{ "PassageName": { "layout": "...", "progress": N }, ... }` JSON map. `layout` overrides `InferLayout`'s tag-based result for that passage; `progress` emits a synthetic `_ProgressRound` assign wherever the source has a matching `PassageTracker.instance.CheckProgress(passageName, ...)` call, and a `CheckProgress` call whose current-passage name has no entry at all in the map is reported as a warning. Optional — omitting it leaves layout inference and `CheckProgress` handling unchanged. The assign is emitted on the link that *leaves* the mapped passage (matching where `CheckProgress` is actually called in the source), so `_ProgressRound` reflects rounds *completed so far* — it's `0` throughout round 1 and only reaches the mapped round's own value once the player has already clicked past it, not while that round's content is being displayed. See `Masterwork-Design/Modules/progress-map.json` and `docs/mws-format-latest.md` §8 (including its timing note) for how a module turns `_ProgressRound` into an actual progress-bar display via `layouts/*.mws.yaml` chrome. |
+| `--progress-map <json>` | Path to a `{ "PassageName": { "layout": "...", "progress": N, "end_of_round_body": "...", "end_of_round_body2": "..." }, ... }` JSON map. `layout` overrides `InferLayout`'s tag-based result for that passage. `progress`/`end_of_round_body` together drive what happens at a matching `PassageTracker.instance.CheckProgress(passageName, ...)` call: if the entry has end-of-round body text, the link that calls `CheckProgress` becomes a `layout: end_of_round` popup (label/target carried over from the original link, `okay` fixed to the reference app's own "End of Round" button caption, `content` the two body strings, `onclose` the `_ProgressRound` assign) instead of a bare navigation link — matching the reference app's `ViewEndOfRound.SetEndOfRound` acknowledgement popup, which the source's `CheckProgress` call site alone doesn't represent (there is no Cradle passage for it; see `Masterwork-Modules/cost-of-disease/.source/TheCostofDisease_Eng_v10.cs`'s `ReminderroundEnd` passage, explicitly commented as a prototype-only stand-in never used by final app logic). If the entry has `progress` but no end-of-round body text, only the synthetic `_ProgressRound` assign is emitted (unchanged, plain-link behavior). A `CheckProgress` call whose current-passage name has no entry at all in the map is reported as a warning. Optional — omitting `--progress-map` entirely leaves layout inference and `CheckProgress` handling unchanged. `_ProgressRound` reflects rounds *completed so far* — it's `0` throughout round 1 and only reaches the mapped round's own value once the player has clicked past it *and* dismissed the end-of-round popup, not while that round's content is being displayed. See `Masterwork-Modules/progress-map.json` and `docs/mws-format-latest.md` §7 (`end_of_round`/`end_of_generation` popup examples) and §8 (including its timing note) for how a module turns `_ProgressRound` into an actual progress-bar display via `layouts/*.mws.yaml` chrome. |
 | `--variables-out <dir>` | Where `_variables.yaml` is written. Defaults to `<passages-out-dir>`. |
 | `--restext-out <dir>` | Where `en-US.restext` is written. Defaults to `<passages-out-dir>`. |
 | `--common-restext <file>` | Path to a manually curated `Key=Value` restext file. When a string is promoted to a Common key (used in 2+ passages), a matching curated ID (by exact text) is used instead of an auto-generated `Common_NNN` one, so override/manually-written passages have a stable name to reference instead of one that can shift on every re-extraction. Curated IDs never matched during extraction are omitted from the output restext file and reported as warnings. Purely an extractor-time input — `ModuleLoader` never reads this file. |
@@ -51,35 +51,48 @@ The extractor no longer accepts hand-authored overrides — see [Module Override
 
 ## Extraction Commands for the Three Scenarios
 
-Run from the `c:\Projects\Masterwork` directory. See `Masterwork-Design/CLAUDE.md` for the
-authoritative, up-to-date version of these commands.
+Run from the `c:\Projects\Masterwork` directory. Extracted modules live in the standalone
+`Masterwork-Modules` repo (`c:\Projects\Masterwork-Modules`) — a sibling of this repo and of
+`Masterwork-Design`, not a subfolder of either. Each migrated module holds its own canonical Cradle
+source under `Masterwork-Modules/{module}/.source/` and extraction reads from there — `Cost of
+Disease` has been migrated; `Masterwork-Design/Reference/ScriptsComplete/` is historical for it now.
+Fear of the Unknown and A Time of War haven't been migrated yet, so they still read from
+`Masterwork-Design/Reference/ScriptsComplete/` and still output flat there (no `passages/` subfolder
+split). See `Masterwork-Modules/CLAUDE.md` for the authoritative, up-to-date version of the Cost of
+Disease command.
 
 ```powershell
-$base      = "c:\Projects\Masterwork-Design\Reference\ScriptsComplete"
-$spritemap = "c:\Projects\Masterwork-Design\Reference\my-fathers-work-master-4\Assets\Resources\TheCostOfDisease_ItemObtain.json"
-$progressmap = "c:\Projects\Masterwork-Design\Modules\progress-map.json"
-$modules   = "c:\Projects\Masterwork-Design\Modules"
+$base = "c:\Projects\Masterwork-Design\Reference\ScriptsComplete"
 
-# Fear of the Unknown (still flat output — not yet moved into Modules/)
+# Fear of the Unknown (not yet migrated into Masterwork-Modules/ — still flat output here)
 dotnet run --project src/Masterwork.Extractor -- `
   "$base\FearoftheUnknown_Eng_v15.cs" `
   "$base\fear-of-the-unknown"
 
-# A Time of War (still flat output — not yet moved into Modules/)
+# A Time of War (not yet migrated — still flat output here)
 dotnet run --project src/Masterwork.Extractor -- `
   "$base\ATimeofWar_Eng_v8.cs" `
   "$base\a-time-of-war" `
   --module-title "A Time of War"
 
-# The Cost of Disease — passages go into the module's passages/ subfolder; _variables.yaml and
-# en-US.restext go into the module root, next to manifest.yaml and passages-override/
+# The Cost of Disease — migrated; reads from its own .source/ copy in Masterwork-Modules, not from
+# $base above. Passages go into the module's passages/ subfolder; _variables.yaml and en-US.restext
+# go into the module root, next to manifest.yaml and passages-override/. --common-restext gives
+# stable IDs to Common strings (see Masterwork-Modules/cost-of-disease/en-US.common.restext);
+# --progress-map gives hub_early/hub_middle/hub_late layout overrides + end_of_round popups at the
+# reference app's real progress-bar checkpoints (see Masterwork-Modules/progress-map.json).
+$codbase     = "c:\Projects\Masterwork-Modules\cost-of-disease\.source"
+$spritemap   = "c:\Projects\Masterwork-Design\Reference\UnityOriginalApp\Assets\Resources\TheCostOfDisease_ItemObtain.json"
+$progressmap = "c:\Projects\Masterwork-Modules\progress-map.json"
+$modules     = "c:\Projects\Masterwork-Modules"
 dotnet run --project src/Masterwork.Extractor -- `
-  "$base\TheCostofDisease_Eng_v10.cs" `
+  "$codbase\TheCostofDisease_Eng_v10.cs" `
   "$modules\cost-of-disease\passages" `
   --variables-out "$modules\cost-of-disease" `
   --restext-out "$modules\cost-of-disease" `
   --module-title "The Cost of Disease" `
   --sprite-map $spritemap `
+  --common-restext "$modules\cost-of-disease\en-US.common.restext" `
   --progress-map $progressmap
 ```
 
@@ -87,6 +100,11 @@ dotnet run --project src/Masterwork.Extractor -- `
 
 > **Note:** Re-running extraction only touches `passages/` — it never writes to `passages-override/`,
 > so hand-authored passages there always survive a re-extraction.
+
+> **Note:** the source `.cs` file's directory determines what the "# {path}:{line}" comments in each
+> passage resolve to — that's why Cost of Disease reads from its own `.source/` copy (giving
+> `../.source/TheCostofDisease_Eng_v10.cs`, a path valid inside `Masterwork-Modules`) rather than
+> from `Masterwork-Design`, which wouldn't resolve to a valid relative path from inside that repo.
 
 ---
 
@@ -251,7 +269,7 @@ Unknown sprites fall back to a slugified form of the atlas name.
 
 The extractor itself no longer has any override mechanism — it only ever writes to `<passages-out-dir>`, never touches hand-authored content, and every re-extraction is a clean, repeatable regeneration of that one folder. Hand-authored passages instead live directly in a module and are applied at **module load time**, not extraction time.
 
-A module directory (e.g. `Masterwork-Design/Modules/cost-of-disease/`) is laid out as:
+A module directory (e.g. `Masterwork-Modules/cost-of-disease/`) is laid out as:
 
 ```
 <module>/
