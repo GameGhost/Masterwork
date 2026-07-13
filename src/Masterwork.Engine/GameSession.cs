@@ -344,7 +344,7 @@ public sealed class GameSession
     {
         TruncateFuture();
 
-        _timeline.Add(new SessionSnapshot
+        var snapshot = new SessionSnapshot
         {
             PassageId = passageId,
             Kind = kind,
@@ -352,11 +352,19 @@ public sealed class GameSession
             SeedOccurrences = _prng.SnapshotOccurrences(),
             DisplayLabel = displayLabel ?? ResolvePassageTitle(passageId),
             DiagnosticLabel = diagnosticLabel,
-        });
+        };
+
+        // Render BEFORE committing the new timeline entry. RenderChainFrom can throw (e.g. a
+        // malformed expression reachable from this passage) — _timeline, HistoryIndex, and
+        // _cachedRenders must advance together or not at all, otherwise CurrentRender
+        // (_cachedRenders[HistoryIndex]) permanently throws IndexOutOfRange on every subsequent
+        // render of any component that reads it, bricking the session with no recovery short of a
+        // full reload. Mirrors RenderInPlace's existing render-then-mutate ordering.
+        var result = RenderChainFrom(passageId);
+
+        _timeline.Add(snapshot);
         HistoryIndex = _timeline.Count - 1;
         RecomputeVisitedFromTimeline();
-
-        var result = RenderChainFrom(passageId);
         _cachedRenders.Add(result);
 
         HandleCheckpoints(result);

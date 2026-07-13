@@ -962,6 +962,57 @@ public class GameSessionTests
         Assert.Equal("The Second Passage", session.Current.DisplayLabel);
     }
 
+    // Regression: reproduces the crash reported against Gen1CreepyYes.mws.yaml — a popup target
+    // computed from a ternary chain (extracted from Cradle's own ternary passage-name assignment)
+    // used to fail to parse at all, since the expression language had no ternary operator.
+    [Fact]
+    public async Task PopupAccept_ComputedTernaryTarget_ResolvesToMatchingBranch()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'assign'
+              var: 'round'
+              expr: '2'
+            - type: 'popup'
+              snapshot: true
+              target: '${round == 1 ? "Fever1" : round == 2 ? "Fever2" : "Fever3"}'
+              okay: 'Continue'
+              content: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Fever1'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Fever2'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Fever3'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("Fever2", result.PassageId);
+    }
+
     [Fact]
     public async Task PopupAccept_TimelineLabel_OverridesDestinationPassageTitle()
     {
@@ -1299,5 +1350,52 @@ public class GameSessionTests
         var restored = GameSession.Restore(module, save);
 
         Assert.Equal(session.CurrentRender.PassageId, restored.CurrentRender.PassageId);
+    }
+
+    [Fact]
+    public async Task FollowLinkAsync_TargetPassageRenderThrows_SessionStaysUsable()
+    {
+        // Regression: PushAndRender used to commit the new Timeline entry and advance HistoryIndex
+        // *before* calling RenderChainFrom (which can throw — e.g. a malformed expression, real
+        // occurrence: S5Fate2.mws.yaml). When it threw, _cachedRenders never got its matching
+        // entry appended, leaving it one shorter than Timeline/HistoryIndex — every subsequent
+        // CurrentRender access (from ANY component re-rendering) then threw
+        // ArgumentOutOfRangeException, permanently bricking the session. PushAndRender now renders
+        // before committing, so a failed navigation leaves the session exactly as it was.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.3'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Welcome'
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.3'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'assign'
+              var: 'broken'
+              expr: '{a} + {b}'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => session.FollowLinkAsync(navId));
+
+        // Must not throw — the failed navigation left Timeline/HistoryIndex/_cachedRenders in sync.
+        var stillCurrent = session.CurrentRender;
+        Assert.Equal("P1", stillCurrent.PassageId);
+        Assert.Single(session.Timeline);
     }
 }
