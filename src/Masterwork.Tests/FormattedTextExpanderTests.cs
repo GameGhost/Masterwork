@@ -6,8 +6,13 @@ public class FormattedTextExpanderTests
 {
     private sealed class FakeAssetResolver : IAssetResolver
     {
-        public Task<string?> ResolveAsync(string assetUri) =>
-            Task.FromResult(assetUri == "icon://storybook" ? "assets/icons/storybook.png" : null);
+        public Task<string?> ResolveAsync(string assetUri) => Task.FromResult(assetUri switch
+        {
+            "icon://storybook" => "assets/icons/storybook.png",
+            "icon://creepy_icon" => "assets/icons/creepy_icon.png",
+            "icon://insanity_icon" => "assets/icons/insanity_icon.png",
+            _ => null,
+        });
     }
 
     private static readonly FormattedTextExpander Expander = new(new FakeAssetResolver());
@@ -96,5 +101,34 @@ public class FormattedTextExpanderTests
     {
         var result = await Expander.ExpandAsync("**<script>**");
         Assert.Equal("<strong>&lt;script&gt;</strong>", result.Value);
+    }
+
+    [Fact]
+    public async Task ExpandAsync_ItalicSpanWrappingIconRefs_ReportedCase()
+    {
+        // Reported case (restext _35VP_008): an italic span whose opening/closing _ sit on
+        // opposite sides of one or more {icon:...} refs. The old icon-first implementation split
+        // the string into icon-separated segments and matched emphasis independently within each,
+        // so the opening _ and closing _ landed in different segments and neither ever found its
+        // pair - both rendered as literal underscores. Icon slugs containing underscores
+        // themselves (creepy_icon, insanity_icon) is also the reason a naive "match emphasis on
+        // the raw string first" fix would be wrong: the regex would treat the underscore inside
+        // the slug as a delimiter.
+        var result = await Expander.ExpandAsync(
+            " _(They gain 2 {icon:creepy_icon} and 1 {icon:insanity_icon}.)_");
+
+        Assert.Equal(
+            " <em>(They gain 2 <img src=\"assets/icons/creepy_icon.png\" alt=\"creepy_icon\" class=\"mws-inline-icon\" /> and 1 " +
+            "<img src=\"assets/icons/insanity_icon.png\" alt=\"insanity_icon\" class=\"mws-inline-icon\" />.)</em>",
+            result.Value);
+    }
+
+    [Fact]
+    public async Task ExpandAsync_BoldSpanWrappingIconRef_StillWorks()
+    {
+        var result = await Expander.ExpandAsync("**Gain 1 {icon:creepy_icon} token**");
+        Assert.Equal(
+            "<strong>Gain 1 <img src=\"assets/icons/creepy_icon.png\" alt=\"creepy_icon\" class=\"mws-inline-icon\" /> token</strong>",
+            result.Value);
     }
 }
