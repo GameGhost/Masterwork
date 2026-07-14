@@ -288,6 +288,10 @@ partial class Program
         var restextRelFromPassages = Path.GetRelativePath(
             fullPassagesDir, Path.Combine(Path.GetFullPath(restextOutDir), "en-US.restext")).Replace('\\', '/');
 
+        // Relative path from the restext file's own directory to the passages dir, for the
+        // "# {file}" group-header comments WriteRestextFile emits above each passage's strings.
+        var passagesRelFromRestext = Path.GetRelativePath(Path.GetFullPath(restextOutDir), fullPassagesDir).Replace('\\', '/');
+
         // Phase 2: serialize and write YAML files using the now-complete restext index.
         foreach (var (passage, dict, _, outPath, relSourcePath) in cachedPassages)
         {
@@ -303,7 +307,7 @@ partial class Program
         // Write restext locale file
         restext.ReportDeduplicationStats(report);
         restext.ReportUnusedCuratedIds(report);
-        WriteRestextFile(restext, restextOutDir);
+        WriteRestextFile(restext, restextOutDir, passagesRelFromRestext);
 
         // Write variables manifest
         WriteVarsManifest(vars, variablesOutDir, serializer);
@@ -610,7 +614,7 @@ partial class Program
 
     // Writes en-US.restext: one Key=Value per string, grouped by passage with a comment header.
     // Common strings (shared across passages) appear first under "# (Common)".
-    private static void WriteRestextFile(RestextCollector restext, string outputDir)
+    private static void WriteRestextFile(RestextCollector restext, string outputDir, string passagesRelFromRestext)
     {
         var outPath = Path.Combine(outputDir, "en-US.restext");
         var sb = new StringBuilder();
@@ -626,9 +630,12 @@ partial class Program
                 continue;
             }
 
+            var relPath = passagesRelFromRestext.Length == 0 || passagesRelFromRestext == "."
+                ? fileName
+                : $"{passagesRelFromRestext}/{fileName}";
             sb.AppendLine(fileName == "(Common)"
                 ? "# Common strings — shared by multiple passages"
-                : $"# {fileName}");
+                : $"# {relPath}");
             foreach (var entry in entries)
             {
                 sb.AppendLine($"{entry.Key}={NormalizeRestextValue(entry.Value)}");
