@@ -155,7 +155,13 @@ public class PassageBodyVisitor
 
                 result.AddRange(FlushText());
                 var condLine = _currentStatementLine; // capture before BuildConditional mutates _currentStatementLine
-                var cond = BuildConditional(ifs);
+                var (hoisted, cond) = BuildConditional(ifs);
+                if (hoisted.Count > 0)
+                {
+                    TagNodes(hoisted, condLine);
+                    result.AddRange(hoisted);
+                }
+
                 cond.SourceLine = condLine;
                 result.Add(cond);
                 continue;
@@ -1234,9 +1240,10 @@ public class PassageBodyVisitor
 
     // ── Conditional (if/else) → ConditionalNode ───────────────────────────
 
-    private ConditionalNode BuildConditional(IfStatementSyntax ifs)
+    private (List<MwsNode> Hoisted, ConditionalNode Node) BuildConditional(IfStatementSyntax ifs)
     {
         var branches = new List<ConditionalBranch>();
+        var hoisted = new List<MwsNode>();
         StatementSyntax? current = ifs;
 
         while (current is IfStatementSyntax currentIf)
@@ -1247,7 +1254,10 @@ public class PassageBodyVisitor
                     currentIf.Condition.ToString(), GetLine(currentIf));
             }
 
-            var condStr = SimplifyCondition(currentIf.Condition.ToString());
+            var (condHoisted, condText) = HoistInlineEithers(currentIf.Condition);
+            hoisted.AddRange(condHoisted);
+
+            var condStr = SimplifyCondition(condText);
             // Translate localIntList.Count references to count(varsArrayRef)
             foreach (var (listName, varsRef) in _localIntLists)
             {
@@ -1273,7 +1283,37 @@ public class PassageBodyVisitor
             branches.Add(new ConditionalBranch { Else = true, Nodes = elseNodes });
         }
 
-        return new ConditionalNode { Branches = branches };
+        return (hoisted, new ConditionalNode { Branches = branches });
+    }
+
+    // Finds every macros1.either(...) call embedded directly in a condition expression — as
+    // opposed to one used as the right-hand side of an assignment, which ProcessExpressionStatement
+    // already converts to a VarRandom — and hoists each into its own synthetic `let` node emitted
+    // as a sibling before the conditional, replacing the call's own source text with a reference to
+    // that temp variable. Cradle draws a fresh, independent value every time either() is called, so
+    // a condition can't call it inline (MWS conditions only test already-bound state); hoisting to a
+    // `let` right before the conditional preserves a once-per-occurrence draw with the same timing.
+    private (List<MwsNode> Hoisted, string Condition) HoistInlineEithers(ExpressionSyntax condition)
+    {
+        var hoisted = new List<MwsNode>();
+        var text = condition.ToString();
+        foreach (var inv in condition.DescendantNodesAndSelf()
+                     .OfType<InvocationExpressionSyntax>()
+                     .Where(i => GetSimpleMethodName(i) == "either"))
+        {
+            var original = inv.ToString();
+            if (!text.Contains(original))
+            {
+                continue; // already substituted by an earlier, textually-identical occurrence
+            }
+
+            var values = ExtractMacroArgs(inv);
+            var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+            hoisted.Add(new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } });
+            text = text.Replace(original, tempVar);
+        }
+
+        return (hoisted, text);
     }
 
     // ── Input prompt detection ─────────────────────────────────────────────

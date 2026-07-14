@@ -1939,6 +1939,65 @@ public class ExtractorTests
         Assert.Equal("popup", node["type"]);
     }
 
+    [Fact]
+    public void InlineEitherInConditional_HoistsToLetBeforeConditional()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00131-HospitalVisitCheck2.mws.yaml.
+        // `if (macros1.either(1, 2) == 1)` used to pass the literal C# call straight through into
+        // the emitted `if:` expression untouched, since SimplifyCondition only does textual Vars.X
+        // normalization — the engine then failed at render time with "Unknown variable 'macros1'".
+        // Cradle draws a fresh value every either() call, so it must be hoisted into its own `let`
+        // right before the conditional (mirroring how an either() on an assignment's RHS already
+        // becomes a VarRandom), not left inline in the `if:` expression.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.hospentry == 1)
+                {
+                    if (macros1.either(1, 2) == 1)
+                    {
+                        yield return base.text("branch A");
+                    }
+                    else
+                    {
+                        yield return base.text("branch B");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        var outer = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        var thenNodes = outer.Branches.Single(b => b.Else != true).Nodes;
+
+        var let = Assert.Single(thenNodes.OfType<LetNode>());
+        Assert.NotNull(let.Random);
+        Assert.DoesNotContain("either", let.Var);
+
+        var inner = Assert.Single(thenNodes.OfType<ConditionalNode>());
+        var innerCond = inner.Branches.Single(b => b.Else != true).Condition!;
+        Assert.DoesNotContain("either", innerCond);
+        Assert.DoesNotContain("macros1", innerCond);
+        Assert.Contains(let.Var, innerCond);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        var outerThen = (List<Dictionary<string, object?>>)nodes.Single(n => (string)n["type"]! == "conditional")["then"]!;
+        var letDict = Assert.Single(outerThen, n => (string)n["type"]! == "let");
+        Assert.Equal("rand_between(1, 2, \"P1_0\")", letDict["expr"]);
+
+        var innerCondDict = Assert.Single(outerThen, n => (string)n["type"]! == "conditional");
+        var innerConditions = (List<Dictionary<string, object?>>)innerCondDict["conditions"]!;
+        var innerIf = (string)innerConditions[0]["if"]!;
+        Assert.DoesNotContain("either", innerIf);
+        Assert.DoesNotContain("macros1", innerIf);
+        Assert.Contains(let.Var, innerIf);
+    }
+
     private static string WriteReport(ExtractionReport report)
     {
         var tempReportPath = System.IO.Path.GetTempFileName();
