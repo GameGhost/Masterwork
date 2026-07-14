@@ -12,8 +12,13 @@ public sealed record LinkNode : Node
     /// <summary>Open, module-extensible visual style vocabulary (e.g. <c>link</c>, <c>button</c>) — styled entirely by module CSS.</summary>
     public string? Style { get; init; }
 
-    /// <summary>Target passage_id, or <c>"${expr}"</c> for a dynamic target resolved at follow time.</summary>
-    public required string Target { get; init; }
+    /// <summary>
+    /// Target passage_id, or <c>"${expr}"</c> for a dynamic target resolved at follow time. Optional
+    /// when every reachable path through <see cref="OnClick"/> is guaranteed to hit a <c>goto</c>
+    /// (which preempts this) — otherwise following the link with neither would have nothing to
+    /// navigate to.
+    /// </summary>
+    public string? Target { get; init; }
 
     /// <summary>Whether following this link creates a new timeline snapshot — parsed from <c>snapshot</c> (see <see cref="SnapshotLabel"/>).</summary>
     public required bool StateAffecting { get; init; }

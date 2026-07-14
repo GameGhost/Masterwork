@@ -364,6 +364,30 @@ public class DeserializerTests
     }
 
     [Fact]
+    public void Navigation_NoTarget_RelyingOnGotoInOnclick_Deserializes()
+    {
+        // A link can omit `target` entirely when every reachable path through `onclick` is
+        // guaranteed to hit a `goto` instead — mirrors popup's existing no-target/no-onclose case.
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              snapshot: true
+              onclick:
+              - type: 'goto'
+                target: 'P2'
+            """);
+
+        var nav = Assert.IsType<LinkNode>(passage.Nodes.Single());
+        Assert.Null(nav.Target);
+        Assert.Single(nav.OnClick);
+        Assert.IsType<GotoNode>(nav.OnClick[0]);
+    }
+
+    [Fact]
     public void DynamicTarget_Preserved()
     {
         var passage = ParseOne("""

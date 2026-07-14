@@ -1841,6 +1841,104 @@ public class ExtractorTests
         Assert.Equal("1", assign["expr"]);
     }
 
+    [Fact]
+    public void ExpandLink_AssignThenExhaustiveIfElseOfGotos_BecomesLinkWithOnclick()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00130-HospitalVisitCheck.mws.yaml.
+        // The Cradle idiom here is a link(...) -> enchantHook fragment whose body is an assign
+        // followed by an if/elseif/.../else chain where EVERY branch ends in abort(goToPassage:...).
+        // This isn't IsNavigationOnly (the leading assign is an EffectNode), but it's still guaranteed
+        // to hit a goto by the time it finishes, so it must become a `link` with `onclick` (and no
+        // `target`) rather than a `popup` with no way to close it.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Dr. Smith Jr.", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                this.Vars.hospsign = this.Vars.nameA;
+                if (this.Vars.hospsign == this.Vars.nameA && this.Vars.hospA == "yes")
+                {
+                    yield return base.abort(goToPassage: "HospitalVisitReject");
+                }
+                else if (this.Vars.hospsign == this.Vars.nameB && this.Vars.hospB == "yes")
+                {
+                    yield return base.abort(goToPassage: "HospitalVisitReject");
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "HospitalVisitCheck2");
+                }
+                yield break;
+            }
+            """);
+
+        // Extractor-internal node types stay unchanged (V2Serializer does the transform at output time).
+        Assert.Empty(passages[0].Nodes.OfType<LinkNode>());
+        Assert.Single(passages[0].Nodes.OfType<ExpandLinkNode>());
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("link", node["type"]);
+        Assert.Equal("Dr. Smith Jr.", node["label"]);
+        Assert.False(node.ContainsKey("target"));
+
+        var onclick = (List<Dictionary<string, object?>>)node["onclick"]!;
+        Assert.Equal("assign", onclick[0]["type"]);
+        Assert.Equal("hospsign", onclick[0]["var"]);
+        Assert.Equal("conditional", onclick[1]["type"]);
+
+        var conditions = (List<Dictionary<string, object?>>)onclick[1]["conditions"]!;
+        var firstThen = (List<Dictionary<string, object?>>)conditions[0]["then"]!;
+        Assert.Equal("goto", firstThen[0]["type"]);
+        Assert.Equal("HospitalVisitReject", firstThen[0]["target"]);
+
+        var elseNodes = (List<Dictionary<string, object?>>)onclick[1]["else"]!;
+        Assert.Equal("goto", elseNodes[0]["type"]);
+        Assert.Equal("HospitalVisitCheck2", elseNodes[0]["target"]);
+    }
+
+    [Fact]
+    public void ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_StaysPopup()
+    {
+        // Guardrail: without a final `else`, the conditional isn't provably exhaustive, so a link
+        // relying solely on a goto inside onclick could do nothing on a click that matches no
+        // branch. Must still become a popup in that case (a separate, pre-existing concern that
+        // this popup has no `okay` is out of scope for this fix).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Dr. Smith Jr.", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                this.Vars.hospsign = this.Vars.nameA;
+                if (this.Vars.hospsign == this.Vars.nameA && this.Vars.hospA == "yes")
+                {
+                    yield return base.abort(goToPassage: "HospitalVisitReject");
+                }
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+    }
+
     private static string WriteReport(ExtractionReport report)
     {
         var tempReportPath = System.IO.Path.GetTempFileName();

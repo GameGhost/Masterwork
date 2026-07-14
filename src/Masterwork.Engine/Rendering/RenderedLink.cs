@@ -8,8 +8,12 @@ public sealed record RenderedLink : RenderedAction
     /// <summary>Formatted link label.</summary>
     public required string Label { get; init; }
 
-    /// <summary>Raw target string, possibly <c>"${expr}"</c> — resolved by <see cref="GameSession.FollowLinkAsync"/>, not here.</summary>
-    public required string Target { get; init; }
+    /// <summary>
+    /// Raw target string, possibly <c>"${expr}"</c> — resolved by <see cref="GameSession.FollowLinkAsync"/>,
+    /// not here. Null when every reachable path through <see cref="OnClickRaw"/> is guaranteed to
+    /// hit a <c>goto</c> instead.
+    /// </summary>
+    public string? Target { get; init; }
 
     /// <summary>Whether following this link creates a new timeline snapshot.</summary>
     public required bool StateAffecting { get; init; }

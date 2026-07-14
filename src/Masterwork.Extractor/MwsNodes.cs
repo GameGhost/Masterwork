@@ -231,7 +231,7 @@ public class LinkNode : MwsNode
 {
     public override string Type => "navigation";
     public string Label { get; set; } = "";
-    public string Target { get; set; } = "";
+    public string? Target { get; set; }
     public bool StateAffecting { get; set; } = true;
     public string? TimelineLabel { get; set; }
     // State effects that execute when the link is followed (from stitched enchantHook fragments)
@@ -243,9 +243,13 @@ public class LinkNode : MwsNode
         {
             ["type"] = Type,
             ["label"] = Label,
-            ["target"] = Target,
             ["state_affecting"] = StateAffecting,
         };
+        if (Target is not null)
+        {
+            d["target"] = Target;
+        }
+
         if (TimelineLabel is not null)
         {
             d["timeline_label"] = TimelineLabel;

@@ -147,7 +147,10 @@ public sealed class GameSession
     /// (a <c>goto</c> among <c>onclick</c> preempts it), and navigates — all as a single snapshot
     /// when the link is state-affecting. The snapshot's timeline label is, in priority order: a
     /// preempting <c>goto</c>'s own <c>snapshot_label</c>; else the link's own <c>snapshot</c> label;
-    /// else the destination passage's <c>title</c> (see <see cref="ResolvePassageTitle"/>).
+    /// else the destination passage's <c>title</c> (see <see cref="ResolvePassageTitle"/>). If neither
+    /// a <c>goto</c> nor <see cref="RenderedLink.Target"/> resolves a destination, there's nothing to
+    /// navigate to — the link's <c>onclick</c> effects have already run against the live store, but
+    /// nothing else happens (mirrors <see cref="ClosePopupAsync"/>'s same no-destination case).
     /// </summary>
     /// <exception cref="InvalidOperationException">A currently-showing input doesn't have a valid value.</exception>
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
@@ -166,7 +169,13 @@ public sealed class GameSession
             pendingGotoLabel = onClickResult.PendingGotoLabel;
         }
 
-        var targetId = pendingGoto ?? ResolveTarget(link.Target);
+        if (pendingGoto is null && link.Target is null)
+        {
+            ViewState.Reset();
+            return Task.FromResult(CurrentRender);
+        }
+
+        var targetId = pendingGoto ?? ResolveTarget(link.Target!);
         var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? link.SnapshotLabel;
 
         var result = link.StateAffecting

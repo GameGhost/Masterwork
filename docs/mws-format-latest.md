@@ -627,11 +627,13 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 |---|---|---|---|
 | `label` | string | yes | Link text (string formatting — see §3) |
 | `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `link`, `button`) |
-| `target` | string | yes | Destination `passage_id`, or `'${expression}'` for a runtime-computed target (see §4) |
+| `target` | string | no | Destination `passage_id`, or `'${expression}'` for a runtime-computed target (see §4). Optional when every reachable path through `onclick` is guaranteed to hit a `goto`, which preempts this — omitting both would leave the link with nothing to navigate to |
 | `snapshot` | bool or string | no | Whether following this link creates a timeline snapshot. Defaults to `false` if absent. A string value means `true` *and* sets the timeline scrubber's label to that string in one step — overriding the destination passage's own `title` (the default label when `snapshot` is a bare `true`). A preempting `goto` inside `onclick` takes priority over this label — see `goto` below |
 | `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation. A `goto` among these preempts `target` |
 
 **Execution order when `onclick` is present:** on click, pending `input` values are committed first, then the engine executes all nodes in the `onclick` list, then evaluates `target` (unless a `goto` inside `onclick` fired, which preempts it). This matters when `target` is an expression referencing a variable and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
+
+**Omitting `target`:** a link whose only purpose is to run `onclick` logic that always ends in a `goto` — e.g. an exhaustive `conditional` where every branch's last node is a `goto` — can omit `target` entirely. If neither a preempting `goto` nor `target` resolves a destination, following the link runs its `onclick` effects against the live store and then does nothing else (mirrors a `popup` with neither `target` nor `onclose` set — see above).
 
 ```yaml
 - type: 'link'
@@ -1102,8 +1104,9 @@ regions (a passage's node list; a popup's `header`/`content`/`okay`/`cancel`) �
 ever carried through as a `layout-{value}` CSS class for module stylesheets to target. `voting` and
 `bidding` are the one exception: the app renders a bespoke countdown-then-reveal component
 (`VotingPopupContent`) for those two popup layout values specifically. Every other layout value —
-`hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/anything
-module-defined on popups — renders through the fully generic path; all visual differentiation comes
+`hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/`end_of_round`/
+`input-popup`/anything module-defined on popups — renders through the fully generic path; all
+visual differentiation comes
 from module CSS keyed on the `layout-{value}` class (see `Masterwork.App.Shared`'s
 `PassageView.razor`/`RenderedPopupView.razor`, and e.g.
 `Masterwork-Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`

@@ -218,7 +218,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
                 {
                     Label = map.GetRequiredString("label", ctx),
                     Style = map.GetString("style", ctx),
-                    Target = map.GetRequiredString("target", ctx),
+                    Target = map.GetString("target", ctx),
                     StateAffecting = stateAffecting,
                     SnapshotLabel = snapshotLabel,
                     OnClick = BuildNodeList(map.TryGet("onclick"), ctx, "'link' node onclick"),

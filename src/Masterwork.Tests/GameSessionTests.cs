@@ -480,6 +480,100 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task FollowLink_NoTarget_GotoInOnclickNavigates()
+    {
+        // A link can omit target entirely when a goto buried in onclick is guaranteed to fire —
+        // e.g. Cost of Disease's HospitalVisitCheck: an assign followed by an exhaustive
+        // if/elseif/else chain where every branch ends in a goto.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              snapshot: true
+              onclick:
+              - type: 'assign'
+                var: 'round'
+                expr: '1'
+              - type: 'conditional'
+                if: 'round == 1'
+                then:
+                - type: 'goto'
+                  target: 'P2'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        var result = await session.FollowLinkAsync(navId);
+
+        Assert.Equal("P2", result.PassageId);
+        Assert.Equal(1L, session.Current.Variables["round"].AsInt());
+    }
+
+    [Fact]
+    public async Task FollowLink_NoTargetAndNoGoto_CommitsStateWithoutNavigating()
+    {
+        // Mirrors PopupAccept_NoTargetOrOnclose_ClosesWithoutReRenderingPassage's own no-destination
+        // case: following a link whose onclick never reaches a goto (and which has no target of its
+        // own) still runs its effects against the live store, but has nothing to navigate to.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              snapshot: true
+              onclick:
+              - type: 'assign'
+                var: 'round'
+                expr: '99'
+            - type: 'link'
+              label: 'Continue'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var beforeRender = session.CurrentRender;
+        var navId = beforeRender.Actions.OfType<RenderedLink>().First().Id;
+
+        var result = await session.FollowLinkAsync(navId);
+
+        Assert.Same(beforeRender, result);
+        Assert.Equal("P1", result.PassageId);
+        Assert.Single(session.Timeline);
+
+        var link = result.Actions.OfType<RenderedLink>().Last();
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(99L, session.Current.Variables["round"].AsInt());
+    }
+
+    [Fact]
     public async Task FollowLink_Onclick_ExecutedBeforeNavigation()
     {
         var module = new ModuleLoader().LoadFromSources(

@@ -659,7 +659,11 @@ partial class Program
             switch (node)
             {
                 case LinkNode lk:
-                    ids.Add(lk.Target);
+                    if (lk.Target is not null)
+                    {
+                        ids.Add(lk.Target);
+                    }
+
                     if (lk.Nodes.Count > 0)
                     {
                         CollectFromNodes(lk.Nodes, ids);

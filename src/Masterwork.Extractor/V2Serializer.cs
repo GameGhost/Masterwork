@@ -255,7 +255,9 @@ public static partial class V2Serializer
             case ExpandLinkNode expand:
                 yield return IsNavigationOnly(expand.ExpandNodes)
                     ? BuildNavigationFromExpand(expand, ctx)
-                    : TransformPopup(expand, ctx);
+                    : AlwaysNavigatesToGoto(expand.ExpandNodes) && !ContainsPopupOnlyMarker(expand.ExpandNodes)
+                        ? BuildLinkWithOnClickFromExpand(expand, ctx)
+                        : TransformPopup(expand, ctx);
                 break;
             case InputPromptNode input:
                 yield return TransformInputAction(input, ctx);
@@ -461,9 +463,12 @@ public static partial class V2Serializer
         {
             ["type"] = "link",
             ["label"] = link.Label,
-            ["target"] = link.Target,
         };
-        AddLinkHint(d, link.Target, ctx);
+        if (link.Target is not null)
+        {
+            d["target"] = link.Target;
+            AddLinkHint(d, link.Target, ctx);
+        }
         // Unified field: a string implies snapshot=true and doubles as the label, so only emit the
         // separate bool when there's no label to fold it into.
         d["snapshot"] = link.TimelineLabel is not null ? link.TimelineLabel : link.StateAffecting;
@@ -550,6 +555,49 @@ public static partial class V2Serializer
         // Fallback: shouldn't be reached given IsNavigationOnly precondition
         return new Dictionary<string, object?> { ["type"] = "link", ["label"] = label, ["target"] = "", ["snapshot"] = stateAffecting };
     }
+
+    // True when the LAST node in `nodes` is guaranteed to fire a goto by the time it finishes —
+    // either a bare GotoNode, or an exhaustive (has an else) ConditionalNode whose every branch also
+    // always navigates. Earlier nodes are irrelevant to this guarantee — they just run as ordinary
+    // onclick prelude (assigns, lets, whatever) — so unlike IsNavigationOnly this doesn't require the
+    // whole list to be nav-only, only that it can never fall through into a click that navigates
+    // nowhere. Used to convert an expand-link like Cost of Disease's HospitalVisitCheck fragments
+    // (an assign followed by an exhaustive if/elseif/.../else chain where every branch ends in an
+    // abort/goto) into a link with onclick instead of a popup with no way to close it.
+    private static bool AlwaysNavigatesToGoto(List<MwsNode> nodes) =>
+        nodes.Count > 0 && nodes[^1] switch
+        {
+            GotoNode => true,
+            ConditionalNode { Branches: var branches } when branches.Any(b => b.Else == true) =>
+                branches.All(b => AlwaysNavigatesToGoto(b.Nodes)),
+            _ => false,
+        };
+
+    // Top-level scan (matching TransformPopup's own scan depth) for node shapes that mean this
+    // expand-link's content is a *specific* popup flavor (bidding/voting, end-of-generation,
+    // end-of-round, setup notification/block) regardless of whether it happens to always navigate —
+    // those markers carry their own layout/okay/onclose semantics that BuildLinkWithOnClickFromExpand
+    // doesn't reproduce, so they must still route through TransformPopup.
+    private static bool ContainsPopupOnlyMarker(List<MwsNode> nodes) => nodes.Any(n =>
+        n is EogSetupMarkerNode or EndOfRoundMarkerNode or SetupNotificationNode or SetupBlockNode ||
+        (n is UnknownNode unk && BiddingCallPattern().IsMatch(unk.OriginalCode ?? "")));
+
+    // Converts an expand-link whose content isn't itself pure navigation (IsNavigationOnly) but is
+    // still guaranteed to navigate via a goto by the time it finishes (AlwaysNavigatesToGoto) into a
+    // link node with target omitted and onclick set to the full content — e.g. Cradle's
+    // `link(...) -> fragment: assign; if/elseif/.../else chain where every branch ends in abort(...)`
+    // idiom (real occurrence: HospitalVisitCheck.mws.yaml). This used to become a popup with no
+    // okay/close button — clicking it just displayed an empty, permanently-stuck popup instead of
+    // navigating, since the goto lived inside content, not onclose. A goto inside onclick correctly
+    // preempts target at render time (see GameSession.FollowLinkAsync), so target can be omitted.
+    private static Dictionary<string, object?> BuildLinkWithOnClickFromExpand(ExpandLinkNode expand, SerializationContext? ctx) =>
+        new()
+        {
+            ["type"] = "link",
+            ["label"] = expand.Label,
+            ["snapshot"] = expand.StateAffecting,
+            ["onclick"] = TransformNodeList(expand.ExpandNodes, ctx),
+        };
 
     // ── Popup ─────────────────────────────────────────────────────────────
 

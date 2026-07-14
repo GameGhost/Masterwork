@@ -265,7 +265,11 @@ public sealed class ModuleLoader : IModuleLoader
             switch (node)
             {
                 case LinkNode n:
-                    CheckTarget(passageId, n.Target, passages, warnings);
+                    if (n.Target is not null)
+                    {
+                        CheckTarget(passageId, n.Target, passages, warnings);
+                    }
+
                     CheckNodeListReferences(passageId, n.OnClick, passages, warnings);
                     break;
                 case GotoNode g:
