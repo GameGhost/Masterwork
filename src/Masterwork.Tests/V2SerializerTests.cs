@@ -121,6 +121,7 @@ public class V2SerializerTests
         var then = (List<Dictionary<string, object?>>)cond["then"]!;
         var popup = Assert.Single(then);
         Assert.Equal("popup", popup["type"]);
+        Assert.Equal("input-popup", popup["layout"]);
         Assert.Equal("Feverheart", popup["target"]);
         Assert.Equal("Continue", popup["okay"]);
         Assert.Equal(true, popup["snapshot"]);
@@ -130,6 +131,9 @@ public class V2SerializerTests
         Assert.Equal("text", content[0]["type"]);
         Assert.Equal("How do you feel?", content[0]["value"]);
         Assert.Equal("input", content[1]["type"]);
+        // input.PromptId ("Feverheart") is just the OnGenerationBtn call's resume-passage
+        // argument, not a real label — the input must not display it (or anything else).
+        Assert.Equal("", content[1]["label"]);
         Assert.Equal("feverheart", content[1]["var"]);
         Assert.DoesNotContain("text", content[1].Keys);
         Assert.DoesNotContain("input", content[1].Keys);

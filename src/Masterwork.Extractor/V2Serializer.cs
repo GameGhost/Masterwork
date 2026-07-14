@@ -861,10 +861,16 @@ public static partial class V2Serializer
         var popup = new Dictionary<string, object?>
         {
             ["type"] = "popup",
+            ["layout"] = "input-popup",
             ["content"] = new List<Dictionary<string, object?>>
             {
                 new() { ["type"] = "text", ["value"] = input.Text },
-                new() { ["type"] = "input", ["label"] = input.PromptId, ["var"] = input.StoreIn },
+                // input.PromptId is the OnGenerationBtn call's first argument — just the popup's
+                // own resume-passage value (always equal to the enclosing passage in every real
+                // occurrence, see IsInputPromptIf/TryDetectInputPrompt), not a label meant for
+                // display. The prompt text is already the preceding text node above; the input
+                // itself gets no label.
+                new() { ["type"] = "input", ["label"] = "", ["var"] = input.StoreIn },
             },
             ["okay"] = "Continue",
             ["onclose"] = new List<Dictionary<string, object?>>
