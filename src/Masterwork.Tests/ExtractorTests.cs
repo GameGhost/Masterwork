@@ -1991,8 +1991,8 @@ public class ExtractorTests
         Assert.Equal("rand_between(1, 2, \"P1_0\")", letDict["expr"]);
 
         var innerCondDict = Assert.Single(outerThen, n => (string)n["type"]! == "conditional");
-        var innerConditions = (List<Dictionary<string, object?>>)innerCondDict["conditions"]!;
-        var innerIf = (string)innerConditions[0]["if"]!;
+        // A single if/else pair flattens to if/then/else directly — no `conditions:` wrapper.
+        var innerIf = (string)innerCondDict["if"]!;
         Assert.DoesNotContain("either", innerIf);
         Assert.DoesNotContain("macros1", innerIf);
         Assert.Contains(let.Var, innerIf);

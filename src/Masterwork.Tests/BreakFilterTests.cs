@@ -36,6 +36,20 @@ public class BreakFilterTests
     }
 
     [Fact]
+    public void LeadingBreak_AfterLeadingAssigns_IsDropped()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00027-Barventures.mws.yaml — a
+        // leftover break from between the passage's heading (hoisted out to `title` upstream) and
+        // its first real line, with two `assign`s (barin, gen3pg) sitting between the break and the
+        // start of the list. "Leading" was computed from the break run's own list index (2, not 0)
+        // instead of whether anything had actually rendered yet, so it slipped through as an
+        // ordinary interior break instead of being dropped.
+        var nodes = new List<MwsNode> { Assign("barin"), Assign("gen3pg"), new BreakNode(), Text("a") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["effect", "effect", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
     public void SingleBreakTouchingAssign_IsDropped()
     {
         // Matches the original (pre-fix) aggressive-strip behavior for a lone break with a
@@ -182,5 +196,167 @@ public class BreakFilterTests
 
         var resultCondB = Assert.IsType<ConditionalNode>(result[1]);
         Assert.Equal(["break", "text"], resultCondB.Branches[0].Nodes.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void LeadingAutoDisplayPopup_DoesNotCountAsRenderedForFollowingBreak()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00009-S5Fate2.mws.yaml —
+        // EndOfGenerationNode always becomes an auto-display popup with no label (a separate
+        // overlay, never a position in the passage's own inline flow), so a break right after it,
+        // with nothing else rendered yet in the passage body itself, is still a leading break and
+        // must be dropped — not preserved just because *something* (the popup) came before it.
+        var nodes = new List<MwsNode> { new EndOfGenerationNode(), new BreakNode(), Text("a") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["end_of_generation", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SwitchWithOnlyNonRenderedCases_DoesNotCountAsRenderedForSurroundingBreaks()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00009-S5Fate2.mws.yaml — a
+        // `switch (players) { case 2: heart = 3; ... default: heart = 3; }` where every case is a
+        // bare assign can never put anything on screen, unlike an ordinary conditional/switch that
+        // might contain real text in some branch — so it must be transparent for break purposes the
+        // same way a bare assign is, letting a break directly after it still count as leading.
+        var sw = new SwitchNode
+        {
+            On = "players",
+            Cases =
+            [
+                new SwitchCase { Match = 2, Nodes = [Assign("heart")] },
+                new SwitchCase { Default = true, Nodes = [Assign("heart")] },
+            ],
+        };
+        var result = BreakFilter.Apply([sw, new BreakNode(), Text("a")], BreaksMode.Omit);
+        Assert.Equal(["switch", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SwitchWithOneTextCase_CountsAsRenderedForSurroundingBreaks()
+    {
+        // Contrast with the previous test: a switch with even one case that could render text must
+        // NOT be treated as transparent — its own leading/trailing break decisions already account
+        // for this correctly (existing behavior), this just confirms the new recursive check doesn't
+        // over-apply to switches that really can produce visible output.
+        var sw = new SwitchNode
+        {
+            On = "players",
+            Cases =
+            [
+                new SwitchCase { Match = 2, Nodes = [Assign("heart")] },
+                new SwitchCase { Default = true, Nodes = [Text("many players")] },
+            ],
+        };
+        var result = BreakFilter.Apply([sw, new BreakNode(), Text("a")], BreaksMode.Omit);
+        Assert.Equal(["switch", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SingleBreakBetweenTextAndNonRenderedSwitch_IsPreserved()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00002-Fever1.mws.yaml — a break
+        // between a text node and a following `switch (players) { case 2: let name = ...; ... }`
+        // (every case just a `let`, so IsNonRendered per the S5Fate2 fix above) got swept up into
+        // the same aggressive "single break touching non-rendered content -> decorative, drop it"
+        // rule used for a bare assign/let sitting mid-sentence — but a switch/conditional is a whole
+        // separate statement in the source, not an inline technicality, so a break the author placed
+        // next to one must survive even though the switch itself renders nothing.
+        var sw = new SwitchNode
+        {
+            On = "players",
+            Cases = [new SwitchCase { Match = 2, Nodes = [Let("_rnd_name")] }],
+        };
+        var nodes = new List<MwsNode> { Text("Retrieve the heart tokens."), new BreakNode(), sw, Text("Give the Start Player token.") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        // Interstitials are emitted before the break they were gathered alongside (established
+        // convention — see TwoBreaksStraddlingAnAssign_CollapseToOneParagraphBreak above).
+        Assert.Equal(["text", "switch", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SingleBreakBeforeNonRenderedConditional_IsPreserved()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00003-Hospital1.mws.yaml — a break
+        // between a "Turn to page..." text and a following
+        // `if (players > 3 && !Hospital1) { Hospital1 = 1; tracker = tracker - 1; }` (single branch,
+        // no else, both nodes assigns — IsNonRendered) got absorbed as the conditional's interstitial
+        // and dropped the same wrong way as the Fever1 case above, just with the non-rendering
+        // container on the far side of the break instead of the near side.
+        var cond = new ConditionalNode
+        {
+            Branches = [new ConditionalBranch { Condition = "players > 3 && !Hospital1", Nodes = [Assign("Hospital1"), Assign("tracker")] }],
+        };
+        var nodes = new List<MwsNode> { Text("Turn to page 4."), new BreakNode(), cond, Text("Place the Suspicion marker.") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["text", "conditional", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void ExhaustiveConditional_BreakOnlyBranches_CollapsesToSingleBreak()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00003-Hospital1.mws.yaml — a
+        // `if (seedy == "yes") { Vars._SetupImage = "..."; lineBreak(); } else { Vars._SetupImage =
+        // "..."; lineBreak(); }` whose _SetupImage assignment gets hoisted out to the popup header
+        // elsewhere (see SplitPopupHeaderNodes), leaving each branch with nothing but its own
+        // trailing break — a conditional that fires the exact same break regardless of which branch
+        // matches provides no real conditional behavior and must collapse to one plain break.
+        var condA = new ConditionalBranch { Condition = "seedy == \"yes\"", Nodes = [new BreakNode()] };
+        var elseB = new ConditionalBranch { Else = true, Nodes = [new BreakNode()] };
+        var cond = new ConditionalNode { Branches = [condA, elseB] };
+
+        var result = BreakFilter.Apply([Text("a"), cond, Text("b")], BreaksMode.Omit);
+
+        Assert.Equal(["text", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void ExhaustiveConditional_EmptyBranches_CollapsesToNothing()
+    {
+        var condA = new ConditionalBranch { Condition = "x == 1", Nodes = [] };
+        var elseB = new ConditionalBranch { Else = true, Nodes = [] };
+        var cond = new ConditionalNode { Branches = [condA, elseB] };
+
+        var result = BreakFilter.Apply([Text("a"), cond, Text("b")], BreaksMode.Omit);
+
+        Assert.Equal(["text", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void NonExhaustiveConditional_BreakOnlyBranch_IsNotCollapsed()
+    {
+        // No `else` — the condition might not match at all, in which case nothing would have
+        // rendered originally. Collapsing to an unconditional break would wrongly insert one.
+        var condA = new ConditionalBranch { Condition = "x == 1", Nodes = [new BreakNode()] };
+        var cond = new ConditionalNode { Branches = [condA] };
+
+        var result = BreakFilter.Apply([Text("a"), cond, Text("b")], BreaksMode.Omit);
+
+        var resultCond = Assert.IsType<ConditionalNode>(result[1]);
+        Assert.Equal(["break"], resultCond.Branches[0].Nodes.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void CollapsedBreak_MergesWithAdjacentRealBreakIntoParagraphBreak()
+    {
+        var condA = new ConditionalBranch { Condition = "x == 1", Nodes = [new BreakNode()] };
+        var elseB = new ConditionalBranch { Else = true, Nodes = [new BreakNode()] };
+        var cond = new ConditionalNode { Branches = [condA, elseB] };
+
+        var result = BreakFilter.Apply([Text("a"), cond, new BreakNode(), Text("b")], BreaksMode.Omit);
+
+        Assert.Equal(["text", "paragraph_break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void ExhaustiveSwitch_BreakOnlyCases_CollapsesToSingleBreak()
+    {
+        var caseA = new SwitchCase { Match = 1, Nodes = [new BreakNode()] };
+        var defaultCase = new SwitchCase { Default = true, Nodes = [new BreakNode()] };
+        var sw = new SwitchNode { On = "x", Cases = [caseA, defaultCase] };
+
+        var result = BreakFilter.Apply([Text("a"), sw, Text("b")], BreaksMode.Omit);
+
+        Assert.Equal(["text", "break", "text"], result.Select(n => n.Type));
     }
 }

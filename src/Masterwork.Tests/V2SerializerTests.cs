@@ -322,8 +322,9 @@ public class V2SerializerTests
 
         var header = (List<Dictionary<string, object?>>)popup["header"]!;
         var headerCond = Assert.Single(header);
-        var headerConditions = (List<Dictionary<string, object?>>)headerCond["conditions"]!;
-        var headerThen = (List<Dictionary<string, object?>>)Assert.Single(headerConditions)["then"]!;
+        // A single if/else pair flattens to if/then/else directly — no `conditions:` wrapper (that's
+        // only for an if/elseif/.../else chain).
+        var headerThen = (List<Dictionary<string, object?>>)headerCond["then"]!;
         var headerImage = Assert.Single(headerThen);
         Assert.Equal("image", headerImage["type"]);
         Assert.Equal("image://setup/Creepy_Icon", headerImage["asset"]);
@@ -332,10 +333,167 @@ public class V2SerializerTests
 
         var content = (List<Dictionary<string, object?>>)popup["content"]!;
         var contentCond = Assert.Single(content, n => (string)n["type"]! == "conditional");
-        var contentConditions = (List<Dictionary<string, object?>>)contentCond["conditions"]!;
-        var contentThen = (List<Dictionary<string, object?>>)Assert.Single(contentConditions)["then"]!;
+        var contentThen = (List<Dictionary<string, object?>>)contentCond["then"]!;
         Assert.Equal(2, contentThen.Count); // break + text, image removed
         Assert.DoesNotContain(contentThen, n => (string)n["type"]! == "image");
+    }
+
+    [Fact]
+    public void SetupNotificationBlock_ConditionalWithOnlyImageAndBreak_CollapsesAndTrimsLeadingBreak()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00003-Hospital1.mws.yaml and
+        // 00004-Devastation1.mws.yaml — each branch is exactly [image, break] (no other
+        // branch-specific content). Once the image is hoisted to the header, every branch's
+        // remaining content is nothing but its own trailing break — the exact same break regardless
+        // of which branch matches — so the leftover content conditional collapses to one plain break
+        // (CollapseIfBreakOnly). Here nothing precedes it in the popup's own content, so that
+        // collapsed break is *also* leading and TrimEdgeBreaks removes it entirely — it must not
+        // survive as a stray break at the very start of content.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "seedy == \"yes\"",
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/AngryMobSetup2", Style = "setup-image" },
+                                        new Masterwork.Extractor.BreakNode(),
+                                    ],
+                                },
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Else = true,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/AngryMobSetup1", Style = "setup-image" },
+                                        new Masterwork.Extractor.BreakNode(),
+                                    ],
+                                },
+                            ],
+                        },
+                        new Masterwork.Extractor.TextNode { Template = "Turn to page." },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var popup = Nodes0(d);
+
+        var content = (List<Dictionary<string, object?>>)popup["content"]!;
+        Assert.DoesNotContain(content, n => (string)n["type"]! == "conditional");
+        Assert.Single(content);
+        Assert.Equal("text", content[0]["type"]);
+    }
+
+    [Fact]
+    public void SplitPopupHeaderNodes_TrailingBreakAfterLastRealContent_IsTrimmed()
+    {
+        // Symmetric case: a trailing break left dangling at the very end of `content` (nothing after
+        // it — SplitPopupHeaderNodes builds this list independently of whatever, if anything, the
+        // caller appends afterward) must be trimmed too, not just a leading one.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.TextNode { Template = "Turn to page." },
+                        new Masterwork.Extractor.BreakNode(),
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var popup = Nodes0(d);
+
+        var content = (List<Dictionary<string, object?>>)popup["content"]!;
+        Assert.Single(content);
+        Assert.Equal("text", content[0]["type"]);
+    }
+
+    [Fact]
+    public void SetupNotificationBlock_CollapsedBreakAdjacentToFollowingLiteralBreak_MergesToParagraphBreak()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00003-Hospital1.mws.yaml's actual
+        // full shape — the break-only conditional collapses to a single break (previous test), and
+        // Cradle's own next statement is a second, literal lineBreak() right after the if/else block.
+        // BreakFilter already merges consecutive breaks, but only for pairs it can see during its own
+        // pass — this collapsed break didn't exist yet then (SplitPopupHeaderNodes synthesizes it
+        // afterward), so without this merge the two would sit side by side as two plain breaks
+        // instead of the one paragraph break the source's two real lineBreak() calls call for. A
+        // leading text node is placed inside SetupBlockNode.Nodes itself (unlike the previous test)
+        // so the merged break isn't *also* leading from SplitPopupHeaderNodes' own point of view —
+        // note that SetupNotificationNode.Title alone wouldn't do this: it's prepended by the caller
+        // (TransformSetupNotificationBlock) entirely outside SplitPopupHeaderNodes' own view of
+        // `content`, so TrimEdgeBreaks would still see (and remove) a leading break regardless.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.TextNode { Template = "Preamble." },
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "seedy == \"yes\"",
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/AngryMobSetup2", Style = "setup-image" },
+                                        new Masterwork.Extractor.BreakNode(),
+                                    ],
+                                },
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Else = true,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/AngryMobSetup1", Style = "setup-image" },
+                                        new Masterwork.Extractor.BreakNode(),
+                                    ],
+                                },
+                            ],
+                        },
+                        new Masterwork.Extractor.BreakNode(),
+                        new Masterwork.Extractor.TextNode { Template = "Turn to page." },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var popup = Nodes0(d);
+
+        var content = (List<Dictionary<string, object?>>)popup["content"]!;
+        Assert.Equal("text", content[0]["type"]); // "Preamble."
+        Assert.Equal("break", content[1]["type"]);
+        Assert.Equal("paragraph", content[1]["style"]);
+        Assert.Equal("text", content[2]["type"]); // "Turn to page."
     }
 
     [Fact]
@@ -385,19 +543,84 @@ public class V2SerializerTests
 
         var header = (List<Dictionary<string, object?>>)popup["header"]!;
         var headerCond = Assert.Single(header);
-        var headerConditions = (List<Dictionary<string, object?>>)headerCond["conditions"]!;
-        var headerThen = (List<Dictionary<string, object?>>)Assert.Single(headerConditions)["then"]!;
+        // A single if/else pair flattens to if/then/else directly — no `conditions:` wrapper.
+        var headerThen = (List<Dictionary<string, object?>>)headerCond["then"]!;
         Assert.Single(headerThen); // just the image
         var headerElse = (List<Dictionary<string, object?>>)headerCond["else"]!;
         Assert.Empty(headerElse); // non-qualifying branch contributes nothing to header
 
         var content = (List<Dictionary<string, object?>>)popup["content"]!;
         var contentCond = Assert.Single(content, n => (string)n["type"]! == "conditional");
-        var contentConditions = (List<Dictionary<string, object?>>)contentCond["conditions"]!;
-        var contentThen = (List<Dictionary<string, object?>>)Assert.Single(contentConditions)["then"]!;
+        var contentThen = (List<Dictionary<string, object?>>)contentCond["then"]!;
         Assert.Single(contentThen); // text only, image removed
         Assert.DoesNotContain(contentThen, n => (string)n["type"]! == "image");
         var contentElse = (List<Dictionary<string, object?>>)contentCond["else"]!;
         Assert.Single(contentElse); // unchanged — no leading image to remove
+    }
+
+    [Fact]
+    public void Conditional_SingleIfWithElse_FlattensToIfThenElse()
+    {
+        // `conditions:` is only needed for an if/elseif/.../else chain (2+ if-branches) — a plain
+        // if/else pair should read the condition and both bodies directly on the node, matching
+        // docs/mws-format-latest.md's documented flat form (already parsed either way — see
+        // PassageYamlParser.BuildConditional).
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ConditionalNode
+                {
+                    Branches =
+                    [
+                        new Masterwork.Extractor.ConditionalBranch { Condition = "nameA == \"\"", Nodes = [new Masterwork.Extractor.TextNode { Template = "Enter your name." }] },
+                        new Masterwork.Extractor.ConditionalBranch { Else = true, Nodes = [new Masterwork.Extractor.TextNode { Template = "Welcome back." }] },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var cond = Nodes0(d);
+
+        Assert.Equal("conditional", cond["type"]);
+        Assert.DoesNotContain("conditions", cond.Keys);
+        Assert.Equal("nameA == \"\"", cond["if"]);
+        Assert.Equal("Enter your name.", ((List<Dictionary<string, object?>>)cond["then"]!)[0]["value"]);
+        Assert.Equal("Welcome back.", ((List<Dictionary<string, object?>>)cond["else"]!)[0]["value"]);
+    }
+
+    [Fact]
+    public void Conditional_IfElseIfElse_StillUsesConditionsWrapper()
+    {
+        // Contrast with the previous test: 2+ if-branches (a real elseif chain) still need the
+        // `conditions:` list — flattening only applies to a single if-branch.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ConditionalNode
+                {
+                    Branches =
+                    [
+                        new Masterwork.Extractor.ConditionalBranch { Condition = "players >= 3", Nodes = [new Masterwork.Extractor.TextNode { Template = "Three or more." }] },
+                        new Masterwork.Extractor.ConditionalBranch { Condition = "players == 2", Nodes = [new Masterwork.Extractor.TextNode { Template = "Two." }] },
+                        new Masterwork.Extractor.ConditionalBranch { Else = true, Nodes = [new Masterwork.Extractor.TextNode { Template = "None." }] },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var cond = Nodes0(d);
+
+        Assert.Equal("conditional", cond["type"]);
+        Assert.DoesNotContain("if", cond.Keys);
+        Assert.DoesNotContain("then", cond.Keys);
+        var conditions = (List<Dictionary<string, object?>>)cond["conditions"]!;
+        Assert.Equal(2, conditions.Count);
+        Assert.NotNull(cond["else"]);
     }
 }

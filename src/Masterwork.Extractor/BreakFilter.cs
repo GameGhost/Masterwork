@@ -12,8 +12,41 @@ public sealed class CommentedBreakNode : MwsNode
 
 public static class BreakFilter
 {
-    // Nodes that produce no visible output — breaks adjacent to only these are removable.
-    private static bool IsNonRendered(MwsNode node) => node is
+    // Nodes that produce no visible output in the *surrounding passage's own document flow* —
+    // breaks adjacent to only these are removable. Two shapes need recursion, not just a type
+    // check:
+    //   - A ConditionalNode/SwitchNode renders nothing only if EVERY branch/case is itself entirely
+    //     non-rendered (e.g. Cost of Disease's S5Fate2 `switch (players) { case 2: heart = 3; ... }`
+    //     — every case is a bare assign, so the whole switch can never put anything on screen,
+    //     unlike a conditional/switch with even one branch of real text). Exhaustiveness doesn't
+    //     matter here the way it does for CollapseIfBreakOnly: whether or not a branch matches,
+    //     nothing renders either way, so there's no unsafe "insert a break where none belongs" case.
+    //   - EndOfGenerationNode always becomes an auto-display popup with no label (TransformEndOfGeneration
+    //     never sets one) — a separate overlay, not a position in the passage's own inline flow, so a
+    //     break next to it is exactly as decorative as one next to an assign.
+    private static bool IsNonRendered(MwsNode node) => node switch
+    {
+        EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode or EndOfGenerationNode => true,
+        ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsNonRendered)),
+        SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsNonRendered)),
+        _ => false,
+    };
+
+    // The narrower, original leaf-only set — small technical bookkeeping statements that Cradle
+    // routinely leaves sitting mid-sentence (e.g. `text(); Vars.x = 1; text();`), where a single
+    // break touching one of them on only one side is genuinely decorative. A non-rendering
+    // ConditionalNode/SwitchNode is NOT one of these: even though it can never put anything on
+    // screen (see IsNonRendered above), it's still a whole separate statement/block in the source —
+    // e.g. Cost of Disease's Fever1 `switch (players) { case 2: let name = ...; ... }` sitting
+    // between two real sentences, or Hospital1's `if (players > 3 && !Hospital1) { ... }` — and a
+    // break the author placed next to one of those was deliberate paragraph separation, not
+    // decoration around an inline technicality. Used only to decide whether a *single* break run
+    // (breakCount == 1) gets the aggressive "drop it" treatment; every other decision in Apply below
+    // (leading/trailing sawRendered, run-gathering, multi-break merging) correctly keeps using the
+    // fuller IsNonRendered instead, since a non-rendering container must still count as transparent
+    // for those — e.g. S5Fate2's leading popup+switch+lets, which really do need to be skipped over
+    // to find the true first rendered content.
+    private static bool IsTrivialNonRendered(MwsNode node) => node is
         EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode;
 
     private static bool IsBreak(MwsNode node) => node is BreakNode or ParagraphBreakNode;
@@ -32,6 +65,57 @@ public static class BreakFilter
             }
         }
         return false;
+    }
+
+    // After a ConditionalNode/SwitchNode's branches have already been recursively processed, checks
+    // whether EVERY branch's surviving content is nothing but breaks (possibly none at all) — left
+    // behind, for example, when a branch's only real content (e.g. a `Vars._SetupImage` assignment,
+    // see Cost of Disease's Hospital1) gets hoisted out elsewhere by an earlier pass, leaving just
+    // the branch's own trailing lineBreak() with no distinguishing content anymore. When every
+    // branch collapses to the same nothing-but-breaks shape AND the branches are exhaustive (an
+    // else/default is present — otherwise "no branch matched" would originally have rendered
+    // nothing, and collapsing to an unconditional break would wrongly insert one), the whole
+    // conditional is replaced by a single representative break (or removed entirely if every branch
+    // was empty) rather than surviving as a no-op wrapper around it.
+    // Also called directly by V2Serializer.SplitPopupHeaderNodes: the vacuous "every branch is just
+    // its own trailing break" conditional that pattern leaves behind after stripping a setup-image
+    // node out of each branch is synthesized at serialization time, after this whole Apply pass has
+    // already run over the extractor-internal node tree — so BreakFilter itself never sees it.
+    internal static (bool Collapsible, MwsNode? Replacement) CollapseIfBreakOnly(MwsNode node)
+    {
+        List<List<MwsNode>> branchLists;
+        bool isExhaustive;
+        switch (node)
+        {
+            case ConditionalNode cond:
+                branchLists = cond.Branches.Select(b => b.Nodes).ToList();
+                isExhaustive = cond.Branches.Any(b => b.Else == true);
+                break;
+            case SwitchNode sw:
+                branchLists = sw.Cases.Select(c => c.Nodes).ToList();
+                isExhaustive = sw.Cases.Any(c => c.Default == true);
+                break;
+            default:
+                return (false, null);
+        }
+
+        if (!isExhaustive || branchLists.Count == 0 || !branchLists.All(b => b.All(IsBreak)))
+        {
+            return (false, null);
+        }
+
+        var allBreaks = branchLists.SelectMany(b => b).ToList();
+        if (allBreaks.Count == 0)
+        {
+            return (true, null);
+        }
+
+        var anyParagraph = allBreaks.Any(b => b is ParagraphBreakNode) || branchLists.Any(b => b.Count >= 2);
+        var withinStyleScope = allBreaks.All(b => b is BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true });
+        MwsNode replacement = anyParagraph
+            ? new ParagraphBreakNode { SourceLine = node.SourceLine, WithinStyleScope = withinStyleScope }
+            : new BreakNode { SourceLine = node.SourceLine, WithinStyleScope = withinStyleScope };
+        return (true, replacement);
     }
 
     // Recurse into container sub-lists and apply the filter in place. hasPrecedingRendered/
@@ -99,6 +183,24 @@ public static class BreakFilter
             {
                 var followingForContainer = hasFollowingRendered || HasRenderedLater(nodes, i + 1);
                 RecurseContainers(node, mode, sawRendered, followingForContainer);
+
+                var (collapsible, replacement) = CollapseIfBreakOnly(node);
+                if (collapsible)
+                {
+                    if (replacement is null)
+                    {
+                        // Every branch was vacuous — the conditional/switch disappears entirely.
+                        i++;
+                        continue;
+                    }
+
+                    // Substitute the synthesized break in place and re-enter the loop at the same
+                    // index, so it flows through the ordinary break-run-gathering logic below
+                    // (correctly merging with any real break immediately before/after it too).
+                    nodes = [.. nodes[..i], replacement, .. nodes[(i + 1)..]];
+                    continue;
+                }
+
                 result.Add(node);
                 if (!IsNonRendered(node))
                 {
@@ -113,7 +215,6 @@ public static class BreakFilter
             // (e.g. a lineBreak() straddling an invisible assign, as in Cost of Disease's
             // HospitalVisitCheck2 — `lineBreak(); Vars.hospentry = ...; lineBreak();` — is still one
             // gap, not two separately-decided ones) up to the next rendered node or list end.
-            var runStart = i;
             var interstitials = new List<MwsNode>();
             var breakCount = 0;
             var anyParagraph = false;
@@ -142,7 +243,17 @@ public static class BreakFilter
                 i++;
             }
 
-            var isLeading = runStart == 0 && !hasPrecedingRendered;
+            // "Leading" means nothing rendered has been seen yet in this list AND nothing was
+            // guaranteed to render before the list even started (propagated from an enclosing
+            // container) — NOT merely "this run starts at list index 0". Cost of Disease's
+            // Barventures has two leading `assign`s (barin, gen3pg) before its first real break; by
+            // runStart alone the break sits at index 2, so it slipped past this check entirely and
+            // survived as an ordinary "between two rendered nodes" break even though nothing had
+            // rendered before it. sawRendered — tracked across the whole loop, untouched by
+            // interstitials — is the correct signal. (isTrailing needs no equivalent fix: the
+            // run-gathering loop above only stops once it hits a genuinely rendered node or the list
+            // end, so `i < nodes.Count` here always means a rendered node is next.)
+            var isLeading = !sawRendered && !hasPrecedingRendered;
             var isTrailing = i >= nodes.Count && !hasFollowingRendered;
 
             result.AddRange(interstitials);
@@ -161,9 +272,14 @@ public static class BreakFilter
                 continue;
             }
 
-            if (!isLeading && !isTrailing && breakCount == 1 && interstitials.Count == 0)
+            if (!isLeading && !isTrailing && breakCount == 1 &&
+                (interstitials.Count == 0 || interstitials.Any(n => !IsTrivialNonRendered(n))))
             {
-                // An ordinary single break directly between two rendered nodes — never was "extra".
+                // An ordinary single break directly between two rendered nodes — never was "extra" —
+                // OR one touching a non-rendering conditional/switch/EndOfGenerationNode, which is a
+                // whole separate statement/block, not decorative inline bookkeeping (see
+                // IsTrivialNonRendered) — Cost of Disease's Fever1/Hospital1 both have real breaks
+                // the author placed right next to one of these that must survive.
                 result.Add(new BreakNode { SourceLine = firstBreakLine, WithinStyleScope = withinStyleScope });
                 sawRendered = true;
                 continue;

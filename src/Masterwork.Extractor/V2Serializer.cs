@@ -517,10 +517,11 @@ public static partial class V2Serializer
             var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
             var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
 
-            // Flat format: single if-branch with no else
-            if (ifBranches.Count == 1 && elseBranch is null)
+            // Flat format: a single if-branch, with or without an else — see TransformConditional's
+            // identical reasoning (`conditions:` is only for an if/elseif/.../else chain).
+            if (ifBranches.Count == 1)
             {
-                return new Dictionary<string, object?>
+                var flat = new Dictionary<string, object?>
                 {
                     ["type"] = "conditional",
                     ["if"] = ifBranches[0].Condition,
@@ -528,6 +529,14 @@ public static partial class V2Serializer
                         .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
                         .ToList(),
                 };
+                if (elseBranch is not null)
+                {
+                    flat["else"] = elseBranch.Nodes
+                        .Select(n => BuildNavDictFromNodes([n], label, stateAffecting, ctx))
+                        .ToList();
+                }
+
+                return flat;
             }
 
             // Multi-branch format
@@ -610,6 +619,46 @@ public static partial class V2Serializer
     private static bool StartsWithSetupImage(ConditionalBranch b) =>
         b.Nodes is [var first, ..] && IsSetupImageNode(first);
 
+    // Appends `node` to `content`, merging it into an immediately-preceding break instead of adding
+    // a duplicate when both are break-type. BreakFilter already merges consecutive breaks, but only
+    // over the tree as it existed during its own pass — a break-only conditional collapsing to a
+    // single break here (see CollapseIfBreakOnly above) can newly land right next to the branch's
+    // own following literal break, a pairing BreakFilter never had the chance to see.
+    private static void AddContentNode(List<MwsNode> content, MwsNode node)
+    {
+        if (node is BreakNode or ParagraphBreakNode && content.Count > 0 && content[^1] is BreakNode or ParagraphBreakNode)
+        {
+            content[^1] = new ParagraphBreakNode { SourceLine = content[^1].SourceLine };
+            return;
+        }
+
+        content.Add(node);
+    }
+
+    // Strips any leading/trailing break(s) from a header or content list built by
+    // SplitPopupHeaderNodes. BreakFilter already trims leading/trailing breaks over the tree as it
+    // existed during its own pass, but a break-only conditional collapsing to a plain break here
+    // (see CollapseIfBreakOnly above) can land at the very start of `content` when the setup-image
+    // it used to lead with is all that came before it (e.g. Cost of Disease's Devastation1) — a
+    // position BreakFilter never got the chance to judge as leading, since this conditional didn't
+    // exist as a synthesized single break until this split ran, after BreakFilter's own pass.
+    private static List<MwsNode> TrimEdgeBreaks(List<MwsNode> nodes)
+    {
+        var start = 0;
+        while (start < nodes.Count && nodes[start] is BreakNode or ParagraphBreakNode)
+        {
+            start++;
+        }
+
+        var end = nodes.Count;
+        while (end > start && nodes[end - 1] is BreakNode or ParagraphBreakNode)
+        {
+            end--;
+        }
+
+        return start == 0 && end == nodes.Count ? nodes : nodes[start..end];
+    }
+
     // Splits a popup's raw child-node list into (header, content). Three shapes route (part of)
     // themselves to header, each preserving relative order:
     //   - A bare setup-image ImageNode (TryProcessSetupImageAssignment's literal case) — moves
@@ -655,7 +704,22 @@ public static partial class V2Serializer
                     Else = b.Else,
                     Nodes = StartsWithSetupImage(b) ? b.Nodes.Skip(1).ToList() : b.Nodes,
                 }).ToList();
-                if (remainingBranches.Any(b => b.Nodes.Count > 0))
+
+                // Stripping the setup-image node commonly leaves a branch with nothing but its own
+                // trailing break (e.g. Cost of Disease's Hospital1) — a conditional that fires the
+                // exact same break regardless of which branch matches isn't a real conditional
+                // anymore, so collapse it the same way BreakFilter would if it had ever seen this
+                // shape (it can't: this conditional is synthesized here, after BreakFilter's own
+                // pass over the extractor-internal tree already ran).
+                var (collapsible, replacement) = BreakFilter.CollapseIfBreakOnly(new ConditionalNode { Branches = remainingBranches });
+                if (collapsible)
+                {
+                    if (replacement is not null)
+                    {
+                        AddContentNode(content, replacement);
+                    }
+                }
+                else if (remainingBranches.Any(b => b.Nodes.Count > 0))
                 {
                     content.Add(new ConditionalNode { Branches = remainingBranches });
                 }
@@ -663,10 +727,10 @@ public static partial class V2Serializer
                 continue;
             }
 
-            content.Add(n);
+            AddContentNode(content, n);
         }
 
-        return (header ?? [], content);
+        return (TrimEdgeBreaks(header ?? []), TrimEdgeBreaks(content));
     }
 
     private static Dictionary<string, object?> TransformPopup(ExpandLinkNode expand, SerializationContext? ctx = null)
@@ -929,15 +993,24 @@ public static partial class V2Serializer
         var ifBranches = cond.Branches.Where(b => b.Else != true).ToList();
         var elseBranch = cond.Branches.FirstOrDefault(b => b.Else == true);
 
-        // Flat format: single if-branch with no else
-        if (ifBranches.Count == 1 && elseBranch is null)
+        // Flat format: a single if-branch, with or without an else — `conditions:` is only needed
+        // for an if/elseif/.../else chain (2+ if-branches); a plain if/else pair reads the condition
+        // and both bodies directly on the node, per docs/mws-format-latest.md's own documented (and
+        // already-parsed — see PassageYamlParser.BuildConditional) flat form.
+        if (ifBranches.Count == 1)
         {
-            return new Dictionary<string, object?>
+            var flat = new Dictionary<string, object?>
             {
                 ["type"] = "conditional",
                 ["if"] = ifBranches[0].Condition,
                 ["then"] = TransformNodeList(ifBranches[0].Nodes, ctx),
             };
+            if (elseBranch is not null)
+            {
+                flat["else"] = TransformNodeList(elseBranch.Nodes, ctx);
+            }
+
+            return flat;
         }
 
         // Multi-branch format
