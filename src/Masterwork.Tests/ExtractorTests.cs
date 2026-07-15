@@ -2158,6 +2158,101 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void CheckProgress_TernaryTargetArgument_BecomesExpressionTarget()
+    {
+        // Regression, found via a survey of the other two module sources: A Time of War's
+        // MonarchReign2 calls CheckProgress with a single ternary expression directly as the
+        // target argument (not two separate calls in if/else branches, unlike NoUni3/Warning2time)
+        // — CheckProgress("MonarchReign2", Vars.advisorcount >= Vars.commtrigger ?
+        // "CommemorativeStatueEvent" : "MonarchReign3"). GetStringValue can't resolve a ternary to
+        // a literal, so TargetPassage used to come out empty, leaving the popup with no target/
+        // okay/layout — same broken shape as the other two patterns.
+        var mapper = MakeProgressMapper("""{ "P1": { "progress": 1 } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                PassageTracker.instance.CheckProgress("P1", this.Vars.advisorcount >= this.Vars.commtrigger ? "P2" : "P3");
+                yield break;
+            }
+            """, mapper, out _);
+
+        // No curated end-of-round text for P1 — falls to a plain LinkNode, not a popup.
+        Assert.Empty(passages[0].Nodes.OfType<ExpandLinkNode>());
+        var link = Assert.Single(passages[0].Nodes.OfType<LinkNode>());
+        Assert.Equal("${advisorcount >= commtrigger ? \"P2\" : \"P3\"}", link.Target);
+        Assert.True(link.StateAffecting);
+    }
+
+    [Fact]
+    public void CheckProgress_TargetIsUnresolvedSessionVariable_TargetsItDirectlyAndRunsPriorLogicAsOnclose()
+    {
+        // Regression, found via a survey of the other two module sources: Fear of the Unknown's
+        // Liberal2 has three fragments; two of them guard-assign a SESSION variable
+        // (Vars.Liberal2nextpsg, via macros1.either()) just before calling CheckProgress with that
+        // variable as the target — not a local C# var (already handled by _localVars/
+        // _localPassageConditionals) and not a literal, so TargetPassage used to come out empty.
+        // Per the user's explicit design: the target becomes "${Liberal2nextpsg}" directly (a
+        // session variable is always a valid expression), and the guard+assign that computes it
+        // must run as onclose (right before target resolves), not passage-render-time content.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "progress": 1,
+                "end_of_round_body": "The round has ended."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                if (this.Vars.nextpsg == "" || this.Vars.nextpsg == 0)
+                {
+                    this.Vars.nextpsg = macros1.either("P2", "P3");
+                }
+                PassageTracker.instance.CheckProgress("P1", this.Vars.nextpsg);
+                yield break;
+            }
+            """, mapper, out _);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_round", node["layout"]);
+        Assert.Equal("${nextpsg}", node["target"]);
+
+        // The guard conditional must run as onclose (before the _ProgressRound assign / target
+        // resolution), and content must be ONLY the curated body — the guard must not leak into it.
+        var onclose = (List<Dictionary<string, object?>>)node["onclose"]!;
+        Assert.Equal(2, onclose.Count);
+        Assert.Equal("conditional", onclose[0]["type"]);
+        Assert.Equal("_ProgressRound", onclose[1]["var"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        var textContent = Assert.Single(content);
+        Assert.Equal("The round has ended.", textContent["value"]);
+    }
+
+    [Fact]
     public void ExpandLink_AssignThenExhaustiveIfElseOfGotos_BecomesLinkWithOnclick()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00130-HospitalVisitCheck.mws.yaml.

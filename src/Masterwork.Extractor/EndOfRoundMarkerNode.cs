@@ -15,6 +15,14 @@ internal sealed class EndOfRoundMarkerNode : MwsNode
     public string? Body { get; init; }
     public string? Body2 { get; init; }
 
+    // Nodes that sat before the terminal CheckProgress call in the source — typically a guarded
+    // assignment that computes a dynamic NextPassage (e.g. Fear of the Unknown's Liberal2:
+    // Vars.Liberal2nextpsg set via macros1.either() just before the call). These must run as
+    // `onclose`, right before `target` resolves, not as passage-render-time `content` — content
+    // runs against a sandboxed store clone the moment the popup renders, well before Okay is
+    // clicked, which is too early for logic whose only purpose is feeding the target expression.
+    public List<MwsNode> OncloseNodes { get; init; } = [];
+
     public override Dictionary<string, object?> ToDict() =>
         throw new InvalidOperationException("EndOfRoundMarkerNode must be consumed by V2Serializer before serialization.");
 }

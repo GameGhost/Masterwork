@@ -852,13 +852,18 @@ public static partial class V2Serializer
             // Unlike the other markers' onclose, this one needs real logic (the _ProgressRound
             // assign moved out of the popup's own content by CradleExtractor.StitchFragments), not
             // just a bare navigation target — so it's built directly rather than through the
-            // string-onclose path below.
+            // string-onclose path below. Any OncloseNodes (source logic that sat before the
+            // terminal CheckProgress call — e.g. computing a dynamic target expression) run first,
+            // ahead of the progress assign, matching source order.
             d["target"] = eorMarker.NextPassage;
             d["okay"] = "End of Round";
-            d["onclose"] = new List<Dictionary<string, object?>>
+            var eorOnclose = new List<Dictionary<string, object?>>();
+            if (eorMarker.OncloseNodes.Count > 0)
             {
-                new() { ["type"] = "assign", ["var"] = "_ProgressRound", ["expr"] = eorMarker.ProgressValue.ToString() },
-            };
+                eorOnclose.AddRange(TransformNodeList(eorMarker.OncloseNodes, ctx));
+            }
+            eorOnclose.Add(new() { ["type"] = "assign", ["var"] = "_ProgressRound", ["expr"] = eorMarker.ProgressValue.ToString() });
+            d["onclose"] = eorOnclose;
             AddLinkHint(d, eorMarker.NextPassage, ctx);
         }
         else if (onclose is not null)

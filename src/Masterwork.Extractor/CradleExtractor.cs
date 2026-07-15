@@ -725,12 +725,18 @@ public partial class CradleExtractor
                                         expand.ExpandNodes.RemoveAt(expand.ExpandNodes.Count - 1);
                                     }
 
+                                    // Anything still left (e.g. a guarded assignment computing a
+                                    // dynamic target — see Liberal2/OncloseNodes' own doc comment)
+                                    // must run as onclose, not passage-render-time content.
+                                    var oncloseNodes = new List<MwsNode>(expand.ExpandNodes);
+                                    expand.ExpandNodes.Clear();
                                     expand.ExpandNodes.Add(new EndOfRoundMarkerNode
                                     {
                                         NextPassage = cpTerm.TargetPassage,
                                         ProgressValue = progressValue ?? 0,
                                         Body = eorBody,
                                         Body2 = eorBody2,
+                                        OncloseNodes = oncloseNodes,
                                     });
                                 }
                                 else
@@ -755,12 +761,15 @@ public partial class CradleExtractor
                                 {
                                     progressMapper!.TryGetProgressValue(repCp!.CurrentPassage, out var progressValue);
                                     expand.ExpandNodes.RemoveAt(expand.ExpandNodes.Count - 1);
+                                    var oncloseNodes = new List<MwsNode>(expand.ExpandNodes);
+                                    expand.ExpandNodes.Clear();
                                     expand.ExpandNodes.Add(new EndOfRoundMarkerNode
                                     {
                                         NextPassage = ternaryTarget!,
                                         ProgressValue = progressValue ?? 0,
                                         Body = eorBody,
                                         Body2 = eorBody2,
+                                        OncloseNodes = oncloseNodes,
                                     });
                                 }
                                 else
@@ -856,8 +865,13 @@ public partial class CradleExtractor
         foreach (var branch in cond.Branches)
         {
             if (branch.Nodes.Count == 0 || branch.Nodes[^1] is not CheckProgressNode cp ||
-                string.IsNullOrEmpty(cp.TargetPassage))
+                string.IsNullOrEmpty(cp.TargetPassage) || cp.TargetPassage.StartsWith("${", StringComparison.Ordinal))
             {
+                // The ternary this method builds quotes each branch's target as a passage-name
+                // string literal — correct for a plain literal target, but wrong for a branch
+                // whose own target is already a computed expression (nesting an unevaluated
+                // "${...}" string inside the outer ternary's string literal). No known real
+                // occurrence combines both patterns; bail rather than mis-serialize if one ever does.
                 return false;
             }
 

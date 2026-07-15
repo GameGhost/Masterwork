@@ -702,21 +702,45 @@ public class PassageBodyVisitor
                     $"CheckProgress(\"{cp.CurrentPassage}\", ...) has no entry in the progress map", sourceLine: GetLine(cpInv));
             }
 
-            // If target was unresolvable (computed local var), check _localVars and _localPassageConditionals.
-            // When resolved, return conditional GotoNodes instead of a CheckProgressNode so that the
-            // enclosing expand-link can be converted to navigation by V2Serializer.
-            if (string.IsNullOrEmpty(cp.TargetPassage) && cpInv.ArgumentList.Arguments.Count > 1 &&
-                cpInv.ArgumentList.Arguments[1].Expression is IdentifierNameSyntax cpTargetId)
+            // If target wasn't a plain string literal, try progressively more general fallbacks.
+            if (string.IsNullOrEmpty(cp.TargetPassage) && cpInv.ArgumentList.Arguments.Count > 1)
             {
-                var targetVar = cpTargetId.Identifier.Text;
-                if (_localVars.TryGetValue(targetVar, out var literalTarget) && !string.IsNullOrEmpty(literalTarget))
+                var targetExpr = cpInv.ArgumentList.Arguments[1].Expression;
+                if (targetExpr is IdentifierNameSyntax cpTargetId)
                 {
-                    return [.. progressPrefix, new GotoNode { Target = literalTarget }];
-                }
+                    // Computed local var: check _localVars and _localPassageConditionals first.
+                    // When resolved, return conditional GotoNodes instead of a CheckProgressNode so
+                    // that the enclosing expand-link can be converted to navigation by V2Serializer.
+                    var targetVar = cpTargetId.Identifier.Text;
+                    if (_localVars.TryGetValue(targetVar, out var literalTarget) && !string.IsNullOrEmpty(literalTarget))
+                    {
+                        return [.. progressPrefix, new GotoNode { Target = literalTarget }];
+                    }
 
-                if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
+                    if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
+                    {
+                        return [.. progressPrefix, .. BuildGotoNodesFromLetConditionals(psnNodes)];
+                    }
+
+                    // Not a known local var — it's a session variable (Vars.X in the original
+                    // source, stripped to its bare name by SimplifyCondition's normalization),
+                    // valid to reference directly as a target expression instead of leaving this
+                    // CheckProgressNode with an unusable empty target. See Fear of the Unknown's
+                    // Liberal2 (Vars.Liberal2nextpsg, conditionally assigned via macros1.either()
+                    // just before this call) for the real occurrence motivating this — any nodes
+                    // that computed the variable's value stay in progressPrefix/preceding sibling
+                    // nodes, which StitchFragments' end-of-round-popup collapse now runs as
+                    // `onclose` (before target resolves), not passage-render-time `content`.
+                    cp.TargetPassage = $"${{{targetVar}}}";
+                }
+                else
                 {
-                    return [.. progressPrefix, .. BuildGotoNodesFromLetConditionals(psnNodes)];
+                    // Any other dynamic shape (ternary, boolean expression, arithmetic, ...) found
+                    // directly in the argument — e.g. A Time of War's MonarchReign2: CheckProgress(
+                    // "MonarchReign2", Vars.advisorcount >= Vars.commtrigger ? "CommemorativeStatueEvent"
+                    // : "MonarchReign3"). Translate the raw C# text into an MWS expression the same
+                    // way IsSetupPassagenameAssignment's computed-target fallback does.
+                    cp.TargetPassage = $"${{{SimplifyCondition(targetExpr.ToString())}}}";
                 }
             }
             return [.. progressPrefix, cp];
