@@ -210,19 +210,68 @@ public static partial class V2Serializer
 
     // Appends a _link field to a node dict immediately after the "target" key was inserted.
     // InjectSentinelComments converts this to an inline "# file" comment on the target line.
-    // Skipped for expression-valued targets (starting with "${") since the passage is not statically known.
+    // For an expression-valued target (starting with "${"), every quoted string literal
+    // appearing anywhere in the expression (e.g. both branches of a ternary) that resolves to a
+    // real passage gets its own hint, joined into one comment — e.g. '${peeps == 1 ? "NoUni3b" :
+    // "Scoring"}' hints both "./00040-NoUni3b.mws.yaml, ./00284-Scoring.mws.yaml". A bare variable
+    // reference with no literal substrings (e.g. '${Liberal2nextpsg}') yields no hint — its
+    // possible values aren't statically known here (see ExtractQuotedLiterals's own remarks on
+    // why this doesn't attempt to trace the variable back to its assignment sites).
     private static void AddLinkHint(Dictionary<string, object?> d, string target, SerializationContext? ctx)
     {
-        if (target.StartsWith("${", StringComparison.Ordinal))
+        if (ctx?.PassageFileMap is null)
         {
             return;
         }
 
-        if (ctx?.PassageFileMap?.TryGetValue(target, out var file) == true && file is not null)
+        if (!target.StartsWith("${", StringComparison.Ordinal))
         {
-            d["_link"] = file;
+            if (ctx.PassageFileMap.TryGetValue(target, out var file) && file is not null)
+            {
+                d["_link"] = file;
+            }
+
+            return;
+        }
+
+        List<string>? files = null;
+        foreach (var literal in ExtractQuotedLiterals(target))
+        {
+            if (ctx.PassageFileMap.TryGetValue(literal, out var file) && file is not null)
+            {
+                files ??= [];
+                if (!files.Contains(file))
+                {
+                    files.Add(file);
+                }
+            }
+        }
+
+        if (files is { Count: > 0 })
+        {
+            d["_link"] = string.Join(", ", files);
         }
     }
+
+    // Extracts every double-quoted string literal substring from a raw MWS expression (e.g. a
+    // ternary's branches). Deliberately shallow — a pure text scan, not real expression parsing —
+    // since AddLinkHint only needs the literal branch values, not the whole expression's shape.
+    // Doesn't attempt to resolve a bare variable target back to its assignment sites (e.g. finding
+    // that Liberal2nextpsg is set from a shuffled ["LiberalEvent", "LiberalTaxes"] array elsewhere
+    // in the same onclose/onclick list) — that's real dataflow tracing, not a text scan, and risks
+    // producing misleading hints for variables whose value isn't actually constrained to a small
+    // literal set. Left unhandled per the format docs' own guidance that expression targets are
+    // simply not statically known.
+    private static IEnumerable<string> ExtractQuotedLiterals(string exprText)
+    {
+        foreach (Match m in QuotedLiteralRegex().Matches(exprText))
+        {
+            yield return m.Groups[1].Value.Replace("\\\"", "\"").Replace("\\\\", "\\");
+        }
+    }
+
+    [GeneratedRegex("\"((?:[^\"\\\\]|\\\\.)*)\"")]
+    private static partial Regex QuotedLiteralRegex();
 
     // Returns one or more v0.2 dicts for a single v0.1 node.
     private static IEnumerable<Dictionary<string, object?>> TransformNode(MwsNode node, SerializationContext? ctx = null)
@@ -507,9 +556,9 @@ public static partial class V2Serializer
                 ["type"] = "link",
                 ["label"] = label,
                 ["target"] = singleGoto.Target,
-                ["snapshot"] = stateAffecting,
             };
             AddLinkHint(d, singleGoto.Target, ctx);
+            d["snapshot"] = stateAffecting;
             return d;
         }
         if (nodes is [ConditionalNode cond])
@@ -856,6 +905,11 @@ public static partial class V2Serializer
             // terminal CheckProgress call — e.g. computing a dynamic target expression) run first,
             // ahead of the progress assign, matching source order.
             d["target"] = eorMarker.NextPassage;
+            // AddLinkHint must run right after `target` is inserted (see its own doc comment) —
+            // InjectSentinelComments attaches the resulting _link hint to whatever line precedes
+            // it in the emitted YAML, so inserting it any later (e.g. after okay/onclose below)
+            // would land the comment on the wrong line instead of the target line.
+            AddLinkHint(d, eorMarker.NextPassage, ctx);
             d["okay"] = "End of Round";
             var eorOnclose = new List<Dictionary<string, object?>>();
             if (eorMarker.OncloseNodes.Count > 0)
@@ -864,7 +918,6 @@ public static partial class V2Serializer
             }
             eorOnclose.Add(new() { ["type"] = "assign", ["var"] = "_ProgressRound", ["expr"] = eorMarker.ProgressValue.ToString() });
             d["onclose"] = eorOnclose;
-            AddLinkHint(d, eorMarker.NextPassage, ctx);
         }
         else if (onclose is not null)
         {
@@ -872,8 +925,8 @@ public static partial class V2Serializer
             // `target` (navigation) vs. `onclose` (a node list of logic run before it). This
             // extraction path never produced onclose logic, only a destination, so it maps to `target`.
             d["target"] = onclose;
-            d["okay"] = "Close";
             AddLinkHint(d, onclose, ctx);
+            d["okay"] = "Close";
         }
         else if (layout == "setup")
         {

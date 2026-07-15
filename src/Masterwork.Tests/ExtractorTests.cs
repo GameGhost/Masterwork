@@ -2253,6 +2253,206 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void LinkTarget_TernaryExpression_EmitsOneLinkHintPerConstant()
+    {
+        // Regression: link.target (and by extension popup.target, goto.target, etc. — all routed
+        // through the same AddLinkHint) previously only ever emitted a file-path comment for a
+        // plain literal target, skipping any "${...}" expression target outright — including a
+        // ternary whose branches are themselves just string literals, where the destination IS
+        // still statically knowable per-branch (e.g. A Time of War's MonarchReign2).
+        var mapper = MakeProgressMapper("""{ "P1": { "progress": 1 } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                PassageTracker.instance.CheckProgress("P1", this.Vars.advisorcount >= this.Vars.commtrigger ? "P2" : "P3");
+                yield break;
+            }
+            """, mapper, out _);
+
+        var ctx = new SerializationContext(SourceRelativePath: null, PassageFileMap: new Dictionary<string, string>
+        {
+            ["P2"] = "./0002-P2.mws.yaml",
+            ["P3"] = "./0003-P3.mws.yaml",
+        });
+        var dict = V2Serializer.ToDict(passages[0], ctx);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+
+        Assert.Equal("${advisorcount >= commtrigger ? \"P2\" : \"P3\"}", node["target"]);
+        Assert.Equal("./0002-P2.mws.yaml, ./0003-P3.mws.yaml", node["_link"]);
+
+        // _link must sit immediately after target (before snapshot) — see the analogous popup
+        // ordering assertion below for why this isn't just cosmetic.
+        var keys = node.Keys.ToList();
+        Assert.Equal(keys.IndexOf("target") + 1, keys.IndexOf("_link"));
+    }
+
+    [Fact]
+    public void PopupTarget_TernaryExpression_EmitsOneLinkHintPerConstant()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00037-NoUni3.mws.yaml — the
+        // end_of_round popup's target ('${peeps == 1 ? "NoUni3b" : "Scoring"}') got no file-path
+        // comment at all, unlike an ordinary link's literal target. Same AddLinkHint fix as the
+        // plain-link case above, exercised through the popup path (EndOfRoundMarkerNode) instead.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "progress": 1,
+                "end_of_round_body": "The round has ended."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                if (this.Vars.peeps == 1)
+                {
+                    PassageTracker.instance.CheckProgress("P1", "NoUni3b");
+                }
+                else
+                {
+                    PassageTracker.instance.CheckProgress("P1", "Scoring");
+                }
+                yield break;
+            }
+            """, mapper, out _);
+
+        var ctx = new SerializationContext(SourceRelativePath: null, PassageFileMap: new Dictionary<string, string>
+        {
+            ["NoUni3b"] = "./0040-NoUni3b.mws.yaml",
+            ["Scoring"] = "./0284-Scoring.mws.yaml",
+        });
+        var dict = V2Serializer.ToDict(passages[0], ctx);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("${peeps == 1 ? \"NoUni3b\" : \"Scoring\"}", node["target"]);
+        Assert.Equal("./0040-NoUni3b.mws.yaml, ./0284-Scoring.mws.yaml", node["_link"]);
+
+        // _link must sit immediately after target in the dict's key order — InjectSentinelComments
+        // (Program.cs) attaches the hint to whichever line precedes it in the emitted YAML, keyed
+        // purely off insertion order, so an intervening key (okay/onclose) would land the comment
+        // on the wrong line even though the dict's *value* for "_link" itself is already correct.
+        var keys = node.Keys.ToList();
+        Assert.Equal(keys.IndexOf("target") + 1, keys.IndexOf("_link"));
+    }
+
+    [Fact]
+    public void PopupTarget_PlainLiteralTarget_LinkHintKeyImmediatelyFollowsTarget()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00002-Fever1.mws.yaml — even a
+        // plain literal end_of_round popup target (the overwhelmingly common case — every
+        // occurrence before NoUni3/Warning2time's conditional pattern) got no file-path comment,
+        // because TransformPopup's eorMarker branch called AddLinkHint AFTER inserting `okay` and
+        // `onclose` into the dict, landing the hint on the onclose block's last line instead of
+        // the target line. This predates the "${...}"-expression-target work entirely — that work
+        // only made it visible by being the first thing to actually populate `_link` for this
+        // branch (AddLinkHint used to unconditionally skip "${"-prefixed targets, and every other
+        // target here was a plain literal, so the misplacement was never exercised... except it
+        // was, silently, for every plain-literal case too. This test pins the fix for both.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "progress": 1,
+                "end_of_round_body": "The round has ended."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                PassageTracker.instance.CheckProgress("P1", "P2");
+                yield break;
+            }
+            """, mapper, out _);
+
+        var ctx = new SerializationContext(SourceRelativePath: null, PassageFileMap: new Dictionary<string, string>
+        {
+            ["P2"] = "./0002-P2.mws.yaml",
+        });
+        var dict = V2Serializer.ToDict(passages[0], ctx);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+
+        Assert.Equal("P2", node["target"]);
+        Assert.Equal("./0002-P2.mws.yaml", node["_link"]);
+
+        var keys = node.Keys.ToList();
+        Assert.Equal(keys.IndexOf("target") + 1, keys.IndexOf("_link"));
+    }
+
+    [Fact]
+    public void PopupTarget_BareVariableExpression_EmitsNoLinkHint()
+    {
+        // A target expression with no literal substrings at all (e.g. a bare session-variable
+        // reference) has no statically-knowable destination — must not emit a hint, let alone a
+        // wrong one, since AddLinkHint doesn't trace the variable back to its assignment sites.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "progress": 1,
+                "end_of_round_body": "The round has ended."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                PassageTracker.instance.CheckProgress("P1", this.Vars.nextpsg);
+                yield break;
+            }
+            """, mapper, out _);
+
+        var ctx = new SerializationContext(SourceRelativePath: null, PassageFileMap: new Dictionary<string, string>
+        {
+            ["NoUni3b"] = "./0040-NoUni3b.mws.yaml",
+        });
+        var dict = V2Serializer.ToDict(passages[0], ctx);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+
+        Assert.Equal("${nextpsg}", node["target"]);
+        Assert.False(node.ContainsKey("_link"));
+    }
+
+    [Fact]
     public void ExpandLink_AssignThenExhaustiveIfElseOfGotos_BecomesLinkWithOnclick()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00130-HospitalVisitCheck.mws.yaml.
