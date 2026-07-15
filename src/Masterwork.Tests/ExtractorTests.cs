@@ -1258,6 +1258,161 @@ public class ExtractorTests
         Assert.Empty(passages[0].Nodes.OfType<BreakNode>());
     }
 
+    // ── Embedded \n in text() literals ─────────────────────────────────────
+
+    [Fact]
+    public void TextWithEmbeddedDoubleNewline_SplitsIntoTwoTextNodesWithParagraphBreak()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("first paragraph.\n\nsecond paragraph");
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var textNodes = nodes.OfType<TextNode>().ToList();
+        Assert.Equal(2, textNodes.Count);
+        Assert.Equal("first paragraph.", textNodes[0].Template);
+        Assert.Equal("second paragraph", textNodes[1].Template);
+        Assert.Single(nodes.OfType<ParagraphBreakNode>());
+        Assert.Empty(nodes.OfType<BreakNode>());
+    }
+
+    [Fact]
+    public void TextWithEmbeddedSingleNewline_SplitsIntoTwoTextNodesWithBreak()
+    {
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("first line\nsecond line");
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var textNodes = nodes.OfType<TextNode>().ToList();
+        Assert.Equal(2, textNodes.Count);
+        Assert.Equal("first line", textNodes[0].Template);
+        Assert.Equal("second line", textNodes[1].Template);
+        Assert.Single(nodes.OfType<BreakNode>());
+        Assert.Empty(nodes.OfType<ParagraphBreakNode>());
+    }
+
+    [Fact]
+    public void TrailingOnlyNewline_EmitsBreakWithNoEmptyTrailingTextNode()
+    {
+        // Regression: Cost of Disease's OptiontoKillYes ends its final text() run with a
+        // lone `" \n"` immediately before a link() — the space belongs to no visible text
+        // (it's leading whitespace on an otherwise-empty trailing segment) and the \n should
+        // become just a break between the preceding text and the link, not an empty TextNode.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("Once all players have chosen");
+                yield return base.text(" \n");
+                yield return base.link("click here to continue", "Next", null);
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var textNode = Assert.Single(nodes.OfType<TextNode>());
+        Assert.Equal("Once all players have chosen", textNode.Template);
+        Assert.Single(nodes.OfType<BreakNode>());
+        Assert.IsType<LinkNode>(nodes[^1]);
+        Assert.IsType<BreakNode>(nodes[^2]);
+    }
+
+    [Fact]
+    public void EmbeddedNewlineInStringConcatLeaf_SplitsIntoParagraphBreak()
+    {
+        // Regression, reported against the real Cost of Disease extraction (passage 200,
+        // ~line 22969): text()'s argument can be a "prefix" + "suffix" string-concat chain
+        // rather than a single literal — routed through ProcessTextConcatPart, a separate
+        // code path from ProcessTextInvocation's own plain-literal branch, that had its own
+        // unfixed copy of the same newline-stripping bug. The \n\n sits in the second leaf.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("They do not have to pay the cost" +
+                    " to open a new plot.\n\nReturn the token to the scenario box.");
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var textNodes = nodes.OfType<TextNode>().ToList();
+        Assert.Equal(2, textNodes.Count);
+        Assert.Equal("They do not have to pay the cost to open a new plot.", textNodes[0].Template);
+        Assert.Equal("Return the token to the scenario box.", textNodes[1].Template);
+        Assert.Single(nodes.OfType<ParagraphBreakNode>());
+        Assert.Empty(nodes.OfType<BreakNode>());
+    }
+
+    [Fact]
+    public void OptiontoKillYesPattern_ThreeTextBlocksTwoParagraphBreaksAndTrailingBreakBeforeLink()
+    {
+        // Regression, reported against the real Cost of Disease extraction: a run of text()
+        // calls merges into a pending buffer as usual, but two of them carry embedded "\n\n"
+        // (source lines ~29032/29037) and the last carries a lone trailing "\n" (~29038)
+        // immediately before a link(). Previously all of this merged into ONE restext value
+        // with the newlines silently collapsed to spaces at restext-write time, losing every
+        // paragraph break. Expect 3 separate text blocks, 2 paragraph breaks, and a plain
+        // break directly before the link — matching the user's worked-example spec exactly.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Gain 1 Body,");
+                }
+                StyleScope styleScope = null;
+                yield return base.text(" Lose 1");
+                yield return base.text(" and Gain 1VP. Then");
+                yield return base.text(" they must return a piece to Lost.\n\nIf a player chooses to keep their card,");
+                yield return base.text(" they receive no special bonus.\n\nOnce all players have chosen");
+                yield return base.text(" \n");
+                yield return base.link("click here to continue", "Next", null);
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var textNodes = nodes.OfType<TextNode>().ToList();
+        Assert.Equal(3, textNodes.Count);
+        Assert.Equal("**Gain 1 Body,** Lose 1 and Gain 1VP. Then they must return a piece to Lost.", textNodes[0].Template);
+        Assert.Equal("If a player chooses to keep their card, they receive no special bonus.", textNodes[1].Template);
+        Assert.Equal("Once all players have chosen", textNodes[2].Template);
+
+        Assert.Equal(2, nodes.OfType<ParagraphBreakNode>().Count());
+        var plainBreak = Assert.Single(nodes.OfType<BreakNode>());
+        var breakIndex = nodes.IndexOf(plainBreak);
+        Assert.IsType<LinkNode>(nodes[breakIndex + 1]);
+        Assert.Equal(breakIndex, nodes.Count - 2);
+    }
+
     [Fact]
     public void PassageIndex_IsSetFromFunctionNumber()
     {

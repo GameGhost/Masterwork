@@ -315,30 +315,18 @@ public class PassageBodyVisitor
                 return [];
             }
 
-            // Check for TextMesh Pro rich text
-            var richRuns = _spriteMapper.TryParseRichText(raw);
-            if (richRuns is not null)
+            // Embedded newlines are break points, not whitespace to collapse: split the
+            // literal on them so each side flushes to its own TextNode with a BreakNode in
+            // between (runs of 2+ consolidate into a paragraph break via the existing
+            // ConsolidateBreaks pass, same as adjacent lineBreak() calls) instead of
+            // surviving into a multi-line restext value that NormalizeRestextValue would
+            // later flatten to a single space, losing the intended break structure.
+            if (raw.Contains('\n'))
             {
-                foreach (var (t, assetRef) in richRuns)
-                {
-                    if (assetRef is not null)
-                    {
-                        AddRun(new TextRun { AssetRef = assetRef });
-                    }
-                    else if (!string.IsNullOrEmpty(t))
-                    {
-                        AddRun(new TextRun { Text = t, Style = currentStyle });
-                    }
-                }
+                return ProcessTextLiteralWithBreaks(raw, currentStyle);
             }
-            else
-            {
-                var cleaned = _spriteMapper.StripLayoutTags(raw);
-                if (!string.IsNullOrEmpty(cleaned))
-                {
-                    AddRun(new TextRun { Text = cleaned, Style = currentStyle });
-                }
-            }
+
+            AddPlainTextRuns(raw, currentStyle);
             return [];
         }
 
@@ -490,29 +478,12 @@ public class PassageBodyVisitor
         if (expr is LiteralExpressionSyntax lit2)
         {
             var raw2 = lit2.Token.ValueText;
-            var richRuns2 = _spriteMapper.TryParseRichText(raw2);
-            if (richRuns2 is not null)
+            if (raw2.Contains('\n'))
             {
-                foreach (var (t2, assetRef2) in richRuns2)
-                {
-                    if (assetRef2 is not null)
-                    {
-                        AddRun(new TextRun { AssetRef = assetRef2 });
-                    }
-                    else if (!string.IsNullOrEmpty(t2))
-                    {
-                        AddRun(new TextRun { Text = t2, Style = style });
-                    }
-                }
+                return ProcessTextLiteralWithBreaks(raw2, style);
             }
-            else
-            {
-                var cleaned2 = _spriteMapper.StripLayoutTags(raw2);
-                if (!string.IsNullOrEmpty(cleaned2))
-                {
-                    AddRun(new TextRun { Text = cleaned2, Style = style });
-                }
-            }
+
+            AddPlainTextRuns(raw2, style);
             return [];
         }
 
@@ -1686,6 +1657,88 @@ public class PassageBodyVisitor
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    // Parses a newline-free text() literal into pending TextRuns: TextMesh Pro rich-text
+    // sprite spans, or (falling back) a single run with layout tags stripped.
+    private void AddPlainTextRuns(string raw, string? currentStyle)
+    {
+        var richRuns = _spriteMapper.TryParseRichText(raw);
+        if (richRuns is not null)
+        {
+            foreach (var (t, assetRef) in richRuns)
+            {
+                if (assetRef is not null)
+                {
+                    AddRun(new TextRun { AssetRef = assetRef });
+                }
+                else if (!string.IsNullOrEmpty(t))
+                {
+                    AddRun(new TextRun { Text = t, Style = currentStyle });
+                }
+            }
+        }
+        else
+        {
+            var cleaned = _spriteMapper.StripLayoutTags(raw);
+            if (!string.IsNullOrEmpty(cleaned))
+            {
+                AddRun(new TextRun { Text = cleaned, Style = currentStyle });
+            }
+        }
+    }
+
+    // Splits a text() literal containing embedded \n into text/break segments: the text
+    // before each newline run is flushed as its own TextNode, then one BreakNode is emitted
+    // per '\n' character (ConsolidateBreaks later merges runs of 2+ into a single paragraph
+    // break, matching how consecutive lineBreak() calls already behave). Each text segment
+    // is trimmed only on the side(s) adjacent to a break, so a lone trailing "\n" with
+    // nothing after it contributes just a BreakNode, no empty/whitespace-only TextNode.
+    private List<MwsNode> ProcessTextLiteralWithBreaks(string raw, string? currentStyle)
+    {
+        var result = new List<MwsNode>();
+        var segments = Regex.Split(raw, "(\n+)");
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            if (segment.Length == 0)
+            {
+                continue;
+            }
+
+            if (segment[0] == '\n')
+            {
+                result.AddRange(FlushText());
+                for (var n = 0; n < segment.Length; n++)
+                {
+                    result.Add(new BreakNode { WithinStyleScope = _styleStack.Count > 0 });
+                }
+                continue;
+            }
+
+            var text = segment;
+            if (i + 1 < segments.Length && segments[i + 1].Length > 0 && segments[i + 1][0] == '\n')
+            {
+                text = text.TrimEnd();
+            }
+            if (i > 0 && segments[i - 1].Length > 0 && segments[i - 1][0] == '\n')
+            {
+                text = text.TrimStart();
+            }
+
+            if (text.Length > 0)
+            {
+                AddPlainTextRuns(text, currentStyle);
+                // Flush eagerly (mirroring the per-statement FlushAndAdd flush every other
+                // yield-return case gets) rather than leaving this run pending — the caller's
+                // own FlushAndAdd() flushes BEFORE appending our returned nodes, so a run left
+                // pending here would surface ahead of everything we already returned.
+                result.AddRange(FlushText());
+            }
+        }
+
+        return result;
+    }
 
     private List<MwsNode> FlushText()
     {
