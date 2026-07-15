@@ -18,7 +18,7 @@
     }
     else
     {
-        <NodeListView Nodes="Content" Session="Session" IsRewound="false" OnStateChanged="OnClosed" />
+        <NodeListView Nodes="Content" Session="Session" IsRewound="false" OnStateChanged="OnClosed" OnInputChanged="OnInputChanged" />
         <button type="button" @onclick="() => OnClosed.InvokeAsync()">Continue</button>
     }
 </div>
@@ -39,6 +39,10 @@
     /// <summary>Invoked once the player confirms/continues past the reveal — closes the popup.</summary>
     [Parameter]
     public EventCallback OnClosed { get; set; }
+
+    /// <summary>Cheaper sibling of <see cref="OnClosed"/> for purely-local changes (e.g. an input keystroke inside <see cref="Content"/>) — see <see cref="PassageView.OnInputChanged"/>.</summary>
+    [Parameter]
+    public EventCallback OnInputChanged { get; set; }
 
     private int _stage;
     private bool _revealed;

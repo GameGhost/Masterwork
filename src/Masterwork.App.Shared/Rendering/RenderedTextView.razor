@@ -12,6 +12,7 @@
     public RenderedText Node { get; set; } = null!;
 
     private MarkupString _rendered;
+    private string? _expandedFor;
 
     private string AlignClass => Node.Align switch
     {
@@ -22,8 +23,18 @@
         _ => "",
     };
 
+    // Result records are immutable and re-rendered fresh on every StateHasChanged() cascade even
+    // when nothing about this node actually changed (e.g. a sibling input's keystroke) — re-running
+    // FormattedTextExpander's regex passes every time is pure waste when Node.Value is the same
+    // string as last render.
     protected override async Task OnParametersSetAsync()
     {
+        if (Node.Value == _expandedFor)
+        {
+            return;
+        }
+
         _rendered = await FormattedTextExpander.ExpandAsync(Node.Value);
+        _expandedFor = Node.Value;
     }
 }

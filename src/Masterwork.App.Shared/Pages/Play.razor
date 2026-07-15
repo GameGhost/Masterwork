@@ -31,7 +31,7 @@ else
     </div>
 
     <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound"
-                 OnStateChanged="Refresh" />
+                 OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
 
     @if (!State.Session.IsRewound && State.Session.CurrentRender.IsEnding)
     {
@@ -69,6 +69,16 @@ else
             await PersistAutosaveAsync();
         }
     }
+
+    // For input drafts and other purely-local view-state toggles (e.g. cancelling a popup) that
+    // haven't actually committed anything to the session — a keystroke isn't "progress" worth an
+    // ambient-audio sync or a full autosave (JSON-serializing the whole timeline plus several
+    // localStorage JS-interop round trips), and doing that work on every keystroke is what makes
+    // typing inside a popup feel like it lags several seconds behind, especially on single-threaded
+    // WASM. Sibling components (e.g. a link's disabled state, which depends on
+    // GameSession.AreCurrentInputsValid) still need to see the new draft, so this still re-renders
+    // the whole subtree — it just skips the two genuinely expensive, unnecessary side effects.
+    private void RefreshUiOnly() => StateHasChanged();
 
     private async Task StepBack()
     {

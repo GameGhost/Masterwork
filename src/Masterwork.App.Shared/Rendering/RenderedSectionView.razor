@@ -9,7 +9,7 @@
     {
         <h3>@_titleMarkup</h3>
     }
-    <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+    <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
 </section>
 
 @code {
@@ -29,10 +29,23 @@
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
 
-    private MarkupString _titleMarkup;
+    /// <summary>Cheaper sibling of <see cref="OnStateChanged"/> for purely-local changes — see <see cref="PassageView.OnInputChanged"/>.</summary>
+    [Parameter]
+    public EventCallback OnInputChanged { get; set; }
 
+    private MarkupString _titleMarkup;
+    private string? _expandedFor;
+
+    // See RenderedTextView's identical guard — skips re-running FormattedTextExpander's regex
+    // passes on every cascaded re-render when Node.Title hasn't actually changed.
     protected override async Task OnParametersSetAsync()
     {
+        if (Node.Title == _expandedFor)
+        {
+            return;
+        }
+
         _titleMarkup = await FormattedTextExpander.ExpandAsync(Node.Title);
+        _expandedFor = Node.Title;
     }
 }

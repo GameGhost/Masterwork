@@ -20,7 +20,7 @@
     @if (Result.Chrome.Header.Count > 0)
     {
         <div class="mws-layout-header">
-            <NodeListView Nodes="Result.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <NodeListView Nodes="Result.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
         </div>
     }
     @if (Result.Title is not null)
@@ -36,22 +36,22 @@
     @if (Result.Chrome.BeforeContent.Count > 0)
     {
         <div class="mws-layout-before-content">
-            <NodeListView Nodes="Result.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <NodeListView Nodes="Result.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
         </div>
     }
     <div class="mws-passage-body">
-        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
     </div>
     @if (Result.Chrome.AfterContent.Count > 0)
     {
         <div class="mws-layout-after-content">
-            <NodeListView Nodes="Result.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <NodeListView Nodes="Result.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
         </div>
     }
     @if (Result.Chrome.Footer.Count > 0)
     {
         <div class="mws-layout-footer">
-            <NodeListView Nodes="Result.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <NodeListView Nodes="Result.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
         </div>
     }
 </div>
@@ -72,4 +72,12 @@
     /// <summary>Invoked after an interactive node completes an action that may have changed <see cref="Session"/>'s current render.</summary>
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
+
+    /// <summary>
+    /// Invoked for a purely-local UI change that doesn't represent committed session progress (an
+    /// input keystroke, cancelling a popup) — a cheaper sibling of <see cref="OnStateChanged"/> that
+    /// skips ambient-audio sync and autosaving. See <see cref="RenderedInputView.OnInputChanged"/>.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnInputChanged { get; set; }
 }

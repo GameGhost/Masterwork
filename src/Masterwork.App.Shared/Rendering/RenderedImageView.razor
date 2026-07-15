@@ -18,9 +18,18 @@ else
     public RenderedImage Node { get; set; } = null!;
 
     private string? _url;
+    private string? _resolvedFor;
 
+    // AssetResolver itself now caches by URI (see AssetResolver.cs), so this guard is mostly about
+    // skipping the async call/state-write entirely on a re-render where nothing changed.
     protected override async Task OnParametersSetAsync()
     {
+        if (Node.Asset == _resolvedFor)
+        {
+            return;
+        }
+
         _url = await AssetResolver.ResolveAsync(Node.Asset);
+        _resolvedFor = Node.Asset;
     }
 }

@@ -28,10 +28,13 @@
     /// <summary>
     /// Invoked after every keystroke so sibling components (e.g. a <c>link</c>'s disabled state,
     /// which depends on <see cref="GameSession.AreCurrentInputsValid"/>) re-render — Blazor only
-    /// auto-re-renders the component whose own event handler fired, not siblings.
+    /// auto-re-renders the component whose own event handler fired, not siblings. A draft keystroke
+    /// hasn't committed anything to <see cref="Session"/> (that only happens when a link is followed
+    /// or a popup is accepted), so this is the cheap sibling of <c>OnStateChanged</c> — see
+    /// <see cref="PassageView.OnInputChanged"/> — that skips ambient-audio sync and autosaving.
     /// </summary>
     [Parameter]
-    public EventCallback OnStateChanged { get; set; }
+    public EventCallback OnInputChanged { get; set; }
 
     private string _value = "";
 
@@ -46,6 +49,6 @@
     {
         _value = e.Value?.ToString() ?? "";
         Session.UpdateInputDraft(Node.Id, _value);
-        await OnStateChanged.InvokeAsync();
+        await OnInputChanged.InvokeAsync();
     }
 }

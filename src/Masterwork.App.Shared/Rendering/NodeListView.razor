@@ -25,16 +25,16 @@
             <RenderedImageView @key="key" Node="image" />
             break;
         case RenderedSection section:
-            <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
             break;
         case RenderedLink link:
             <RenderedLinkView @key="key" Node="link" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedInput input:
-            <RenderedInputView @key="key" Node="input" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedInputView @key="key" Node="input" Session="Session" IsRewound="IsRewound" OnInputChanged="OnInputChanged" />
             break;
         case RenderedPopup popup:
-            <RenderedPopupView @key="key" Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+            <RenderedPopupView @key="key" Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
             break;
     }
 }
@@ -55,4 +55,8 @@
     /// <summary>Invoked after an interactive node completes an action that may have changed <see cref="Session"/>'s current render.</summary>
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
+
+    /// <summary>Cheaper sibling of <see cref="OnStateChanged"/> for purely-local changes — see <see cref="PassageView.OnInputChanged"/>.</summary>
+    [Parameter]
+    public EventCallback OnInputChanged { get; set; }
 }

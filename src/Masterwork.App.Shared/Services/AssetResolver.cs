@@ -6,6 +6,19 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
     private const string IconScheme = "icon://";
     private const string ImageScheme = "image://";
 
+    // Keyed by the raw assetUri. Blazor re-renders a component tree (and thus re-resolves every
+    // {icon:...}/image node it contains) far more often than the underlying module assets ever
+    // change, and a bundle-local hit is otherwise a full Convert.ToBase64String over the raw asset
+    // bytes on every single render — the dominant cost behind popups/text feeling sluggish,
+    // especially on single-threaded WASM. This instance can outlive a single module (it's DI-scoped,
+    // which on WASM/MAUI BlazorWebView effectively means "app lifetime" — Abandon/Save-and-quit
+    // return to the main menu without tearing down the service provider), so the cache is only valid
+    // as long as GameSessionState.Assets is still the same dictionary instance this resolver last
+    // saw; a new module load replaces that reference wholesale (see GameSessionState), which is the
+    // signal to invalidate rather than serve another module's stale resolved bytes.
+    private readonly Dictionary<string, string?> _cache = new(StringComparer.Ordinal);
+    private IReadOnlyDictionary<string, byte[]>? _cachedForAssets;
+
     // Stand-in for the MFW_Common_Assets dependency pack, which doesn't exist until asset packs are
     // unshelved (masterwork-plan Q27). These are small hand-authored placeholder SVGs
     // (wwwroot/assets/test-pack/), not derived from any copyrighted source — real assets are a
@@ -33,6 +46,24 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
     /// <inheritdoc/>
     public Task<string?> ResolveAsync(string assetUri)
     {
+        if (!ReferenceEquals(_cachedForAssets, sessionState.Assets))
+        {
+            _cache.Clear();
+            _cachedForAssets = sessionState.Assets;
+        }
+
+        if (_cache.TryGetValue(assetUri, out var cached))
+        {
+            return Task.FromResult(cached);
+        }
+
+        var resolved = ResolveUncached(assetUri);
+        _cache[assetUri] = resolved;
+        return Task.FromResult(resolved);
+    }
+
+    private string? ResolveUncached(string assetUri)
+    {
         string scheme;
         string folder;
         if (assetUri.StartsWith(IconScheme, StringComparison.Ordinal))
@@ -47,7 +78,7 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         }
         else
         {
-            return Task.FromResult<string?>(null);
+            return null;
         }
 
         var slug = assetUri[scheme.Length..];
@@ -58,18 +89,18 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         // MAUI BlazorWebView — the only platform difference is where LoadAsync's bytes came from.
         if (TryResolveBundleLocal(folder, slug) is { } dataUri)
         {
-            return Task.FromResult<string?>(dataUri);
+            return dataUri;
         }
 
         // Tier 2 (dependency pack) — icon:// only; image:// has no placeholder pack yet.
         if (scheme == IconScheme && TestAssetPack.TryGetValue(slug, out var packUrl))
         {
-            return Task.FromResult<string?>(packUrl);
+            return packUrl;
         }
 
         // Tier 3 (engine fallback) — icon:// only; an unresolved image:// yields null (the caller,
         // e.g. RenderedImageView, shows its own "missing image" state).
-        return Task.FromResult<string?>(scheme == IconScheme ? FallbackIcon : null);
+        return scheme == IconScheme ? FallbackIcon : null;
     }
 
     private string? TryResolveBundleLocal(string folder, string slug)

@@ -15,10 +15,10 @@ else
         @switch (Node.Layout)
         {
             case "voting":
-                <VotingPopupContent Content="Node.Content" Label="Cast your vote" Session="Session" OnClosed="Accept" />
+                <VotingPopupContent Content="Node.Content" Label="Cast your vote" Session="Session" OnClosed="Accept" OnInputChanged="OnInputChanged" />
                 break;
             case "bidding":
-                <VotingPopupContent Content="Node.Content" Label="Place your bid" Session="Session" OnClosed="Accept" />
+                <VotingPopupContent Content="Node.Content" Label="Place your bid" Session="Session" OnClosed="Accept" OnInputChanged="OnInputChanged" />
                 break;
             default:
                 @* Purely structural — the app never inspects a node's style/layout to decide what
@@ -31,29 +31,29 @@ else
                 @if (Node.Chrome.Header.Count > 0)
                 {
                     <div class="mws-layout-header">
-                        <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                     </div>
                 }
                 <div class="mws-popup-container">
                     @if (Node.Header.Count > 0)
                     {
                         <div class="mws-popup-header">
-                            <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                            <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                         </div>
                     }
                     @if (Node.Chrome.BeforeContent.Count > 0)
                     {
                         <div class="mws-layout-before-content">
-                            <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                            <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                         </div>
                     }
                     <div class="mws-popup-content">
-                        <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                     </div>
                     @if (Node.Chrome.AfterContent.Count > 0)
                     {
                         <div class="mws-layout-after-content">
-                            <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                            <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                         </div>
                     }
                     @if (Node.Okay is not null || Node.Cancel is not null)
@@ -73,7 +73,7 @@ else
                 @if (Node.Chrome.Footer.Count > 0)
                 {
                     <div class="mws-layout-footer">
-                        <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
+                        <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
                     </div>
                 }
                 break;
@@ -97,6 +97,10 @@ else
     /// <summary>Invoked after the popup closes.</summary>
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
+
+    /// <summary>Cheaper sibling of <see cref="OnStateChanged"/> for purely-local changes — see <see cref="PassageView.OnInputChanged"/>. Also used by <see cref="Cancel"/>, which only ever touches local view state, never <see cref="Session"/>.</summary>
+    [Parameter]
+    public EventCallback OnInputChanged { get; set; }
 
     private bool IsOpen => Session.ViewState.ExpandedPopups.Contains(Node.Id);
 
@@ -126,7 +130,10 @@ else
 
     private async Task Cancel()
     {
+        // Never touches Session — a plain dismiss with no navigation or committed state, so it's the
+        // cheap path (no ambient-audio sync, no autosave), matching the reported "popups are slow to
+        // dismiss even with no close/navigation action" symptom.
         Session.ViewState.ExpandedPopups.Remove(Node.Id);
-        await OnStateChanged.InvokeAsync();
+        await OnInputChanged.InvokeAsync();
     }
 }
