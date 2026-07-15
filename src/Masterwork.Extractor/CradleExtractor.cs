@@ -2105,8 +2105,17 @@ public partial class CradleExtractor
 
                 var varName = m.Groups[1].Value;
                 var rawVal = m.Groups[3].Value.Trim();
-                if (rawVal.Contains(' '))
+                if (rawVal.Contains(' ') || !IsLiteralMatchValue(rawVal))
                 {
+                    // rawVal isn't a quoted string or integer literal — it's a bare identifier, i.e.
+                    // a reference to another variable (e.g. `Vars.trig == Vars.players`). switch's
+                    // `match:` field is always a static literal to compare `on` against, never a
+                    // dynamic expression, so silently coercing the bareword into a literal string
+                    // (as BuildMatchValue used to) produces a case that can never match the intended
+                    // variable's value — see Cost of Disease's NewMHub, where `trig == players`
+                    // became `match: 'players'` and fell through to `match: 2` instead. Bail on the
+                    // whole conversion; the original if/elseif/else chain already evaluates this
+                    // correctly in order.
                     return null;
                 }
 
@@ -2163,16 +2172,24 @@ public partial class CradleExtractor
             return null;
         }
 
-        // Reject compound values like "2 || x == 3"
+        // Reject compound values like "2 || x == 3", and anything that isn't actually a literal
+        // (e.g. `Vars.trig == Vars.players` — a bare identifier here is a variable reference, not a
+        // literal to match against — see TryConvertCompoundConditionalToSwitch's identical check for
+        // why silently coercing it into a literal string is wrong).
         var rawVal = m.Groups[3].Value.Trim();
         bool isQuoted = rawVal.StartsWith('"') && rawVal.EndsWith('"');
-        if (!isQuoted && rawVal.Contains(' '))
+        if ((!isQuoted && rawVal.Contains(' ')) || !IsLiteralMatchValue(rawVal))
         {
             return null;
         }
 
         return m.Groups[1].Value;
     }
+
+    // A switch/case `match:` value is always a static literal — a bare (unquoted, non-numeric)
+    // identifier is a reference to another variable, never a literal, in this expression language.
+    private static bool IsLiteralMatchValue(string rawVal) =>
+        (rawVal.StartsWith('"') && rawVal.EndsWith('"')) || int.TryParse(rawVal, out _);
 
     private static bool HasElseBranch(ConditionalNode cond) =>
         cond.Branches.Count > 0 && cond.Branches[^1].Else == true;

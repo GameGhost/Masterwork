@@ -1083,6 +1083,93 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void IfElseIfChain_FirstConditionComparesToAnotherVariable_StaysConditionalNotSwitch()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00149-NewMHub.mws.yaml —
+        // `if (Vars.trig == Vars.players) {...} else if (Vars.trig == 1) {...} else if (Vars.trig
+        // == 2) {...} ...` used to convert to a SwitchNode with `match: 'players'` on the first
+        // case — since "players" is a bare (unquoted, non-numeric) identifier, BuildMatchValue
+        // silently coerced it into the LITERAL STRING "players", which can never equal an integer
+        // `trig`, so the branch that should fire when trig equals the *current value* of `players`
+        // never matched and evaluation fell through to `match: 2` instead. A switch's `match:` is
+        // always a static literal — a comparison against another variable can't be expressed as one,
+        // so the whole if/elseif/else chain must stay a ConditionalNode (correctly evaluated in
+        // order) instead of being lossily converted to a switch.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.trig == this.Vars.players)
+                {
+                    yield return base.abort(goToPassage: "NoUni1");
+                }
+                else if (this.Vars.trig == 1)
+                {
+                    yield return base.abort(goToPassage: "NewMaster1B");
+                }
+                else if (this.Vars.trig == 2)
+                {
+                    yield return base.abort(goToPassage: "NewMaster1C");
+                }
+                else if (this.Vars.trig == 3)
+                {
+                    yield return base.abort(goToPassage: "NewMaster1D");
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "NoUni1");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Empty(passages[0].Nodes.OfType<SwitchNode>());
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        Assert.Equal(5, cond.Branches.Count);
+        Assert.Equal("trig == players", cond.Branches[0].Condition);
+        Assert.Equal("trig == 1", cond.Branches[1].Condition);
+        Assert.Equal("trig == 2", cond.Branches[2].Condition);
+        Assert.Equal("trig == 3", cond.Branches[3].Condition);
+        Assert.True(cond.Branches[4].Else);
+    }
+
+    [Fact]
+    public void ConsecutiveConditionals_OneComparesToAnotherVariable_ExcludedFromSwitch()
+    {
+        // Same bug, but via the OTHER switch-consolidation path: 2+ consecutive standalone `if`
+        // statements on the same variable (not one if/elseif chain) — TryExtractSwitchVar has the
+        // identical "bare identifier silently coerced to a literal string" flaw. The first `if`
+        // (comparing against another variable) can't itself become a switch case, so it's left
+        // behind as its own ConditionalNode; the other two, both genuinely literal, still correctly
+        // consolidate into a SwitchNode together — only the specific unsafe branch is excluded.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.trig == this.Vars.players) { this.Vars.slots = 1; }
+                if (this.Vars.trig == 2) { this.Vars.slots = 2; }
+                if (this.Vars.trig == 3) { this.Vars.slots = 3; }
+                yield break;
+            }
+            """);
+
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        Assert.Equal("trig == players", cond.Branches[0].Condition);
+
+        var sw = Assert.Single(passages[0].Nodes.OfType<SwitchNode>());
+        Assert.Equal("trig", sw.On);
+        Assert.Equal(2, sw.Cases.Count);
+        Assert.Equal(2, sw.Cases[0].Match);
+        Assert.Equal(3, sw.Cases[1].Match);
+    }
+
+    [Fact]
     public void SwitchWithElse_LastConditionalElseBecomesDefault()
     {
         var passages = Extract("""
