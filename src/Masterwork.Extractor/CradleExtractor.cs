@@ -739,6 +739,36 @@ public partial class CradleExtractor
                                     termStateAffecting = true;
                                 }
                             }
+                            else if (expand.ExpandNodes[^1] is ConditionalNode condTerm &&
+                                     TryCollapseCheckProgressConditional(condTerm, out var ternaryTarget, out var repCp))
+                            {
+                                // Same shape as the single-CheckProgressNode case above, but each branch
+                                // routes to a different target passage (e.g. Vars.peeps == 1 ? "NoUni3b" :
+                                // "Scoring") while every branch reports the SAME current passage — collapse
+                                // to one checkpoint whose target is a ternary expression instead of a
+                                // conditional wrapping duplicate progress-assign/checkpoint content (see
+                                // TryCollapseCheckProgressConditional for the exhaustiveness/uniformity
+                                // requirements this relies on).
+                                var (eorBody, eorBody2) = progressMapper?.TryGetEndOfRoundText(repCp!.CurrentPassage)
+                                    ?? (null, null);
+                                if (eorBody is not null)
+                                {
+                                    progressMapper!.TryGetProgressValue(repCp!.CurrentPassage, out var progressValue);
+                                    expand.ExpandNodes.RemoveAt(expand.ExpandNodes.Count - 1);
+                                    expand.ExpandNodes.Add(new EndOfRoundMarkerNode
+                                    {
+                                        NextPassage = ternaryTarget!,
+                                        ProgressValue = progressValue ?? 0,
+                                        Body = eorBody,
+                                        Body2 = eorBody2,
+                                    });
+                                }
+                                else
+                                {
+                                    termTarget = ternaryTarget;
+                                    termStateAffecting = true;
+                                }
+                            }
                         }
                         if (termTarget is not null)
                         {
@@ -793,6 +823,87 @@ public partial class CradleExtractor
                 StitchFragments(passageName, setup.Nodes, localFrags, allFrags, spriteMapper, report, variables, progressMapper);
             }
         }
+    }
+
+    // Recognizes an if/elseif/.../else chain whose every branch does nothing but call
+    // PassageTracker.instance.CheckProgress(current, target) for the SAME current passage — e.g.
+    // Cost of Disease's NoUni3 hub: `if (peeps == 1) CheckProgress("NoUni3", "NoUni3b"); else
+    // CheckProgress("NoUni3", "Scoring");`. Since the current-passage argument (and therefore the
+    // progress value / end-of-round text) is identical across branches, the whole conditional
+    // collapses to a single checkpoint whose target is a ternary expression over the branches'
+    // individual target passages, rather than a conditional wrapping duplicate progress-assign/
+    // checkpoint content per branch (which V2Serializer has no representation for — CheckProgressNode
+    // is only ever consumed as a StitchFragments terminal, never serialized directly).
+    // Requires: an exhaustive chain (has an else branch), every branch's Nodes ending in a
+    // CheckProgressNode with a non-empty TargetPassage, all branches reporting the same
+    // CurrentPassage, and nothing left in any branch besides that terminal CheckProgressNode and
+    // its optional preceding `_ProgressRound` assign — anything else per-branch is a different,
+    // unhandled shape and this bails out (false) rather than risk dropping real content.
+    private static bool TryCollapseCheckProgressConditional(
+        ConditionalNode cond, out string? targetExpr, out CheckProgressNode? representative)
+    {
+        targetExpr = null;
+        representative = null;
+
+        if (!cond.Branches.Any(b => b.Else == true))
+        {
+            return false;
+        }
+
+        var arms = new List<(string? Condition, string Target)>();
+        string? commonCurrentPassage = null;
+
+        foreach (var branch in cond.Branches)
+        {
+            if (branch.Nodes.Count == 0 || branch.Nodes[^1] is not CheckProgressNode cp ||
+                string.IsNullOrEmpty(cp.TargetPassage))
+            {
+                return false;
+            }
+
+            var bodyEnd = branch.Nodes.Count - 1;
+            if (bodyEnd > 0 && branch.Nodes[bodyEnd - 1] is EffectNode { VarSets.Count: 1 } eff &&
+                eff.VarSets!.ContainsKey("_ProgressRound"))
+            {
+                bodyEnd--;
+            }
+            if (bodyEnd > 0)
+            {
+                return false;
+            }
+
+            commonCurrentPassage ??= cp.CurrentPassage;
+            if (!string.Equals(commonCurrentPassage, cp.CurrentPassage, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            representative ??= cp;
+            arms.Add((branch.Else == true ? null : branch.Condition, cp.TargetPassage));
+        }
+
+        // Ternary-building below assumes the else arm is last regardless of the source's own
+        // branch order (ConditionalBranch doesn't guarantee it).
+        var elseIdx = arms.FindIndex(a => a.Condition is null);
+        if (elseIdx != arms.Count - 1)
+        {
+            var elseArm = arms[elseIdx];
+            arms.RemoveAt(elseIdx);
+            arms.Add(elseArm);
+        }
+
+        targetExpr = "${" + BuildTernaryChain(arms) + "}";
+        return true;
+    }
+
+    private static string BuildTernaryChain(List<(string? Condition, string Target)> arms)
+    {
+        string Quoted(string s) => $"\"{MwsExprHelper.EscapeStr(s)}\"";
+        string Build(int i) =>
+            arms[i].Condition is null
+                ? Quoted(arms[i].Target)
+                : $"{arms[i].Condition} ? {Quoted(arms[i].Target)} : {Build(i + 1)}";
+        return Build(0);
     }
 
     private static int? ParseFragmentIndex(string refCode)

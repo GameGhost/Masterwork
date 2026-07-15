@@ -2084,6 +2084,80 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void CheckProgress_ConditionalWithSameCurrentPassage_CollapsesToSingleCheckpointWithTernaryTarget()
+    {
+        // Regression: Masterwork-Modules/cost-of-disease/passages/00037-NoUni3.mws.yaml. The
+        // fragment's whole body can be an if/else whose branches BOTH call CheckProgress with the
+        // same current-passage argument but a different target — `if (peeps == 1) CheckProgress
+        // ("P1", "P2"); else CheckProgress("P1", "P3");`. Previously StitchFragments only recognized
+        // a bare terminal GotoNode/CheckProgressNode, so this fell through untouched: the popup got
+        // no target/okay/layout at all, and its content was the raw conditional with only the
+        // _ProgressRound assigns left in it (CheckProgressNode silently dropped by V2Serializer,
+        // which only ever consumes it as a StitchFragments terminal). Since both branches report the
+        // SAME current passage, this must collapse to ONE end_of_round popup — one copy of the
+        // curated body text, one onclose assign — whose target is a ternary expression choosing
+        // between the branches' individual target passages.
+        var mapper = MakeProgressMapper("""
+            {
+              "P1": {
+                "layout": "hub_late",
+                "progress": 9,
+                "end_of_round_body": "The Late Years has ended.",
+                "end_of_round_body2": "Perform any End of Round actions before continuing."
+              }
+            }
+            """);
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                if (this.Vars.peeps == 1)
+                {
+                    PassageTracker.instance.CheckProgress("P1", "P2");
+                }
+                else
+                {
+                    PassageTracker.instance.CheckProgress("P1", "P3");
+                }
+                yield break;
+            }
+            """, mapper, out _);
+
+        Assert.Empty(passages[0].Nodes.OfType<LinkNode>());
+        var expand = Assert.Single(passages[0].Nodes.OfType<ExpandLinkNode>());
+        Assert.DoesNotContain(expand.ExpandNodes, n => n is ConditionalNode);
+        Assert.DoesNotContain(expand.ExpandNodes, n => n is CheckProgressNode);
+        Assert.DoesNotContain(expand.ExpandNodes, n => n is EffectNode);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_round", node["layout"]);
+        Assert.Equal("${peeps == 1 ? \"P2\" : \"P3\"}", node["target"]);
+        Assert.Equal("End of Round", node["okay"]);
+
+        // Exactly one copy of the curated body — not one per conditional branch.
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        Assert.Equal(3, content.Count);
+        Assert.Equal("The Late Years has ended.", content[0]["value"]);
+        Assert.Equal("Perform any End of Round actions before continuing.", content[2]["value"]);
+
+        var onclose = (List<Dictionary<string, object?>>)node["onclose"]!;
+        var assign = Assert.Single(onclose);
+        Assert.Equal("_ProgressRound", assign["var"]);
+        Assert.Equal("9", assign["expr"]);
+    }
+
+    [Fact]
     public void ExpandLink_AssignThenExhaustiveIfElseOfGotos_BecomesLinkWithOnclick()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00130-HospitalVisitCheck.mws.yaml.
