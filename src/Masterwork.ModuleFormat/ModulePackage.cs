@@ -20,7 +20,8 @@ public sealed record ModulePackageContents(
     IReadOnlyDictionary<string, byte[]> Assets,
     IReadOnlyList<string> OverridePassageYamls,
     IReadOnlyDictionary<string, string> RestextOverridesByLocale,
-    IReadOnlyList<string> LayoutYamls
+    IReadOnlyList<string> LayoutYamls,
+    IReadOnlyList<string> AdditionalVariableYamls
 );
 
 /// <summary>
@@ -52,6 +53,7 @@ public static class ModulePackage
         var overridePassageYamls = new List<string>();
         var assets = new Dictionary<string, byte[]>();
         var layoutYamls = new List<string>();
+        var additionalVariableYamls = new List<string>();
 
         foreach (var entry in archive.Entries)
         {
@@ -101,6 +103,11 @@ public static class ModulePackage
             {
                 layoutYamls.Add(ReadText(entry));
             }
+            else if (path.StartsWith("variables/", StringComparison.OrdinalIgnoreCase) &&
+                     path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+            {
+                additionalVariableYamls.Add(ReadText(entry));
+            }
             else if (path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
             {
                 assets[path] = ReadBytes(entry);
@@ -108,10 +115,11 @@ public static class ModulePackage
         }
 
         return new ModulePackageContents(
-            manifestYaml, variablesYaml, restextByLocale, passageYamls, assets, overridePassageYamls, restextOverridesByLocale, layoutYamls);
+            manifestYaml, variablesYaml, restextByLocale, passageYamls, assets, overridePassageYamls,
+            restextOverridesByLocale, layoutYamls, additionalVariableYamls);
     }
 
-    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes.</summary>
+    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes. Excludes <c>.source/</c> (a module's own copy of the CC BY-NC-SA Cradle source it was extracted from — never distributable) and a root <c>README.md</c> — neither belongs in a distributable bundle.</summary>
     public static byte[] WriteToBytes(string sourceDirectory)
     {
         using var stream = new MemoryStream();
@@ -120,11 +128,24 @@ public static class ModulePackage
             foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
             {
                 var relativeName = Path.GetRelativePath(sourceDirectory, file).Replace('\\', '/');
+                if (IsExcludedFromPackage(relativeName))
+                {
+                    continue;
+                }
+
                 archive.CreateEntryFromFile(file, relativeName);
             }
         }
 
         return stream.ToArray();
+    }
+
+    private static bool IsExcludedFromPackage(string relativeName)
+    {
+        var separatorIndex = relativeName.IndexOf('/');
+        var firstSegment = separatorIndex < 0 ? relativeName : relativeName[..separatorIndex];
+        return firstSegment.Equals(".source", StringComparison.OrdinalIgnoreCase) ||
+               relativeName.Equals("README.md", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ReadText(ZipArchiveEntry entry)

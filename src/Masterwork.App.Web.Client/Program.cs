@@ -3,11 +3,20 @@ using Masterwork.App.Shared.Services;
 using Masterwork.ModuleFormat;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
-builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
+// Not AddSingleton<IModuleLoader, ModuleLoader>() — DI can't resolve ModuleLoader's parameterized
+// constructor (IPassageYamlParser etc. aren't registered), so it silently falls back to the
+// parameterless one, which discards all of ModuleLoader's own logging (unresolved passage refs,
+// stray files that don't match "*.mws.yaml", ...) to a NullLogger. This factory routes those
+// warnings to the browser console (via WebAssemblyHostBuilder's default logging) like everything
+// else logged through DI-resolved loggers already does.
+builder.Services.AddSingleton<IModuleLoader>(sp => new ModuleLoader(
+    new PassageYamlParser(), new VariableManifest(), new RestextFile(), new RestextResolver(),
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger<ModuleLoader>()));
 // Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
 builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();

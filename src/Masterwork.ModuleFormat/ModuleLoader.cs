@@ -51,7 +51,43 @@ public sealed class ModuleLoader : IModuleLoader
             ? Directory.EnumerateFiles(layoutsDir, "*.mws.yaml").Select(File.ReadAllText)
             : null;
 
-        return LoadFromSources(passageYamls, variablesYaml, restextText, overridePassageYamls, restextOverrideText, layoutChromeYamls);
+        var additionalVariablesDir = Path.Combine(directoryPath, "variables");
+        var additionalVariableYamls = Directory.Exists(additionalVariablesDir)
+            ? Directory.EnumerateFiles(additionalVariablesDir, "*.yaml").Select(File.ReadAllText)
+            : null;
+
+        var module = LoadFromSources(passageYamls, variablesYaml, restextText, overridePassageYamls, restextOverrideText,
+            layoutChromeYamls, additionalVariableYamls);
+
+        WarnAboutStrayYamlFiles(passagesDir, module.Warnings);
+        if (overrideDir is not null)
+        {
+            WarnAboutStrayYamlFiles(overrideDir, module.Warnings);
+        }
+        if (Directory.Exists(layoutsDir))
+        {
+            WarnAboutStrayYamlFiles(layoutsDir, module.Warnings);
+        }
+
+        return module;
+    }
+
+    // A ".yaml" file in passages/, passages-override/, or layouts/ that doesn't end in the
+    // required ".mws.yaml" suffix is invisible to the "*.mws.yaml" glob used above — the passage
+    // or layout it defines silently never loads, and anything targeting its passage_id fails at
+    // playtime with no indication why (see Masterwork.Engine.PassageNotFoundException). A missing
+    // extension (e.g. "Entry.yaml" instead of "Entry.mws.yaml") is an easy authoring slip, so this
+    // surfaces it as a warning here instead of leaving it a silent no-op.
+    private static void WarnAboutStrayYamlFiles(string dir, ModuleWarnings warnings)
+    {
+        foreach (var file in Directory.EnumerateFiles(dir, "*.yaml"))
+        {
+            if (!file.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add("stray_yaml_file",
+                    $"'{Path.GetFileName(file)}' does not end in '.mws.yaml' and was not loaded.");
+            }
+        }
     }
 
     // Finds the module's base restext file — preferring en-US.restext, falling back to whichever
@@ -87,13 +123,27 @@ public sealed class ModuleLoader : IModuleLoader
     public LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
-        IEnumerable<string>? layoutChromeYamls = null)
+        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null)
     {
         var warnings = new ModuleWarnings();
 
         var variables = variablesYaml is null
             ? new Dictionary<string, VarDef>()
-            : _variableManifest.Parse(variablesYaml, warnings);
+            : new Dictionary<string, VarDef>(_variableManifest.Parse(variablesYaml, warnings));
+
+        // Hand-authored variable files load after the extractor-owned _variables.yaml: a matching
+        // name is replaced, a new one is added — same add/override-by-key semantics as passage
+        // and layout-chrome overrides.
+        if (additionalVariableYamls is not null)
+        {
+            foreach (var yaml in additionalVariableYamls)
+            {
+                foreach (var (name, def) in _variableManifest.Parse(yaml, warnings))
+                {
+                    variables[name] = def;
+                }
+            }
+        }
 
         IReadOnlyDictionary<string, string> locale = restextText is null
             ? new Dictionary<string, string>()
@@ -321,12 +371,19 @@ public sealed class ModuleLoader : IModuleLoader
         }
     }
 
+    // "app::gameover" is a reserved sentinel the engine (Masterwork.Engine.GameSession) recognizes
+    // directly — it never resolves to a passage at all, so it must never be flagged as an
+    // unresolved reference here. Duplicated as a literal rather than shared via a project
+    // reference, matching how "${module::entrypoint}" is already duplicated across GameSession.cs
+    // and PassageRenderer.cs.
+    private const string AppGameOverTarget = "app::gameover";
+
     private void CheckTarget(string fromPassageId, string target,
         IReadOnlyDictionary<string, MwsPassageDoc> passages, ModuleWarnings warnings)
     {
-        if (target.StartsWith("${", StringComparison.Ordinal))
+        if (target.StartsWith("${", StringComparison.Ordinal) || target == AppGameOverTarget)
         {
-            return; // dynamic — can't validate statically
+            return; // dynamic, or a reserved app-level sentinel — can't/shouldn't validate statically
         }
 
         if (!passages.ContainsKey(target))

@@ -5,9 +5,9 @@ namespace Masterwork.App.Shared.SampleData;
 /// into the app as a permanent, non-deletable entry in <see cref="Masterwork.App.Shared.Services.EmbeddedModuleStore"/>.
 /// Originally just an engine test fixture (Phase 2), it doubles as a feature showcase and the
 /// primary vehicle for testing app-shell mechanics that need real, playable content — the
-/// autosave/named-save model, the ending-triggered autosave cleanup, and Manage Modules' non-deletable
-/// built-in entry (masterwork-plan-rev13.md Phase 3 Milestone E) — without depending on the much
-/// larger Cost of Disease content (Milestone D).
+/// autosave/named-save model, and Manage Modules' non-deletable built-in entry
+/// (masterwork-plan-rev13.md Phase 3 Milestone E) — without depending on the much larger Cost of
+/// Disease content (Milestone D).
 /// </summary>
 public static class SampleModule
 {
@@ -16,7 +16,7 @@ public static class SampleModule
     /// grows), an event passage exercising <c>rand_between</c> (via <c>switch</c>) and
     /// <c>.shuffled(...)</c> (via <c>let</c>), an input prompt, generic and <c>voting</c>-layout
     /// popups, a <c>foreach</c> over a shuffled array (<c>let</c> + <c>foreach</c> together), and a
-    /// terminal <c>ending: true</c> passage reachable once the hub has evolved enough.
+    /// terminal passage reachable once the hub has evolved enough.
     /// </summary>
     public static readonly IReadOnlyList<string> PassageYamls =
     [
@@ -192,7 +192,6 @@ public static class SampleModule
         format: 'mws/0.4'
         passage_id: 'Ending'
         layout: 'narration'
-        ending: true
         nodes:
         - type: 'assign'
           var: 'ending'

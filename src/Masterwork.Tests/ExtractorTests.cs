@@ -2609,6 +2609,64 @@ public class ExtractorTests
         Assert.Contains(let.Var, innerIf);
     }
 
+    // ── ViewController.instance.ChangeView(...) ──────────────────────────────
+
+    [Fact]
+    public void ChangeViewScoreEntry_ExpandLinkBecomesPlainNavigationToScoreEntry()
+    {
+        // Regression: Cost of Disease's Scoring passage (source ~line 3029-3036) hands off to
+        // the reference app's native score-entry UI via ViewController.instance.ChangeView(
+        // ViewController.instance.scoreEntry). IsChangeViewMainMenu used to match ANY ChangeView(
+        // ...) call by method name alone, mislabeling this as GotoMenuNode { Target = "main_menu"
+        // } — which V2Serializer then silently drops, losing the navigation to score entry
+        // entirely. Every real story-script ChangeView(...) call site actually passes
+        // .scoreEntry (confirmed via cross-module grep); this must become a plain navigation
+        // link to the fixed "ScoreEntry" passage id instead.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h00006"))
+                    yield return base.link("Click to tabulate scores for posterity...", null, () => base.enchantHook("h00006", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                ViewController.instance.ChangeView(ViewController.instance.scoreEntry);
+                yield return base.lineBreak();
+                yield break;
+            }
+            """);
+
+        Assert.Empty(passages[0].Nodes.OfType<ExpandLinkNode>());
+        var link = Assert.Single(passages[0].Nodes.OfType<LinkNode>());
+        Assert.Equal("ScoreEntry", link.Target);
+    }
+
+    [Fact]
+    public void ChangeViewMainMenu_StillEmitsGotoMenuNode()
+    {
+        // Defensive case: .mainMenu never actually occurs in any story-script source, but should
+        // stay correct/cheap to keep.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                ViewController.instance.ChangeView(ViewController.instance.mainMenu);
+                yield break;
+            }
+            """);
+
+        var menuNode = Assert.Single(passages[0].Nodes.OfType<GotoMenuNode>());
+        Assert.Equal("main_menu", menuNode.Target);
+    }
+
     private static string WriteReport(ExtractionReport report)
     {
         var tempReportPath = System.IO.Path.GetTempFileName();

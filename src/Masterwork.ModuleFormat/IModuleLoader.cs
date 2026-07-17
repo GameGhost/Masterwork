@@ -47,10 +47,18 @@ public interface IModuleLoader
     /// Raw <c>layouts/*.yaml</c> text, one entry per layout chrome file, keyed by each file's own
     /// <c>layout_id</c> (not filename) once loaded.
     /// </param>
+    /// <param name="additionalVariableYamls">
+    /// Raw <c>variables/*.yaml</c> text, one entry per hand-authored variable file — same schema
+    /// as <paramref name="variablesYaml"/> (<c>variables:</c>/legacy <c>standard_variables:</c>),
+    /// parsed and merged on top of it after <paramref name="variablesYaml"/>: a matching variable
+    /// name is replaced, a new one is added. Lets a module declare variables that survive
+    /// re-extraction without editing the extractor-owned <c>_variables.yaml</c>, and lets authors
+    /// split declarations across multiple files by concern.
+    /// </param>
     LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
-        IEnumerable<string>? layoutChromeYamls = null);
+        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null);
 
     /// <summary>
     /// Merges a dependency (typically an asset pack) into <paramref name="module"/> — its passages

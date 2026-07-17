@@ -69,12 +69,11 @@ public sealed class PassageYamlParser : IPassageYamlParser
             Debug = root.GetBool("debug", ctx),
             Location = location,
             CheckProgress = root.GetString("check_progress", ctx),
-            Ending = root.GetBool("ending", ctx),
             Nodes = BuildNodeList(root.TryGet("nodes"), ctx, "passage nodes"),
         };
 
         root.WarnUnmatchedFields(ctx, "passage header",
-            "format", "passage_id", "title", "subtitle", "tags", "layout", "debug", "location", "check_progress", "ending", "nodes");
+            "format", "passage_id", "title", "subtitle", "tags", "layout", "debug", "location", "check_progress", "nodes");
 
         _logger.LogDebug("Parsed passage '{PassageId}' with {NodeCount} top-level nodes", passage.PassageId, passage.Nodes.Count);
         return passage;
@@ -252,7 +251,7 @@ public sealed class PassageYamlParser : IPassageYamlParser
             {
                 var result = new InputNode
                 {
-                    Label = map.GetRequiredString("label", ctx),
+                    Label = map.GetString("label", ctx),
                     Style = map.GetString("style", ctx),
                     Var = map.GetRequiredString("var", ctx),
                     Min = map.GetLong("min", ctx),
@@ -263,12 +262,14 @@ public sealed class PassageYamlParser : IPassageYamlParser
             }
             case "goto":
             {
+                var (stateAffecting, snapshotLabel) = map.GetNullableBoolOrLabel("snapshot", ctx);
                 var result = new GotoNode
                 {
                     Target = map.GetRequiredString("target", ctx),
-                    SnapshotLabel = map.GetString("snapshot_label", ctx),
+                    StateAffecting = stateAffecting,
+                    SnapshotLabel = snapshotLabel,
                 };
-                map.WarnUnmatchedFields(ctx, "'goto' node", "type", "target", "snapshot_label");
+                map.WarnUnmatchedFields(ctx, "'goto' node", "type", "target", "snapshot");
                 return result;
             }
             case "include_passage":

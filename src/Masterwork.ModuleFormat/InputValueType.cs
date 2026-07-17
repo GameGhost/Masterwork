@@ -9,4 +9,5 @@ public enum InputValueType
 {
     String,
     Number,
+    Boolean,
 }

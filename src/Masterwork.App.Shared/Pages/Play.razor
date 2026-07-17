@@ -30,16 +30,34 @@ else
         <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
     </div>
 
-    <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound"
-                 OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
-
-    @if (!State.Session.IsRewound && State.Session.CurrentRender.IsEnding)
-    {
-        <div class="mws-ending-banner">
-            <p>@AppStrings.Play_EndingMessage</p>
-            <button type="button" @onclick="ReturnToMainMenu">@AppStrings.Play_ReturnToMainMenuButton</button>
-        </div>
-    }
+    <ErrorBoundary @ref="_errorBoundary">
+        <ChildContent>
+            <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound"
+                         OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
+        </ChildContent>
+        <ErrorContent Context="ex">
+            @if (_showQuitFromNavError)
+            {
+                <OptionsDialog DialogContext="OptionsDialogContext.InGame" StartAtQuit="true"
+                               OnClose="() => _showQuitFromNavError = false"
+                               OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
+            }
+            else
+            {
+                <div class="mws-dialog-overlay">
+                    <div class="mws-dialog mws-nav-error-dialog">
+                        <h3>@AppStrings.Play_NavErrorTitle</h3>
+                        <p>@AppStrings.Play_NavErrorBody</p>
+                        <p class="mws-nav-error-detail">@ex.Message</p>
+                        <div class="mws-dialog-actions">
+                            <button type="button" @onclick="RecoverFromNavError">@AppStrings.Play_NavErrorReturnButton</button>
+                            <button type="button" class="mws-quit-button" @onclick="() => _showQuitFromNavError = true">@AppStrings.OptionsDialog_Quit</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </ErrorContent>
+    </ErrorBoundary>
 
     @if (_showOptions)
     {
@@ -50,13 +68,15 @@ else
 
 @code {
     private bool _showOptions;
+    private ErrorBoundary? _errorBoundary;
+    private bool _showQuitFromNavError;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && State.Session is not null)
         {
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
-            await PersistAutosaveAsync();
+            await HandleGameOverOrAutosaveAsync();
         }
     }
 
@@ -66,7 +86,7 @@ else
         if (State.Session is not null)
         {
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
-            await PersistAutosaveAsync();
+            await HandleGameOverOrAutosaveAsync();
         }
     }
 
@@ -91,10 +111,49 @@ else
         await Refresh();
     }
 
+    // Recovery for the ErrorBoundary wrapping PassageView — most commonly a link/popup/goto
+    // targeting a passage_id that doesn't exist (GameSession.PassageNotFoundException), thrown
+    // mid-FollowLinkAsync/ClosePopupAsync after input drafts and onclick/onclose side effects
+    // already committed to the live store but before any new timeline entry landed. "Return to
+    // this passage" rolls the live store back to the last good snapshot (GameSession's own
+    // RecoverFromFailedNavigation) so play can continue from where it actually still is, then
+    // clears the tripped ErrorBoundary so PassageView renders again.
+    private void RecoverFromNavError()
+    {
+        State.Session?.RecoverFromFailedNavigation();
+        _showQuitFromNavError = false;
+        _errorBoundary?.Recover();
+    }
+
+    // A module signals "this playthrough is complete" by resolving a link/popup/goto target to the
+    // "app::gameover" sentinel (see GameSession.IsGameOverRequested's remarks) — not by any
+    // passage-level flag, and not something the engine acts on itself. Checked ahead of the ordinary
+    // autosave persistence at every point that already calls it (first render, and after every
+    // state-changing action), since IsGameOverRequested can only become true as a result of one of
+    // those actions. A completed playthrough has nothing left to resume, so this deletes the
+    // autosave and returns to the main menu instead of upserting it.
+    private async Task HandleGameOverOrAutosaveAsync()
+    {
+        if (State.Session is not { IsGameOverRequested: true })
+        {
+            await PersistAutosaveAsync();
+            return;
+        }
+
+        if (State.ModuleId is not null)
+        {
+            // TODO: preserve this playthrough's "memory" into the logbook (Town Records — see
+            // docs/mws-format-latest.md's own TBD note; not yet designed).
+            await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
+        }
+
+        await StyleInjector.ApplyAsync(null);
+        State.Clear();
+        Nav.NavigateTo("/");
+    }
+
     // Continuously updates the module's autosave while playing live (not while just reviewing
     // history via the timeline scrubber) — see masterwork-plan-rev13.md Section 13's save model.
-    // Deletes it instead once a recognized ending is reached, since there's no longer an
-    // in-progress session to resume.
     private async Task PersistAutosaveAsync()
     {
         if (State.Session is null || State.ModuleId is null || State.Session.IsRewound)
@@ -102,15 +161,8 @@ else
             return;
         }
 
-        var id = SaveIds.Autosave(State.ModuleId);
-        if (State.Session.CurrentRender.IsEnding)
-        {
-            await SaveStore.DeleteAsync(id);
-            return;
-        }
-
         var entry = new SaveEntry(
-            Id: id,
+            Id: SaveIds.Autosave(State.ModuleId),
             ModuleId: State.ModuleId,
             ModuleVersion: State.ModuleVersion ?? "",
             IsAutosave: true,
@@ -166,16 +218,6 @@ else
             await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
         }
 
-        await StyleInjector.ApplyAsync(null);
-        State.Clear();
-        Nav.NavigateTo("/");
-    }
-
-    // Reaching an ending already deleted the module's autosave (see PersistAutosaveAsync above) —
-    // this just clears the in-memory session and returns to the menu. Distinct from AbandonGame,
-    // which is for walking away from an *unfinished* session rather than a completed one.
-    private async Task ReturnToMainMenu()
-    {
         await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/");

@@ -8,12 +8,14 @@ namespace Masterwork.Engine.Rendering;
 /// alongside the enclosing passage's own actions), and whether a <c>goto</c> fired during the
 /// render — used to let a <c>goto</c> in a <c>link</c>/popup's on-click logic preempt its own
 /// declared target. When it does, <see cref="PendingGotoLabel"/> carries that <c>goto</c>'s own
-/// <c>timeline_label</c> (if any) — the caller gives it priority over the enclosing <c>link</c>/
-/// <c>popup</c>'s own label, since the <c>goto</c> is what actually picked the destination.
+/// custom label (if any) and <see cref="PendingGotoStateAffecting"/> its own snapshot override (if
+/// any) — the caller gives both priority over the enclosing <c>link</c>/<c>popup</c>'s own
+/// <c>snapshot</c>, since the <c>goto</c> is what actually picked the destination.
 /// </summary>
 public sealed record NodeListRenderResult(
     IReadOnlyList<RenderedNode> Nodes,
     IReadOnlyList<RenderedAction> Actions,
     string? PendingGoto,
-    string? PendingGotoLabel
+    string? PendingGotoLabel,
+    bool? PendingGotoStateAffecting
 );

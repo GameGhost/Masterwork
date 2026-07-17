@@ -697,6 +697,23 @@ public partial class CradleExtractor
                         bool termStateAffecting = expand.StateAffecting;
                         if (expand.ExpandNodes.Count > 0)
                         {
+                            // Trailing decorative breaks (e.g. a stray yield return lineBreak();
+                            // after an unconditional ChangeView/CheckProgress call — see Cost of
+                            // Disease's Scoring passage) don't stop this from being a navigation
+                            // terminal: nothing ever renders after an unconditional GotoNode/
+                            // CheckProgressNode anyway. Trim them so the checks below see the
+                            // real terminal node, once trimming would actually reveal one.
+                            var lastRealIndex = expand.ExpandNodes.Count - 1;
+                            while (lastRealIndex >= 0 && expand.ExpandNodes[lastRealIndex] is BreakNode or ParagraphBreakNode)
+                            {
+                                lastRealIndex--;
+                            }
+                            if (lastRealIndex >= 0 && lastRealIndex < expand.ExpandNodes.Count - 1 &&
+                                expand.ExpandNodes[lastRealIndex] is GotoNode or CheckProgressNode)
+                            {
+                                expand.ExpandNodes.RemoveRange(lastRealIndex + 1, expand.ExpandNodes.Count - lastRealIndex - 1);
+                            }
+
                             if (expand.ExpandNodes[^1] is GotoNode termGoto)
                             {
                                 termTarget = termGoto.Target;

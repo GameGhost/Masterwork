@@ -17,6 +17,5 @@ public sealed record PassageRenderResult(
     IReadOnlyList<RenderedAction> Actions,
     IReadOnlyList<RenderedCheckpoint> Checkpoints,
     string? PendingGoto,
-    bool IsEnding,
     RenderedLayoutChrome Chrome
 );

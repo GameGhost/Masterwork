@@ -69,7 +69,7 @@ public sealed record RenderedPopup : RenderedAction
     /// string form; overrides the destination passage's own title (the default — see
     /// <see cref="GameSession.ResolvePassageTitle"/>). A <c>goto</c> within <see cref="OnCloseRaw"/>
     /// that preempts <see cref="Target"/> takes priority over this, if that <c>goto</c> sets its own
-    /// <c>snapshot_label</c>.
+    /// <c>snapshot</c> (string form).
     /// </summary>
     public string? SnapshotLabel { get; init; }
 

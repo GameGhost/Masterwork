@@ -12,8 +12,9 @@ public sealed record InputNode : Node
     /// <inheritdoc/>
     public override string Type => "input";
 
-    /// <summary>Formatted label shown inline with the field.</summary>
-    public required string Label { get; init; }
+    /// <summary>Formatted label shown inline with the field. Optional — a module can render the
+    /// visible label itself as a separate <c>text</c> node beside the field instead.</summary>
+    public string? Label { get; init; }
 
     /// <summary>Open, module-extensible visual style vocabulary, styled entirely by module CSS.</summary>
     public string? Style { get; init; }

@@ -1,6 +1,7 @@
 using Masterwork.App.Shared.Services;
 using Masterwork.App.Web.Components;
 using Masterwork.ModuleFormat;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +12,14 @@ builder.Services.AddRazorComponents()
 // Registered here too because AddInteractiveWebAssemblyRenderMode() prerenders components on the
 // server before the WebAssembly client takes over — the same services Program.cs in
 // Masterwork.App.Web.Client registers for the live WASM app are needed for that first render.
-builder.Services.AddSingleton<IModuleLoader, ModuleLoader>();
+// Not AddSingleton<IModuleLoader, ModuleLoader>() — DI can't resolve ModuleLoader's parameterized
+// constructor (IPassageYamlParser etc. aren't registered), so it silently falls back to the
+// parameterless one, which discards all of ModuleLoader's own logging (unresolved passage refs,
+// stray files that don't match "*.mws.yaml", ...) to a NullLogger. This factory gets those
+// warnings into the same file/console log everything else uses instead.
+builder.Services.AddSingleton<IModuleLoader>(sp => new ModuleLoader(
+    new PassageYamlParser(), new VariableManifest(), new RestextFile(), new RestextResolver(),
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger<ModuleLoader>()));
 // Scoped, not Singleton: resolves against the current module's assets via GameSessionState (Scoped).
 builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();

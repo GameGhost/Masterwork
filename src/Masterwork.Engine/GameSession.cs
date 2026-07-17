@@ -32,6 +32,20 @@ public sealed class GameSession
     private readonly List<PassageRenderResult> _cachedRenders = [];
     private HashSet<string> _visitedPassageIds = [];
 
+    // A non-state-affecting (RenderInPlace) navigation at the live edge diverges from
+    // _timeline[^1]'s own anchor snapshot without ever getting a bookmark of its own — e.g. a
+    // chain of automatic tie-break rounds. _activeState captures the most recent such divergence
+    // (only ever one at a time — a later in-place transition overwrites it, per ActiveState's own
+    // remarks) and survives however far back the player steps into real history — only
+    // ResumeFromHere (branching play from a historical point) or a new PushAndRender (superseding
+    // it with a real snapshot) discard it; see their own remarks. _viewingAnchor tracks, only while
+    // sitting exactly at the live edge (HistoryIndex == _timeline.Count - 1), whether CurrentRender
+    // currently shows the anchor's own bare render (via StepBack) instead of _activeState — reset
+    // whenever the player leaves the live edge, so a later return to it defaults back to showing
+    // _activeState fresh rather than re-requiring a second Forward press.
+    private ActiveState? _activeState;
+    private bool _viewingAnchor;
+
     /// <summary>The full history of snapshots recorded so far, including any rewound-past future.</summary>
     public IReadOnlyList<SessionSnapshot> Timeline => _timeline;
 
@@ -44,17 +58,33 @@ public sealed class GameSession
     /// <summary>The cached render corresponding to <see cref="Current"/>.</summary>
     public PassageRenderResult CurrentRender => _cachedRenders[HistoryIndex];
 
-    /// <summary>True when <see cref="HistoryIndex"/> is not at the end of <see cref="Timeline"/> (i.e. the player has stepped back).</summary>
-    public bool IsRewound => HistoryIndex < _timeline.Count - 1;
+    /// <summary>
+    /// True when <see cref="HistoryIndex"/> is not at the end of <see cref="Timeline"/> (i.e. the
+    /// player has stepped back), or when it's at the end but <see cref="StepBack"/> has shown the
+    /// live edge's own anchor snapshot instead of a pending <see cref="ActiveState"/> (see the
+    /// remarks on the fields above) — both are "reviewing something other than where play actually
+    /// is right now," which is what disables further state-changing actions until the player
+    /// explicitly steps/jumps back to the front or calls <see cref="ResumeFromHere"/>.
+    /// </summary>
+    public bool IsRewound => HistoryIndex < _timeline.Count - 1 || _viewingAnchor;
 
     /// <summary>True when <see cref="StepBack"/> can be called.</summary>
-    public bool CanStepBack => HistoryIndex > 0;
+    public bool CanStepBack => HistoryIndex > 0 || (HistoryIndex == _timeline.Count - 1 && _activeState is not null && !_viewingAnchor);
 
     /// <summary>True when <see cref="StepForward"/> can be called.</summary>
     public bool CanStepForward => IsRewound;
 
     /// <summary>Transient, non-persisted UI state for the current position.</summary>
     public SessionViewState ViewState { get; } = new();
+
+    /// <summary>
+    /// Set once a <c>link</c>/<c>popup</c>/<c>goto</c> resolves its target to the <c>"app::gameover"</c>
+    /// sentinel (see <see cref="ResolveTarget"/>'s remarks) — the App is responsible for reacting to
+    /// this (deleting the module's autosave, recording playthrough memory, and returning to the main
+    /// menu; see <c>Play.razor</c>'s <c>HandleGameOverIfRequestedAsync</c>), not the engine. One-way:
+    /// once true, this <see cref="GameSession"/> is expected to be torn down by the App, not reused.
+    /// </summary>
+    public bool IsGameOverRequested { get; private set; }
 
     /// <summary>
     /// Starts a new session at the module's start passage (or <paramref name="startPassageIdOverride"/> if given).
@@ -123,6 +153,20 @@ public sealed class GameSession
         HistoryIndex = save.HistoryIndex;
         _store.RestoreSession(_timeline[HistoryIndex].Variables);
         _prng.RestoreOccurrences(_timeline[HistoryIndex].SeedOccurrences);
+
+        // Active state pending at save time only means anything if it was taken at the live edge
+        // (see ActiveState's remarks) — restore it the same way RenderInPlace originally produced
+        // it, so resuming lands the player back where they actually left off instead of on the bare
+        // anchor. _viewingAnchor defaults to false (showing the active state), matching "resuming
+        // shows you what you were looking at when you saved."
+        if (save.ActiveState is not null && HistoryIndex == _timeline.Count - 1)
+        {
+            _activeState = save.ActiveState;
+            _store.RestoreSession(_activeState.Variables);
+            _prng.RestoreOccurrences(_activeState.SeedOccurrences);
+            _cachedRenders[HistoryIndex] = RenderChainFrom(_activeState.PassageId);
+            RecomputeVisitedFromTimeline();
+        }
     }
 
     /// <summary>Reconstructs a session from a previously <see cref="Serialize"/>d save, without re-executing any player actions.</summary>
@@ -137,20 +181,25 @@ public sealed class GameSession
         new(module, save, passageRenderer, expressionEvaluator, logger);
 
     /// <summary>Captures the full timeline and current position as a serializable save.</summary>
-    public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex);
+    public SessionSave Serialize() => new(_masterSeed, [.. _timeline], HistoryIndex, _activeState);
 
     // ── Player actions ───────────────────────────────────────────────────────
 
     /// <summary>
     /// Follows a <see cref="RenderedLink"/> action: commits every currently-showing <c>input</c>'s
     /// draft value to its bound variable, runs the link's <c>onclick</c> nodes, resolves its target
-    /// (a <c>goto</c> among <c>onclick</c> preempts it), and navigates — all as a single snapshot
-    /// when the link is state-affecting. The snapshot's timeline label is, in priority order: a
-    /// preempting <c>goto</c>'s own <c>snapshot_label</c>; else the link's own <c>snapshot</c> label;
-    /// else the destination passage's <c>title</c> (see <see cref="ResolvePassageTitle"/>). If neither
-    /// a <c>goto</c> nor <see cref="RenderedLink.Target"/> resolves a destination, there's nothing to
-    /// navigate to — the link's <c>onclick</c> effects have already run against the live store, but
-    /// nothing else happens (mirrors <see cref="ClosePopupAsync"/>'s same no-destination case).
+    /// (a <c>goto</c> among <c>onclick</c> preempts it), and navigates. Whether this creates a new
+    /// timeline snapshot is, in priority order: a preempting <c>goto</c>'s own <c>snapshot</c> (if
+    /// explicitly set); else the link's own <c>snapshot</c>. The timeline label follows the same
+    /// priority (the <c>goto</c>'s own label, if any, else the link's). A non-state-affecting
+    /// navigation still lands on the destination passage (see <see cref="RenderInPlace"/>) — it just
+    /// doesn't bookmark it, which <see cref="StepBack"/>/<see cref="StepForward"/>/<see cref="JumpToPresent"/>
+    /// account for (see their own remarks). If neither a <c>goto</c> nor <see cref="RenderedLink.Target"/>
+    /// resolves a destination, there's nothing to navigate to — the link's <c>onclick</c> effects
+    /// have already run against the live store, but nothing else happens (mirrors
+    /// <see cref="ClosePopupAsync"/>'s same no-destination case). If the resolved target is the
+    /// <c>"app::gameover"</c> sentinel, this sets <see cref="IsGameOverRequested"/> and returns
+    /// <see cref="CurrentRender"/> unchanged instead of navigating.
     /// </summary>
     /// <exception cref="InvalidOperationException">A currently-showing input doesn't have a valid value.</exception>
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
@@ -162,11 +211,13 @@ public sealed class GameSession
 
         string? pendingGoto = null;
         string? pendingGotoLabel = null;
+        bool? pendingGotoStateAffecting = null;
         if (link.OnClickRaw.Count > 0)
         {
             var onClickResult = _passageRenderer.RenderNodeList(link.OnClickRaw, _store, _module);
             pendingGoto = onClickResult.PendingGoto;
             pendingGotoLabel = onClickResult.PendingGotoLabel;
+            pendingGotoStateAffecting = onClickResult.PendingGotoStateAffecting;
         }
 
         if (pendingGoto is null && link.Target is null)
@@ -176,9 +227,17 @@ public sealed class GameSession
         }
 
         var targetId = pendingGoto ?? ResolveTarget(link.Target!);
-        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? link.SnapshotLabel;
+        if (targetId == AppGameOverTarget)
+        {
+            IsGameOverRequested = true;
+            ViewState.Reset();
+            return Task.FromResult(CurrentRender);
+        }
 
-        var result = link.StateAffecting
+        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? link.SnapshotLabel;
+        var stateAffecting = (pendingGoto is not null ? pendingGotoStateAffecting : null) ?? link.StateAffecting;
+
+        var result = stateAffecting
             ? PushAndRender(targetId, SnapshotKind.Choice, displayLabel, diagnosticLabel: null)
             : RenderInPlace(targetId);
 
@@ -189,13 +248,16 @@ public sealed class GameSession
     /// Closes a <see cref="RenderedPopup"/> via its Okay/Cancel action. When <paramref name="accept"/>
     /// is <see langword="true"/> (Okay), commits its pending input drafts and state changes to the
     /// live store, runs <c>onclose</c> against them (a <c>goto</c> among <c>onclose</c> preempts
-    /// <c>target</c>), and navigates — all as a single transaction. The snapshot's timeline label is,
-    /// in priority order: a preempting <c>goto</c>'s own <c>snapshot_label</c>; else the popup's own
-    /// <c>snapshot</c> label; else the destination passage's <c>title</c> (see
-    /// <see cref="ResolvePassageTitle"/>). If neither a <c>goto</c> nor <c>target</c> resolves a
+    /// <c>target</c>), and navigates — all as a single transaction. Whether this creates a new
+    /// timeline snapshot, and its label, follow the same priority as <see cref="FollowLinkAsync"/>'s
+    /// own remarks (a preempting <c>goto</c>'s own <c>snapshot</c>, if explicitly set, else the
+    /// popup's own). If neither a <c>goto</c> nor <c>target</c> resolves a
     /// destination, there's nothing to navigate to — the popup just closes in place (state already
     /// committed above) without re-rendering the current passage, since a re-render would re-run its
-    /// whole node list for no reason. When <see langword="false"/> (Cancel), the popup's sandbox
+    /// whole node list for no reason. If the resolved target is the <c>"app::gameover"</c> sentinel,
+    /// this sets <see cref="IsGameOverRequested"/> and returns <see cref="CurrentRender"/> unchanged
+    /// instead — the committed state above (including any <c>record</c>/achievement nodes in
+    /// <c>onclose</c>) still applies. When <see langword="false"/> (Cancel), the popup's sandbox
     /// is discarded entirely: no commit, no <c>onclose</c>, no navigation — the caller doesn't even
     /// need to call this for Cancel, since nothing session-side needs to happen (see
     /// <see cref="RenderedPopup"/>'s remarks); it's provided for symmetry.
@@ -215,11 +277,13 @@ public sealed class GameSession
 
         string? pendingGoto = null;
         string? pendingGotoLabel = null;
+        bool? pendingGotoStateAffecting = null;
         if (popup.OnCloseRaw.Count > 0)
         {
             var onCloseResult = _passageRenderer.RenderNodeList(popup.OnCloseRaw, popup.Sandbox, _module);
             pendingGoto = onCloseResult.PendingGoto;
             pendingGotoLabel = onCloseResult.PendingGotoLabel;
+            pendingGotoStateAffecting = onCloseResult.PendingGotoStateAffecting;
         }
 
         _store.RestoreSession(popup.Sandbox.SessionSnapshot());
@@ -235,9 +299,17 @@ public sealed class GameSession
         }
 
         var targetId = pendingGoto ?? ResolveTarget(popup.Target!);
-        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? popup.SnapshotLabel;
+        if (targetId == AppGameOverTarget)
+        {
+            IsGameOverRequested = true;
+            ViewState.Reset();
+            return Task.FromResult(CurrentRender);
+        }
 
-        var result = popup.StateAffecting
+        var displayLabel = (pendingGoto is not null ? pendingGotoLabel : null) ?? popup.SnapshotLabel;
+        var stateAffecting = (pendingGoto is not null ? pendingGotoStateAffecting : null) ?? popup.StateAffecting;
+
+        var result = stateAffecting
             ? PushAndRender(targetId, SnapshotKind.Choice, displayLabel, diagnosticLabel: null)
             : RenderInPlace(targetId);
         return Task.FromResult(result);
@@ -246,6 +318,14 @@ public sealed class GameSession
     /// <summary>Whether <paramref name="input"/>'s current draft satisfies its implicit-required/min/max constraints.</summary>
     public bool IsInputValid(RenderedInput input)
     {
+        // A boolean field has no "empty" state to require — unchecked/false is itself a valid
+        // value, so it never blocks the enclosing link/popup okay button, whether or not the
+        // player has touched it yet.
+        if (input.InputType == InputValueType.Boolean)
+        {
+            return true;
+        }
+
         if (!ViewState.InputDrafts.TryGetValue(input.Id, out var draft) || draft?.ToString() is not { Length: > 0 } text)
         {
             return false;
@@ -284,10 +364,22 @@ public sealed class GameSession
                 throw new InvalidOperationException($"Input '{input.Id}' does not have a valid value.");
             }
 
-            var text = ViewState.InputDrafts[input.Id].ToString()!;
-            var value = input.InputType == InputValueType.Number
-                ? StoryValue.Of(long.Parse(text))
-                : StoryValue.Of(text);
+            StoryValue value;
+            if (input.InputType == InputValueType.Boolean)
+            {
+                // No draft at all (never touched) defaults to false — see IsInputValid's own
+                // note on booleans having no "empty" state.
+                var isChecked = ViewState.InputDrafts.TryGetValue(input.Id, out var boolDraft) && boolDraft is true;
+                value = StoryValue.Of(isChecked);
+            }
+            else
+            {
+                var text = ViewState.InputDrafts[input.Id].ToString()!;
+                value = input.InputType == InputValueType.Number
+                    ? StoryValue.Of(long.Parse(text))
+                    : StoryValue.Of(text);
+            }
+
             target.SetSessionVariable(input.Var, value);
         }
     }
@@ -297,21 +389,50 @@ public sealed class GameSession
 
     // ── Timeline navigation ──────────────────────────────────────────────────
 
-    /// <summary>Moves one step back in the timeline and re-renders from the restored snapshot.</summary>
+    /// <summary>
+    /// Moves one step back. If the live edge currently shows a pending <see cref="ActiveState"/> (a
+    /// chain of non-state-affecting transitions since the last true snapshot — e.g. tie-break
+    /// rounds), the first call shows that snapshot's own anchor render instead of consuming a real
+    /// timeline entry, so "true snapshots" are never skipped over. <see cref="StepForward"/> or
+    /// <see cref="JumpToPresent"/> restores the active state again without replaying whatever
+    /// produced it. Further calls step through real timeline entries exactly as before — the active
+    /// state is <em>not</em> discarded no matter how far back the player goes; only
+    /// <see cref="ResumeFromHere"/> (choosing to branch play from a historical point) or a new
+    /// state-affecting navigation (which supersedes it with a real snapshot — see
+    /// <see cref="PushAndRender"/>) does that.
+    /// </summary>
     /// <exception cref="InvalidOperationException"><see cref="CanStepBack"/> is false.</exception>
     public PassageRenderResult StepBack()
     {
+        if (_activeState is not null && HistoryIndex == _timeline.Count - 1 && !_viewingAnchor)
+        {
+            _viewingAnchor = true;
+            _logger.LogDebug("Stepping back: showing the anchor snapshot instead of the active state, at history index {HistoryIndex}", HistoryIndex);
+            return RestoreAndRerenderCurrent();
+        }
+
         if (!CanStepBack)
         {
             throw new InvalidOperationException("Cannot step back past the start of the timeline.");
         }
 
+        _viewingAnchor = false;
         HistoryIndex--;
         _logger.LogDebug("Stepped back to history index {HistoryIndex}", HistoryIndex);
         return RestoreAndRerenderCurrent();
     }
 
-    /// <summary>Moves one step forward in the timeline and re-renders from the restored snapshot.</summary>
+    /// <summary>
+    /// Moves one step forward. If the live edge's own anchor is currently showing because
+    /// <see cref="StepBack"/> just revealed it, this restores the pending <see cref="ActiveState"/>
+    /// directly — landing back on the state that was actually left, without replaying whatever
+    /// non-state-affecting transitions produced it. Otherwise moves to the next real timeline
+    /// entry as before; if that lands exactly on the live edge and an active state is pending
+    /// there (reachable after stepping back through several real entries — see
+    /// <see cref="StepBack"/>'s own remarks on it surviving that), the active state is shown
+    /// instead of the bare anchor (arriving at the live edge always means "where play actually
+    /// is," never an intermediate stop).
+    /// </summary>
     /// <exception cref="InvalidOperationException"><see cref="CanStepForward"/> is false.</exception>
     public PassageRenderResult StepForward()
     {
@@ -320,30 +441,92 @@ public sealed class GameSession
             throw new InvalidOperationException("Cannot step forward at the head of the timeline.");
         }
 
+        if (_viewingAnchor && HistoryIndex == _timeline.Count - 1)
+        {
+            _viewingAnchor = false;
+            _logger.LogDebug("Stepping forward: restoring the active state at history index {HistoryIndex}", HistoryIndex);
+            return RestoreActiveState();
+        }
+
         HistoryIndex++;
         _logger.LogDebug("Stepped forward to history index {HistoryIndex}", HistoryIndex);
-        return RestoreAndRerenderCurrent();
+        var result = RestoreAndRerenderCurrent();
+        if (HistoryIndex == _timeline.Count - 1 && _activeState is not null)
+        {
+            _viewingAnchor = false;
+            return RestoreActiveState();
+        }
+        return result;
     }
 
-    /// <summary>Discards any rewound future, unlocking live play again from the current position.</summary>
+    /// <summary>
+    /// Discards any rewound future and the pending active state (if any), unlocking live play
+    /// again from the current position — the one place a pending <see cref="ActiveState"/> is
+    /// deliberately thrown away, since choosing to branch play from a historical point makes
+    /// whatever was ahead of it no longer applicable.
+    /// </summary>
     public void ResumeFromHere()
     {
-        _logger.LogDebug("Resuming from history index {HistoryIndex}, discarding rewound future", HistoryIndex);
+        _logger.LogDebug("Resuming from history index {HistoryIndex}, discarding rewound future and any pending active state", HistoryIndex);
         TruncateFuture();
+        _activeState = null;
+        _viewingAnchor = false;
         ViewState.Reset();
     }
 
-    /// <summary>Jumps straight back to the head of the timeline without discarding it — unlike <see cref="ResumeFromHere"/>, the rewound-past future (if any) is kept.</summary>
+    /// <summary>
+    /// Jumps straight to the head of the timeline without discarding it — unlike
+    /// <see cref="ResumeFromHere"/>, the rewound-past future (if any) is kept, and so is a pending
+    /// <see cref="ActiveState"/>. Lands on that active state if one exists, same as
+    /// <see cref="StepForward"/>'s own live-edge-arrival behavior, rather than stopping on the bare
+    /// anchor.
+    /// </summary>
     public PassageRenderResult JumpToPresent()
     {
+        if (_viewingAnchor && HistoryIndex == _timeline.Count - 1)
+        {
+            _viewingAnchor = false;
+            _logger.LogDebug("Returning to present: restoring the active state at history index {HistoryIndex}", HistoryIndex);
+            return RestoreActiveState();
+        }
+
         if (!IsRewound)
         {
             return CurrentRender;
         }
 
         HistoryIndex = _timeline.Count - 1;
+        _viewingAnchor = false;
         _logger.LogDebug("Jumped to present at history index {HistoryIndex}", HistoryIndex);
-        return RestoreAndRerenderCurrent();
+        var result = RestoreAndRerenderCurrent();
+        return _activeState is not null ? RestoreActiveState() : result;
+    }
+
+    /// <summary>
+    /// Rolls the live variable store and PRNG back to the last successfully-committed timeline
+    /// entry and re-renders it — recovery for a <see cref="FollowLinkAsync"/>/<see cref="ClosePopupAsync"/>
+    /// call that threw partway through (e.g. a <see cref="PassageNotFoundException"/> for a target
+    /// that doesn't exist). Both of those calls commit input drafts and onclick/onclose side
+    /// effects to the live store <em>before</em> attempting to render the destination, so a
+    /// failure there can leave the store ahead of what <see cref="Current"/>/<see cref="CurrentRender"/>
+    /// still reflect (neither of which moves until the destination renders successfully); this
+    /// discards that partial progress and re-renders the passage the player was already on. Safe
+    /// to call even when nothing actually failed — it just recomputes the same state that's
+    /// already current.
+    /// </summary>
+    public PassageRenderResult RecoverFromFailedNavigation()
+    {
+        _logger.LogWarning("Recovering from a failed navigation at history index {HistoryIndex}.", HistoryIndex);
+        // A failed FollowLinkAsync/ClosePopupAsync never reaches RenderInPlace/PushAndRender (see
+        // their own remarks on rendering before committing), so an active state that was already
+        // pending and showing *before* the failed attempt is untouched by it — recover back to
+        // that if there is one, not the bare anchor, since that's what the player actually saw. The
+        // HistoryIndex check guards against a failure reachable while reviewing older real history
+        // (bypassing the UI's usual disabling) — an active state pending at the live edge doesn't
+        // apply there.
+        return _activeState is not null && !_viewingAnchor && HistoryIndex == _timeline.Count - 1
+            ? RestoreActiveState()
+            : RestoreAndRerenderCurrent();
     }
 
     // ── Internals ────────────────────────────────────────────────────────────
@@ -352,6 +535,12 @@ public sealed class GameSession
         string? displayLabel, string? diagnosticLabel)
     {
         TruncateFuture();
+        // A new real snapshot supersedes any pending active state — it was "the state before this
+        // passage rendered" relative to the OLD live edge, which this call is moving past. Unlike
+        // StepBack, this isn't "reviewing" the active state, it's continuing past it — see
+        // ActiveState's and StepBack's own remarks on why only this and ResumeFromHere discard it.
+        _activeState = null;
+        _viewingAnchor = false;
 
         var snapshot = new SessionSnapshot
         {
@@ -381,15 +570,58 @@ public sealed class GameSession
         return result;
     }
 
-    // Renders `passageId` without creating a timeline entry (non-state-affecting navigation).
-    // The current entry's cached render is overwritten in place so CurrentRender reflects it.
+    // Renders `passageId` without creating a timeline entry (non-state-affecting navigation). The
+    // current entry's cached render is overwritten in place so CurrentRender reflects it. At the
+    // live edge, this also records/overwrites _activeState with the pre-render state captured below
+    // — the same "capture before, render after" ordering PushAndRender uses, and for the same
+    // reason: RenderChainFrom can throw, and _activeState must not change unless the render
+    // actually succeeded (see RecoverFromFailedNavigation's own remarks on why this matters). The
+    // post-checkpoint recheck guards a narrower case: if the passage being rendered contains its
+    // own `checkpoint` node, HandleCheckpoints below already adds a real timeline entry for this
+    // exact render — there's nothing left to track as "active" beyond an actual bookmark, so
+    // _activeState is left as it was (null, or whatever it already held) rather than duplicating
+    // that bookmark's own state. Away from the live edge (reachable only if a caller bypasses the
+    // UI's IsRewound-gated disabling), there's no active state to track — a rewound RenderInPlace
+    // doesn't correspond to "where play actually is."
     private PassageRenderResult RenderInPlace(string passageId)
     {
+        var wasAtLiveEdge = HistoryIndex == _timeline.Count - 1;
+        var preRenderVariables = wasAtLiveEdge ? _store.SessionSnapshot() : null;
+        var preRenderSeedOccurrences = wasAtLiveEdge ? _prng.SnapshotOccurrences() : null;
+        var timelineCountBeforeCheckpoints = _timeline.Count;
+
         var result = RenderChainFrom(passageId);
         _cachedRenders[HistoryIndex] = result;
         RecomputeVisitedFromTimeline();
         HandleCheckpoints(result);
         ViewState.Reset();
+
+        if (wasAtLiveEdge && _timeline.Count == timelineCountBeforeCheckpoints)
+        {
+            _activeState = new ActiveState { PassageId = passageId, Variables = preRenderVariables!, SeedOccurrences = preRenderSeedOccurrences! };
+            _viewingAnchor = false;
+        }
+
+        return result;
+    }
+
+    // Restores and re-renders the pending live-edge active state (see ActiveState's remarks) — its
+    // counterpart to RestoreAndRerenderCurrent for the timeline's own entries. Deliberately does
+    // NOT call HandleCheckpoints, mirroring RestoreAndRerenderCurrent: this is re-displaying state
+    // that already happened once (when RenderInPlace originally captured it), not a fresh
+    // navigation, so any checkpoint the passage contains was already registered then and shouldn't
+    // be registered again. Doesn't clear _activeState — toggling back and forth between the anchor
+    // and the active state should keep working, same as scrubbing ordinary timeline entries does.
+    private PassageRenderResult RestoreActiveState()
+    {
+        var state = _activeState!;
+        _store.RestoreSession(state.Variables);
+        _prng.RestoreOccurrences(state.SeedOccurrences);
+        RecomputeVisitedFromTimeline();
+        ViewState.Reset();
+
+        var result = RenderChainFrom(state.PassageId);
+        _cachedRenders[HistoryIndex] = result;
         return result;
     }
 
@@ -397,14 +629,29 @@ public sealed class GameSession
     private PassageRenderResult RenderChainFrom(string passageId)
     {
         _visitedPassageIds.Add(passageId);
-        var result = _passageRenderer.Render(_module.Passages[passageId], _store, _module, _visitedPassageIds);
+        var result = _passageRenderer.Render(GetPassageOrThrow(passageId), _store, _module, _visitedPassageIds);
         while (result.PendingGoto is not null)
         {
             var nextId = result.PendingGoto;
             _visitedPassageIds.Add(nextId);
-            result = _passageRenderer.Render(_module.Passages[nextId], _store, _module, _visitedPassageIds);
+            result = _passageRenderer.Render(GetPassageOrThrow(nextId), _store, _module, _visitedPassageIds);
         }
         return result;
+    }
+
+    // Every passage lookup in this class funnels through here specifically so a missing
+    // passage_id (a typo in hand-authored content, or a target referencing a passage that hasn't
+    // been written yet) produces a diagnosable PassageNotFoundException naming the id that was
+    // requested, instead of a bare KeyNotFoundException from the dictionary indexer.
+    private MwsPassageDoc GetPassageOrThrow(string passageId)
+    {
+        if (_module.Passages.TryGetValue(passageId, out var doc))
+        {
+            return doc;
+        }
+
+        _logger.LogError("Passage '{PassageId}' does not exist in this module.", passageId);
+        throw new PassageNotFoundException(passageId);
     }
 
     // Checkpoint nodes become bookmark timeline entries pointing at the same render that produced
@@ -498,6 +745,13 @@ public sealed class GameSession
     // asset-pack onboarding flow's final goto/navigation reaches the loaded module's own Begins-Here
     // passage without hardcoding a passage id it can't know in advance (masterwork-plan-rev14.md Q24).
     private const string ModuleEntrypointTarget = "${module::entrypoint}";
+
+    // "app::gameover" — a module-authored signal that this playthrough is complete, distinct from
+    // "${module::entrypoint}" in that it never resolves to a real passage at all. Unlike an ordinary
+    // target it's a plain literal (no "${}" wrapper — see ResolveTarget's own fallthrough case),
+    // since it isn't an expression to evaluate, just a fixed sentinel string a module's popup/link/
+    // goto can use directly. See IsGameOverRequested's own remarks for what happens next.
+    private const string AppGameOverTarget = "app::gameover";
 
     private string ResolveTarget(string raw) =>
         raw switch

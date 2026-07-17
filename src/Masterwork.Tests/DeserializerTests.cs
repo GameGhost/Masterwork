@@ -491,11 +491,46 @@ public class DeserializerTests
             nodes:
             - type: 'goto'
               target: 'P2'
-              snapshot_label: 'goto label'
+              snapshot: 'goto label'
             """);
 
         var go = Assert.IsType<GotoNode>(passage.Nodes.Single());
+        Assert.True(go.StateAffecting);
         Assert.Equal("goto label", go.SnapshotLabel);
+    }
+
+    [Fact]
+    public void GotoSnapshotBool_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'goto'
+              target: 'P2'
+              snapshot: false
+            """);
+
+        var go = Assert.IsType<GotoNode>(passage.Nodes.Single());
+        Assert.False(go.StateAffecting);
+        Assert.Null(go.SnapshotLabel);
+    }
+
+    [Fact]
+    public void GotoSnapshotAbsent_StateAffectingIsNull()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'goto'
+              target: 'P2'
+            """);
+
+        var go = Assert.IsType<GotoNode>(passage.Nodes.Single());
+        Assert.Null(go.StateAffecting);
     }
 
     [Fact]
@@ -704,33 +739,6 @@ public class DeserializerTests
             """);
 
         Assert.Equal("Hospital0", passage.CheckProgress);
-    }
-
-    [Fact]
-    public void Ending_Header_Deserializes()
-    {
-        var passage = ParseOne("""
-            format: 'mws/0.3'
-            passage_id: 'END-1'
-            layout: 'narration'
-            ending: true
-            nodes: []
-            """);
-
-        Assert.True(passage.Ending);
-    }
-
-    [Fact]
-    public void Ending_Header_DefaultsToFalse()
-    {
-        var passage = ParseOne("""
-            format: 'mws/0.3'
-            passage_id: 'P1'
-            layout: 'narration'
-            nodes: []
-            """);
-
-        Assert.False(passage.Ending);
     }
 
     // ── Layout chrome ─────────────────────────────────────────────────────────

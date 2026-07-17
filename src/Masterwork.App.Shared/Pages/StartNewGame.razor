@@ -5,12 +5,14 @@
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
 @using Masterwork.ModuleFormat
+@using Microsoft.Extensions.Logging
 @inject IModuleStore ModuleStore
 @inject ISaveStore SaveStore
 @inject IAppSettingsStore SettingsStore
 @inject GameSessionState State
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
+@inject ILogger<GameSession> GameSessionLogger
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
@@ -233,7 +235,7 @@
         // Resuming always uses the save's own recorded language, not whatever's currently picked in
         // the dropdown — the save state is what decides, per the "preserved in the save state" rule.
         var loaded = await ModuleStore.LoadAsync(module.ModuleId, autosaveLanguage);
-        var session = GameSession.Restore(loaded.Module, save);
+        var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
         State.Start(module.ModuleId, module.Version, autosaveLanguage, loaded, session);
         await StyleInjector.ApplyAsync(loaded.StyleCss);
         Nav.NavigateTo("/play");
@@ -256,7 +258,7 @@
     private async Task StartFreshAsync(InstalledModule module, string? language)
     {
         var loaded = await ModuleStore.LoadAsync(module.ModuleId, language);
-        var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64());
+        var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64(), logger: GameSessionLogger);
         State.Start(module.ModuleId, module.Version, language, loaded, session);
         await StyleInjector.ApplyAsync(loaded.StyleCss);
         Nav.NavigateTo("/play");

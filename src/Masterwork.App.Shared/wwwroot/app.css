@@ -568,12 +568,11 @@ body {
     margin-top: 0.5rem;
 }
 
-.mws-ending-banner {
-    margin-top: 1rem;
-    padding: 1rem;
-    text-align: center;
-    background: #f5f5f5;
-    border-radius: 0.5rem;
+.mws-nav-error-detail {
+    font-family: monospace;
+    font-size: 0.85rem;
+    opacity: 0.75;
+    word-break: break-word;
 }
 
 /* ── Responsive / platform layout (Phase 2 Milestone C) ──────────────────────
@@ -599,7 +598,6 @@ body {
 
     .mws-timeline,
     .mws-audio-test,
-    .mws-ending-banner,
     .mws-main-menu,
     .mws-help,
     .mws-achievements,

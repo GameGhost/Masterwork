@@ -5,11 +5,21 @@
 
 <label class="mws-input style-@(Node.Style ?? "default")">
     @Node.Label
-    <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
-           min="@Node.Min" max="@Node.Max"
-           value="@_value"
-           disabled="@IsRewound"
-           @oninput="HandleInput" />
+    @if (Node.InputType == InputValueType.Boolean)
+    {
+        <input type="checkbox"
+               checked="@_checked"
+               disabled="@IsRewound"
+               @onchange="HandleCheckboxChange" />
+    }
+    else
+    {
+        <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
+               min="@Node.Min" max="@Node.Max"
+               value="@_value"
+               disabled="@IsRewound"
+               @oninput="HandleInput" />
+    }
 </label>
 
 @code {
@@ -37,9 +47,18 @@
     public EventCallback OnInputChanged { get; set; }
 
     private string _value = "";
+    private bool _checked;
 
     protected override void OnParametersSet()
     {
+        if (Node.InputType == InputValueType.Boolean)
+        {
+            _checked = IsRewound
+                ? Session.Current.Variables.TryGetValue(Node.Var, out var historicalBool) && historicalBool.AsBool()
+                : Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var boolDraft) && boolDraft is true;
+            return;
+        }
+
         _value = IsRewound
             ? Session.Current.Variables.TryGetValue(Node.Var, out var historical) ? historical.AsString() : ""
             : Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var draft) ? draft.ToString() ?? "" : "";
@@ -49,6 +68,13 @@
     {
         _value = e.Value?.ToString() ?? "";
         Session.UpdateInputDraft(Node.Id, _value);
+        await OnInputChanged.InvokeAsync();
+    }
+
+    private async Task HandleCheckboxChange(ChangeEventArgs e)
+    {
+        _checked = e.Value is bool b && b;
+        Session.UpdateInputDraft(Node.Id, _checked);
         await OnInputChanged.InvokeAsync();
     }
 }

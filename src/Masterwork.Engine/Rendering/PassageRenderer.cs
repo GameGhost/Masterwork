@@ -54,7 +54,6 @@ public sealed class PassageRenderer : IPassageRenderer
             Actions: ctx.Actions,
             Checkpoints: ctx.Checkpoints,
             PendingGoto: ctx.PendingGoto,
-            IsEnding: passage.Ending,
             Chrome: chrome);
     }
 
@@ -92,7 +91,7 @@ public sealed class PassageRenderer : IPassageRenderer
     {
         var ctx = new RenderContext(store, module, actionIdPrefix);
         var rendered = RenderNodes(nodes, ctx);
-        return new NodeListRenderResult(rendered, ctx.Actions, ctx.PendingGoto, ctx.PendingGotoLabel);
+        return new NodeListRenderResult(rendered, ctx.Actions, ctx.PendingGoto, ctx.PendingGotoLabel, ctx.PendingGotoStateAffecting);
     }
 
     private sealed class RenderContext(VariableStore store, LoadedModule module, string actionIdPrefix = "")
@@ -103,6 +102,7 @@ public sealed class PassageRenderer : IPassageRenderer
         public List<RenderedCheckpoint> Checkpoints { get; } = [];
         public string? PendingGoto { get; set; }
         public string? PendingGotoLabel { get; set; }
+        public bool? PendingGotoStateAffecting { get; set; }
 
         private int _actionCounter;
         public string NextActionId(string prefix) => $"{actionIdPrefix}{prefix}_{_actionCounter++}";
@@ -156,6 +156,7 @@ public sealed class PassageRenderer : IPassageRenderer
             case GotoNode go:
                 ctx.PendingGoto = ResolveTargetNow(go.Target, ctx);
                 ctx.PendingGotoLabel = ExpandOrNull(go.SnapshotLabel, ctx.Store);
+                ctx.PendingGotoStateAffecting = go.StateAffecting;
                 break;
             case IncludePassageNode inc:
                 var targetId = ResolveTargetNow(inc.Target, ctx);
@@ -257,7 +258,7 @@ public sealed class PassageRenderer : IPassageRenderer
         {
             Id = ctx.NextActionId("input"),
             Style = input.Style,
-            Label = ctx.Store.ExpandTemplate(input.Label),
+            Label = input.Label is null ? "" : ctx.Store.ExpandTemplate(input.Label),
             Var = input.Var,
             InputType = ResolveInputType(input.Var, ctx),
             Min = input.Min,
@@ -279,7 +280,12 @@ public sealed class PassageRenderer : IPassageRenderer
             return InputValueType.String;
         }
 
-        return varDef.VarType == VarKind.Integer ? InputValueType.Number : InputValueType.String;
+        return varDef.VarType switch
+        {
+            VarKind.Integer => InputValueType.Number,
+            VarKind.Boolean => InputValueType.Boolean,
+            _ => InputValueType.String,
+        };
     }
 
     private void RenderForEach(ForEachNode fe, RenderContext ctx, List<RenderedNode> output)

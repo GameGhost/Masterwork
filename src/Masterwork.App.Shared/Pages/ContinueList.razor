@@ -3,11 +3,13 @@
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
+@using Microsoft.Extensions.Logging
 @inject ISaveStore SaveStore
 @inject IModuleStore ModuleStore
 @inject GameSessionState State
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
+@inject ILogger<GameSession> GameSessionLogger
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ContinueList_PageTitle</PageTitle>
@@ -182,7 +184,7 @@
             }
 
             var loaded = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
-            var session = GameSession.Restore(loaded.Module, save);
+            var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
             State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
             Nav.NavigateTo("/play");

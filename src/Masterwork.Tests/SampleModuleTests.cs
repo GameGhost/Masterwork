@@ -94,12 +94,10 @@ public class SampleModuleTests
             Assert.Equal((long)visit, session.Current.Variables["wellVisits"].AsInt());
         }
 
-        Assert.False(session.CurrentRender.IsEnding);
         var endingNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label.Contains("Confront"));
         var endingResult = await session.FollowLinkAsync(endingNav.Id);
 
         Assert.Equal("Ending", endingResult.PassageId);
-        Assert.True(endingResult.IsEnding);
         // The 'ending' assign runs during this terminal passage's own render, so its new value is
         // only observable in this render's output — not in session.Current.Variables, which is a
         // snapshot of state from just *before* this passage rendered (see SessionSnapshot's doc

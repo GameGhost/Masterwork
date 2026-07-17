@@ -168,8 +168,9 @@
 
   <data name="Play_NoSessionMessage" xml:space="preserve"><value>No active session.</value></data>
   <data name="Play_ReturnToMainMenuLink" xml:space="preserve"><value>Return to the main menu</value></data>
-  <data name="Play_EndingMessage" xml:space="preserve"><value>You've reached the end of your story, and the game.</value></data>
-  <data name="Play_ReturnToMainMenuButton" xml:space="preserve"><value>Return to Main Menu</value></data>
+  <data name="Play_NavErrorTitle" xml:space="preserve"><value>Something went wrong</value></data>
+  <data name="Play_NavErrorBody" xml:space="preserve"><value>This passage couldn't continue — likely a broken link or reference in the module content.</value></data>
+  <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Return to this passage</value></data>
 
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Forward ▶</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Return to present</value></data>

@@ -43,7 +43,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
             : null;
         var loadedModule = loader.LoadFromSources(
             contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride,
-            contents.LayoutYamls);
+            contents.LayoutYamls, contents.AdditionalVariableYamls);
         return LoadedModuleContent.FromPackage(contents, loadedModule);
     }
 

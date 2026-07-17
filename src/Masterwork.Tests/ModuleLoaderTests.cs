@@ -158,6 +158,50 @@ public class ModuleLoaderTests
         Assert.Equal("Module version", text.Value);
     }
 
+    // ── app::gameover reserved target ───────────────────────────────────────
+
+    [Fact]
+    public void LoadFromSources_LinkTargetsAppGameOver_NoUnresolvedPassageRefWarning()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources([
+            """
+            format: 'mws/0.3'
+            passage_id: 'Ending'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Finish'
+              target: 'app::gameover'
+            """,
+        ]);
+
+        Assert.DoesNotContain(module.Warnings.Items,
+            w => w.Kind == "unresolved_passage_ref" && w.Message.Contains("app::gameover"));
+    }
+
+    [Fact]
+    public void LoadFromSources_LinkTargetsNonexistentPassage_StillWarns()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources([
+            """
+            format: 'mws/0.3'
+            passage_id: 'Ending'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Finish'
+              target: 'DoesNotExist'
+            """,
+        ]);
+
+        Assert.Contains(module.Warnings.Items,
+            w => w.Kind == "unresolved_passage_ref" && w.Message.Contains("DoesNotExist"));
+    }
+
     // ── passages-override merge (LoadFromSources overridePassageYamls) ─────
 
     [Fact]
@@ -248,6 +292,47 @@ public class ModuleLoaderTests
 
             var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
             Assert.Equal("Hand-authored", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadFromDirectory_PassageFileMissingMwsExtension_WarnsAndIsNotLoaded()
+    {
+        // A ".yaml" file that isn't named "*.mws.yaml" is invisible to the passages/ glob — this
+        // pins the real-world bug it causes (a link targeting that passage's own passage_id fails
+        // at playtime with no indication why) by asserting the loader at least warns about it.
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "passages"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "passages", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'Hi'
+                """);
+            File.WriteAllText(Path.Combine(dir, "passages", "002-Entry.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Entry'
+                layout: 'narration'
+                nodes:
+                - type: 'text'
+                  value: 'Never loaded'
+                """);
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            Assert.False(module.Passages.ContainsKey("Entry"));
+            Assert.Contains(module.Warnings.Items,
+                w => w.Kind == "stray_yaml_file" && w.Message.Contains("002-Entry.yaml"));
         }
         finally
         {
@@ -512,6 +597,107 @@ public class ModuleLoaderTests
 
             var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
             Assert.Equal("From layouts folder", text.Value);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // ── Hand-authored variables/ folder ─────────────────────────────────────────
+
+    [Fact]
+    public void LoadFromSources_AdditionalVariableYaml_NewName_IsAdded()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  round: int
+                """,
+            additionalVariableYamls:
+            [
+                """
+                variables:
+                  mwA: bool
+                """,
+            ]);
+
+        Assert.True(module.Variables.ContainsKey("round"));
+        Assert.Equal(VarKind.Boolean, module.Variables["mwA"].VarType);
+    }
+
+    [Fact]
+    public void LoadFromSources_AdditionalVariableYaml_CollidingName_OverridesBaseDeclaration()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  scoreA: string
+                """,
+            additionalVariableYamls:
+            [
+                """
+                variables:
+                  scoreA: int
+                """,
+            ]);
+
+        Assert.Equal(VarKind.Integer, module.Variables["scoreA"].VarType);
+    }
+
+    [Fact]
+    public void LoadFromSources_NoAdditionalVariableYamls_VariablesUnchanged()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            variablesYaml: """
+                variables:
+                  round: int
+                """);
+
+        Assert.Single(module.Variables);
+        Assert.True(module.Variables.ContainsKey("round"));
+    }
+
+    [Fact]
+    public void LoadFromDirectory_VariablesFolder_DiscoveredAndMerged()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));
+        var variablesDir = Path.Combine(dir, "variables");
+        Directory.CreateDirectory(variablesDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(dir, "_variables.yaml"), """
+                variables:
+                  round: int
+                """);
+            File.WriteAllText(Path.Combine(variablesDir, "scoring.yaml"), """
+                variables:
+                  mwA: bool
+                  tie2ScoreA: int
+                """);
+
+            var module = new ModuleLoader().LoadFromDirectory(dir);
+
+            Assert.True(module.Variables.ContainsKey("round"));
+            Assert.Equal(VarKind.Boolean, module.Variables["mwA"].VarType);
+            Assert.Equal(VarKind.Integer, module.Variables["tie2ScoreA"].VarType);
         }
         finally
         {

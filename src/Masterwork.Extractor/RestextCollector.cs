@@ -404,8 +404,7 @@ public sealed partial class RestextCollector
             TryScanStringField(d, "value");
             TryScanStringField(d, "title");
             TryScanStringField(d, "text");
-            TryScanStringField(d, "snapshot"); // link/popup's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
-            TryScanStringField(d, "snapshot_label"); // goto's own field
+            TryScanStringField(d, "snapshot"); // link/popup/goto's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
             TryScanStringField(d, "display");
             TryScanStringField(d, "name");
             TryScanStringField(d, "okay");
@@ -506,8 +505,7 @@ public sealed partial class RestextCollector
             TryReplaceStringField(d, "value");
             TryReplaceStringField(d, "title");
             TryReplaceStringField(d, "text");
-            TryReplaceStringField(d, "snapshot"); // link/popup's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
-            TryReplaceStringField(d, "snapshot_label"); // goto's own field
+            TryReplaceStringField(d, "snapshot"); // link/popup/goto's own field — only a string when it's a snapshot label, harmlessly skipped when it's a bool
             TryReplaceStringField(d, "display");
             TryReplaceStringField(d, "name");
             TryReplaceStringField(d, "okay");

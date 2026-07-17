@@ -168,8 +168,9 @@
 
   <data name="Play_NoSessionMessage" xml:space="preserve"><value>Aucune session active.</value></data>
   <data name="Play_ReturnToMainMenuLink" xml:space="preserve"><value>Retour au menu principal</value></data>
-  <data name="Play_EndingMessage" xml:space="preserve"><value>Vous avez atteint la fin de votre histoire, et du jeu.</value></data>
-  <data name="Play_ReturnToMainMenuButton" xml:space="preserve"><value>Retour au menu principal</value></data>
+  <data name="Play_NavErrorTitle" xml:space="preserve"><value>Un problème est survenu</value></data>
+  <data name="Play_NavErrorBody" xml:space="preserve"><value>Impossible de continuer à partir de ce passage — probablement un lien ou une référence brisée dans le contenu du module.</value></data>
+  <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Retourner à ce passage</value></data>
 
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer ▶</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Retour au présent</value></data>

@@ -80,7 +80,7 @@
                 <div class="mws-dialog-actions">
                     <button type="button" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
                     <button type="button" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
-                    <button type="button" @onclick="() => _view = View.Options">@AppStrings.Common_Cancel</button>
+                    <button type="button" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
 
@@ -123,6 +123,16 @@
     [Parameter]
     public string DefaultSaveName { get; set; } = "";
 
+    /// <summary>
+    /// Opens straight into the Quit confirmation view instead of the ordinary Options view — used
+    /// by <c>Play.razor</c>'s navigation-error recovery prompt, which only wants the Save-and-Quit/
+    /// Abandon choice, not the audio/text-size settings. <see cref="OptionsDialogContext.InGame"/>
+    /// only. When set, Cancel from that view closes the dialog entirely instead of falling back to
+    /// the (in this case never-shown) Options view.
+    /// </summary>
+    [Parameter]
+    public bool StartAtQuit { get; set; }
+
     private View _view = View.Options;
     private AppSettings _draft = AppSettings.Default;
     private string _saveName = "";
@@ -130,6 +140,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (StartAtQuit)
+        {
+            _view = View.QuitConfirm;
+        }
+
         if (!RendererInfo.IsInteractive)
         {
             return;
@@ -179,6 +194,17 @@
     {
         _saveName = DefaultSaveName;
         _view = View.QuitNamePrompt;
+    }
+
+    private async Task CancelQuitConfirm()
+    {
+        if (StartAtQuit)
+        {
+            await OnClose.InvokeAsync();
+            return;
+        }
+
+        _view = View.Options;
     }
 
     private async Task ConfirmSaveAndQuit()

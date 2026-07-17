@@ -415,6 +415,27 @@ All string operations are **immutable**.
 
 `seed_key` is a string literal that uniquely identifies a random call within the module. The engine uses it to derive a stable PRNG offset from the master seed.
 
+### Special Target Sentinels
+
+A `target` field (`link`, `popup`, `goto`) can resolve to one of two reserved sentinel values instead of an ordinary `passage_id`. Both are fixed strings the engine recognizes directly — not something a module can define or extend.
+
+| Sentinel | Form | Meaning |
+|---|---|---|
+| `module::entrypoint` | Expression: `target: '${module::entrypoint}'` | Resolves to the loaded module's own `Begins-Here` passage. For a shared asset-pack flow (e.g. onboarding) whose final `goto`/navigation needs to hand off into whichever module pulled it in, without hardcoding a passage id it can't know in advance. |
+| `app::gameover` | Plain literal: `target: 'app::gameover'` | Signals that this playthrough is complete — not a passage reference at all. Following a link or closing a popup with this as the resolved target does not navigate anywhere; instead the engine stops and the App takes over: it deletes the module's autosave, records the playthrough's memory (TBD — not yet implemented), and returns the player to the main menu. Any `onclick`/`onclose` logic before this (e.g. a `record` achievement trigger) still runs and commits normally — only the navigation itself is replaced. |
+
+`app::gameover` is a plain literal (no `${}` wrapper) since it isn't an expression to evaluate, just a fixed sentinel a module places directly as a `target:` value — typically on the `okay` path of a final "ending unlocked" popup.
+
+```yaml
+- type: 'popup'
+  layout: 'game_complete'
+  content:
+  - type: 'text'
+    value: 'You have unlocked **The Long Winter** ending.'
+  okay: 'Close'
+  target: 'app::gameover'
+```
+
 ---
 
 ## 5. Pattern Strings
@@ -800,17 +821,17 @@ since it should only commit once the player has acknowledged the popup:
 
 ### `input`
 
-A player-fillable field, rendered inline wherever it appears — directly in a passage, or inside a `popup`'s `content`. Implicitly required: it starts empty and editable when live; when the timeline is rewound to view history, it shows disabled and populated from that snapshot instead. There is no `onsubmit`/submit action of its own — any `link` in the same passage (or a popup's `okay` button) stays disabled until every currently-showing `input` has a valid value, and following it commits all of them to their bound variables as part of its own snapshot (see §6 `link`/`popup`).
+A player-fillable field, rendered inline wherever it appears — directly in a passage, or inside a `popup`'s `content`. Implicitly required for text/number fields: each starts empty and editable when live; when the timeline is rewound to view history, it shows disabled and populated from that snapshot instead. A boolean field has no empty state — unchecked (`false`) is itself a valid value, so it's always considered filled, whether or not the player has touched it. There is no `onsubmit`/submit action of its own — any `link` in the same passage (or a popup's `okay` button) stays disabled until every currently-showing text/number `input` has a valid value (boolean inputs never block it), and following it commits all of them to their bound variables as part of its own snapshot (see §6 `link`/`popup`).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `label` | string | yes | Formatted label shown inline with the field (string formatting — see §3) |
+| `label` | string | no | Formatted label shown inline with the field (string formatting — see §3). Omit when a module renders the visible label itself as a separate `text` node beside the field instead |
 | `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
 | `var` | string | yes | Session variable to receive the value |
 | `min` | int | no | Minimum accepted value. Only meaningful when `var`'s declared type is numeric |
 | `max` | int | no | Maximum accepted value. Only meaningful when `var`'s declared type is numeric |
 
-The field's value type (text vs. number) is **not** declared on the node — it's derived from `var`'s own declared type in the module's variable manifest (an integer-typed variable gets a number field; anything else gets a text field). There's nowhere a mismatch between the two could come from, since they're the same value.
+The field's value type — text, number, or checkbox — is **not** declared on the node — it's derived from `var`'s own declared type in the module's variable manifest: an integer-typed variable gets a number field, a boolean-typed variable gets a checkbox, anything else gets a text field. There's nowhere a mismatch between the two could come from, since they're the same value.
 
 ```yaml
 - type: 'text'
@@ -829,12 +850,21 @@ The field's value type (text vs. number) is **not** declared on the node — it'
 
 ### `goto`
 
-Unconditional navigation — no player interaction, no timeline snapshot of its own. A `goto` placed inside a `link`'s `onclick` or a `popup`'s `onclose` is the one exception: it preempts that action's own `target`, and if that action's own `snapshot` is truthy, the `goto`'s own `snapshot_label` (if set) takes priority over the enclosing `link`/`popup`'s own label for the resulting snapshot — see `link`/`popup` above.
+Unconditional navigation — no player interaction. A plain top-level `goto` never creates a timeline
+snapshot. A `goto` placed inside a `link`'s `onclick` or a `popup`'s `onclose` is the one exception:
+it preempts that action's own `target`, and its own `snapshot` field — if explicitly set — overrides
+whether the resulting navigation creates a snapshot *at all* (not just its label), taking priority
+over the enclosing `link`/`popup`'s own `snapshot`. This is what lets a single link branch
+differently per outcome: e.g. a `conditional` inside `onclick` where one branch's `goto` forces a
+snapshot and a sibling branch's forces none, even though both share the same enclosing link (see the
+example below). Omitting `snapshot` on the `goto` means "inherit whatever the enclosing `link`/
+`popup`'s own `snapshot` says" — the historical default, and the only behavior a plain top-level
+`goto` has, since it has no enclosing action to override.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `target` | string | yes | Destination `passage_id`, or `'${expression}'` resolving to one (see §4) |
-| `snapshot_label` | string | no | Custom label for the timeline scrubber entry, when this `goto` preempts a state-affecting `link`/`popup`'s target (see above). No effect on a plain `goto`, which never creates a snapshot |
+| `snapshot` | bool or string | no | Overrides whether this navigation creates a timeline snapshot, when this `goto` fires from within a `link`'s `onclick` or a `popup`'s `onclose`. Absent means "inherit the enclosing action's own `snapshot`". A string value means `true` *and* sets the timeline scrubber's label to that string, taking priority over the enclosing `link`/`popup`'s own label. No effect on a plain top-level `goto` |
 
 ```yaml
 - type: 'goto'
@@ -857,6 +887,33 @@ For conditional routing, wrap in `conditional`:
   - type: 'goto'
     target: 'NeutralPath'
 ```
+
+**Per-branch snapshot override** — the same enclosing link routes to either a bookmarked passage or
+a transient intermediate one, decided at click time:
+
+```yaml
+- type: 'link'
+  label: 'Continue'
+  onclick:
+  - type: 'conditional'
+    if: 'winnerCount == 1'
+    then:
+    - type: 'goto'
+      target: 'Ranking'
+      snapshot: true       # a genuine decision point — worth its own timeline entry
+    else:
+    - type: 'goto'
+      target: 'TieBreaker1' # an automatic in-between step — no bookmark of its own
+      snapshot: false
+```
+
+A non-state-affecting `goto` like the `TieBreaker1` branch above still fully navigates there — it
+just doesn't create a timeline entry. The player isn't stuck with no way back to it, though:
+stepping back from anywhere further down the same non-snapshotted chain returns to the *last true
+snapshot* (here, wherever `Ranking`'s link was originally reached from) in one step, skipping the
+transient passages in between; stepping forward (or "return to present") goes straight back to
+wherever the player actually was, without replaying them. See `Masterwork.Engine.GameSession`'s own
+remarks on `StepBack`/`StepForward`/`JumpToPresent` for the exact mechanics.
 
 ---
 
@@ -1205,6 +1262,18 @@ variables:
   all_players:   { type: array,  items: player, default: [] }
   current_player: { type: player }
 ```
+
+For an extracted module, this block normally lives in the extractor-owned `_variables.yaml` at
+the module root — regenerated wholesale on every re-extraction, so hand edits there don't
+survive. A module can additionally declare variables of its own in a `variables/` folder
+(sibling to `passages/`/`passages-override/`/`layouts/`): zero or more `.yaml` files, each using
+the exact same `variables:`/`default:` shape as `_variables.yaml`. Files load after
+`_variables.yaml` and are applied with the same add-or-override-by-key semantics as
+`passages-override/` and `layouts/*.yaml`: a variable name already declared in `_variables.yaml`
+is replaced, a new name is added. Splitting declarations across multiple files (e.g.
+`variables/scoring.yaml`, `variables/achievements.yaml`) is purely an authoring convenience —
+the loader doesn't care about file names or count, just that everything under `variables/` ends
+in `.yaml`.
 
 ### Achievements
 

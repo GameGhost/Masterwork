@@ -177,4 +177,71 @@ public class ModulePackageTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void WriteToBytes_SourceFolderAndReadme_ExcludedFromPackage()
+    {
+        var dir = MakeSourceDirectory();
+        Directory.CreateDirectory(Path.Combine(dir, ".source"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, ".source", "Module_Eng_v1.cs"), "// Cradle source");
+            File.WriteAllText(Path.Combine(dir, ".source", "en-US.common.restext"), "Common_001=Hello");
+            File.WriteAllText(Path.Combine(dir, "README.md"), "# Module readme");
+
+            var bytes = ModulePackage.WriteToBytes(dir);
+
+            using var stream = new MemoryStream(bytes);
+            using var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read);
+            Assert.DoesNotContain(archive.Entries, e => e.FullName.StartsWith(".source/", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(archive.Entries, e => e.FullName.Equals("README.md", StringComparison.OrdinalIgnoreCase));
+            // Confirm the package isn't just empty — other root content still made it in.
+            Assert.Contains(archive.Entries, e => e.FullName.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadFromBytes_VariablesFolder_RoundTripsAndMerges()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "variables"));
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+                id: 'test.module'
+                title: 'Test Module'
+                version: '1.0.0'
+                """);
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(dir, "variables", "scoring.yaml"), """
+                variables:
+                  mwA: bool
+                """);
+
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+
+            Assert.Single(contents.AdditionalVariableYamls);
+            Assert.Contains("mwA: bool", contents.AdditionalVariableYamls[0]);
+
+            var module = new ModuleLoader().LoadFromSources(
+                contents.PassageYamls, additionalVariableYamls: contents.AdditionalVariableYamls);
+            Assert.Equal(VarKind.Boolean, module.Variables["mwA"].VarType);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

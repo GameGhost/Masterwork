@@ -78,7 +78,7 @@ dotnet run --project src/Masterwork.Extractor -- `
 # The Cost of Disease — migrated; reads from its own .source/ copy in Masterwork-Modules, not from
 # $base above. Passages go into the module's passages/ subfolder; _variables.yaml and en-US.restext
 # go into the module root, next to manifest.yaml and passages-override/. --common-restext gives
-# stable IDs to Common strings (see Masterwork-Modules/cost-of-disease/en-US.common.restext);
+# stable IDs to Common strings (see Masterwork-Modules/cost-of-disease/.source/en-US.common.restext);
 # --progress-map gives hub_early/hub_middle/hub_late layout overrides + end_of_round popups at the
 # reference app's real progress-bar checkpoints (see Masterwork-Modules/progress-map.json).
 $codbase     = "c:\Projects\Masterwork-Modules\cost-of-disease\.source"
@@ -92,7 +92,7 @@ dotnet run --project src/Masterwork.Extractor -- `
   --restext-out "$modules\cost-of-disease" `
   --module-title "The Cost of Disease" `
   --sprite-map $spritemap `
-  --common-restext "$modules\cost-of-disease\en-US.common.restext" `
+  --common-restext "$codbase\en-US.common.restext" `
   --progress-map $progressmap
 ```
 

@@ -67,8 +67,8 @@ public sealed record PopupNode : Node
     /// destination passage's own <c>title</c> (the default). Set by writing a string (instead of a
     /// bare bool) to <c>snapshot</c> — that string is both the label and an implicit <c>true</c> for
     /// <see cref="StateAffecting"/>. A <c>goto</c> inside <see cref="OnClose"/> that preempts
-    /// <see cref="Target"/> takes priority over this, if that <c>goto</c> sets its own
-    /// <c>snapshot_label</c> — see <see cref="GotoNode.SnapshotLabel"/>.
+    /// <see cref="Target"/> takes priority over this — and over <see cref="StateAffecting"/> itself
+    /// — if that <c>goto</c> sets its own <c>snapshot</c>; see <see cref="GotoNode.StateAffecting"/>.
     /// </summary>
     public string? SnapshotLabel { get; init; }
 }

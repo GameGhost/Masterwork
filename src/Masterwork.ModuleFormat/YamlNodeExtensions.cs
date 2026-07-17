@@ -115,6 +115,24 @@ internal static class YamlNodeExtensions
     }
 
     /// <summary>
+    /// Like <see cref="GetBoolOrLabel"/>, but distinguishes "absent" from an explicit
+    /// <see langword="false"/> by returning <see langword="null"/> for <c>Value</c> when the field
+    /// isn't present at all — used by <c>goto</c>'s own <c>snapshot</c> field, where "absent" means
+    /// "inherit whatever the enclosing action's own <c>snapshot</c> says" and an explicit
+    /// <c>false</c> means "force no snapshot even if the enclosing action would otherwise create one."
+    /// </summary>
+    public static (bool? Value, string? Label) GetNullableBoolOrLabel(this YamlMappingNode map, string key, YamlParseContext ctx)
+    {
+        var raw = map.GetString(key, ctx);
+        if (raw is null)
+        {
+            return (null, null);
+        }
+
+        return bool.TryParse(raw, out var value) ? (value, null) : (true, raw);
+    }
+
+    /// <summary>
     /// Reads an optional integer field, returning <see langword="null"/> if absent.
     /// </summary>
     /// <exception cref="MwsParseException">The field is present but not a valid integer.</exception>

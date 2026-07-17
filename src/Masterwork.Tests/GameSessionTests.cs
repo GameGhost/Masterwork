@@ -162,6 +162,43 @@ public class GameSessionTests
         return new GameSession(module, masterSeed: 1);
     }
 
+    private static GameSession MakeBooleanInputSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              label: 'Completed Masterwork'
+              var: 'completedMasterwork'
+            - type: 'link'
+              label: 'Submit'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Completed: {completedMasterwork}'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              completedMasterwork:
+                type: 'bool'
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
     private static GameSession MakePopupSession()
     {
         var module = new ModuleLoader().LoadFromSources(
@@ -413,7 +450,7 @@ public class GameSessionTests
               onclick:
               - type: 'goto'
                 target: 'P3'
-                snapshot_label: 'goto label'
+                snapshot: 'goto label'
             """,
             """
             format: 'mws/0.4'
@@ -1161,7 +1198,7 @@ public class GameSessionTests
               onclose:
               - type: 'goto'
                 target: 'P3'
-                snapshot_label: 'goto label'
+                snapshot: 'goto label'
             """,
             """
             format: 'mws/0.4'
@@ -1361,6 +1398,632 @@ public class GameSessionTests
         Assert.Equal(InputValueType.Number, input.InputType);
     }
 
+    [Fact]
+    public void FollowLink_DerivesBooleanInputType_FromDeclaredVariableType()
+    {
+        var session = MakeBooleanInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+
+        Assert.Equal(InputValueType.Boolean, input.InputType);
+    }
+
+    [Fact]
+    public void IsInputValid_BooleanInput_ValidWithNoDraftAtAll()
+    {
+        // A boolean field has no "empty" state — unchecked/false is itself a valid value, so it
+        // must never block the enclosing link, whether or not the player has touched it.
+        var session = MakeBooleanInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+
+        Assert.True(session.IsInputValid(input));
+        Assert.True(session.AreCurrentInputsValid());
+    }
+
+    [Fact]
+    public async Task FollowLink_BooleanInput_NoDraft_CommitsFalse()
+    {
+        var session = MakeBooleanInputSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.False(session.Current.Variables["completedMasterwork"].AsBool());
+    }
+
+    [Fact]
+    public async Task FollowLink_BooleanInput_CheckedDraft_CommitsTrue()
+    {
+        var session = MakeBooleanInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, true);
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.True(session.Current.Variables["completedMasterwork"].AsBool());
+    }
+
+    // ── Game over (app::gameover) ────────────────────────────────────────────
+
+    private static GameSession MakeGameOverLinkSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'assign'
+              var: 'round'
+              expr: '1'
+            - type: 'link'
+              label: 'Finish'
+              snapshot: true
+              target: 'app::gameover'
+            """,
+        ]);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    private static GameSession MakeGameOverPopupSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Open'
+              snapshot: true
+              target: 'app::gameover'
+              okay: 'Close'
+              content:
+              - type: 'assign'
+                var: 'round'
+                expr: '99'
+              - type: 'text'
+                value: 'ending popup body'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              round:
+                type: 'int'
+                default: 0
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    [Fact]
+    public void GameOverLinkSession_IsGameOverRequested_InitiallyFalse()
+    {
+        var session = MakeGameOverLinkSession();
+        Assert.False(session.IsGameOverRequested);
+    }
+
+    [Fact]
+    public async Task FollowLink_TargetIsAppGameOver_SetsIsGameOverRequested()
+    {
+        var session = MakeGameOverLinkSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.True(session.IsGameOverRequested);
+    }
+
+    [Fact]
+    public async Task FollowLink_TargetIsAppGameOver_DoesNotNavigate()
+    {
+        var session = MakeGameOverLinkSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        var result = await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal("P1", result.PassageId);
+    }
+
+    [Fact]
+    public async Task ClosePopup_TargetIsAppGameOver_SetsIsGameOverRequestedAndCommitsSandbox()
+    {
+        // The popup's own committed state (its `round` assign) must still apply even though there's
+        // nowhere to navigate — only the navigation itself is replaced by the gameover signal, not
+        // the transaction's state commit (see ClosePopupAsync's own remarks: _store.RestoreSession
+        // runs unconditionally, before the gameover target check). Not directly observable via
+        // session.Current.Variables here, since that reflects the last-pushed *snapshot* and no new
+        // one is pushed for a gameover target (there's no destination passage to snapshot toward) —
+        // checking the popup's own sandbox is the closest available proxy; a future "preserve
+        // playthrough memory" implementation reading final state at gameover time will need its own
+        // way to observe the post-commit store, not yet designed (see the TBD note on IsGameOverRequested).
+        var session = MakeGameOverPopupSession();
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        var result = await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.True(session.IsGameOverRequested);
+        Assert.Equal("P1", result.PassageId);
+        Assert.Equal(99L, popup.Sandbox.GetVariable("round").AsInt());
+    }
+
+    // ── Missing passage target (PassageNotFoundException / recovery) ─────────
+
+    private static GameSession MakeMissingTargetSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Bar is {bar}'
+            - type: 'link'
+              label: 'Go'
+              target: 'Missing'
+              onclick:
+              - type: 'assign'
+                var: 'bar'
+                expr: '99'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              bar:
+                type: 'int'
+                default: 0
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    [Fact]
+    public async Task FollowLink_TargetPassageDoesNotExist_ThrowsPassageNotFoundExceptionNamingTarget()
+    {
+        var session = MakeMissingTargetSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        var ex = await Assert.ThrowsAsync<PassageNotFoundException>(() => session.FollowLinkAsync(link.Id));
+
+        Assert.Equal("Missing", ex.PassageId);
+    }
+
+    [Fact]
+    public async Task RecoverFromFailedNavigation_AfterFailedFollowLink_RollsBackLeakedOnclickEffectsAndStaysOnCurrentPassage()
+    {
+        // FollowLinkAsync runs the link's onclick (mutating the live store) before it attempts to
+        // render the destination — a PassageNotFoundException there leaves that mutation applied
+        // to the live store even though no new timeline entry was pushed. RecoverFromFailedNavigation
+        // should roll the store back to the last committed snapshot (bar's default, 0) and
+        // re-render the passage the player is actually still on, not leave the leaked bar=99 in place.
+        var session = MakeMissingTargetSession();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        await Assert.ThrowsAsync<PassageNotFoundException>(() => session.FollowLinkAsync(link.Id));
+
+        var result = session.RecoverFromFailedNavigation();
+
+        Assert.Equal("P1", result.PassageId);
+        Assert.Contains(result.Nodes, n => n is RenderedText t && t.Value == "Bar is 0");
+    }
+
+    // ── goto's own snapshot override (per-branch state-affecting) ────────────
+
+    [Fact]
+    public async Task FollowLink_GotoSnapshotTrue_ForcesSnapshotEvenWhenEnclosingLinkIsNot()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              onclick:
+              - type: 'goto'
+                target: 'P2'
+                snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(2, session.Timeline.Count);
+        Assert.Equal(1, session.HistoryIndex);
+        Assert.Equal("P2", session.CurrentRender.PassageId);
+    }
+
+    [Fact]
+    public async Task FollowLink_GotoSnapshotFalse_SuppressesSnapshotEvenWhenEnclosingLinkIsStateAffecting()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              snapshot: true
+              onclick:
+              - type: 'goto'
+                target: 'P2'
+                snapshot: false
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Single(session.Timeline);
+        Assert.Equal(0, session.HistoryIndex);
+        Assert.Equal("P2", session.CurrentRender.PassageId);
+    }
+
+    [Fact]
+    public async Task FollowLink_GotoWithoutSnapshotField_InheritsEnclosingLinkStateAffecting()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              snapshot: true
+              onclick:
+              - type: 'goto'
+                target: 'P2'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(2, session.Timeline.Count);
+    }
+
+    // ── Live-edge active state (non-state-affecting link/goto chains) ────────
+
+    private static async Task<(GameSession session, LoadedModule module)> MakeActiveStateSessionAsync()
+    {
+        // Start --(snapshot:true)--> Anchor --(no snapshot)--> Mid --(no snapshot)--> Final. Mirrors
+        // a score-entry -> tie-break-round-1 -> tie-break-round-2 chain: only entering Anchor gets a
+        // timeline entry; Mid/Final are reached via RenderInPlace and never bookmarked.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'Anchor'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Anchor'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'anchor text'
+            - type: 'link'
+              label: 'ToMid'
+              target: 'Mid'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Mid'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'mid text'
+            - type: 'link'
+              label: 'ToFinal'
+              target: 'Final'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Final'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'final text'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id);
+        return (session, module);
+    }
+
+    [Fact]
+    public async Task ActiveState_AfterChainOfInPlaceTransitions_CurrentRenderShowsFinalPassageWithNoNewTimelineEntries()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+
+        Assert.Equal("Final", session.CurrentRender.PassageId);
+        Assert.Equal(2, session.Timeline.Count); // Start + Anchor only
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackOnce_ShowsAnchorWithoutConsumingATimelineEntry()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+
+        var result = session.StepBack();
+
+        Assert.Equal("Anchor", result.PassageId);
+        Assert.Equal(1, session.HistoryIndex);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackThenStepForward_RestoresFinalWithoutReplayingMid()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+
+        var result = session.StepForward();
+
+        Assert.Equal("Final", result.PassageId);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackThenJumpToPresent_RestoresFinal()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+
+        var result = session.JumpToPresent();
+
+        Assert.Equal("Final", result.PassageId);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackTwice_ReachesStartWithoutDiscardingActiveState()
+    {
+        // Per the user's explicit correction: stepping back any amount must NOT discard the active
+        // state — only ResumeFromHere (or a new real snapshot superseding it) does that.
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack(); // reveal Anchor's own bare render
+        var result = session.StepBack(); // real decrement past Anchor
+
+        Assert.Equal("Start", result.PassageId);
+        Assert.Equal(0, session.HistoryIndex);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackPastAnchorThenForward_ArrivingAtLiveEdgeRestoresFinal()
+    {
+        // Only one real entry (Anchor) separates Start from the live edge here, so a single
+        // StepForward from Start already arrives at the live edge and reveals Final directly — see
+        // the deeper-chain test below for the case where an intermediate real entry is visited on
+        // its own first.
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack(); // Final (active state) -> Anchor's own anchor
+        session.StepBack(); // Anchor -> Start (real decrement, active state preserved)
+
+        var result = session.StepForward(); // Start -> Anchor, which IS the live edge -> shows Final
+
+        Assert.Equal("Final", result.PassageId);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackTwoRealEntriesPastAnchor_ForwardVisitsIntermediateEntryBeforeRestoringFinal()
+    {
+        // A longer chain: Start -> A -> Anchor (three real entries) -> Mid -> Final (active state,
+        // never bookmarked). Stepping back three times (un-drift, then two real decrements) lands
+        // on Start, two real indices before the live edge — forward must visit A on its own first,
+        // only revealing the active state once it actually arrives at the live edge (Anchor).
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'A'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'A'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'Anchor'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Anchor'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'ToMid'
+              target: 'Mid'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Mid'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'ToFinal'
+              target: 'Final'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Final'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Start -> A
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // A -> Anchor
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Anchor -> Mid (active state)
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Mid -> Final (active state)
+
+        session.StepBack(); // Final -> Anchor's own anchor
+        session.StepBack(); // Anchor -> A (real decrement, active state preserved)
+        session.StepBack(); // A -> Start (real decrement, active state still preserved)
+
+        var afterFirstForward = session.StepForward(); // Start -> A (an ordinary real entry, not the live edge)
+        Assert.Equal("A", afterFirstForward.PassageId);
+
+        var afterSecondForward = session.StepForward(); // A -> Anchor, which IS the live edge -> shows Final
+        Assert.Equal("Final", afterSecondForward.PassageId);
+    }
+
+    [Fact]
+    public async Task ActiveState_StepBackPastAnchorThenJumpToPresent_RestoresFinal()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+        session.StepBack();
+
+        var result = session.JumpToPresent();
+
+        Assert.Equal("Final", result.PassageId);
+    }
+
+    [Fact]
+    public async Task ActiveState_ResumeFromHere_DiscardsActiveStateAndPreventsForward()
+    {
+        // The one place an active state is deliberately thrown away: choosing to branch play from
+        // a historical point makes whatever was ahead of it no longer applicable.
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack(); // reveal Anchor's own bare render
+
+        session.ResumeFromHere();
+
+        Assert.False(session.CanStepForward);
+    }
+
+    [Fact]
+    public async Task ActiveState_NewStateAffectingLinkFromLiveEdge_DiscardsPendingActiveState()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'Anchor'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Anchor'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'ToMid'
+              target: 'Mid'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Mid'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'ToFinal'
+              target: 'Final'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Final'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Start -> Anchor
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Anchor -> Mid (active state)
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id); // Mid -> Final (real snapshot, discards active state)
+
+        Assert.Equal("Final", session.CurrentRender.PassageId);
+        Assert.Equal(3, session.Timeline.Count);
+
+        var result = session.StepBack();
+
+        Assert.Equal("Anchor", result.PassageId); // not "Mid" — the stale active state was discarded
+    }
+
+    [Fact]
+    public async Task ActiveState_Initially_IsRewoundIsFalse()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        Assert.False(session.IsRewound);
+    }
+
+    [Fact]
+    public async Task ActiveState_AfterStepBack_IsRewoundIsTrue()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+        Assert.True(session.IsRewound);
+    }
+
     // ── Save/restore ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -1491,5 +2154,69 @@ public class GameSessionTests
         var stillCurrent = session.CurrentRender;
         Assert.Equal("P1", stillCurrent.PassageId);
         Assert.Single(session.Timeline);
+    }
+
+    // ── Live-edge active state persistence (save/resume mid-chain) ────────────
+
+    [Fact]
+    public async Task Serialize_WithPendingActiveState_CapturesIt()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+
+        var save = session.Serialize();
+
+        Assert.NotNull(save.ActiveState);
+        Assert.Equal("Final", save.ActiveState!.PassageId);
+    }
+
+    [Fact]
+    public async Task Serialize_NoPendingActiveState_ActiveStateIsNull()
+    {
+        var (session, _) = await MakeThreeStepSessionAsync();
+
+        var save = session.Serialize();
+
+        Assert.Null(save.ActiveState);
+    }
+
+    [Fact]
+    public async Task Restore_WithPendingActiveState_ResumesShowingIt()
+    {
+        // A save taken mid-tie-break (or any other chain of non-state-affecting transitions) must
+        // not silently lose that progress back to the bare anchor on resume — see ActiveState's own
+        // remarks on why _cachedRenders alone (never persisted) isn't enough to reconstruct this.
+        var (session, module) = await MakeActiveStateSessionAsync();
+        var save = session.Serialize();
+
+        var restored = GameSession.Restore(module, save);
+
+        Assert.Equal("Final", restored.CurrentRender.PassageId);
+        Assert.Equal(2, restored.Timeline.Count);
+    }
+
+    [Fact]
+    public async Task Restore_WithPendingActiveState_StepBackStillShowsAnchorFirst()
+    {
+        var (session, module) = await MakeActiveStateSessionAsync();
+        var save = session.Serialize();
+        var restored = GameSession.Restore(module, save);
+
+        var result = restored.StepBack();
+
+        Assert.Equal("Anchor", result.PassageId);
+        Assert.Equal(1, restored.HistoryIndex);
+    }
+
+    [Fact]
+    public async Task Serialize_JsonRoundTrip_PreservesActiveState()
+    {
+        var (session, module) = await MakeActiveStateSessionAsync();
+        var json = JsonSerializer.Serialize(session.Serialize());
+
+        var roundTripped = JsonSerializer.Deserialize<SessionSave>(json);
+        Assert.NotNull(roundTripped?.ActiveState);
+
+        var restored = GameSession.Restore(module, roundTripped!);
+        Assert.Equal("Final", restored.CurrentRender.PassageId);
     }
 }

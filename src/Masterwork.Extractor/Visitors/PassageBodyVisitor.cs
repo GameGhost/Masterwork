@@ -668,10 +668,24 @@ public class PassageBodyVisitor
             return [new SetupNotificationNode { NextPassage = nextPassage }];
         }
 
-        // ViewController.instance.ChangeView(...)
-        if (expr is InvocationExpressionSyntax cvi && IsChangeViewMainMenu(cvi))
+        // ViewController.instance.ChangeView(ViewController.instance.<view>) — every real
+        // story-script call site passes .scoreEntry (or, in Fear of the Unknown, .generations);
+        // .mainMenu never actually occurs in any story-script source, but is kept as a defensive
+        // case since it's cheap to keep correct.
+        if (expr is InvocationExpressionSyntax cvi && TryGetChangeViewTarget(cvi, out var viewName))
         {
-            return [new GotoMenuNode { Target = "main_menu" }];
+            if (viewName == "scoreEntry")
+            {
+                return [new GotoNode { Target = "ScoreEntry" }];
+            }
+
+            if (viewName == "mainMenu")
+            {
+                return [new GotoMenuNode { Target = "main_menu" }];
+            }
+
+            _report.AddWarning(_passageName, $"ChangeView(...{viewName}) has no recognized mapping", sourceLine: GetLine(cvi));
+            return [Unknown(cvi)];
         }
 
         // PassageTracker.instance.CheckProgress(current, target)
@@ -2442,8 +2456,26 @@ public class PassageBodyVisitor
     private static bool IsSetLocationCall(InvocationExpressionSyntax inv) =>
         GetSimpleMethodName(inv) == "SetLocationIndicatorIcon";
 
-    private static bool IsChangeViewMainMenu(InvocationExpressionSyntax inv) =>
-        GetSimpleMethodName(inv) == "ChangeView";
+    // ViewController.instance.ChangeView(ViewController.instance.<view>) — extracts the trailing
+    // "<view>" identifier off the single argument (a member-access chain), e.g. "scoreEntry" from
+    // "ViewController.instance.scoreEntry". False if this isn't a ChangeView call, or its argument
+    // isn't a plain member access this can read a trailing name off of.
+    private static bool TryGetChangeViewTarget(InvocationExpressionSyntax inv, out string? viewName)
+    {
+        viewName = null;
+        if (GetSimpleMethodName(inv) != "ChangeView")
+        {
+            return false;
+        }
+
+        if (inv.ArgumentList.Arguments is not [{ Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: { } name } }])
+        {
+            return false;
+        }
+
+        viewName = name;
+        return true;
+    }
 
     private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage)
     {

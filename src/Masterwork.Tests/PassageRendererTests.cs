@@ -821,6 +821,36 @@ public class PassageRendererTests
         Assert.Equal(2, popup.Actions.Count);
     }
 
+    [Fact]
+    public void Input_NoLabelField_ParsesAndRendersWithEmptyLabel()
+    {
+        // label is optional — a module can render the visible label itself as a separate `text`
+        // node beside the field instead (e.g. Cost of Disease's score-entry passages, which show
+        // the player's name via its own `text` node ahead of an unlabeled `input`).
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Alice'
+            - type: 'input'
+              var: 'scoreA'
+              min: 0
+            """,
+            variablesYaml: """
+                standard_variables: []
+                variables:
+                  scoreA:
+                    type: 'int'
+                    default: 0
+                """);
+
+        var result = Render(passage, module, store);
+        var input = Assert.IsType<RenderedInput>(result.Actions.Single());
+        Assert.Equal("", input.Label);
+    }
+
     // ── Goto ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1178,37 +1208,6 @@ public class PassageRendererTests
         Assert.Empty(popup.Chrome.Footer);
         Assert.Empty(popup.Chrome.BeforeContent);
         Assert.Empty(popup.Chrome.AfterContent);
-    }
-
-    // ── Ending header ────────────────────────────────────────────────────────
-
-    [Fact]
-    public void EndingHeader_ExposedInResult()
-    {
-        var (passage, module, store) = Load("""
-            format: 'mws/0.3'
-            passage_id: 'END-1'
-            layout: 'narration'
-            ending: true
-            nodes: []
-            """, mainId: "END-1");
-
-        var result = Render(passage, module, store);
-        Assert.True(result.IsEnding);
-    }
-
-    [Fact]
-    public void NoEnding_IsFalse()
-    {
-        var (passage, module, store) = Load("""
-            format: 'mws/0.3'
-            passage_id: 'P1'
-            layout: 'narration'
-            nodes: []
-            """);
-
-        var result = Render(passage, module, store);
-        Assert.False(result.IsEnding);
     }
 
     // ── Check progress ───────────────────────────────────────────────────────
