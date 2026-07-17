@@ -8,9 +8,9 @@ public sealed partial class JsModuleStyleInjector(IJSRuntime js, IAssetResolver 
 {
     private IJSObjectReference? _module;
 
-    // Matches url(icon://slug), url(image://slug), with or without quotes; slug may contain '/'
-    // for a subfolder (e.g. image://setup/StorybookToken).
-    [GeneratedRegex(@"url\(\s*(['""]?)(icon|image)://([^'"")\s]+)\1\s*\)")]
+    // Matches url(icon://slug), url(image://slug), url(font://slug), with or without quotes; slug
+    // may contain '/' for a subfolder (e.g. image://setup/StorybookToken).
+    [GeneratedRegex(@"url\(\s*(['""]?)(icon|image|font)://([^'"")\s]+)\1\s*\)")]
     private static partial Regex AssetUrlPattern();
 
     private async Task<IJSObjectReference> ModuleAsync() =>

@@ -7,5 +7,6 @@
   <Project Path="Masterwork.Engine/Masterwork.Engine.csproj" />
   <Project Path="Masterwork.Extractor/Masterwork.Extractor.csproj" />
   <Project Path="Masterwork.ModuleFormat/Masterwork.ModuleFormat.csproj" />
+  <Project Path="Masterwork.ModulePacker/Masterwork.ModulePacker.csproj" />
   <Project Path="Masterwork.Tests/Masterwork.Tests.csproj" />
 </Solution>

@@ -5,6 +5,7 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
 {
     private const string IconScheme = "icon://";
     private const string ImageScheme = "image://";
+    private const string FontScheme = "font://";
 
     // Keyed by the raw assetUri. Blazor re-renders a component tree (and thus re-resolves every
     // {icon:...}/image node it contains) far more often than the underlying module assets ever
@@ -43,6 +44,16 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         (".jpeg", "image/jpeg"),
     ];
 
+    // Same "try the common extensions against the bare slug" convention as ImageExtensions —
+    // module fonts ship as plain files under assets/fonts/, named to match the slug.
+    private static readonly (string Ext, string MimeType)[] FontExtensions =
+    [
+        (".woff2", "font/woff2"),
+        (".woff", "font/woff"),
+        (".ttf", "font/ttf"),
+        (".otf", "font/otf"),
+    ];
+
     /// <inheritdoc/>
     public Task<string?> ResolveAsync(string assetUri)
     {
@@ -66,15 +77,24 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
     {
         string scheme;
         string folder;
+        (string Ext, string MimeType)[] extensions;
         if (assetUri.StartsWith(IconScheme, StringComparison.Ordinal))
         {
             scheme = IconScheme;
             folder = "icons";
+            extensions = ImageExtensions;
         }
         else if (assetUri.StartsWith(ImageScheme, StringComparison.Ordinal))
         {
             scheme = ImageScheme;
             folder = "images";
+            extensions = ImageExtensions;
+        }
+        else if (assetUri.StartsWith(FontScheme, StringComparison.Ordinal))
+        {
+            scheme = FontScheme;
+            folder = "fonts";
+            extensions = FontExtensions;
         }
         else
         {
@@ -87,25 +107,26 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         // (populated by IModuleStore.LoadAsync — see LoadedModuleContent). Bytes are returned as a
         // data: URI rather than a blob URL or temp file, so resolution is identical on WASM and
         // MAUI BlazorWebView — the only platform difference is where LoadAsync's bytes came from.
-        if (TryResolveBundleLocal(folder, slug) is { } dataUri)
+        if (TryResolveBundleLocal(folder, slug, extensions) is { } dataUri)
         {
             return dataUri;
         }
 
-        // Tier 2 (dependency pack) — icon:// only; image:// has no placeholder pack yet.
+        // Tier 2 (dependency pack) — icon:// only; image:// and font:// have no placeholder pack yet.
         if (scheme == IconScheme && TestAssetPack.TryGetValue(slug, out var packUrl))
         {
             return packUrl;
         }
 
-        // Tier 3 (engine fallback) — icon:// only; an unresolved image:// yields null (the caller,
-        // e.g. RenderedImageView, shows its own "missing image" state).
+        // Tier 3 (engine fallback) — icon:// only; an unresolved image:// or font:// yields null
+        // (the caller, e.g. RenderedImageView, shows its own "missing image" state; an unresolved
+        // font:// in a @font-face rule just leaves that face unavailable, same as any 404'd font).
         return scheme == IconScheme ? FallbackIcon : null;
     }
 
-    private string? TryResolveBundleLocal(string folder, string slug)
+    private string? TryResolveBundleLocal(string folder, string slug, (string Ext, string MimeType)[] extensions)
     {
-        foreach (var (ext, mime) in ImageExtensions)
+        foreach (var (ext, mime) in extensions)
         {
             if (sessionState.Assets.TryGetValue($"assets/{folder}/{slug}{ext}", out var bytes))
             {

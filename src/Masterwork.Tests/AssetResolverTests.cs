@@ -94,6 +94,32 @@ public class AssetResolverTests
     }
 
     [Fact]
+    public async Task UnresolvedFontScheme_ReturnsNull()
+    {
+        // font:// has no dependency-pack/fallback tier either — only bundle-local.
+        var url = await Resolver.ResolveAsync("font://averia-libre-regular");
+        Assert.Null(url);
+    }
+
+    [Fact]
+    public async Task BundleLocalFont_ResolvesToDataUri()
+    {
+        var bytes = new byte[] { 5, 6, 7, 8 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new Dictionary<string, byte[]> { ["assets/fonts/averia-libre-regular.woff2"] = bytes },
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("font://averia-libre-regular");
+
+        Assert.Equal($"data:font/woff2;base64,{Convert.ToBase64String(bytes)}", url);
+    }
+
+    [Fact]
     public async Task BundleLocalTakesPrecedenceOverTestPack()
     {
         var state = new GameSessionState();

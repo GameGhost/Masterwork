@@ -11,6 +11,7 @@ public class JsModuleStyleInjectorTests
             {
                 "image://popup/Prompt-panel" => "data:image/png;base64,AAA=",
                 "icon://storybook" => "data:image/png;base64,BBB=",
+                "font://averia-libre-regular" => "data:font/woff2;base64,CCC=",
                 _ => null,
             });
     }
@@ -54,6 +55,14 @@ public class JsModuleStyleInjectorTests
         var css = ".x { background: url(image://popup/does-not-exist); }";
         var result = await Injector.ResolveAssetUrlsAsync(css);
         Assert.Equal(css, result);
+    }
+
+    [Fact]
+    public async Task ResolveAssetUrlsAsync_FontRef_ResolvesToDataUri()
+    {
+        var css = "@font-face { src: url(font://averia-libre-regular) format('woff2'); }";
+        var result = await Injector.ResolveAssetUrlsAsync(css);
+        Assert.Equal("@font-face { src: url(\"data:font/woff2;base64,CCC=\") format('woff2'); }", result);
     }
 
     [Fact]
