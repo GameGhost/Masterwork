@@ -170,9 +170,24 @@ h1:focus {
 .mws-image {
     padding: 0.5rem;
     margin: 0.5rem 0;
-    background: #f0f0f0;
     font-style: italic;
 }
+
+/* An <img>'s UA-default display is inline, which only respects horizontal margins as part of the
+   surrounding line box — centering/right-aligning it needs its own line first, same reasoning as
+   .mws-text.align-* above. left/justified get the block treatment too (for the "own line, doesn't
+   flow with neighboring inline content" behavior an explicit align implies) but no margin override
+   — an image has no text-align-justify equivalent, and block-level default margins already read as
+   left-aligned. */
+.mws-image.align-left,
+.mws-image.align-center,
+.mws-image.align-right,
+.mws-image.align-justified {
+    display: block;
+}
+
+.mws-image.align-center { margin-left: auto; margin-right: auto; }
+.mws-image.align-right { margin-left: auto; margin-right: 0; }
 
 .mws-input {
     padding: 0.5rem;

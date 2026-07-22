@@ -1,11 +1,12 @@
 ﻿@namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine.Rendering
 @using Masterwork.App.Shared.Services
+@using Masterwork.ModuleFormat
 @inject IAssetResolver AssetResolver
 
 @if (_url is not null)
 {
-    <img src="@_url" alt="@(Node.Title ?? Node.Asset)" title="@(Node.Title ?? Node.Asset)" class="mws-image style-@(Node.Style ?? "default")" />
+    <img src="@_url" alt="@(Node.Title ?? Node.Asset)" title="@(Node.Title ?? Node.Asset)" class="mws-image@(AlignClass) style-@(Node.Style ?? "default")" style="@SizeStyle" />
 }
 else
 {
@@ -19,6 +20,24 @@ else
 
     private string? _url;
     private string? _resolvedFor;
+
+    // Same class-hook scheme as RenderedTextView's AlignClass — app.css gives .mws-image.align-*
+    // its actual behavior; this component only ever emits the structural hook.
+    private string AlignClass => Node.Align switch
+    {
+        Alignment.Left => " align-left",
+        Alignment.Center => " align-center",
+        Alignment.Right => " align-right",
+        Alignment.Justified => " align-justified",
+        _ => "",
+    };
+
+    // Node.Size is a unitless hint preserved as-is from the source's <size=N> tag (format spec
+    // §6 `image`, "units unspecified") — treated as a pixel width here, the most direct reading of
+    // a bare number, with height left to auto so the image's own aspect ratio is preserved. Applied
+    // as an inline style rather than a generated size-{N} class: unlike Align (a small closed enum
+    // app.css can enumerate), Size is an open-ended numeric value from source data.
+    private string SizeStyle => Node.Size is { } size ? $"width: {size}px; height: auto;" : "";
 
     // AssetResolver itself now caches by URI (see AssetResolver.cs), so this guard is mostly about
     // skipping the async call/state-write entirely on a re-render where nothing changed.
