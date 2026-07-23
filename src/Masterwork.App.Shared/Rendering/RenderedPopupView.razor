@@ -58,14 +58,18 @@ else
                     }
                     @if (Node.Okay is not null || Node.Cancel is not null)
                     {
+                        @* Cancel before Okay in markup — Okay lands on the right in a left-to-right
+                           flex row (web convention: primary action right, secondary left), and
+                           keyboard tab order follows the same source order, so visual and tab order
+                           agree instead of a CSS-only reorder desyncing them. *@
                         <div class="mws-popup-footer">
-                            @if (Node.Okay is not null)
-                            {
-                                <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
-                            }
                             @if (Node.Cancel is not null)
                             {
                                 <button type="button" class="mws-popup-cancel" @onclick="Cancel">@Node.Cancel</button>
+                            }
+                            @if (Node.Okay is not null)
+                            {
+                                <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
                             }
                         </div>
                     }
