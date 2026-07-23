@@ -179,16 +179,21 @@ public class ExtractorTests
     [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
-        // Tagged "ck2" (event layout) so this leading bold text isn't intercepted by the
-        // hub/narration heading-hoist (TryHoistHeadingTitleSubtitle) — this test is about bold
-        // style application, not the heading feature; see HeadingHoist tests for that.
+        // A leading Vars assignment (produces an AssignNode, not a TextNode) so this bold text
+        // isn't at nodes[0] and isn't intercepted by the hub/narration heading-hoist
+        // (TryHoistHeadingTitleSubtitle only matches a *leading* bold TextNode) — this test is
+        // about bold style application, not the heading feature; see HeadingHoist tests for that.
+        // "ck2" used to be usable for this (a layout the hoist didn't apply to at all), but "ck2"
+        // now prepends a synthesized special-event node instead of picking a distinct layout — see
+        // Ck2Tag_PrependsSpecialEventOverlay_AndStillHoistsHeadingNormally.
         var passages = Extract("""
             private void passage1_Init()
             {
-                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck2" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
+                this.Vars.dummy = 1;
                 using (base.styleScope("bold", true))
                 {
                     yield return base.text("Bold text");
@@ -751,14 +756,16 @@ public class ExtractorTests
     [Fact]
     public void UniformBoldScope_HoistsStyleToNode()
     {
-        // Tagged "ck2" (event layout) — see BoldStyleScope_AppliesBoldStyle's comment.
+        // See BoldStyleScope_AppliesBoldStyle's comment — a leading no-op assignment dodges the
+        // heading-hoist instead of relying on a non-hoisting tag/layout, which no longer exists.
         var passages = Extract("""
             private void passage1_Init()
             {
-                base.Passages["P1"] = new StoryPassage("P1", new string[] { "ck2" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
+                this.Vars.dummy = 1;
                 using (base.styleScope("bold", true))
                 {
                     yield return base.text("All ");
@@ -962,8 +969,13 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void EventLayout_LeadingBoldLine_DoesNotHoist()
+    public void Ck2Tag_PrependsSpecialEventOverlay_AndStillHoistsHeadingNormally()
     {
+        // "ck2" is no longer a distinct layout (the reference app shows the special-event banner
+        // as a transient overlay on an ordinary narration passage, not a different frame) — a
+        // "ck2"-tagged passage gets `layout: "narration"` like any other, so its own leading bold
+        // line still hoists into Title exactly as normal; the overlay is a synthesized node
+        // prepended to what's left of the body, not something that suppresses hoisting.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -973,16 +985,24 @@ public class ExtractorTests
             {
                 using (base.styleScope("bold", true))
                 {
-                    yield return base.text("Not A Heading");
+                    yield return base.text("A Bid For Mayor");
                 }
                 StyleScope styleScope = null;
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
                 yield break;
             }
             """);
 
-        Assert.Equal("P1", passages[0].Title);
+        Assert.Equal("narration", passages[0].Layout);
+        Assert.Equal("A Bid For Mayor", passages[0].Title);
         Assert.Null(passages[0].Subtitle);
-        Assert.Single(passages[0].Nodes.OfType<TextNode>());
+
+        var textNodes = passages[0].Nodes.OfType<TextNode>().ToList();
+        Assert.Equal(2, textNodes.Count);
+        Assert.Equal("special-event", textNodes[0].Style);
+        Assert.Equal("Special Event", textNodes[0].Template);
+        Assert.Equal("Body text.", textNodes[1].Template);
     }
 
     [Fact]
