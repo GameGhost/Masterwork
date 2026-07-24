@@ -889,6 +889,17 @@ public static partial class V2Serializer
             childNodes.InsertRange(0, eorTextNodes);
         }
 
+        // ViewBiddingSystem.instance.OnShowBidding(...) — the reference app's bespoke
+        // countdown-then-reveal component (see docs/mws-format-latest.md §8's retired-exception
+        // note). Built as a genuinely nested popup instead of a flat layout: bidding/voting popup —
+        // see BuildCountdownBiddingPopup's own remarks for why, and
+        // Masterwork-Modules/my-fathers-work-template's countdown_instructions/countdown_action
+        // layouts for the hand-built pattern this reproduces.
+        if (layout is "bidding" or "voting")
+        {
+            return BuildCountdownBiddingPopup(layout, onclose!, expand.Label, expand.StateAffecting, childNodes, ctx);
+        }
+
         var d = new Dictionary<string, object?> { ["type"] = "popup" };
         if (layout is not null)
         {
@@ -963,6 +974,81 @@ public static partial class V2Serializer
         }
 
         return d;
+    }
+
+    // ViewBiddingSystem's countdown-then-reveal component (Main.unity 868769489's own
+    // startbuttontextlist/detailstextlist/revealText, English index 0) has no Cradle text() call of
+    // its own — like ViewSpecialEvent's overlay text, this is app-side UI text, not story content,
+    // so the display strings below are literal English (curated into en-US.common.restext for
+    // stable keys, matching the SpecialEvent_Title precedent), not extracted from anywhere in the
+    // .cs source. Built as a genuinely nested popup (a `popup` node inside another popup's own
+    // `content:`) instead of the old flat `layout: bidding/voting` shape handled by the bespoke,
+    // now-retired VotingPopupContent component — this matches Module-09/10A/10B exactly (ONE
+    // continuous parchment note; a small dark countdown pill appears over the trigger button, the
+    // instructions never disappear or change), which the old flat popup never could. See
+    // docs/mws-format-latest.md §6's own worked example and
+    // Masterwork-Modules/my-fathers-work-template's countdown_instructions/countdown_action layouts
+    // for the hand-built pattern this reproduces (including the CSS that makes the inner popup's
+    // Okay button cover the full viewport, invisibly, until the countdown animation finishes).
+    private static Dictionary<string, object?> BuildCountdownBiddingPopup(
+        string mode, string targetPassage, string label, bool stateAffecting, List<MwsNode> extraContent, SerializationContext? ctx)
+    {
+        var isVoting = mode == "voting";
+        var instructions = isVoting
+            ? "Click on the 'Start Voting' button to start the vote. This will start a 3-second countdown."
+            : "Click on the 'Start Bidding' button to start the bid. This will start a 3-second countdown.";
+        var startButton = isVoting ? "Start Voting" : "Start Bidding";
+
+        var inner = new Dictionary<string, object?>
+        {
+            ["type"] = "popup",
+            ["layout"] = "countdown_action",
+            ["label"] = startButton,
+            // Four stacked text nodes (style-timed via CSS opacity keyframes, see the template's
+            // own style.css), not a single node whose text changes — REVEAL needs to be
+            // localizable, and a CSS `content`-cycling pseudo-element never could be.
+            ["content"] = new List<Dictionary<string, object?>>
+            {
+                new() { ["type"] = "text", ["value"] = "3", ["style"] = "countdown-3" },
+                new() { ["type"] = "text", ["value"] = "2", ["style"] = "countdown-2" },
+                new() { ["type"] = "text", ["value"] = "1", ["style"] = "countdown-1" },
+                new() { ["type"] = "text", ["value"] = "REVEAL", ["style"] = "countdown-reveal" },
+            },
+            ["okay"] = "REVEAL",
+        };
+        inner["target"] = targetPassage;
+        // AddLinkHint must run right after `target` is inserted (see its own doc comment).
+        AddLinkHint(inner, targetPassage, ctx);
+        inner["snapshot"] = stateAffecting;
+
+        var outerContent = new List<Dictionary<string, object?>>
+        {
+            new() { ["type"] = "text", ["value"] = instructions },
+            new() { ["type"] = "break", ["style"] = "paragraph" },
+            // Static across both modes in the reference app itself (Main.unity 819202544's own
+            // fixed m_text) — still says "your bid" even in the voting flavor, not a bug introduced
+            // here.
+            new() { ["type"] = "text", ["value"] = "When you see the word 'REVEAL' on the screen, simultaneously show everyone your bid." },
+            new() { ["type"] = "break", ["style"] = "paragraph" },
+        };
+
+        // Real Cradle occurrences never carry anything besides the bare OnShowBidding() call, but
+        // stay defensive: any other content found alongside it is appended after the synthesized
+        // instructions rather than silently dropped.
+        if (extraContent.Count > 0)
+        {
+            outerContent.AddRange(TransformNodeList(extraContent, ctx));
+        }
+
+        outerContent.Add(inner);
+
+        return new Dictionary<string, object?>
+        {
+            ["type"] = "popup",
+            ["layout"] = "countdown_instructions",
+            ["label"] = label,
+            ["content"] = outerContent,
+        };
     }
 
     // ── Input action ──────────────────────────────────────────────────────

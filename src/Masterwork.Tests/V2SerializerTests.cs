@@ -94,6 +94,93 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void OnShowBiddingCall_EmitsNestedCountdownPopup()
+    {
+        // ViewBiddingSystem.instance.OnShowBidding("Target", BiddingSystem.Bidding) — the reference
+        // app's countdown-then-reveal component, previously flattened into a bare
+        // layout: 'bidding' popup handled by the (now-retired) bespoke VotingPopupContent component.
+        // Real shape, matching S5Special1a: an ExpandLinkNode whose only fragment content is the
+        // bidding call itself (FragmentStitchPass/PassageBodyVisitor already isolate it this way).
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "click to start the bid...",
+                    StateAffecting = false,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.UnknownNode
+                        {
+                            OriginalCode = "ViewBiddingSystem.instance.OnShowBidding(\"Target\", BiddingSystem.Bidding);",
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var outer = Nodes0(d);
+
+        Assert.Equal("popup", outer["type"]);
+        Assert.Equal("countdown_instructions", outer["layout"]);
+        Assert.Equal("click to start the bid...", outer["label"]);
+        Assert.False(outer.ContainsKey("okay"));
+        Assert.False(outer.ContainsKey("cancel"));
+
+        var outerContent = (List<Dictionary<string, object?>>)outer["content"]!;
+        var inner = outerContent[^1];
+        Assert.Equal("popup", inner["type"]);
+        Assert.Equal("countdown_action", inner["layout"]);
+        Assert.Equal("Start Bidding", inner["label"]);
+        Assert.Equal("Target", inner["target"]);
+        Assert.Equal("REVEAL", inner["okay"]);
+        Assert.Equal(false, inner["snapshot"]);
+
+        var innerContent = (List<Dictionary<string, object?>>)inner["content"]!;
+        Assert.Equal(4, innerContent.Count);
+        Assert.Equal(["3", "2", "1", "REVEAL"], innerContent.Select(n => n["value"]));
+        Assert.Equal(
+            ["countdown-3", "countdown-2", "countdown-1", "countdown-reveal"],
+            innerContent.Select(n => n["style"]));
+    }
+
+    [Fact]
+    public void OnShowBiddingCall_VotingMode_UsesVotingWording()
+    {
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click here to start the vote...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.UnknownNode
+                        {
+                            OriginalCode = "ViewBiddingSystem.instance.OnShowBidding(\"Target\", BiddingSystem.Voting);",
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var outer = Nodes0(d);
+        var outerContent = (List<Dictionary<string, object?>>)outer["content"]!;
+        var inner = outerContent[^1];
+
+        Assert.Equal("Start Voting", inner["label"]);
+        Assert.Equal(true, inner["snapshot"]);
+        Assert.Contains("Start Voting", (string)outerContent[0]["value"]!);
+    }
+
+    [Fact]
     public void ParagraphBreak_EmitsBreakWithParagraphStyle()
     {
         var passage = new MwsPassage
