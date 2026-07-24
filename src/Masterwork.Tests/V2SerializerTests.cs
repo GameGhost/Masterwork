@@ -55,6 +55,45 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void TextNode_NonEmphasisStyle_EmitsStyleField()
+    {
+        // Regression: TextNode.ToDict() used to consume Style only to decide bold/italic markdown
+        // wrapping (via ApplyInlineStyle) and never wrote a `style:` key at all — silently dropping
+        // any non-emphasis style, e.g. the special-event overlay marker (see
+        // PassageBodyVisitor.IsShowEventPopupCall), which needs `style:` in the v0.3 output for
+        // module CSS to hook into.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes = [new Masterwork.Extractor.TextNode { Template = "Special Event", Style = "special-event" }],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("Special Event", node["value"]);
+        Assert.Equal("special-event", node["style"]);
+    }
+
+    [Fact]
+    public void TextNode_BoldStyle_OmitsStyleField()
+    {
+        // "bold"/"italic" stay baked into the markdown value (**...**) — no separate style: field,
+        // matching how hand-authored content expresses emphasis inline.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes = [new Masterwork.Extractor.TextNode { Template = "Heading", Style = "bold" }],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("**Heading**", node["value"]);
+        Assert.False(node.ContainsKey("style"));
+    }
+
+    [Fact]
     public void ParagraphBreak_EmitsBreakWithParagraphStyle()
     {
         var passage = new MwsPassage

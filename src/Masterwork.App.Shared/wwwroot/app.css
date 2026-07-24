@@ -60,12 +60,6 @@ h1:focus {
     background: #fafafa;
 }
 
-/* event: full-bleed, no card frame, for one-off encounters */
-.mws-passage.layout-event {
-    border-left: 4px solid #7c3aed;
-    padding-left: 1.25rem;
-}
-
 /* Extractor-hoisted title/subtitle (hub/narration passages only — see CradleExtractor's
    TryHoistHeadingTitleSubtitle) get their own header region ahead of the node-driven body. */
 .mws-passage-header {

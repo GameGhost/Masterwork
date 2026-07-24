@@ -621,8 +621,6 @@ public partial class CradleExtractor
                 continue;
             }
 
-            nodes = InsertSpecialEventOverlay(nodes, tags);
-
             passages.Add(new MwsPassage
             {
                 PassageIndex = idx,
@@ -1049,10 +1047,11 @@ public partial class CradleExtractor
             return "hub";
         }
 
-        // "ck2" (special event) is NOT a distinct layout — the reference app shows it as a
-        // transient banner overlay on top of an ordinary narration passage, not a different frame/
-        // background. See InsertSpecialEventOverlay, called from BuildPassages after this returns,
-        // for the actual "ck2" handling — it prepends a synthesized node instead.
+        // "ck2" is NOT the special-event signal, despite looking plausible next to "ck"→hub — every
+        // real ViewSpecialEvent.instance.ShowEventPopup() call site in Cost of Disease has an empty
+        // tags array, and neither "ck2"-tagged passage (AngryMobStorybook, TipsnTricks) contains
+        // that call. A "ck2"-tagged passage is just an ordinary narration passage; the real overlay
+        // trigger is handled at the call site itself — see PassageBodyVisitor.IsShowEventPopupCall.
 
         // Cradle tag "INTRO" marks a generation-opening passage — visually distinct in the
         // reference app from ordinary narration (see masterwork-plan notes on layout survey).
@@ -1062,28 +1061,6 @@ public partial class CradleExtractor
         }
 
         return "narration";
-    }
-
-    // The reference app (ViewSpecialEvent) shows this as a transient fade-in/fade-out banner over
-    // whatever narration content is already on screen when a "ck2"-tagged passage renders — not a
-    // distinct background/border treatment (confirmed against real "ck2" passages in Cost of
-    // Disease, e.g. AngryMobStorybook/TipsnTricks: their own bodies are ordinary text/lineBreak/
-    // link content with no special call: the tag alone is what the *original Unity app* keys the
-    // overlay off of, entirely outside Cradle/MWS). Modeled here as a single synthesized `text`
-    // node prepended to the passage's own content — matches how the template's own
-    // `style-special-event` CSS treatment expects to find it (a fade animation + a
-    // pointer-events-blocking full-viewport layer while visible, entirely module-CSS-driven; the
-    // engine/extractor have no built-in notion of "an overlay"). Sound cue deferred — would attach
-    // to this same node once designed, since it plays on the same "passage just rendered" trigger.
-    private static List<MwsNode> InsertSpecialEventOverlay(List<MwsNode> nodes, string[] tags)
-    {
-        if (!tags.Any(t => t.Equals("ck2", StringComparison.OrdinalIgnoreCase)))
-        {
-            return nodes;
-        }
-
-        var overlay = new TextNode { Template = "Special Event", Style = "special-event" };
-        return [overlay, .. nodes];
     }
 
     // ── Heading (title/subtitle) hoisting ─────────────────────────────────────
@@ -2010,6 +1987,17 @@ public partial class CradleExtractor
     {
         if (node is TextNode t)
         {
+            // The special-event overlay marker (see PassageBodyVisitor.IsShowEventPopupCall) is a
+            // synthesized structural node, not real inline reading text — it must never merge with
+            // a neighboring TextNode (e.g. a bold heading immediately before it, with no break in
+            // between, exactly S5Special1a's own real shape). Returning false here both refuses to
+            // join an existing group (flushing it as its own node, unmerged) and skips starting a
+            // new group of its own, so text that follows it doesn't get pulled in either.
+            if (t.Style == "special-event")
+            {
+                return false;
+            }
+
             if (t.Template is not null)
             {
                 return true;

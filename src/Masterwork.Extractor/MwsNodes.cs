@@ -134,6 +134,15 @@ public class TextNode : MwsNode
             d["align"] = Align;
         }
 
+        // "bold"/"italic" are baked into the markdown value above via ApplyInlineStyle, not
+        // exposed as their own field — but a non-emphasis style (e.g. "special-event", see
+        // PassageBodyVisitor.IsShowEventPopupCall) has no markdown representation and must
+        // surface as a real v0.3 `style:` field for module CSS to hook into.
+        if (Style is not null and not "bold" and not "italic")
+        {
+            d["style"] = Style;
+        }
+
         return d;
     }
 }

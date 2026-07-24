@@ -969,13 +969,12 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void Ck2Tag_PrependsSpecialEventOverlay_AndStillHoistsHeadingNormally()
+    public void Ck2Tag_IsOrdinaryNarration_NoOverlaySynthesized()
     {
-        // "ck2" is no longer a distinct layout (the reference app shows the special-event banner
-        // as a transient overlay on an ordinary narration passage, not a different frame) — a
-        // "ck2"-tagged passage gets `layout: "narration"` like any other, so its own leading bold
-        // line still hoists into Title exactly as normal; the overlay is a synthesized node
-        // prepended to what's left of the body, not something that suppresses hoisting.
+        // "ck2" turned out NOT to be the special-event signal (see
+        // ShowEventPopupCall_EmitsSpecialEventNodeAtCallSitePosition for the real one) — a
+        // "ck2"-tagged passage is just ordinary narration, heading-hoist and all, nothing
+        // synthesized into its body just because of the tag.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -999,10 +998,46 @@ public class ExtractorTests
         Assert.Null(passages[0].Subtitle);
 
         var textNodes = passages[0].Nodes.OfType<TextNode>().ToList();
+        Assert.Single(textNodes);
+        Assert.Equal("Body text.", textNodes[0].Template);
+    }
+
+    [Fact]
+    public void ShowEventPopupCall_EmitsSpecialEventNodeAtCallSitePosition()
+    {
+        // The real signal: ViewSpecialEvent.instance.ShowEventPopup(), a plain statement (not a
+        // yield return — it produces no story output of its own in Cradle). Every real call site
+        // in Cost of Disease has an *empty* tags array, so this must be detected in the body, not
+        // via any tag. Modeled on the real shape of S5Special1a (the "A Bid for Mayor" mayoral-vote
+        // event): a bold title, then the call — not always the very first statement in the method,
+        // so the synthesized node must land wherever the call itself sits, not forced to the front.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("A Bid for Mayor");
+                }
+                StyleScope styleScope = null;
+                ViewSpecialEvent.instance.ShowEventPopup();
+                yield return base.lineBreak();
+                yield return base.text("All players take all their money into their hands.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("narration", passages[0].Layout);
+        Assert.Equal("A Bid for Mayor", passages[0].Title);
+
+        var textNodes = passages[0].Nodes.OfType<TextNode>().ToList();
         Assert.Equal(2, textNodes.Count);
         Assert.Equal("special-event", textNodes[0].Style);
         Assert.Equal("Special Event", textNodes[0].Template);
-        Assert.Equal("Body text.", textNodes[1].Template);
+        Assert.Equal("All players take all their money into their hands.", textNodes[1].Template);
     }
 
     [Fact]

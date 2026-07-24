@@ -768,6 +768,19 @@ public class PassageBodyVisitor
             return [new SetLocationNode()];
         }
 
+        // ViewSpecialEvent.instance.ShowEventPopup() — triggers a transient fade-in/fade-out
+        // banner overlay on top of whatever narration content is currently rendered. NOT signaled
+        // by a passage tag ("ck2" looked plausible — Cradle tags "ck"→hub, "ck2"→? — but every
+        // real ShowEventPopup() call site in Cost of Disease has an *empty* tags array, and neither
+        // "ck2"-tagged passage in that source contains this call at all; the two are unrelated).
+        // This is the actual, only reliable signal. Emitted at the exact call-site position, not
+        // forced to the front of the passage — some call sites have real narrative content before
+        // them (e.g. S5Special1a's own bold title + lineBreak precede it).
+        if (expr is InvocationExpressionSyntax sev && IsShowEventPopupCall(sev))
+        {
+            return [new TextNode { Template = "Special Event", Style = "special-event" }];
+        }
+
         // ViewGenerationEnding, ViewPopupPanel utility calls — skip
         if (expr is InvocationExpressionSyntax utilInv && IsIgnorableCall(utilInv))
         {
@@ -2456,6 +2469,9 @@ public class PassageBodyVisitor
     private static bool IsSetLocationCall(InvocationExpressionSyntax inv) =>
         GetSimpleMethodName(inv) == "SetLocationIndicatorIcon";
 
+    private static bool IsShowEventPopupCall(InvocationExpressionSyntax inv) =>
+        GetSimpleMethodName(inv) == "ShowEventPopup";
+
     // ViewController.instance.ChangeView(ViewController.instance.<view>) — extracts the trailing
     // "<view>" identifier off the single argument (a member-access chain), e.g. "scoreEntry" from
     // "ViewController.instance.scoreEntry". False if this isn't a ChangeView call, or its argument
@@ -2553,9 +2569,11 @@ public class PassageBodyVisitor
     private static bool IsIgnorableCall(InvocationExpressionSyntax inv)
     {
         var name = GetSimpleMethodName(inv);
-        // Unity API calls with no MWS equivalent — logged but not emitted as nodes
+        // Unity API calls with no MWS equivalent — logged but not emitted as nodes. ShowEventPopup
+        // used to be here too — it has a real MWS equivalent now, see IsShowEventPopupCall above,
+        // checked earlier in the dispatch so it never reaches this list.
         return name is "Clear" or "EnableDisableContinueBtn" or "OnGenerationBtn"
-            or "PassageValueNumber" or "ShowEventPopup" or "Log";
+            or "PassageValueNumber" or "Log";
     }
 
     private static bool IsIgnorableAssignment(ExpressionStatementSyntax es)
