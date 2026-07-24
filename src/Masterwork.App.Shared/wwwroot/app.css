@@ -212,8 +212,7 @@ h1:focus {
     max-width: 30rem;
 }
 
-/* .mws-popup-container wraps the header/content/footer regions (see RenderedPopupView.razor) —
-   voting/bidding's own .mws-voting-popup is a separate, simpler stack and isn't affected by this. */
+/* .mws-popup-container wraps the header/content/footer regions (see RenderedPopupView.razor). */
 .mws-popup-container {
     display: flex;
     flex-direction: column;
@@ -229,11 +228,6 @@ h1:focus {
     gap: 0.5rem;
     margin-top: 1rem;
     flex-shrink: 0;
-}
-
-.mws-voting-popup .mws-countdown {
-    font-size: 3rem;
-    text-align: center;
 }
 
 .mws-timeline {

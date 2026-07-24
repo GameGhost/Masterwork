@@ -709,7 +709,7 @@ Okay/Cancel dismissal mirrors `link`'s own `target`/`onclick` shape: `onclose` r
 | `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS (e.g. `link`, `button`) |
 | `layout` | string | no | Named layout definition (see §8) — overrides the popup's default visual treatment |
 | `header` | list | no | Optional nodes rendered in a separate structural region, before `content` — evaluated eagerly the same way. Purely structural: the format doesn't prescribe what a header contains or how it's positioned, that's entirely up to module CSS. The extractor uses this for a Cradle `setupStyle` block's image, for example, but any node list is valid |
-| `content` | list | no | Content nodes for the popup body — evaluated eagerly, at passage-render time (see the popup transaction model below). For layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated the same way to bind layout properties |
+| `content` | list | no | Content nodes for the popup body — evaluated eagerly, at passage-render time (see the popup transaction model below). For layout-driven popups, may contain `let`/`conditional`/`switch` nodes evaluated the same way to bind layout properties. May also contain another `popup` node — see the nested-popup example below |
 | `okay` | string | no | Okay button label (string formatting — see §3); only rendered if present. Clicking it commits any pending `input` values in `content`, runs `onclose`, then resolves `target` |
 | `cancel` | string | no | Cancel button label; only rendered if present. Clicking it discards the popup's pending state entirely — no `onclose`, no `target`, no commit |
 | `onclose` | list | no | `let`, `assign`, and `conditional` nodes run when Okay is clicked, before `target` is resolved — same shape and timing as `link.onclick`. A `goto` among these preempts `target` |
@@ -754,9 +754,39 @@ Popup collecting a value via an `input` inside its content — guarded so it onl
 Layout-driven popup — body owned by the layout, no content nodes:
 ```yaml
 - type: 'popup'
-  layout: 'voting'
+  layout: 'setup'
   label: 'restext://S4Kill2_006'  # "Click to start the vote..."
   target: 'S4Kill3'
+```
+
+Nested popup — a `popup` node inside another popup's own `content:`. This is how a
+countdown-then-reveal interaction (the reference app's `ViewBiddingSystem`, formerly special-cased
+as the `voting`/`bidding` layout values) is built: the outer popup is a pure instructional
+container with no `okay`/`cancel` of its own (only ever carried away by the inner popup's own
+navigation), and the inner popup's own `label` renders as an ordinary trigger button *inline within
+the outer's content* — see `Masterwork-Modules/my-fathers-work-template`'s
+`countdown_instructions`/`countdown_action` layouts for the full worked example, including the CSS
+that makes the inner popup's Okay button cover the full viewport, invisibly, until a countdown
+animation finishes. Nesting needs no engine support beyond what already exists — a popup's
+`content:` is rendered through the same node-list machinery as everything else, so a nested
+popup's own sandboxed store just clones from its parent's, the same way the parent's clones from
+the live store:
+```yaml
+- type: 'popup'
+  layout: 'countdown_instructions'
+  label: 'restext://S5Special1a_008'  # "click to start the bid..."
+  content:
+  - type: 'text'
+    value: 'restext://Bidding_Instructions'
+  - type: 'popup'
+    layout: 'countdown_action'
+    label: 'restext://Bidding_StartButton'  # "START BIDDING"
+    content:
+    - type: 'text'
+      value: 'restext://Countdown_Three'
+      style: 'countdown-3'
+    okay: 'restext://Countdown_Reveal'
+    target: 'S5Special1b'
 ```
 
 Layout-driven popup with property bindings — content nodes bind values to layout properties at open time:
@@ -1158,17 +1188,22 @@ Extracted passage files include YAML comments injected by the extractor. These a
 `layout` (on both passages and popups) is an open, module-extensible string. The app never
 branches on its value to decide *what* to render — it always renders the same purely structural
 regions (a passage's node list; a popup's `header`/`content`/`okay`/`cancel`) — the value is only
-ever carried through as a `layout-{value}` CSS class for module stylesheets to target. `voting` and
-`bidding` are the one exception: the app renders a bespoke countdown-then-reveal component
-(`VotingPopupContent`) for those two popup layout values specifically. Every other layout value —
-`hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/`end_of_round`/
-`input-popup`/anything module-defined on popups — renders through the fully generic path; all
-visual differentiation comes
-from module CSS keyed on the `layout-{value}` class (see `Masterwork.App.Shared`'s
-`PassageView.razor`/`RenderedPopupView.razor`, and e.g.
+ever carried through as a `layout-{value}` CSS class for module stylesheets to target. Every layout
+value — `hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/
+`end_of_round`/`input-popup`/anything module-defined on popups — renders through the fully generic
+path; all visual differentiation comes from module CSS keyed on the `layout-{value}` class (see
+`Masterwork.App.Shared`'s `PassageView.razor`/`RenderedPopupView.razor`, and e.g.
 `Masterwork-Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`
 rules for a worked example). There is no manifest-declared `layouts:`/`popups:` registry — layout
 values are just strings the extractor and a module's own CSS agree on.
+
+`voting`/`bidding` used to be the one exception — a bespoke countdown-then-reveal component
+(`VotingPopupContent`) rendered those two popup layout values specially, bypassing module CSS
+entirely. Retired: a countdown-then-reveal interaction is fully expressible as an ordinary nested
+popup (a `type: popup` node inside another popup's own `content:` — see §6's `popup` entry for the
+worked example, and `Masterwork-Modules/my-fathers-work-template`'s `countdown_instructions`/
+`countdown_action` layouts for the full pattern), so it needed no special-casing at all once
+someone actually built it that way.
 
 ### Layout chrome (`layouts/{id}.mws.yaml`)
 

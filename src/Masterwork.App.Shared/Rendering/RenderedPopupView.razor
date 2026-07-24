@@ -12,75 +12,66 @@
 else
 {
     <div class="mws-popup-overlay layout-@(Node.Layout ?? "default") style-@(Node.Style ?? "default")">
-        @switch (Node.Layout)
+        @* Purely structural — the app never inspects a node's style/layout to decide what goes
+           where (no more "voting"/"bidding" special case; those retired in favor of a real
+           declarative nested-popup pattern, see my-fathers-work-template's countdown_instructions/
+           countdown_action). Header/Content/Footer are just three node-list regions the format
+           already gives us (RenderedPopup.Header/Content, Okay/Cancel); module CSS is entirely
+           responsible for what each one looks like. Node.Chrome is the same idea one level up —
+           module-authored regions matched by Node.Layout's name, nesting outside this popup's own
+           structural regions (see PassageView.razor for the same composition order applied to
+           passages). *@
+        @if (Node.Chrome.Header.Count > 0)
         {
-            case "voting":
-                <VotingPopupContent Content="Node.Content" Label="Cast your vote" Session="Session" OnClosed="Accept" OnInputChanged="OnInputChanged" />
-                break;
-            case "bidding":
-                <VotingPopupContent Content="Node.Content" Label="Place your bid" Session="Session" OnClosed="Accept" OnInputChanged="OnInputChanged" />
-                break;
-            default:
-                @* Purely structural — the app never inspects a node's style/layout to decide what
-                   goes where. Header/Content/Footer are just three node-list regions the format
-                   already gives us (RenderedPopup.Header/Content, Okay/Cancel); module CSS is
-                   entirely responsible for what each one looks like. Node.Chrome is the same idea
-                   one level up — module-authored regions matched by Node.Layout's name, nesting
-                   outside this popup's own structural regions (see PassageView.razor for the same
-                   composition order applied to passages). *@
-                @if (Node.Chrome.Header.Count > 0)
-                {
-                    <div class="mws-layout-header">
-                        <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                    </div>
-                }
-                <div class="mws-popup-container">
-                    @if (Node.Header.Count > 0)
+            <div class="mws-layout-header">
+                <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            </div>
+        }
+        <div class="mws-popup-container">
+            @if (Node.Header.Count > 0)
+            {
+                <div class="mws-popup-header">
+                    <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                </div>
+            }
+            @if (Node.Chrome.BeforeContent.Count > 0)
+            {
+                <div class="mws-layout-before-content">
+                    <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                </div>
+            }
+            <div class="mws-popup-content">
+                <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            </div>
+            @if (Node.Chrome.AfterContent.Count > 0)
+            {
+                <div class="mws-layout-after-content">
+                    <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                </div>
+            }
+            @if (Node.Okay is not null || Node.Cancel is not null)
+            {
+                @* Cancel before Okay in markup — Okay lands on the right in a left-to-right
+                   flex row (web convention: primary action right, secondary left), and
+                   keyboard tab order follows the same source order, so visual and tab order
+                   agree instead of a CSS-only reorder desyncing them. *@
+                <div class="mws-popup-footer">
+                    @if (Node.Cancel is not null)
                     {
-                        <div class="mws-popup-header">
-                            <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                        </div>
+                        <button type="button" class="mws-popup-cancel" @onclick="Cancel">@Node.Cancel</button>
                     }
-                    @if (Node.Chrome.BeforeContent.Count > 0)
+                    @if (Node.Okay is not null)
                     {
-                        <div class="mws-layout-before-content">
-                            <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                        </div>
-                    }
-                    <div class="mws-popup-content">
-                        <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                    </div>
-                    @if (Node.Chrome.AfterContent.Count > 0)
-                    {
-                        <div class="mws-layout-after-content">
-                            <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                        </div>
-                    }
-                    @if (Node.Okay is not null || Node.Cancel is not null)
-                    {
-                        @* Cancel before Okay in markup — Okay lands on the right in a left-to-right
-                           flex row (web convention: primary action right, secondary left), and
-                           keyboard tab order follows the same source order, so visual and tab order
-                           agree instead of a CSS-only reorder desyncing them. *@
-                        <div class="mws-popup-footer">
-                            @if (Node.Cancel is not null)
-                            {
-                                <button type="button" class="mws-popup-cancel" @onclick="Cancel">@Node.Cancel</button>
-                            }
-                            @if (Node.Okay is not null)
-                            {
-                                <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
-                            }
-                        </div>
+                        <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
                     }
                 </div>
-                @if (Node.Chrome.Footer.Count > 0)
-                {
-                    <div class="mws-layout-footer">
-                        <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
-                    </div>
-                }
-                break;
+            }
+        </div>
+        @if (Node.Chrome.Footer.Count > 0)
+        {
+            <div class="mws-layout-footer">
+                <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            </div>
         }
     </div>
 }
