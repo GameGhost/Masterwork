@@ -13,6 +13,8 @@
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
+@inject ILogger<StartNewGame> Logger
+@inject IModuleFilePicker FilePicker
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
@@ -24,9 +26,16 @@
         <div class="mws-start-new-game">
             <div class="mws-module-toolbar">
                 <button type="button" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
-                <label for="mws-upload-input" class="mws-upload-button">@AppStrings.StartNewGame_UploadModule</label>
-                <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
-                           accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
+                @if (FilePicker.IsAvailable)
+                {
+                    <button type="button" class="mws-upload-button" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
+                }
+                else
+                {
+                    <label for="mws-upload-input" class="mws-upload-button">@AppStrings.StartNewGame_UploadModule</label>
+                    <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
+                               accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
+                }
             </div>
             @if (_uploadError is not null)
             {
@@ -266,6 +275,7 @@
 
     private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
     {
+        Logger.LogInformation("Module upload: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
         _uploadError = null;
         try
         {
@@ -273,36 +283,74 @@
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
             var bytes = memory.ToArray();
+            Logger.LogInformation("Module upload: read {Size} bytes from InputFile", bytes.Length);
 
-            var contents = ModulePackage.ReadFromBytes(bytes);
-            if (contents.ManifestYaml is null)
-            {
-                _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
-                return;
-            }
-
-            var manifest = new ManifestParser().Parse(contents.ManifestYaml);
-            if (manifest.Id == BuiltInModules.DemoModuleId)
-            {
-                _uploadError = AppStrings.StartNewGame_UploadError_ReservedId;
-                return;
-            }
-
-            var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
-            if (existing is null)
-            {
-                await InstallBytesAsync(bytes);
-                return;
-            }
-
-            await PrepareConflictPromptAsync(bytes, manifest, existing);
+            await ProcessUploadedBytesAsync(bytes);
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Module upload: InputFile read/process failed");
             // ex.Message is an internal exception message (English, per the "behind the scenes
             // strings stay in code" rule) even though it surfaces in this user-facing dialog.
             _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
         }
+    }
+
+    // MAUI-only path (FilePicker.IsAvailable) — see IModuleFilePicker's own remarks for why this
+    // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected.
+    private async Task OnNativePickerClicked()
+    {
+        Logger.LogInformation("Module upload: native picker opened");
+        _uploadError = null;
+        try
+        {
+            var bytes = await FilePicker.PickAsync();
+            if (bytes is null)
+            {
+                Logger.LogInformation("Module upload: native picker cancelled");
+                return;
+            }
+            Logger.LogInformation("Module upload: read {Size} bytes from native picker", bytes.Length);
+
+            await ProcessUploadedBytesAsync(bytes);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Module upload: native picker read/process failed");
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+        }
+    }
+
+    // Shared by both upload paths above — everything from "bytes on disk" onward, regardless of how
+    // they were picked.
+    private async Task ProcessUploadedBytesAsync(byte[] bytes)
+    {
+        var contents = ModulePackage.ReadFromBytes(bytes);
+        if (contents.ManifestYaml is null)
+        {
+            Logger.LogWarning("Module upload: package has no manifest.yaml");
+            _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
+            return;
+        }
+
+        var manifest = new ManifestParser().Parse(contents.ManifestYaml);
+        if (manifest.Id == BuiltInModules.DemoModuleId)
+        {
+            Logger.LogWarning("Module upload: package id {ModuleId} collides with the reserved demo id", manifest.Id);
+            _uploadError = AppStrings.StartNewGame_UploadError_ReservedId;
+            return;
+        }
+
+        var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
+        if (existing is null)
+        {
+            Logger.LogInformation("Module upload: installing new module {ModuleId} v{Version}", manifest.Id, manifest.Version);
+            await InstallBytesAsync(bytes);
+            return;
+        }
+
+        Logger.LogInformation("Module upload: {ModuleId} already installed (existing v{ExistingVersion}, uploaded v{UploadedVersion}) — prompting", manifest.Id, existing.Version, manifest.Version);
+        await PrepareConflictPromptAsync(bytes, manifest, existing);
     }
 
     // Compares the uploaded manifest's version against what's already installed under the same id
@@ -370,9 +418,11 @@
             var installed = await ModuleStore.InstallAsync(bytes);
             _modules = await ModuleStore.ListAsync();
             SelectModule(installed.ModuleId);
+            Logger.LogInformation("Module upload: installed {ModuleId} v{Version}", installed.ModuleId, installed.Version);
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Module upload: install failed");
             // ex.Message is an internal exception message (English, per the "behind the scenes
             // strings stay in code" rule) even though it surfaces in this user-facing dialog.
             _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);

@@ -42,6 +42,9 @@ public static class MauiProgram
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
         builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
+        // Overrides Shared's NullModuleFilePicker default — see IModuleFilePicker's own remarks for
+        // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload.
+        builder.Services.AddScoped<IModuleFilePicker, MauiModuleFilePicker>();
 
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the

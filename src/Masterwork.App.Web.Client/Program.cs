@@ -26,6 +26,9 @@ builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
+// No WebView2 host here — the InputFile element StartNewGame.razor uses for module upload doesn't
+// hit the crash IModuleFilePicker documents, so this default (never actually called) is enough.
+builder.Services.AddScoped<IModuleFilePicker, NullModuleFilePicker>();
 
 var host = builder.Build();
 
