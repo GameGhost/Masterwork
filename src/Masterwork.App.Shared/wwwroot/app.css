@@ -221,6 +221,11 @@ h1:focus {
 
 .mws-popup-content {
     overflow-y: auto;
+    /* Without an explicit overflow-x, the spec computes it as auto (not visible) once overflow-y
+       is non-visible — so any 1px rounding overflow (fractional vw widths, mask pseudo-elements)
+       triggers a spurious horizontal scrollbar even though text is wrapping correctly. Content
+       here is only ever meant to scroll vertically. */
+    overflow-x: hidden;
 }
 
 .mws-popup-footer {
