@@ -6,7 +6,7 @@
 {
     @if (!Node.AutoDisplay)
     {
-        <button type="button" class="mws-popup-trigger" disabled="@IsRewound" @onclick="Open">@Node.Label</button>
+        <button type="button" class="mws-popup-trigger style-@(Node.Style ?? "default")" disabled="@IsRewound" @onclick="Open">@Node.Label</button>
     }
 }
 else
