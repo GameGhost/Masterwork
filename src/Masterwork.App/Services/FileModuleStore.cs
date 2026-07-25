@@ -47,7 +47,7 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
             : null;
         var module = loader.LoadFromSources(
             contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride,
-            contents.LayoutYamls);
+            contents.LayoutYamls, contents.AdditionalVariableYamls);
         return LoadedModuleContent.FromPackage(contents, module);
     }
 
