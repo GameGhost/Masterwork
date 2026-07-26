@@ -9,7 +9,7 @@
     {
         <h3>@_titleMarkup</h3>
     }
-    <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+    <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@FirstFocusableInputId" />
 </section>
 
 @code {
@@ -32,6 +32,10 @@
     /// <summary>Cheaper sibling of <see cref="OnStateChanged"/> for purely-local changes — see <see cref="PassageView.OnInputChanged"/>.</summary>
     [Parameter]
     public EventCallback OnInputChanged { get; set; }
+
+    /// <summary>Forwarded straight through to this section's own content — see <see cref="FocusHelper"/>.</summary>
+    [Parameter]
+    public string? FirstFocusableInputId { get; set; }
 
     private MarkupString _titleMarkup;
     private string? _expandedFor;

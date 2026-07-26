@@ -20,7 +20,7 @@
     @if (Result.Chrome.Header.Count > 0)
     {
         <div class="mws-layout-header">
-            <NodeListView Nodes="Result.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            <NodeListView Nodes="Result.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
         </div>
     }
     @if (Result.Title is not null)
@@ -36,22 +36,22 @@
     @if (Result.Chrome.BeforeContent.Count > 0)
     {
         <div class="mws-layout-before-content">
-            <NodeListView Nodes="Result.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            <NodeListView Nodes="Result.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
         </div>
     }
     <div class="mws-passage-body">
-        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+        <NodeListView Nodes="Result.Nodes" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
     </div>
     @if (Result.Chrome.AfterContent.Count > 0)
     {
         <div class="mws-layout-after-content">
-            <NodeListView Nodes="Result.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            <NodeListView Nodes="Result.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
         </div>
     }
     @if (Result.Chrome.Footer.Count > 0)
     {
         <div class="mws-layout-footer">
-            <NodeListView Nodes="Result.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            <NodeListView Nodes="Result.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
         </div>
     }
 </div>
@@ -80,4 +80,14 @@
     /// </summary>
     [Parameter]
     public EventCallback OnInputChanged { get; set; }
+
+    private string? _firstFocusableInputId;
+
+    // Recomputed only when Result itself changes (a new passage render) — computing this once here
+    // rather than as a property re-evaluated by each of the five NodeListView usages below.
+    protected override void OnParametersSet()
+    {
+        _firstFocusableInputId = FocusHelper.FindFirstFocusableInputId(
+            Result.Chrome.Header, Result.Chrome.BeforeContent, Result.Nodes, Result.Chrome.AfterContent, Result.Chrome.Footer);
+    }
 }

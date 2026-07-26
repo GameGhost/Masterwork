@@ -2,6 +2,7 @@
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 @using Masterwork.ModuleFormat
+@inject IJSRuntime JS
 
 <label class="mws-input style-@(Node.Style ?? "default")">
     @Node.Label
@@ -18,6 +19,8 @@
                min="@Node.Min" max="@Node.Max"
                value="@_value"
                disabled="@IsRewound"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               @ref="_inputElement"
                @oninput="HandleInput" />
     }
 </label>
@@ -36,6 +39,15 @@
     public bool IsRewound { get; set; }
 
     /// <summary>
+    /// The id of whichever input the enclosing passage/popup determined should receive automatic
+    /// focus (see <see cref="FocusHelper"/>) — compared against <see cref="Node"/>'s own id, not
+    /// passed down as a plain bool, so only one <c>RenderedInputView</c> instance out of however many
+    /// render ever tries to focus itself.
+    /// </summary>
+    [Parameter]
+    public string? FirstFocusableInputId { get; set; }
+
+    /// <summary>
     /// Invoked after every keystroke so sibling components (e.g. a <c>link</c>'s disabled state,
     /// which depends on <see cref="GameSession.AreCurrentInputsValid"/>) re-render — Blazor only
     /// auto-re-renders the component whose own event handler fired, not siblings. A draft keystroke
@@ -48,6 +60,7 @@
 
     private string _value = "";
     private bool _checked;
+    private ElementReference _inputElement;
 
     protected override void OnParametersSet()
     {
@@ -62,6 +75,21 @@
         _value = IsRewound
             ? Session.Current.Variables.TryGetValue(Node.Var, out var historical) ? historical.AsString() : ""
             : Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var draft) ? draft.ToString() ?? "" : "";
+    }
+
+    // Fires exactly once per genuine appearance of this specific input (a new passage render, or a
+    // just-opened popup) — NodeListView keys each rendered node by its own object identity, and a new
+    // passage/popup render always produces fresh RenderedInput instances, so this component (and thus
+    // firstRender) is recreated then and only then; an unrelated re-render (e.g. a sibling input's own
+    // keystroke) reuses this same instance and never sees firstRender again. Skipped for boolean
+    // (checkbox) inputs and while rewound (disabled anyway, and nothing to type into mid-review).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !IsRewound && Node.InputType != InputValueType.Boolean && Node.Id == FirstFocusableInputId)
+        {
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/inputFocus.js");
+            await module.InvokeVoidAsync("focusWithoutMobileKeyboard", _inputElement);
+        }
     }
 
     private async Task HandleInput(ChangeEventArgs e)

@@ -24,29 +24,29 @@ else
         @if (Node.Chrome.Header.Count > 0)
         {
             <div class="mws-layout-header">
-                <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                <NodeListView Nodes="Node.Chrome.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
             </div>
         }
         <div class="mws-popup-container">
             @if (Node.Header.Count > 0)
             {
                 <div class="mws-popup-header">
-                    <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                    <NodeListView Nodes="Node.Header" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
                 </div>
             }
             @if (Node.Chrome.BeforeContent.Count > 0)
             {
                 <div class="mws-layout-before-content">
-                    <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                    <NodeListView Nodes="Node.Chrome.BeforeContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
                 </div>
             }
             <div class="mws-popup-content">
-                <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                <NodeListView Nodes="Node.Content" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
             </div>
             @if (Node.Chrome.AfterContent.Count > 0)
             {
                 <div class="mws-layout-after-content">
-                    <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                    <NodeListView Nodes="Node.Chrome.AfterContent" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
                 </div>
             }
             @if (Node.Okay is not null || Node.Cancel is not null)
@@ -70,7 +70,7 @@ else
         @if (Node.Chrome.Footer.Count > 0)
         {
             <div class="mws-layout-footer">
-                <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+                <NodeListView Nodes="Node.Chrome.Footer" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@_firstFocusableInputId" />
             </div>
         }
     </div>
@@ -98,6 +98,7 @@ else
     public EventCallback OnInputChanged { get; set; }
 
     private bool IsOpen => Session.ViewState.ExpandedPopups.Contains(Node.Id);
+    private string? _firstFocusableInputId;
 
     protected override void OnInitialized()
     {
@@ -105,6 +106,18 @@ else
         {
             Open();
         }
+    }
+
+    // Scoped to this popup's own regions only — never the enclosing passage's, and never a nested
+    // popup's own content (see FocusHelper's remarks) — recomputed whenever Node itself changes (a
+    // new passage render), same as PassageView's identical pattern. The open/closed toggle itself
+    // doesn't need to recompute this: the @if/@else below tears down and recreates every input
+    // inside when a popup opens, which is what actually triggers the one-time focus attempt (see
+    // RenderedInputView's own remarks on why firstRender means exactly that here).
+    protected override void OnParametersSet()
+    {
+        _firstFocusableInputId = FocusHelper.FindFirstFocusableInputId(
+            Node.Chrome.Header, Node.Header, Node.Chrome.BeforeContent, Node.Content, Node.Chrome.AfterContent, Node.Chrome.Footer);
     }
 
     private void Open()

@@ -25,13 +25,13 @@
             <RenderedImageView @key="key" Node="image" />
             break;
         case RenderedSection section:
-            <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
+            <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@FirstFocusableInputId" />
             break;
         case RenderedLink link:
             <RenderedLinkView @key="key" Node="link" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" />
             break;
         case RenderedInput input:
-            <RenderedInputView @key="key" Node="input" Session="Session" IsRewound="IsRewound" OnInputChanged="OnInputChanged" />
+            <RenderedInputView @key="key" Node="input" Session="Session" IsRewound="IsRewound" OnInputChanged="OnInputChanged" FirstFocusableInputId="@FirstFocusableInputId" />
             break;
         case RenderedPopup popup:
             <RenderedPopupView @key="key" Node="popup" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" />
@@ -59,4 +59,12 @@
     /// <summary>Cheaper sibling of <see cref="OnStateChanged"/> for purely-local changes — see <see cref="PassageView.OnInputChanged"/>.</summary>
     [Parameter]
     public EventCallback OnInputChanged { get; set; }
+
+    /// <summary>
+    /// The id of whichever input should receive automatic focus, if any — see <see cref="FocusHelper"/>.
+    /// Forwarded into a nested <see cref="RenderedSectionView"/> (part of the same scope) but not
+    /// into a <see cref="RenderedPopupView"/>'s own content — a popup computes its own independently.
+    /// </summary>
+    [Parameter]
+    public string? FirstFocusableInputId { get; set; }
 }
