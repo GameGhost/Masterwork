@@ -127,7 +127,7 @@
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Sélectionnez un module pour commencer.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Jouer</value></data>
   <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Reprendre la session en cours?</value></data>
-  <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} a déjà une sauvegarde automatique en cours.</value></data>
+  <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} a déjà une session en cours.</value></data>
   <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Abandonner la session précédente</value></data>
   <data name="StartNewGame_AlreadyInstalledTitle" xml:space="preserve"><value>Déjà installé</value></data>
   <data name="StartNewGame_AlreadyInstalledBody" xml:space="preserve"><value>« {0} » v{1} est déjà installé et ce fichier est identique.</value></data>

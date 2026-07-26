@@ -127,7 +127,7 @@
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Select a module to get started.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Play</value></data>
   <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Resume in-progress session?</value></data>
-  <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} already has an autosave in progress.</value></data>
+  <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} already has a session in progress.</value></data>
   <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Discard previous session</value></data>
   <data name="StartNewGame_AlreadyInstalledTitle" xml:space="preserve"><value>Already installed</value></data>
   <data name="StartNewGame_AlreadyInstalledBody" xml:space="preserve"><value>"{0}" v{1} is already installed and this file is identical.</value></data>

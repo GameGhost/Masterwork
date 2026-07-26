@@ -199,11 +199,9 @@ else
         var json = JsonSerializer.Serialize(State.Session.Serialize());
         await SaveStore.SaveAsync(entry, json);
 
-        // The named save now stands in for this session going forward — dropping the autosave keeps
-        // it from lingering as a second, confusingly-similar entry (and keeps "the autosave is always
-        // the newest save" true, since there's no longer a bare autosave at all for this module).
-        await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
-
+        // The autosave is deliberately left in place — Start New Game and Continue now both consider
+        // whichever save (autosave or named) is actually most recent, rather than always assuming the
+        // autosave wins, so leaving it here no longer risks silently shadowing this named save.
         await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/continue");
@@ -211,13 +209,9 @@ else
 
     private async Task AbandonGame()
     {
-        // Abandoning means the session's progress isn't wanted at all — unlike Save and Quit, there's
-        // no named save to fall back to, so the autosave (the only record of this progress) goes too.
-        if (State.ModuleId is not null)
-        {
-            await SaveStore.DeleteAsync(SaveIds.Autosave(State.ModuleId));
-        }
-
+        // The autosave is deliberately left in place — abandoning just means "stop playing right
+        // now," not "erase this progress." The player can still find it via Continue (or get
+        // prompted to resume it from Start New Game) later if they change their mind.
         await StyleInjector.ApplyAsync(null);
         State.Clear();
         Nav.NavigateTo("/");

@@ -139,10 +139,11 @@
         return null;
     }
 
-    // Only warns when resuming a named save would actually clobber an existing autosave for that
-    // module — once play resumes, PersistAutosaveAsync (Play.razor) starts overwriting the module's
-    // autosave with this save's progress, but there's nothing to lose if that module has no autosave
-    // right now (e.g. it was already deleted via Abandon Game or a prior ending).
+    // Only warns when resuming this save would actually clobber *newer* progress sitting in that
+    // module's autosave — once play resumes, PersistAutosaveAsync (Play.razor) starts overwriting
+    // the module's autosave with this save's progress. Nothing is lost by resuming a save that's
+    // itself the autosave, or one that's already at least as recent as the autosave (a manual save
+    // taken after the autosave supersedes it, same as Start New Game's own conflict check).
     private Task Resume(SaveEntry entry)
     {
         _resumeError = null;
@@ -155,8 +156,9 @@
             return Task.CompletedTask;
         }
 
-        var wouldOverwriteAutosave = !entry.IsAutosave && _saves.Any(s => s.ModuleId == entry.ModuleId && s.IsAutosave);
-        if (!wouldOverwriteAutosave)
+        var autosave = _saves.FirstOrDefault(s => s.ModuleId == entry.ModuleId && s.IsAutosave);
+        var wouldOverwriteNewerAutosave = !entry.IsAutosave && autosave is not null && autosave.LastPlayedUtc > entry.LastPlayedUtc;
+        if (!wouldOverwriteNewerAutosave)
         {
             return ConfirmResume(entry);
         }

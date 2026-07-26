@@ -76,14 +76,14 @@
                     <div class="mws-dialog">
                         <h3>@AppStrings.StartNewGame_ConflictTitle</h3>
                         <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_ConflictBody, _conflictModule.Title)</p>
-                        @if (ConflictAutosaveSummary() is { } summary)
+                        @if (ConflictSaveSummary() is { } summary)
                         {
                             <p class="mws-save-timestamp">@summary</p>
                         }
                         <div class="mws-dialog-actions">
                             <button type="button" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
                             <button type="button" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
-                            <button type="button" @onclick="() => { _conflictModule = null; _conflictAutosave = null; }">@AppStrings.Common_Cancel</button>
+                            <button type="button" @onclick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</button>
                         </div>
                     </div>
                 </div>
@@ -122,7 +122,7 @@
     private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
     private string? _selectedLanguage;
     private InstalledModule? _conflictModule;
-    private SaveEntry? _conflictAutosave;
+    private SaveEntry? _conflictSave;
     private string? _uploadError;
     private PendingUpload? _pendingUpload;
     private ErrorBoundary? _errorBoundary;
@@ -204,14 +204,16 @@
         StateHasChanged();
     }
 
-    private string? ConflictAutosaveSummary()
+    private string? ConflictSaveSummary()
     {
-        if (_conflictAutosave is null)
+        if (_conflictSave is null)
         {
             return null;
         }
 
-        var parts = new[] { _conflictAutosave.LastStateLabel, _conflictAutosave.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture), _conflictAutosave.Language }
+        // DisplayName is null for the autosave, so this reads naturally either way: a named save's
+        // own name leads, or (for the autosave) straight into where it left off.
+        var parts = new[] { _conflictSave.DisplayName, _conflictSave.LastStateLabel, _conflictSave.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture), _conflictSave.Language }
             .Where(s => !string.IsNullOrEmpty(s));
         return string.Join(" · ", parts);
     }
@@ -223,13 +225,16 @@
             return;
         }
 
-        var autosaveId = SaveIds.Autosave(module.ModuleId);
+        // Whichever save (autosave or named) was actually played most recently wins — a manual save
+        // taken after the autosave supersedes it here, same as it does everywhere else now (see
+        // Play.razor's Save-and-Quit/Abandon, which both leave the autosave in place, and
+        // ContinueList's own newer-autosave check).
         var saves = await SaveStore.ListAsync();
-        var autosave = saves.FirstOrDefault(s => s.Id == autosaveId);
-        if (autosave is not null)
+        var mostRecent = saves.Where(s => s.ModuleId == module.ModuleId).OrderByDescending(s => s.LastPlayedUtc).FirstOrDefault();
+        if (mostRecent is not null)
         {
             _conflictModule = module;
-            _conflictAutosave = autosave;
+            _conflictSave = mostRecent;
             return;
         }
 
@@ -238,17 +243,17 @@
 
     private async Task ResumeConflicting()
     {
-        if (_conflictModule is null)
+        if (_conflictModule is null || _conflictSave is null)
         {
             return;
         }
 
         var module = _conflictModule;
-        var autosaveLanguage = _conflictAutosave?.Language;
+        var saveEntry = _conflictSave;
         _conflictModule = null;
-        _conflictAutosave = null;
+        _conflictSave = null;
 
-        var json = await SaveStore.LoadAsync(SaveIds.Autosave(module.ModuleId));
+        var json = await SaveStore.LoadAsync(saveEntry.Id);
         if (json is null)
         {
             await StartFreshAsync(module, _selectedLanguage);
@@ -262,9 +267,9 @@
         }
         catch (JsonException)
         {
-            // An autosave from an incompatible/older save-format revision — treat exactly like no
-            // autosave existing rather than crashing the app on a stale format the player can't do
-            // anything about (see SnapshotKind's remarks for a concrete example of how this happens).
+            // A save from an incompatible/older save-format revision — treat exactly like no save
+            // existing rather than crashing the app on a stale format the player can't do anything
+            // about (see SnapshotKind's remarks for a concrete example of how this happens).
             save = null;
         }
 
@@ -282,10 +287,10 @@
         _loadingTotal = null;
         try
         {
-            var loaded = await ModuleStore.LoadAsync(module.ModuleId, autosaveLanguage);
+            var loaded = await ModuleStore.LoadAsync(module.ModuleId, saveEntry.Language);
             loaded = await PreloadAssetsAsync(loaded);
             var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
-            State.Start(module.ModuleId, module.Version, autosaveLanguage, loaded, session);
+            State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
             Nav.NavigateTo("/play");
         }
@@ -324,8 +329,11 @@
 
         var module = _conflictModule;
         _conflictModule = null;
-        _conflictAutosave = null;
-        await SaveStore.DeleteAsync(SaveIds.Autosave(module.ModuleId));
+        _conflictSave = null;
+        // No save is ever deleted here. Starting fresh implicitly overwrites the module's autosave
+        // (Play.razor's first-render PersistAutosaveAsync upserts it via its deterministic id), but a
+        // manual save is a distinct id entirely — it's left alone regardless of whether it was the
+        // one just offered, still resumable later from Continue.
         await StartFreshAsync(module, _selectedLanguage);
     }
 
