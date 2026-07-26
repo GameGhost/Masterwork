@@ -1,24 +1,19 @@
-namespace Masterwork.App.Shared.SampleData;
+using System.Linq;
+using Masterwork.Engine;
+using Masterwork.Engine.Rendering;
+using Masterwork.Engine.Session;
+using Masterwork.ModuleFormat;
 
-/// <summary>
-/// A small, hand-authored MWS v0.4 scenario (not derived from any copyrighted source), pre-loaded
-/// into the app as a permanent, non-deletable entry in <see cref="Masterwork.App.Shared.Services.EmbeddedModuleStore"/>.
-/// Originally just an engine test fixture (Phase 2), it doubles as a feature showcase and the
-/// primary vehicle for testing app-shell mechanics that need real, playable content — the
-/// autosave/named-save model, and Manage Modules' non-deletable built-in entry
-/// (masterwork-plan-rev13.md Phase 3 Milestone E) — without depending on the much larger Cost of
-/// Disease content (Milestone D).
-/// </summary>
-public static class SampleModule
+namespace Masterwork.Tests;
+
+// Inline fixture content (not tied to any app-level "demo module" concept — the app's own built-in
+// demo module was retired) exercising the engine end-to-end: an evolving hub, random/shuffled
+// events, checkpoints, both popup variants, foreach over a shuffled array, and a terminal passage.
+// Ported verbatim from the former SampleModule/BuiltInModules.Demo when that app-level concept was
+// removed, specifically to keep this coverage without depending on it.
+public class FixtureModuleTests
 {
-    /// <summary>
-    /// Six passages: an evolving hub (<c>Start</c>, revisited and changing as <c>wellVisits</c>
-    /// grows), an event passage exercising <c>rand_between</c> (via <c>switch</c>) and
-    /// <c>.shuffled(...)</c> (via <c>let</c>), an input prompt, generic and <c>voting</c>-layout
-    /// popups, a <c>foreach</c> over a shuffled array (<c>let</c> + <c>foreach</c> together), and a
-    /// terminal passage reachable once the hub has evolved enough.
-    /// </summary>
-    public static readonly IReadOnlyList<string> PassageYamls =
+    private static readonly IReadOnlyList<string> PassageYamls =
     [
         """
         format: 'mws/0.4'
@@ -204,8 +199,7 @@ public static class SampleModule
         """,
     ];
 
-    /// <summary>Declares the session variables this demo scenario writes to — an int, a string, and a running counter, showcasing the variable-type range alongside the node-type coverage above.</summary>
-    public const string VariablesYaml = """
+    private const string VariablesYaml = """
         standard_variables: []
         variables:
           surveyCount:
@@ -221,4 +215,98 @@ public static class SampleModule
             type: 'string'
             default: ''
         """;
+
+    [Fact]
+    public void LoadsCleanly_WithNoWarnings()
+    {
+        var module = new ModuleLoader().LoadFromSources(PassageYamls, VariablesYaml);
+
+        Assert.Equal(6, module.Passages.Count);
+        Assert.Equal("Start", module.StartPassageId);
+        Assert.Empty(module.Warnings.Items);
+    }
+
+    [Fact]
+    public async Task FullPlaythrough_ExercisesEveryNodeType()
+    {
+        var module = new ModuleLoader().LoadFromSources(PassageYamls, VariablesYaml);
+        var session = new GameSession(module, masterSeed: 1);
+
+        Assert.Equal("Start", session.CurrentRender.PassageId);
+        Assert.Equal("hub", session.CurrentRender.Layout);
+
+        // Well: text, checkpoint, navigation.
+        var wellNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Visit the old well");
+        var wellResult = await session.FollowLinkAsync(wellNav.Id);
+        Assert.Equal("Well", wellResult.PassageId);
+        Assert.Equal("event", wellResult.Layout);
+        Assert.Single(wellResult.Checkpoints);
+        Assert.Equal(SnapshotKind.Checkpoint, session.Timeline[^1].Kind);
+
+        var backToStart = wellResult.Actions.OfType<RenderedLink>().Single();
+        await session.FollowLinkAsync(backToStart.Id);
+
+        // Survey: input.
+        var surveyNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Take the survey");
+        var surveyResult = await session.FollowLinkAsync(surveyNav.Id);
+        var input = surveyResult.Actions.OfType<RenderedInput>().Single();
+        var submitLink = surveyResult.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "4");
+        var surveyResultResult = await session.FollowLinkAsync(submitLink.Id);
+        Assert.Equal("SurveyResult", surveyResultResult.PassageId);
+        Assert.Contains("4", surveyResultResult.Nodes.OfType<RenderedText>().First().Value);
+
+        // SurveyResult: generic popup + voting-layout popup.
+        var genericPopup = surveyResultResult.Actions.OfType<RenderedPopup>().Single(p => p.Layout is null);
+        Assert.Single(genericPopup.Content);
+        await session.ClosePopupAsync(genericPopup.Id, accept: false);
+
+        var votingPopup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single(p => p.Layout == "voting");
+        var afterVoteClose = await session.ClosePopupAsync(votingPopup.Id, accept: true);
+        Assert.Equal("Start", afterVoteClose.PassageId);
+
+        // Rumors: let + foreach over a shuffled array.
+        var rumorsNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Listen to the rumors");
+        var rumorsResult = await session.FollowLinkAsync(rumorsNav.Id);
+        Assert.Equal("Rumors", rumorsResult.PassageId);
+        Assert.Equal(3, rumorsResult.Nodes.OfType<RenderedText>().Count());
+        var backFromRumors = rumorsResult.Actions.OfType<RenderedLink>().Single();
+        await session.FollowLinkAsync(backFromRumors.Id);
+    }
+
+    [Fact]
+    public async Task HubEvolves_AsWellVisitsAccumulate_ThenReachesEnding()
+    {
+        var module = new ModuleLoader().LoadFromSources(PassageYamls, VariablesYaml);
+        var session = new GameSession(module, masterSeed: 1);
+
+        // Not yet visited: no route to the Ending.
+        Assert.DoesNotContain(session.CurrentRender.Actions.OfType<RenderedLink>(), a => a.Label.Contains("Confront"));
+        Assert.Contains(session.CurrentRender.Nodes.OfType<RenderedText>(), t => t.Value.Contains("quiet for as long as anyone remembers"));
+
+        for (var visit = 1; visit <= 3; visit++)
+        {
+            var wellNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label == "Visit the old well");
+            var wellResult = await session.FollowLinkAsync(wellNav.Id);
+
+            // Exercises both random mechanisms: a shuffled-array pick (let) and rand_between (switch).
+            Assert.Contains(wellResult.Nodes.OfType<RenderedText>(), t =>
+                t.Value.Contains("ice cold") || t.Value.Contains("frog") || t.Value.Contains("echo"));
+
+            var backNav = wellResult.Actions.OfType<RenderedLink>().Single();
+            await session.FollowLinkAsync(backNav.Id);
+            Assert.Equal((long)visit, session.Current.Variables["wellVisits"].AsInt());
+        }
+
+        var endingNav = session.CurrentRender.Actions.OfType<RenderedLink>().Single(a => a.Label.Contains("Confront"));
+        var endingResult = await session.FollowLinkAsync(endingNav.Id);
+
+        Assert.Equal("Ending", endingResult.PassageId);
+        // The 'ending' assign runs during this terminal passage's own render, so its new value is
+        // only observable in this render's output — not in session.Current.Variables, which is a
+        // snapshot of state from just *before* this passage rendered (see SessionSnapshot's doc
+        // comment on precision).
+        Assert.Contains(endingResult.Nodes.OfType<RenderedText>(), t => t.Value.Contains("END-WellDepths"));
+        Assert.Empty(endingResult.Actions);
+    }
 }

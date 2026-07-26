@@ -71,7 +71,7 @@
   <data name="Common_Mute" xml:space="preserve"><value>Mute</value></data>
   <data name="Common_Unmute" xml:space="preserve"><value>Unmute</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Autosave</value></data>
-  <data name="Common_BuiltInBadge" xml:space="preserve"><value>Built-in</value></data>
+  <data name="Common_Loading" xml:space="preserve"><value>Loading…</value></data>
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Help</value></data>
@@ -100,7 +100,6 @@
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Manage Modules</value></data>
   <data name="ManageModules_Heading" xml:space="preserve"><value>Manage Modules</value></data>
-  <data name="ManageModules_BuiltInNote" xml:space="preserve"><value>Ships with the app — can't be removed.</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Delete this module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Also delete this module's saves?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Delete module + saves</value></data>
@@ -146,8 +145,13 @@
   <data name="StartNewGame_SaveNote_Many" xml:space="preserve"><value> There are {0} existing saves for this module.</value></data>
   <data name="StartNewGame_ErrorFallback" xml:space="preserve"><value>Something went wrong loading this screen. Please try again.</value></data>
   <data name="StartNewGame_UploadError_NoManifest" xml:space="preserve"><value>This file has no manifest.yaml and can't be installed.</value></data>
-  <data name="StartNewGame_UploadError_ReservedId" xml:space="preserve"><value>This module's id is reserved for the built-in demo module — rename it in the manifest and try again.</value></data>
   <data name="StartNewGame_UploadError_Generic" xml:space="preserve"><value>Couldn't install that module: {0}</value></data>
+  <data name="StartNewGame_Installing" xml:space="preserve"><value>Installing…</value></data>
+  <data name="StartNewGame_InstallingPercent" xml:space="preserve"><value>Installing… {0}%</value></data>
+  <data name="StartNewGame_Verifying" xml:space="preserve"><value>Verifying…</value></data>
+  <data name="StartNewGame_VerifyingPercent" xml:space="preserve"><value>Verifying… {0}%</value></data>
+  <data name="StartNewGame_PreparingAssets" xml:space="preserve"><value>Preparing assets…</value></data>
+  <data name="StartNewGame_PreparingAssetsPercent" xml:space="preserve"><value>Preparing assets… {0}%</value></data>
 
   <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
   <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Background Volume</value></data>

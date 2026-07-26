@@ -1,5 +1,4 @@
 @page "/new-game"
-@using System.Security.Cryptography
 @using System.Text.Json
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
@@ -15,6 +14,7 @@
 @inject ILogger<GameSession> GameSessionLogger
 @inject ILogger<StartNewGame> Logger
 @inject IModuleFilePicker FilePicker
+@inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
@@ -46,10 +46,6 @@
                 @foreach (var module in _modules)
                 {
                     <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => SelectModule(module.ModuleId)">
-                        @if (module.IsBuiltIn)
-                        {
-                            <span class="mws-badge">@AppStrings.Common_BuiltInBadge</span>
-                        }
                         <strong>@module.Title</strong>
                         <span class="mws-tile-version">v@(module.Version)</span>
                     </div>
@@ -106,6 +102,8 @@
                     </div>
                 </div>
             }
+
+            <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
         </div>
     </ChildContent>
     <ErrorContent>
@@ -117,7 +115,7 @@
 </ErrorBoundary>
 
 @code {
-    private sealed record PendingUpload(byte[] Bytes, string Title, string Message, string ConfirmLabel);
+    private sealed record PendingUpload(byte[] Bytes, string Sha256, string Title, string Message, string ConfirmLabel);
 
     private IReadOnlyList<InstalledModule> _modules = [];
     private string? _selectedId;
@@ -129,6 +127,10 @@
     private PendingUpload? _pendingUpload;
     private ErrorBoundary? _errorBoundary;
     private AppSettings _appSettings = AppSettings.Default;
+    private bool _loading;
+    private string _loadingMessage = "";
+    private int? _loadingDone;
+    private int? _loadingTotal;
 
     protected override async Task OnInitializedAsync()
     {
@@ -137,10 +139,19 @@
             return;
         }
 
-        _modules = await ModuleStore.ListAsync();
-        _appSettings = await SettingsStore.LoadAsync();
-        // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
-        // auto-committed to whatever happened to load first.
+        _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
+        try
+        {
+            _modules = await ModuleStore.ListAsync();
+            _appSettings = await SettingsStore.LoadAsync();
+            // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
+            // auto-committed to whatever happened to load first.
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void Recover()
@@ -170,6 +181,28 @@
     }
 
     private void OnLanguageChanged(ChangeEventArgs e) => _selectedLanguage = e.Value?.ToString();
+
+    // Shared by the verify/install/asset-preparation phases, all of which report a real (done,
+    // total) rather than showing an indeterminate spinner — each just plugs in its own message
+    // format. Fires from Progress<T>'s posted continuation, not the calling method's own await
+    // chain, so it needs its own StateHasChanged rather than relying on the caller's next render.
+    private void ReportProgress((int Done, int Total) p, string percentFormat)
+    {
+        _loadingDone = p.Done;
+        _loadingTotal = p.Total;
+        var percent = p.Total > 0 ? (int)(100.0 * p.Done / p.Total) : 0;
+        _loadingMessage = string.Format(AppStrings.EffectiveCulture, percentFormat, percent);
+        if (p.Total > 0 && p.Done == p.Total)
+        {
+            // Diagnostic: reported progress reaching 100% and the awaited call actually returning
+            // (logged at each call site below) can be far apart in wall-clock time — e.g. a GC pause
+            // reclaiming everything the phase just allocated. Comparing these two timestamps in the
+            // browser console pins down whether a freeze is inside the library call's own tail or
+            // something after it.
+            Logger.LogInformation("Progress reached 100% at {Timestamp:O}", DateTime.UtcNow);
+        }
+        StateHasChanged();
+    }
 
     private string? ConflictAutosaveSummary()
     {
@@ -243,11 +276,43 @@
 
         // Resuming always uses the save's own recorded language, not whatever's currently picked in
         // the dropdown — the save state is what decides, per the "preserved in the save state" rule.
-        var loaded = await ModuleStore.LoadAsync(module.ModuleId, autosaveLanguage);
-        var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
-        State.Start(module.ModuleId, module.Version, autosaveLanguage, loaded, session);
-        await StyleInjector.ApplyAsync(loaded.StyleCss);
-        Nav.NavigateTo("/play");
+        _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
+        _loadingDone = null;
+        _loadingTotal = null;
+        try
+        {
+            var loaded = await ModuleStore.LoadAsync(module.ModuleId, autosaveLanguage);
+            loaded = await PreloadAssetsAsync(loaded);
+            var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
+            State.Start(module.ModuleId, module.Version, autosaveLanguage, loaded, session);
+            await StyleInjector.ApplyAsync(loaded.StyleCss);
+            Nav.NavigateTo("/play");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Fetches every asset the module ships before Play/Resume navigates, with progress — a passage's
+    // images/fonts are already resident by the time it first renders instead of popping in one at a
+    // time as IAssetResolver's own lazy, per-reference fetches would otherwise complete.
+    private async Task<LoadedModuleContent> PreloadAssetsAsync(LoadedModuleContent loaded)
+    {
+        // The previous session's preloaded object URLs (if any) are no longer reachable once this
+        // new module's Assets replaces GameSessionState.Assets — revoke them now rather than leaking
+        // their backing blobs for the rest of the tab's lifetime.
+        if (State.Assets is PreloadedModuleAssetSource previous)
+        {
+            await previous.RevokeAllAsync(JS);
+        }
+
+        _loadingMessage = AppStrings.StartNewGame_PreparingAssets;
+        _loadingDone = null;
+        _loadingTotal = null;
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_PreparingAssetsPercent));
+        return await loaded.WithPreloadedAssetsAsync(progress);
     }
 
     private async Task DiscardAndStartFresh()
@@ -266,11 +331,23 @@
 
     private async Task StartFreshAsync(InstalledModule module, string? language)
     {
-        var loaded = await ModuleStore.LoadAsync(module.ModuleId, language);
-        var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64(), logger: GameSessionLogger);
-        State.Start(module.ModuleId, module.Version, language, loaded, session);
-        await StyleInjector.ApplyAsync(loaded.StyleCss);
-        Nav.NavigateTo("/play");
+        _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
+        _loadingDone = null;
+        _loadingTotal = null;
+        try
+        {
+            var loaded = await ModuleStore.LoadAsync(module.ModuleId, language);
+            loaded = await PreloadAssetsAsync(loaded);
+            var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64(), logger: GameSessionLogger);
+            State.Start(module.ModuleId, module.Version, language, loaded, session);
+            await StyleInjector.ApplyAsync(loaded.StyleCss);
+            Nav.NavigateTo("/play");
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
@@ -322,42 +399,58 @@
     }
 
     // Shared by both upload paths above — everything from "bytes on disk" onward, regardless of how
-    // they were picked.
+    // they were picked. Reads only manifest.yaml (ReadManifestOnly), not the full package — the
+    // conflict-check prompt only ever needs the manifest, and a full ModulePackage.ReadFromBytes
+    // here would mean decompressing every asset in a 60+MB upload just to show a dialog.
     private async Task ProcessUploadedBytesAsync(byte[] bytes)
     {
-        var contents = ModulePackage.ReadFromBytes(bytes);
-        if (contents.ManifestYaml is null)
+        var manifestYaml = ModulePackage.ReadManifestOnly(bytes);
+        if (manifestYaml is null)
         {
             Logger.LogWarning("Module upload: package has no manifest.yaml");
             _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
             return;
         }
 
-        var manifest = new ManifestParser().Parse(contents.ManifestYaml);
-        if (manifest.Id == BuiltInModules.DemoModuleId)
+        var manifest = new ManifestParser().Parse(manifestYaml);
+
+        // The upload is hashed exactly once here, as part of "processing" the incoming file, with
+        // its own progress feedback — not repeated later. Both the same-version conflict check below
+        // and InstallAsync itself (which takes the hash as a parameter) reuse this one result rather
+        // than re-hashing the same bytes a second and third time with no feedback.
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Verifying;
+        _loadingDone = null;
+        _loadingTotal = null;
+        string sha256;
+        try
         {
-            Logger.LogWarning("Module upload: package id {ModuleId} collides with the reserved demo id", manifest.Id);
-            _uploadError = AppStrings.StartNewGame_UploadError_ReservedId;
-            return;
+            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
+            Logger.LogInformation("Module upload: ComputeHashAsync returned at {Timestamp:O}", DateTime.UtcNow);
+        }
+        finally
+        {
+            _loading = false;
         }
 
         var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
         if (existing is null)
         {
             Logger.LogInformation("Module upload: installing new module {ModuleId} v{Version}", manifest.Id, manifest.Version);
-            await InstallBytesAsync(bytes);
+            await InstallBytesAsync(bytes, sha256);
             return;
         }
 
         Logger.LogInformation("Module upload: {ModuleId} already installed (existing v{ExistingVersion}, uploaded v{UploadedVersion}) — prompting", manifest.Id, existing.Version, manifest.Version);
-        await PrepareConflictPromptAsync(bytes, manifest, existing);
+        await PrepareConflictPromptAsync(bytes, sha256, manifest, existing);
     }
 
     // Compares the uploaded manifest's version against what's already installed under the same id
     // and prepares an appropriately-worded confirm prompt — same content is a no-op-ish notice, an
     // upgrade/downgrade gets a warning scaled to the risk, mentioning existing saves if there are any
     // (masterwork-plan-rev14's upload-conflict design, added after manual testing surfaced the need).
-    private async Task PrepareConflictPromptAsync(byte[] bytes, ModuleManifest manifest, InstalledModule existing)
+    private async Task PrepareConflictPromptAsync(byte[] bytes, string sha256, ModuleManifest manifest, InstalledModule existing)
     {
         var saveCount = (await SaveStore.ListAsync()).Count(s => s.ModuleId == manifest.Id);
         var saveNote = saveCount switch
@@ -371,14 +464,16 @@
 
         if (comparison == 0)
         {
-            var existingBytes = await ModuleStore.GetPackageBytesAsync(manifest.Id);
-            var identical = existingBytes is not null && ComputeHash(existingBytes).SequenceEqual(ComputeHash(bytes));
+            // existing.Sha256 was already computed once, at that module's own install time (see
+            // ModuleHasher) — comparing against the hash ProcessUploadedBytesAsync already computed
+            // for the new upload needs no further hashing at all.
+            var identical = string.Equals(sha256, existing.Sha256, StringComparison.OrdinalIgnoreCase);
 
             _pendingUpload = identical
-                ? new PendingUpload(bytes, AppStrings.StartNewGame_AlreadyInstalledTitle,
+                ? new PendingUpload(bytes, sha256, AppStrings.StartNewGame_AlreadyInstalledTitle,
                     string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_AlreadyInstalledBody, manifest.Title, manifest.Version),
                     AppStrings.StartNewGame_ReinstallAnyway)
-                : new PendingUpload(bytes, AppStrings.StartNewGame_SameVersionDiffContentTitle,
+                : new PendingUpload(bytes, sha256, AppStrings.StartNewGame_SameVersionDiffContentTitle,
                     string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SameVersionDiffContentBody, manifest.Title, manifest.Version, saveNote),
                     AppStrings.StartNewGame_ReplaceAnyway);
             return;
@@ -386,18 +481,16 @@
 
         if (comparison > 0)
         {
-            _pendingUpload = new PendingUpload(bytes, AppStrings.StartNewGame_UpgradeTitle,
+            _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_UpgradeTitle,
                 string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpgradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
                 AppStrings.StartNewGame_Upgrade);
             return;
         }
 
-        _pendingUpload = new PendingUpload(bytes, AppStrings.StartNewGame_DowngradeTitle,
+        _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_DowngradeTitle,
             string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_DowngradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
             AppStrings.StartNewGame_DowngradeAnyway);
     }
-
-    private static byte[] ComputeHash(byte[] data) => SHA256.HashData(data);
 
     private async Task ConfirmPendingUpload()
     {
@@ -407,15 +500,23 @@
         }
 
         var bytes = _pendingUpload.Bytes;
+        var sha256 = _pendingUpload.Sha256;
         _pendingUpload = null;
-        await InstallBytesAsync(bytes);
+        await InstallBytesAsync(bytes, sha256);
     }
 
-    private async Task InstallBytesAsync(byte[] bytes)
+    private async Task InstallBytesAsync(byte[] bytes, string sha256)
     {
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Installing;
+        _loadingDone = null;
+        _loadingTotal = null;
+
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_InstallingPercent));
+
         try
         {
-            var installed = await ModuleStore.InstallAsync(bytes);
+            var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
             _modules = await ModuleStore.ListAsync();
             SelectModule(installed.ModuleId);
             Logger.LogInformation("Module upload: installed {ModuleId} v{Version}", installed.ModuleId, installed.Version);
@@ -426,6 +527,10 @@
             // ex.Message is an internal exception message (English, per the "behind the scenes
             // strings stay in code" rule) even though it surfaces in this user-facing dialog.
             _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 }

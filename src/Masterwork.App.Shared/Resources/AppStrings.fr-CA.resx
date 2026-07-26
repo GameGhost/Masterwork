@@ -71,7 +71,7 @@
   <data name="Common_Mute" xml:space="preserve"><value>Muet</value></data>
   <data name="Common_Unmute" xml:space="preserve"><value>Réactiver le son</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Sauvegarde automatique</value></data>
-  <data name="Common_BuiltInBadge" xml:space="preserve"><value>Intégré</value></data>
+  <data name="Common_Loading" xml:space="preserve"><value>Chargement…</value></data>
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Aide</value></data>
@@ -100,7 +100,6 @@
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Gérer les modules</value></data>
   <data name="ManageModules_Heading" xml:space="preserve"><value>Gérer les modules</value></data>
-  <data name="ManageModules_BuiltInNote" xml:space="preserve"><value>Fourni avec l'application — ne peut pas être retiré.</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Supprimer ce module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>
@@ -146,8 +145,13 @@
   <data name="StartNewGame_SaveNote_Many" xml:space="preserve"><value> Il y a {0} sauvegardes existantes pour ce module.</value></data>
   <data name="StartNewGame_ErrorFallback" xml:space="preserve"><value>Une erreur s'est produite lors du chargement de cet écran. Veuillez réessayer.</value></data>
   <data name="StartNewGame_UploadError_NoManifest" xml:space="preserve"><value>Ce fichier n'a pas de manifest.yaml et ne peut pas être installé.</value></data>
-  <data name="StartNewGame_UploadError_ReservedId" xml:space="preserve"><value>Cet identifiant de module est réservé au module de démonstration intégré — renommez-le dans le manifeste et réessayez.</value></data>
   <data name="StartNewGame_UploadError_Generic" xml:space="preserve"><value>Impossible d'installer ce module : {0}</value></data>
+  <data name="StartNewGame_Installing" xml:space="preserve"><value>Installation…</value></data>
+  <data name="StartNewGame_InstallingPercent" xml:space="preserve"><value>Installation… {0} %</value></data>
+  <data name="StartNewGame_Verifying" xml:space="preserve"><value>Vérification…</value></data>
+  <data name="StartNewGame_VerifyingPercent" xml:space="preserve"><value>Vérification… {0} %</value></data>
+  <data name="StartNewGame_PreparingAssets" xml:space="preserve"><value>Préparation des ressources…</value></data>
+  <data name="StartNewGame_PreparingAssetsPercent" xml:space="preserve"><value>Préparation des ressources… {0} %</value></data>
 
   <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
   <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Volume de la musique de fond</value></data>

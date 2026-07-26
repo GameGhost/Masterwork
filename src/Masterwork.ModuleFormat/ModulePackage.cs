@@ -24,6 +24,29 @@ public sealed record ModulePackageContents(
     IReadOnlyList<string> AdditionalVariableYamls
 );
 
+/// <summary>What kind of <c>.mwm</c> entry a <see cref="ModulePackageEntry"/> represents — see <see cref="ModulePackage.ExtractEntriesAsync"/>.</summary>
+public enum ModulePackageEntryKind
+{
+    Manifest,
+    Variables,
+    Restext,
+    RestextOverride,
+    Passage,
+    PassageOverride,
+    Layout,
+    AdditionalVariable,
+    Asset,
+}
+
+/// <summary>
+/// One classified, decompressed entry from a <c>.mwm</c> zip, as streamed by
+/// <see cref="ModulePackage.ExtractEntriesAsync"/>. <see cref="Path"/> is the full in-zip path
+/// (e.g. <c>"assets/icons/village.png"</c>); <see cref="Locale"/> is set only for
+/// <see cref="ModulePackageEntryKind.Restext"/>/<see cref="ModulePackageEntryKind.RestextOverride"/>
+/// (the culture name parsed from the filename, e.g. <c>"en-US"</c>).
+/// </summary>
+public readonly record struct ModulePackageEntry(ModulePackageEntryKind Kind, string Path, string? Locale, byte[] Bytes);
+
 /// <summary>
 /// Reads/writes the <c>.mwm</c> zip format. Layout mirrors what the extractor and
 /// <c>Masterwork-Modules/&lt;id&gt;</c> module directories already produce: extractor-owned
@@ -63,60 +86,109 @@ public static class ModulePackage
             }
 
             var path = entry.FullName.Replace('\\', '/');
+            var classified = Classify(path);
+            if (classified is not { } c)
+            {
+                continue;
+            }
 
-            if (path.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase))
+            switch (c.Kind)
             {
-                manifestYaml = ReadText(entry);
-            }
-            else if (path.Equals("_variables.yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                variablesYaml = ReadText(entry);
-            }
-            else if (!path.Contains('/') && path.EndsWith(".overrides.restext", StringComparison.OrdinalIgnoreCase))
-            {
-                // Checked before the plain ".restext" branch below, since this also ends with it.
-                var locale = path[..^".overrides.restext".Length];
-                restextOverridesByLocale[locale] = ReadText(entry);
-            }
-            else if (!path.Contains('/') && path.EndsWith(".restext", StringComparison.OrdinalIgnoreCase))
-            {
-                var locale = path[..^".restext".Length];
-                restextByLocale[locale] = ReadText(entry);
-            }
-            else if (!path.Contains('/') && path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                // Legacy flat layout: passages directly at the zip root.
-                passageYamls.Add(ReadText(entry));
-            }
-            else if (path.StartsWith("passages/", StringComparison.OrdinalIgnoreCase) &&
-                     path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                passageYamls.Add(ReadText(entry));
-            }
-            else if (path.StartsWith("passages-override/", StringComparison.OrdinalIgnoreCase) &&
-                     path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                overridePassageYamls.Add(ReadText(entry));
-            }
-            else if (path.StartsWith("layouts/", StringComparison.OrdinalIgnoreCase) &&
-                     path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                layoutYamls.Add(ReadText(entry));
-            }
-            else if (path.StartsWith("variables/", StringComparison.OrdinalIgnoreCase) &&
-                     path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
-            {
-                additionalVariableYamls.Add(ReadText(entry));
-            }
-            else if (path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
-            {
-                assets[path] = ReadBytes(entry);
+                case ModulePackageEntryKind.Manifest:
+                    manifestYaml = ReadText(entry);
+                    break;
+                case ModulePackageEntryKind.Variables:
+                    variablesYaml = ReadText(entry);
+                    break;
+                case ModulePackageEntryKind.RestextOverride:
+                    restextOverridesByLocale[c.Locale!] = ReadText(entry);
+                    break;
+                case ModulePackageEntryKind.Restext:
+                    restextByLocale[c.Locale!] = ReadText(entry);
+                    break;
+                case ModulePackageEntryKind.Passage:
+                    passageYamls.Add(ReadText(entry));
+                    break;
+                case ModulePackageEntryKind.PassageOverride:
+                    overridePassageYamls.Add(ReadText(entry));
+                    break;
+                case ModulePackageEntryKind.Layout:
+                    layoutYamls.Add(ReadText(entry));
+                    break;
+                case ModulePackageEntryKind.AdditionalVariable:
+                    additionalVariableYamls.Add(ReadText(entry));
+                    break;
+                case ModulePackageEntryKind.Asset:
+                    assets[path] = ReadBytes(entry);
+                    break;
             }
         }
 
         return new ModulePackageContents(
             manifestYaml, variablesYaml, restextByLocale, passageYamls, assets, overridePassageYamls,
             restextOverridesByLocale, layoutYamls, additionalVariableYamls);
+    }
+
+    /// <summary>
+    /// Reads only <c>manifest.yaml</c> from zip bytes, via <see cref="ZipArchive.GetEntry"/> rather
+    /// than iterating/decompressing every entry — safe to call even against a 60+MB package with a
+    /// large <c>assets/</c> folder, since nothing outside <c>manifest.yaml</c> itself is ever touched.
+    /// Used wherever only the manifest is needed (an upload's pre-install conflict check) instead of
+    /// the full <see cref="ReadFromBytes"/>.
+    /// </summary>
+    public static string? ReadManifestOnly(byte[] zipBytes)
+    {
+        using var stream = new MemoryStream(zipBytes);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry("manifest.yaml");
+        return entry is null ? null : ReadText(entry);
+    }
+
+    /// <summary>
+    /// Streams every classified entry in a <c>.mwm</c> zip to <paramref name="onEntryAsync"/> one at
+    /// a time, yielding periodically (not per-entry — real overhead against packages with many small
+    /// files) so the caller never has to hold the whole decompressed package in memory at once, and
+    /// so a single-threaded UI (WASM) stays responsive during a large install. <paramref name="progress"/>,
+    /// if given, reports (entries done, total entries) — the total is known upfront
+    /// (<see cref="ZipArchive.Entries"/>'s count), so this is a genuine "N of M" count, not an estimate.
+    /// Unclassifiable entries (directory entries, anything <see cref="Classify"/> doesn't recognize)
+    /// are skipped and not counted in "done" but are counted in "total" (so the bar still reaches 100%).
+    /// </summary>
+    public static async Task ExtractEntriesAsync(
+        byte[] zipBytes, Func<ModulePackageEntry, ValueTask> onEntryAsync, IProgress<(int Done, int Total)>? progress = null)
+    {
+        const int yieldEveryNEntries = 8;
+
+        using var stream = new MemoryStream(zipBytes);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        var total = archive.Entries.Count;
+        var done = 0;
+        progress?.Report((done, total));
+
+        foreach (var entry in archive.Entries)
+        {
+            if (!string.IsNullOrEmpty(entry.Name))
+            {
+                var path = entry.FullName.Replace('\\', '/');
+                if (Classify(path) is { } c)
+                {
+                    var bytes = c.Kind == ModulePackageEntryKind.Asset ? ReadBytes(entry) : Encoding.UTF8.GetBytes(ReadText(entry));
+                    await onEntryAsync(new ModulePackageEntry(c.Kind, path, c.Locale, bytes));
+                }
+            }
+
+            done++;
+            progress?.Report((done, total));
+
+            if (done % yieldEveryNEntries == 0)
+            {
+                // Task.Delay(1), not Task.Yield() — see ModuleHasher's remarks on why a bare Yield
+                // can resolve as a microtask on WASM without ever handing control back to the
+                // browser's event loop, starving input/paint even though the awaited task "yielded".
+                await Task.Delay(1);
+            }
+        }
     }
 
     /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes. Excludes <c>.source/</c> (a module's own copy of the CC BY-NC-SA Cradle source it was extracted from — never distributable), a root <c>README.md</c>, and a root <c>VIEW-REQUIREMENTS.md</c> — none belong in a distributable bundle.</summary>
@@ -147,6 +219,71 @@ public static class ModulePackage
         return firstSegment.Equals(".source", StringComparison.OrdinalIgnoreCase) ||
                relativeName.Equals("README.md", StringComparison.OrdinalIgnoreCase) ||
                relativeName.Equals("VIEW-REQUIREMENTS.md", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private readonly record struct ClassifiedPath(ModulePackageEntryKind Kind, string? Locale);
+
+    // Single source of truth for "what is this in-zip path" — shared by ReadFromBytes and
+    // ExtractEntriesAsync so the two can't drift on which paths mean what.
+    private static ClassifiedPath? Classify(string path)
+    {
+        if (path.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Manifest, null);
+        }
+
+        if (path.Equals("_variables.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Variables, null);
+        }
+
+        if (!path.Contains('/') && path.EndsWith(".overrides.restext", StringComparison.OrdinalIgnoreCase))
+        {
+            // Checked before the plain ".restext" branch below, since this also ends with it.
+            return new ClassifiedPath(ModulePackageEntryKind.RestextOverride, path[..^".overrides.restext".Length]);
+        }
+
+        if (!path.Contains('/') && path.EndsWith(".restext", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Restext, path[..^".restext".Length]);
+        }
+
+        if (!path.Contains('/') && path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            // Legacy flat layout: passages directly at the zip root.
+            return new ClassifiedPath(ModulePackageEntryKind.Passage, null);
+        }
+
+        if (path.StartsWith("passages/", StringComparison.OrdinalIgnoreCase) &&
+            path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Passage, null);
+        }
+
+        if (path.StartsWith("passages-override/", StringComparison.OrdinalIgnoreCase) &&
+            path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.PassageOverride, null);
+        }
+
+        if (path.StartsWith("layouts/", StringComparison.OrdinalIgnoreCase) &&
+            path.EndsWith(".mws.yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Layout, null);
+        }
+
+        if (path.StartsWith("variables/", StringComparison.OrdinalIgnoreCase) &&
+            path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.AdditionalVariable, null);
+        }
+
+        if (path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase))
+        {
+            return new ClassifiedPath(ModulePackageEntryKind.Asset, null);
+        }
+
+        return null;
     }
 
     private static string ReadText(ZipArchiveEntry entry)

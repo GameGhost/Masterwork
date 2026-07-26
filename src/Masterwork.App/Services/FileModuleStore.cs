@@ -5,103 +5,172 @@ using Masterwork.ModuleFormat;
 namespace Masterwork.App.Services;
 
 /// <inheritdoc cref="IModuleStore"/>
-/// <remarks>Uploaded packages are backed by <see cref="FileSystem"/>'s app data directory. MAUI-only — lives in the MAUI head rather than the platform-agnostic Shared project.</remarks>
+/// <remarks>
+/// Backed by <see cref="FileSystem"/>'s app data directory. A module is stored as a directory of
+/// loose files mirroring its <c>.mwm</c> zip's own layout (<c>manifest.yaml</c>, <c>passages/</c>,
+/// <c>assets/</c>, ...) rather than one packed file — so loading a passage's assets is a plain
+/// <see cref="File.ReadAllBytesAsync(string, System.Threading.CancellationToken)"/> per asset instead
+/// of decompressing the whole package first. Locale selection across a module's <c>*.restext</c>
+/// files is done inline here (app-layer only) rather than through
+/// <see cref="Masterwork.ModuleFormat.IModuleLoader.LoadFromDirectory"/>, since that method only
+/// picks a single fixed culture. MAUI-only — lives in the MAUI head rather than the
+/// platform-agnostic Shared project.
+/// </remarks>
 public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
 {
     private static string ModulesDir => Path.Combine(FileSystem.AppDataDirectory, "modules");
 
     private static string IndexPath => Path.Combine(ModulesDir, "index.json");
 
-    private static string PackagePath(string moduleId) => Path.Combine(ModulesDir, $"{Sanitize(moduleId)}.mwm");
+    private static string ModuleDir(string moduleId) => Path.Combine(ModulesDir, Sanitize(moduleId));
 
     private static string Sanitize(string id) =>
         new(id.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '_').ToArray());
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<InstalledModule>> ListAsync()
-    {
-        var uploaded = await ReadIndexAsync();
-        return [BuiltInModules.Demo, .. uploaded];
-    }
+    public async Task<IReadOnlyList<InstalledModule>> ListAsync() => await ReadIndexAsync();
 
     /// <inheritdoc/>
     public async Task<LoadedModuleContent> LoadAsync(string moduleId, string? locale = null)
     {
-        if (moduleId == BuiltInModules.DemoModuleId)
-        {
-            return BuiltInModules.LoadDemo(loader, locale);
-        }
-
-        var path = PackagePath(moduleId);
-        if (!File.Exists(path))
+        var moduleDir = ModuleDir(moduleId);
+        if (!Directory.Exists(moduleDir))
         {
             throw new InvalidOperationException($"Module '{moduleId}' is not installed.");
         }
 
-        var bytes = await File.ReadAllBytesAsync(path);
-        var contents = ModulePackage.ReadFromBytes(bytes);
-        var resolvedLocale = ModuleLocales.SelectLocale(contents.RestextByLocale, locale);
-        var restext = resolvedLocale is not null ? contents.RestextByLocale[resolvedLocale] : null;
+        var manifestPath = Path.Combine(moduleDir, "manifest.yaml");
+        var manifestYaml = File.Exists(manifestPath) ? await File.ReadAllTextAsync(manifestPath) : null;
+
+        var variablesPath = Path.Combine(moduleDir, "_variables.yaml");
+        var variablesYaml = File.Exists(variablesPath) ? await File.ReadAllTextAsync(variablesPath) : null;
+
+        var passagesDir = Path.Combine(moduleDir, "passages");
+        var passageYamls = Directory.Exists(passagesDir)
+            ? await ReadAllTextFilesAsync(passagesDir, "*.mws.yaml")
+            : [];
+
+        var overrideDir = Path.Combine(moduleDir, "passages-override");
+        var overridePassageYamls = Directory.Exists(overrideDir)
+            ? await ReadAllTextFilesAsync(overrideDir, "*.mws.yaml")
+            : [];
+
+        var layoutsDir = Path.Combine(moduleDir, "layouts");
+        var layoutYamls = Directory.Exists(layoutsDir)
+            ? await ReadAllTextFilesAsync(layoutsDir, "*.mws.yaml")
+            : [];
+
+        var additionalVariablesDir = Path.Combine(moduleDir, "variables");
+        var additionalVariableYamls = Directory.Exists(additionalVariablesDir)
+            ? await ReadAllTextFilesAsync(additionalVariablesDir, "*.yaml")
+            : [];
+
+        var (restextByLocale, restextOverridesByLocale) = ReadRestextFiles(moduleDir);
+        var resolvedLocale = ModuleLocales.SelectLocale(restextByLocale, locale);
+        var restext = resolvedLocale is not null ? restextByLocale[resolvedLocale] : null;
         var restextOverride = resolvedLocale is not null
-            ? contents.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
+            ? restextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
+
         var module = loader.LoadFromSources(
-            contents.PassageYamls, contents.VariablesYaml, restext, contents.OverridePassageYamls, restextOverride,
-            contents.LayoutYamls, contents.AdditionalVariableYamls);
-        return LoadedModuleContent.FromPackage(contents, module);
+            passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride, layoutYamls, additionalVariableYamls);
+
+        var assets = new FileModuleAssetSource(moduleDir);
+        return await LoadedModuleContent.BuildAsync(module, manifestYaml, assets);
     }
 
     /// <inheritdoc/>
-    public async Task<InstalledModule> InstallAsync(byte[] mwmBytes)
+    public async Task<InstalledModule> InstallAsync(byte[] mwmBytes, string sha256, IProgress<(int Done, int Total)>? progress = null)
     {
-        var contents = ModulePackage.ReadFromBytes(mwmBytes);
-        if (contents.ManifestYaml is null)
+        var manifestYaml = ModulePackage.ReadManifestOnly(mwmBytes)
+            ?? throw new InvalidOperationException("This .mwm file has no manifest.yaml and can't be installed.");
+        var manifest = new ManifestParser().Parse(manifestYaml);
+
+        var moduleDir = ModuleDir(manifest.Id);
+        if (Directory.Exists(moduleDir))
         {
-            throw new InvalidOperationException("This .mwm file has no manifest.yaml and can't be installed.");
+            // No staging/swap — a re-install of an already-installed id deletes its old directory
+            // first (accepted risk: an interrupted install leaves a half-written module, recoverable
+            // by re-uploading), so a re-upload that dropped a file doesn't leave the old copy behind.
+            Directory.Delete(moduleDir, recursive: true);
         }
+        Directory.CreateDirectory(moduleDir);
 
-        var manifest = new ManifestParser().Parse(contents.ManifestYaml);
-        var languages = ModuleLocales.SortedLocales(contents.RestextByLocale);
+        await ModulePackage.ExtractEntriesAsync(mwmBytes, async entry =>
+        {
+            var destPath = Path.Combine(moduleDir, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+            var destDir = Path.GetDirectoryName(destPath);
+            if (!string.IsNullOrEmpty(destDir))
+            {
+                Directory.CreateDirectory(destDir);
+            }
 
-        Directory.CreateDirectory(ModulesDir);
-        await File.WriteAllBytesAsync(PackagePath(manifest.Id), mwmBytes);
+            await File.WriteAllBytesAsync(destPath, entry.Bytes);
+        }, progress);
 
-        var entry = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", IsBuiltIn: false, languages);
+        var (restextByLocale, _) = ReadRestextFiles(moduleDir);
+        var languages = ModuleLocales.SortedLocales(restextByLocale);
+
+        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256);
         var index = await ReadIndexAsync();
-        var updated = index.Where(m => m.ModuleId != entry.ModuleId).Append(entry).ToList();
+        var updated = index.Where(m => m.ModuleId != entryRecord.ModuleId).Append(entryRecord).ToList();
         await WriteIndexAsync(updated);
 
-        return entry;
-    }
-
-    /// <inheritdoc/>
-    public async Task<byte[]?> GetPackageBytesAsync(string moduleId)
-    {
-        if (moduleId == BuiltInModules.DemoModuleId)
-        {
-            return null;
-        }
-
-        var path = PackagePath(moduleId);
-        return File.Exists(path) ? await File.ReadAllBytesAsync(path) : null;
+        return entryRecord;
     }
 
     /// <inheritdoc/>
     public async Task DeleteAsync(string moduleId)
     {
-        if (moduleId == BuiltInModules.DemoModuleId)
+        var moduleDir = ModuleDir(moduleId);
+        if (Directory.Exists(moduleDir))
         {
-            throw new InvalidOperationException("The built-in demo module can't be removed.");
-        }
-
-        var path = PackagePath(moduleId);
-        if (File.Exists(path))
-        {
-            File.Delete(path);
+            Directory.Delete(moduleDir, recursive: true);
         }
 
         var index = await ReadIndexAsync();
         await WriteIndexAsync([.. index.Where(m => m.ModuleId != moduleId)]);
+    }
+
+    private static async Task<List<string>> ReadAllTextFilesAsync(string dir, string searchPattern)
+    {
+        var result = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(dir, searchPattern))
+        {
+            result.Add(await File.ReadAllTextAsync(file));
+        }
+
+        return result;
+    }
+
+    // Mirrors ModuleLoader.LoadFromDirectory's own restext-file convention (a "{culture}.restext"
+    // base file with an optional sibling "{culture}.overrides.restext"), except every locale present
+    // is read rather than just one — FileModuleStore does its own locale selection afterward via
+    // ModuleLocales.SelectLocale, since IModuleLoader's public surface only supports a single fixed
+    // culture per load.
+    private static (Dictionary<string, string> ByLocale, Dictionary<string, string> OverridesByLocale) ReadRestextFiles(string moduleDir)
+    {
+        var byLocale = new Dictionary<string, string>();
+        var overridesByLocale = new Dictionary<string, string>();
+        if (!Directory.Exists(moduleDir))
+        {
+            return (byLocale, overridesByLocale);
+        }
+
+        foreach (var file in Directory.EnumerateFiles(moduleDir, "*.restext"))
+        {
+            var fileName = Path.GetFileName(file);
+            if (fileName.EndsWith(".overrides.restext", StringComparison.OrdinalIgnoreCase))
+            {
+                overridesByLocale[fileName[..^".overrides.restext".Length]] = File.ReadAllText(file);
+            }
+            else
+            {
+                byLocale[fileName[..^".restext".Length]] = File.ReadAllText(file);
+            }
+        }
+
+        return (byLocale, overridesByLocale);
     }
 
     private static async Task<List<InstalledModule>> ReadIndexAsync()

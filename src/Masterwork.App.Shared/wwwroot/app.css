@@ -667,6 +667,28 @@ body {
     animation: mws-spin 0.8s linear infinite;
 }
 
+.mws-loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    color: #fff;
+}
+
+.mws-loading-progress-track {
+    width: 14rem;
+    max-width: 80vw;
+    height: 0.5rem;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.mws-loading-progress-fill {
+    height: 100%;
+    background: #fff;
+}
+
 @keyframes mws-spin {
     to {
         transform: rotate(360deg);

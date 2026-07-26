@@ -1,0 +1,33 @@
+@namespace Masterwork.App.Shared.Chrome
+
+@if (Show)
+{
+    <div class="mws-dialog-overlay mws-loading-overlay">
+        <div class="mws-loading-content">
+            <div class="mws-spinner" aria-hidden="true"></div>
+            <p>@Message</p>
+            @if (Total is > 0)
+            {
+                <div class="mws-loading-progress-track">
+                    <div class="mws-loading-progress-fill" style="width: @(PercentWidth)%;"></div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Whether the overlay is visible. A no-op when <see langword="false"/> — the markup renders nothing.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    /// <summary>The already-localized status text (e.g. <c>AppStrings.Common_Loading</c>, or a formatted "Installing… N of M").</summary>
+    [Parameter] public string Message { get; set; } = "";
+
+    /// <summary>Entries completed so far. Leave <see langword="null"/> (with <see cref="Total"/>) for an indeterminate spinner-only state.</summary>
+    [Parameter] public int? Done { get; set; }
+
+    /// <summary>Total entries expected. A determinate progress bar only renders once this is a known positive value — see <see cref="Masterwork.ModuleFormat.ModulePackage.ExtractEntriesAsync"/>'s <c>IProgress&lt;(int Done, int Total)&gt;</c>.</summary>
+    [Parameter] public int? Total { get; set; }
+
+    private int PercentWidth => Total is > 0 ? (int)(100.0 * (Done ?? 0) / Total.Value) : 0;
+}

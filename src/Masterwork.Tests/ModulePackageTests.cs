@@ -207,6 +207,96 @@ public class ModulePackageTests
     }
 
     [Fact]
+    public void ReadManifestOnly_ReturnsManifestYamlWithoutTouchingOtherEntries()
+    {
+        var dir = MakeSourceDirectory();
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var manifestYaml = ModulePackage.ReadManifestOnly(bytes);
+
+            Assert.NotNull(manifestYaml);
+            Assert.Contains("id: 'test.module'", manifestYaml);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReadManifestOnly_NoManifest_ReturnsNull()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes: []
+                """);
+
+            var bytes = ModulePackage.WriteToBytes(dir);
+
+            Assert.Null(ModulePackage.ReadManifestOnly(bytes));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExtractEntriesAsync_StreamsEveryEntryClassifiedTheSameAsReadFromBytes()
+    {
+        var dir = MakeSourceDirectory();
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var expected = ModulePackage.ReadFromBytes(bytes);
+
+            var entries = new List<ModulePackageEntry>();
+            var progressReports = new List<(int Done, int Total)>();
+            var progress = new Progress<(int Done, int Total)>(p => progressReports.Add(p));
+
+            await ModulePackage.ExtractEntriesAsync(bytes, entry =>
+            {
+                entries.Add(entry);
+                return ValueTask.CompletedTask;
+            }, progress);
+
+            var manifestEntry = Assert.Single(entries, e => e.Kind == ModulePackageEntryKind.Manifest);
+            Assert.Equal(expected.ManifestYaml, System.Text.Encoding.UTF8.GetString(manifestEntry.Bytes));
+
+            var restextEntries = entries.Where(e => e.Kind == ModulePackageEntryKind.Restext).ToList();
+            Assert.Equal(expected.RestextByLocale.Count, restextEntries.Count);
+            foreach (var entry in restextEntries)
+            {
+                Assert.Equal(expected.RestextByLocale[entry.Locale!], System.Text.Encoding.UTF8.GetString(entry.Bytes));
+            }
+
+            var assetEntry = Assert.Single(entries, e => e.Kind == ModulePackageEntryKind.Asset);
+            Assert.Equal("assets/images/icon.png", assetEntry.Path);
+            Assert.Equal(new byte[] { 1, 2, 3, 4 }, assetEntry.Bytes);
+
+            // Progress is reported at least once at the start (0 done) and once at the end (all done),
+            // and the reported total matches how many entries the zip actually contains.
+            Assert.NotEmpty(progressReports);
+            Assert.Equal(0, progressReports[0].Done);
+            var finalReport = progressReports[^1];
+            Assert.Equal(finalReport.Total, finalReport.Done);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ReadFromBytes_VariablesFolder_RoundTripsAndMerges()
     {
         var dir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));

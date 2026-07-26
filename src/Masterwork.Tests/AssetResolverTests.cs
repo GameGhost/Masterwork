@@ -5,6 +5,23 @@ namespace Masterwork.Tests;
 
 public class AssetResolverTests
 {
+    // Minimal in-memory IModuleAssetSource, same shape as LoadedModuleContentTests's own adapter —
+    // just enough to drive AssetResolver against a fixed set of bytes without a real
+    // IndexedDB/filesystem-backed implementation.
+    private sealed class DictionaryModuleAssetSource(IReadOnlyDictionary<string, byte[]> assets) : IModuleAssetSource
+    {
+        public Task<byte[]?> GetAssetAsync(string assetPath) =>
+            Task.FromResult(assets.TryGetValue(assetPath, out var bytes) ? bytes : null);
+
+        public Task<string?> GetAssetUrlAsync(string assetPath, string mimeType) =>
+            Task.FromResult(assets.TryGetValue(assetPath, out var bytes)
+                ? $"data:{mimeType};base64,{Convert.ToBase64String(bytes)}"
+                : null);
+
+        public Task<IReadOnlyList<string>> ListAssetPathsAsync() =>
+            Task.FromResult<IReadOnlyList<string>>([.. assets.Keys]);
+    }
+
     private static readonly AssetResolver Resolver = new(new GameSessionState());
 
     [Fact]
@@ -44,7 +61,7 @@ public class AssetResolverTests
         state.Start("m", "1.0.0", null,
             new LoadedModuleContent(
                 Module: null!,
-                Assets: new Dictionary<string, byte[]> { ["assets/icons/village.png"] = [1, 2, 3, 4] },
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/icons/village.png"] = [1, 2, 3, 4] }),
                 StyleCss: null),
             session: null!);
         var resolver = new AssetResolver(state);
@@ -62,7 +79,7 @@ public class AssetResolverTests
         state.Start("m", "1.0.0", null,
             new LoadedModuleContent(
                 Module: null!,
-                Assets: new Dictionary<string, byte[]> { ["assets/images/MFW_Scenario_1.svg"] = bytes },
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/images/MFW_Scenario_1.svg"] = bytes }),
                 StyleCss: null),
             session: null!);
         var resolver = new AssetResolver(state);
@@ -83,7 +100,7 @@ public class AssetResolverTests
         state.Start("m", "1.0.0", null,
             new LoadedModuleContent(
                 Module: null!,
-                Assets: new Dictionary<string, byte[]> { ["assets/images/setup/StorybookToken.png"] = bytes },
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/images/setup/StorybookToken.png"] = bytes }),
                 StyleCss: null),
             session: null!);
         var resolver = new AssetResolver(state);
@@ -109,7 +126,7 @@ public class AssetResolverTests
         state.Start("m", "1.0.0", null,
             new LoadedModuleContent(
                 Module: null!,
-                Assets: new Dictionary<string, byte[]> { ["assets/fonts/averia-libre-regular.woff2"] = bytes },
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/fonts/averia-libre-regular.woff2"] = bytes }),
                 StyleCss: null),
             session: null!);
         var resolver = new AssetResolver(state);
@@ -126,7 +143,7 @@ public class AssetResolverTests
         state.Start("m", "1.0.0", null,
             new LoadedModuleContent(
                 Module: null!,
-                Assets: new Dictionary<string, byte[]> { ["assets/icons/village.png"] = [9] },
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/icons/village.png"] = [9] }),
                 StyleCss: null),
             session: null!);
         var resolver = new AssetResolver(state);

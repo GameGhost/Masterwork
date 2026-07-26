@@ -19,19 +19,8 @@
             <div>
                 <strong>@module.Title</strong>
                 <span class="mws-module-version">v@(module.Version)</span>
-                @if (module.IsBuiltIn)
-                {
-                    <span class="mws-badge">@AppStrings.Common_BuiltInBadge</span>
-                }
             </div>
-            @if (module.IsBuiltIn)
-            {
-                <span class="mws-empty-state">@AppStrings.ManageModules_BuiltInNote</span>
-            }
-            else
-            {
-                <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
-            }
+            <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
         </div>
     }
 </div>
@@ -51,9 +40,12 @@
     </div>
 }
 
+<LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
+
 @code {
     private IReadOnlyList<InstalledModule> _modules = [];
     private string? _confirmingDeleteId;
+    private bool _loading;
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,7 +54,15 @@
             return;
         }
 
-        _modules = await ModuleStore.ListAsync();
+        _loading = true;
+        try
+        {
+            _modules = await ModuleStore.ListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task ConfirmDelete(string? moduleId, bool deleteSaves)
@@ -72,22 +72,30 @@
             return;
         }
 
-        // Dependency-asset-pack reference counting (don't free a shared pack's storage while
-        // another installed module still depends on it) is still a TODO — it doesn't matter yet
-        // since real modules don't declare dependencies against anything installable until asset
-        // packs exist (Milestone C), but it needs solving before that changes.
-        await ModuleStore.DeleteAsync(moduleId);
-
-        if (deleteSaves)
+        _loading = true;
+        try
         {
-            var saves = await SaveStore.ListAsync();
-            foreach (var save in saves.Where(s => s.ModuleId == moduleId))
-            {
-                await SaveStore.DeleteAsync(save.Id);
-            }
-        }
+            // Dependency-asset-pack reference counting (don't free a shared pack's storage while
+            // another installed module still depends on it) is still a TODO — it doesn't matter yet
+            // since real modules don't declare dependencies against anything installable until asset
+            // packs exist (Milestone C), but it needs solving before that changes.
+            await ModuleStore.DeleteAsync(moduleId);
 
-        _confirmingDeleteId = null;
-        _modules = await ModuleStore.ListAsync();
+            if (deleteSaves)
+            {
+                var saves = await SaveStore.ListAsync();
+                foreach (var save in saves.Where(s => s.ModuleId == moduleId))
+                {
+                    await SaveStore.DeleteAsync(save.Id);
+                }
+            }
+
+            _confirmingDeleteId = null;
+            _modules = await ModuleStore.ListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 }
