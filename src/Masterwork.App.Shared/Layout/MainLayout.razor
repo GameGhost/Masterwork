@@ -1,8 +1,11 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @using Masterwork.App.Shared.Services
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
 @inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject AppNavigationHistory NavHistory
 
 @{ AppSettingsApplier.ReassertCulture(); }
 @* This only fires on the very first paint and on page navigation (a layout doesn't re-render just
@@ -19,6 +22,21 @@
 
 @code {
     private bool _splashHidden;
+
+    // Feeds AppNavigationHistory — see its own remarks on why this lives here (MainLayout wraps
+    // every page and is created exactly once per app session, so this is the one place a
+    // LocationChanged subscription covers every navigation without needing to re-subscribe).
+    protected override void OnInitialized()
+    {
+        NavHistory.Track(Nav.ToBaseRelativePath(Nav.Uri));
+        Nav.LocationChanged += OnLocationChanged;
+        HardwareBackButtonBridge.Register(Nav, NavHistory);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        NavHistory.Track(Nav.ToBaseRelativePath(e.Location));
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 
     // Runs once per app session (MainLayout wraps every page and isn't recreated on navigation) —
     // this is what makes the saved Options actually take effect on a fresh launch/refresh instead

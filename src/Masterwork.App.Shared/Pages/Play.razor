@@ -1,4 +1,5 @@
 @page "/play"
+@implements IDisposable
 @using System.Text.Json
 @using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
@@ -68,13 +69,62 @@ else
         <PauseBar Session="State.Session" OnStateChanged="Refresh" OnResumed="() => _paused = false"
                   OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
     }
+
+    @if (_showQuitFromBackNav)
+    {
+        @* Browser back/forward (web) or the hardware back button (MAUI/Android) attempted to leave
+           /play while a session is still active — see OnLocationChanging. Neither actually navigated
+           anywhere (PreventNavigation), so this offers the same quit flow the pause bar's own Quit
+           button does instead of silently discarding progress or leaving on a broken state. *@
+        <OptionsDialog DialogContext="OptionsDialogContext.InGame" StartAtQuit="true"
+                       OnClose="() => _showQuitFromBackNav = false"
+                       OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
+    }
 }
 
 @code {
     private bool _showOptions;
     private bool _paused;
+    private bool _showQuitFromBackNav;
     private ErrorBoundary? _errorBoundary;
     private bool _showQuitFromNavError;
+    private IDisposable? _locationChangingRegistration;
+
+    // No active session at all (a stale /play history entry reached via browser back/forward, or
+    // the hardware back button, after the previous session already quit and cleared it) — bounce
+    // straight back to the main menu rather than showing a dead page. ReplaceHistoryEntry so this
+    // doesn't itself become yet another entry the player has to back out of.
+    protected override void OnInitialized()
+    {
+        if (State.Session is null)
+        {
+            Nav.NavigateTo("/", new NavigationOptions { ReplaceHistoryEntry = true });
+            return;
+        }
+
+        _locationChangingRegistration = Nav.RegisterLocationChangingHandler(OnLocationChanging);
+    }
+
+    // Intercepts every attempt to leave /play — the browser's own back/forward buttons (web) or a
+    // NavigateTo triggered by the hardware back button (MAUI, see MainPage.xaml.cs), and any other
+    // in-app navigation attempt for that matter — while a session is still active. Once the player
+    // has actually decided to quit (Save and Quit / Abandon / reaching a real ending), those flows
+    // all clear State.Session *before* navigating away, so this only ever blocks navigation that
+    // hasn't gone through that decision yet.
+    private ValueTask OnLocationChanging(LocationChangingContext context)
+    {
+        if (State.Session is null)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        context.PreventNavigation();
+        _showQuitFromBackNav = true;
+        StateHasChanged();
+        return ValueTask.CompletedTask;
+    }
+
+    public void Dispose() => _locationChangingRegistration?.Dispose();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -143,7 +193,9 @@ else
 
         await StyleInjector.ApplyAsync(null);
         State.Clear();
-        Nav.NavigateTo("/");
+        // ReplaceHistoryEntry — /play shouldn't linger as a back-target once the session is gone
+        // (see OnInitialized's own redirect, which is the belt-and-suspenders backstop for this).
+        Nav.NavigateTo("/", new NavigationOptions { ReplaceHistoryEntry = true });
     }
 
     // Continuously updates the module's autosave while playing live (not while just reviewing
@@ -198,7 +250,7 @@ else
         // autosave wins, so leaving it here no longer risks silently shadowing this named save.
         await StyleInjector.ApplyAsync(null);
         State.Clear();
-        Nav.NavigateTo("/continue");
+        Nav.NavigateTo("/continue", new NavigationOptions { ReplaceHistoryEntry = true });
     }
 
     private async Task AbandonGame()
@@ -208,6 +260,6 @@ else
         // prompted to resume it from Start New Game) later if they change their mind.
         await StyleInjector.ApplyAsync(null);
         State.Clear();
-        Nav.NavigateTo("/");
+        Nav.NavigateTo("/", new NavigationOptions { ReplaceHistoryEntry = true });
     }
 }

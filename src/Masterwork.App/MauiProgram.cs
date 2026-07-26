@@ -38,6 +38,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
         builder.Services.AddScoped<IModuleStore, FileModuleStore>();
         builder.Services.AddScoped<GameSessionState>();
+        builder.Services.AddScoped<AppNavigationHistory>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();

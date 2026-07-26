@@ -22,6 +22,7 @@ builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
 builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
 builder.Services.AddScoped<GameSessionState>();
+builder.Services.AddScoped<AppNavigationHistory>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
