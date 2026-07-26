@@ -85,6 +85,31 @@ Tests in `ExtractorTests.cs` check the extractor-internal node types directly (e
 - A non-state-affecting `link`/`popup`/`goto` (`snapshot: false`, or inherited from the enclosing action — see `goto`'s own `snapshot` override in `docs/mws-format-latest.md` §6) navigates via `RenderInPlace`, which does **not** add a timeline entry. The live edge tracks at most one such divergence as `GameSession._activeState` (`Session/ActiveState.cs`) so it isn't silently lost: `StepBack`'s first press shows the entry's own anchor render instead of consuming a real timeline entry, and survives **any** amount of further stepping back into real history (it is *not* discarded by `StepBack` itself); `StepForward`/`JumpToPresent` restore it directly rather than replaying whatever produced it. Only `ResumeFromHere` (branching play from a historical point) or a new state-affecting navigation (which supersedes it with a real snapshot) discard it. Persisted through `SessionSave.ActiveState` so resuming a save taken mid-chain doesn't lose it either.
 - Popup content (`popup.content`) is rendered eagerly by `PassageRenderer`, alongside the rest of the passage, against a sandboxed `VariableStore` clone (`RenderedPopup.Sandbox`) — never the live store. This means opening/closing a popup's *display* is a pure UI state toggle with no engine call involved; only `ClosePopupAsync` (Accept) touches the engine, committing the sandbox to the live store and running `onclose` + navigation as a single transaction. This deliberately trades away one thing: an unopened/never-accepted popup's content still gets evaluated (so a seeded random draw inside popup content is "spent" even if the player never opens it) — acceptable since nothing else can mutate the live store while a popup sits unopened on an already-rendered passage.
 
+### Mobile safe-area / system-bar insets
+Android renders edge-to-edge by default (enforced on API 35+), which stretched `BlazorWebView` under
+the status bar and behind the gesture/button navigation bar. Fixed in
+`Masterwork.App/Platforms/Android/MainActivity.cs`: `OnCreate` calls
+`WindowCompat.SetDecorFitsSystemWindows(Window, false)` (explicit, so behavior is identical on older
+OS versions too) and installs a `ViewCompat.SetOnApplyWindowInsetsListener` on the Activity's content
+view that pads it by `WindowInsetsCompat.Type.SystemBars()` insets on all four edges. This deliberately
+shrinks the actual native view hosting `BlazorWebView` rather than padding around it in CSS — so the
+WebView's own laid-out size already excludes the status bar/nav bar in both orientations, meaning
+`vh`/`vw` inside any module's Blazor content measure the true visible area with **no per-template
+changes needed**. Keep any future mobile-layout work on this side of the fence (native container size)
+rather than reaching for CSS safe-area padding, or `vh`/`vw`-based templates will need per-page fixes.
+
+**iOS/MacCatalyst (not yet implemented — deferred along with the rest of the iOS target, see Solution
+Structure above; needs a Mac build host to write and verify):** first check whether MAUI's default
+`Page.On<iOS>().SetUseSafeArea(true)` behavior already keeps `BlazorWebView` inside the safe area —
+it may just work, unlike Android. If it doesn't (known history of `BlazorWebView`'s internal
+`WKWebView` ignoring the page's safe area and extending under the notch/Dynamic Island/home
+indicator), the analogous fix is native, not CSS, mirroring the Android approach above: in
+`Platforms/iOS/AppDelegate.cs` or a `BlazorWebViewHandler` mapper registered in `MauiProgram.cs`, read
+the hosting `UIViewController`'s `View.SafeAreaInsets` (or set `AdditionalSafeAreaInsets`) and
+constrain/inset the native `WKWebView`'s frame accordingly, re-applied on `ViewSafeAreaInsetsDidChange`
+so rotation (notch/Dynamic Island top in portrait, safe-area sides in landscape, home indicator
+bottom) is handled the same way `WindowInsetsCompat` handles it on Android.
+
 ---
 
 ## MWS Format Documentation
