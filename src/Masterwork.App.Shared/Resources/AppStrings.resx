@@ -72,6 +72,8 @@
   <data name="Common_Unmute" xml:space="preserve"><value>Unmute</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Autosave</value></data>
   <data name="Common_Loading" xml:space="preserve"><value>Loading…</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="Common_No" xml:space="preserve"><value>No</value></data>
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Help</value></data>
@@ -150,8 +152,8 @@
   <data name="StartNewGame_InstallingPercent" xml:space="preserve"><value>Installing… {0}%</value></data>
   <data name="StartNewGame_Verifying" xml:space="preserve"><value>Verifying…</value></data>
   <data name="StartNewGame_VerifyingPercent" xml:space="preserve"><value>Verifying… {0}%</value></data>
-  <data name="StartNewGame_PreparingAssets" xml:space="preserve"><value>Preparing assets…</value></data>
-  <data name="StartNewGame_PreparingAssetsPercent" xml:space="preserve"><value>Preparing assets… {0}%</value></data>
+  <data name="Common_PreparingAssets" xml:space="preserve"><value>Preparing assets…</value></data>
+  <data name="Common_PreparingAssetsPercent" xml:space="preserve"><value>Preparing assets… {0}%</value></data>
 
   <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
   <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Background Volume</value></data>
@@ -165,9 +167,9 @@
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Manage Modules</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quit</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quit?</value></data>
-  <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Your progress in this session hasn't been saved as a named save yet.</value></data>
+  <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Do you want to end your game now?</value></data>
   <data name="OptionsDialog_SaveAndQuit" xml:space="preserve"><value>Save and Quit</value></data>
-  <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Abandon Game</value></data>
+  <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Quit</value></data>
   <data name="OptionsDialog_NameSaveTitle" xml:space="preserve"><value>Name this save</value></data>
 
   <data name="Play_NoSessionMessage" xml:space="preserve"><value>No active session.</value></data>
@@ -175,8 +177,14 @@
   <data name="Play_NavErrorTitle" xml:space="preserve"><value>Something went wrong</value></data>
   <data name="Play_NavErrorBody" xml:space="preserve"><value>This passage couldn't continue — likely a broken link or reference in the module content.</value></data>
   <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Return to this passage</value></data>
+  <data name="Play_Pause" xml:space="preserve"><value>Pause</value></data>
 
-  <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Forward ▶</value></data>
+  <data name="TimelineScrubber_Back" xml:space="preserve"><value>Back</value></data>
+  <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Forward</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Return to present</value></data>
-  <data name="TimelineScrubber_RestartFromHere" xml:space="preserve"><value>Restart from here</value></data>
+  <data name="TimelineScrubber_CurrentLabel" xml:space="preserve"><value>Current</value></data>
+  <data name="TimelineScrubber_ResumeConfirmTitle" xml:space="preserve"><value>Resume from "{0}"?</value></data>
+  <data name="TimelineScrubber_ResumeConfirmBody" xml:space="preserve"><value>Resuming from here will discard all snapshots and state and reset the game to this snapshot. This cannot be undone.</value></data>
+  <data name="TimelineScrubber_ResumeConfirmQuestion" xml:space="preserve"><value>Are you sure you want to resume from here?</value></data>
+  <data name="TimelineScrubber_ResumeFromHere" xml:space="preserve"><value>Resume From Here</value></data>
 </root>

@@ -18,21 +18,19 @@
 }
 else
 {
-    <div class="mws-play-chrome">
-        @if (State.Session.IsRewound)
-        {
-            <TimelineScrubber Session="State.Session" OnStateChanged="Refresh" />
-        }
-        else
-        {
-            <button type="button" class="mws-back-button" disabled="@(!State.Session.CanStepBack)" @onclick="StepBack">@AppStrings.Common_Back</button>
-        }
-        <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
-    </div>
+    @if (!_paused)
+    {
+        <div class="mws-play-chrome">
+            <button type="button" class="mws-pause-button" @onclick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause">⏸</button>
+            <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
+        </div>
+    }
 
     <ErrorBoundary @ref="_errorBoundary">
         <ChildContent>
-            <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="State.Session.IsRewound"
+            @* Paused is its own read-only mode, independent of the session's own IsRewound — pausing
+               shows the scrubber without necessarily having stepped back at all yet (see PauseBar). *@
+            <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="@(State.Session.IsRewound || _paused)"
                          OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
         </ChildContent>
         <ErrorContent Context="ex">
@@ -64,10 +62,17 @@ else
         <OptionsDialog DialogContext="OptionsDialogContext.InGame" OnClose="() => _showOptions = false"
                        OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
     }
+
+    @if (_paused)
+    {
+        <PauseBar Session="State.Session" OnStateChanged="Refresh" OnResumed="() => _paused = false"
+                  OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
+    }
 }
 
 @code {
     private bool _showOptions;
+    private bool _paused;
     private ErrorBoundary? _errorBoundary;
     private bool _showQuitFromNavError;
 
@@ -99,17 +104,6 @@ else
     // GameSession.AreCurrentInputsValid) still need to see the new draft, so this still re-renders
     // the whole subtree — it just skips the two genuinely expensive, unnecessary side effects.
     private void RefreshUiOnly() => StateHasChanged();
-
-    private async Task StepBack()
-    {
-        if (State.Session is not { CanStepBack: true })
-        {
-            return;
-        }
-
-        State.Session.StepBack();
-        await Refresh();
-    }
 
     // Recovery for the ErrorBoundary wrapping PassageView — most commonly a link/popup/goto
     // targeting a passage_id that doesn't exist (GameSession.PassageNotFoundException), thrown

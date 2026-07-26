@@ -43,7 +43,7 @@ public static class AppSettingsApplier
     /// masterwork-plan-rev19.md).
     ///
     /// Called via <c>@{ ReassertCulture(); }</c> at the top of every page and every independently-
-    /// re-rendering chrome component (<c>OptionsDialog</c>, <c>TimelineScrubber</c>) —
+    /// re-rendering chrome component (<c>OptionsDialog</c>, <c>PauseBar</c>) —
     /// <strong>not</strong> just <see cref="Layout.MainLayout"/>. A Razor
     /// component's <c>BuildRenderTree</c> only re-runs when that specific component instance
     /// re-renders; a layout does <em>not</em> get pulled back into the render batch just because a

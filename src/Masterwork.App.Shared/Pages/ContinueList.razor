@@ -10,6 +10,7 @@
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
+@inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ContinueList_PageTitle</PageTitle>
@@ -91,11 +92,17 @@
     </div>
 }
 
+<LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
+
 @code {
     private List<SaveEntry> _saves = [];
     private Dictionary<string, InstalledModule> _modulesById = [];
     private SaveEntry? _pendingResume;
     private string? _resumeError;
+    private bool _loading;
+    private string _loadingMessage = "";
+    private int? _loadingDone;
+    private int? _loadingTotal;
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,6 +178,10 @@
     {
         _pendingResume = null;
 
+        _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
+        _loadingDone = null;
+        _loadingTotal = null;
         try
         {
             var json = await SaveStore.LoadAsync(entry.Id);
@@ -186,6 +197,7 @@
             }
 
             var loaded = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
+            loaded = await PreloadAssetsAsync(loaded);
             var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
             State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
@@ -206,6 +218,42 @@
             // than crashing the app on data the player can't do anything about.
             _resumeError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeError_Exception, ex.Message);
         }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Fetches every asset the module ships before navigating to /play, with progress — a passage's
+    // images/fonts are already resident by the time it first renders instead of popping in one at a
+    // time as IAssetResolver's own lazy, per-reference fetches would otherwise complete. Mirrors
+    // StartNewGame.razor's own PreloadAssetsAsync.
+    private async Task<LoadedModuleContent> PreloadAssetsAsync(LoadedModuleContent loaded)
+    {
+        // The previous session's preloaded object URLs (if any) are no longer reachable once this
+        // new module's Assets replaces GameSessionState.Assets — revoke them now rather than leaking
+        // their backing blobs for the rest of the tab's lifetime.
+        if (State.Assets is PreloadedModuleAssetSource previous)
+        {
+            await previous.RevokeAllAsync(JS);
+        }
+
+        _loadingMessage = AppStrings.Common_PreparingAssets;
+        _loadingDone = null;
+        _loadingTotal = null;
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.Common_PreparingAssetsPercent));
+        return await loaded.WithPreloadedAssetsAsync(progress);
+    }
+
+    // Fires from Progress<T>'s posted continuation, not the calling method's own await chain, so it
+    // needs its own StateHasChanged rather than relying on the caller's next render.
+    private void ReportProgress((int Done, int Total) p, string percentFormat)
+    {
+        _loadingDone = p.Done;
+        _loadingTotal = p.Total;
+        var percent = p.Total > 0 ? (int)(100.0 * p.Done / p.Total) : 0;
+        _loadingMessage = string.Format(AppStrings.EffectiveCulture, percentFormat, percent);
+        StateHasChanged();
     }
 
     private async Task Export(SaveEntry entry)

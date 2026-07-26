@@ -2024,6 +2024,71 @@ public class GameSessionTests
         Assert.True(session.IsRewound);
     }
 
+    [Fact]
+    public async Task ActiveState_Initially_HasActiveStateTrueAndIsAtActiveStateTrue()
+    {
+        // Sitting at the live edge showing Final (the pending active state) without ever having
+        // stepped back — a timeline UI should show a "current" entry beyond the last real snapshot
+        // (Anchor) and highlight that entry, not Anchor's own.
+        var (session, _) = await MakeActiveStateSessionAsync();
+        Assert.True(session.HasActiveState);
+        Assert.True(session.IsAtActiveState);
+    }
+
+    [Fact]
+    public async Task ActiveState_AfterStepBackToAnchor_HasActiveStateTrueButIsAtActiveStateFalse()
+    {
+        // StepBack from the live edge reveals the anchor's own bare render (see StepBack's remarks)
+        // — the pending active state still exists (a timeline UI keeps showing its "current" entry
+        // in the list) but is no longer what's currently selected/highlighted.
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+        Assert.True(session.HasActiveState);
+        Assert.False(session.IsAtActiveState);
+    }
+
+    [Fact]
+    public async Task ActiveState_AfterStepBackIntoRealHistory_HasActiveStateTrueButIsAtActiveStateFalse()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack(); // reveals the anchor
+        session.StepBack(); // steps into real history (Start)
+        Assert.True(session.HasActiveState);
+        Assert.False(session.IsAtActiveState);
+    }
+
+    [Fact]
+    public async Task ActiveState_AfterResumeFromHere_HasActiveStateFalse()
+    {
+        var (session, _) = await MakeActiveStateSessionAsync();
+        session.StepBack();
+        session.ResumeFromHere();
+        Assert.False(session.HasActiveState);
+        Assert.False(session.IsAtActiveState);
+    }
+
+    [Fact]
+    public void NoActiveState_HasActiveStateFalseAndIsAtActiveStateFalse()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'hello'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+
+        Assert.False(session.HasActiveState);
+        Assert.False(session.IsAtActiveState);
+    }
+
     // ── Save/restore ─────────────────────────────────────────────────────────
 
     [Fact]

@@ -235,40 +235,112 @@ h1:focus {
     flex-shrink: 0;
 }
 
-.mws-timeline {
-    margin-bottom: 1rem;
-    padding: 0.5rem 1rem;
-    background: #f5f5f5;
-    border-radius: 0.5rem;
+/* ── Pause bar (Play.razor's pause mode) ─────────────────────────────────────
+   A full-width panel fixed to the bottom of the screen — not a modal, so its own
+   z-index sits below .mws-dialog-overlay (1100, see below) so the resume-confirm
+   and quit dialogs it can open still stack above it, but above ordinary passage
+   content. */
+.mws-pause-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+    background: #1c1c1c;
+    color: #fff;
+    box-shadow: 0 -0.25rem 0.75rem rgba(0, 0, 0, 0.35);
 }
 
+.mws-pause-scrubber-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mws-pause-nav-button {
+    flex: none;
+    min-width: 2.25rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 1rem;
+    line-height: 1;
+    background: rgba(255, 255, 255, 0.12);
+    color: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 0.35rem;
+}
+
+.mws-pause-nav-button:disabled {
+    opacity: 0.35;
+}
+
+.mws-pause-forward-group {
+    display: flex;
+    flex: none;
+    gap: 0.35rem;
+}
+
+.mws-pause-actions-row {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+/* The scrubber itself — every entry always renders (no paging), but the row never wraps, so with
+   many entries most of it sits off to either side; centerElement (timelineScrubber.js) scrolls the
+   highlighted entry into view instead of relying on the player to drag/scroll manually. The
+   scrollbar itself is hidden since dragging it isn't a supported interaction, just a side effect of
+   needing a real scroll container for that to work. */
 .mws-timeline-list {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
     gap: 0.25rem;
     list-style: none;
-    padding: 0;
-    margin: 0.5rem 0 0;
+    padding: 0.15rem 0.35rem;
+    margin: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.mws-timeline-list li {
-    padding: 0.2rem 0.5rem;
-    background: #e0e0e0;
+.mws-timeline-list::-webkit-scrollbar {
+    display: none;
+}
+
+.mws-timeline-entry {
+    flex: none;
+    max-width: 6rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 0.25rem;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 
-.mws-timeline-list li.current {
+.mws-timeline-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mws-timeline-entry.current {
     background: #7c3aed;
     color: #fff;
+    font-weight: 600;
 }
 
-.mws-timeline-list li.checkpoint {
+.mws-timeline-entry.checkpoint {
     border: 1px dashed #7c3aed;
 }
 
-.mws-resume {
-    font-weight: 600;
+.mws-timeline-current-marker {
+    font-style: italic;
 }
 
 .mws-inline-icon {
@@ -302,7 +374,8 @@ body {
 }
 
 .mws-back-button,
-.mws-options-button {
+.mws-options-button,
+.mws-pause-button {
     padding: 0.4rem 0.9rem;
 }
 
@@ -313,8 +386,9 @@ body {
     gap: 0.5rem;
     margin-bottom: 1rem;
     /* Stays above every overlay (popup backdrop, options dialog) and above scrolled passage
-       content — the back button, rewind scrubber, and options button must stay reachable no
-       matter what's showing on top of the passage itself. */
+       content — the pause and options buttons must stay reachable no matter what's showing on top
+       of the passage itself. Hidden entirely while paused (Play.razor) — .mws-pause-bar takes over
+       at the bottom of the screen instead. */
     position: sticky;
     top: 0;
     z-index: 1200;
@@ -322,12 +396,8 @@ body {
     padding: 0.5rem 0;
 }
 
-.mws-play-chrome .mws-timeline {
-    flex: 1;
-    margin-bottom: 0;
-}
-
-.mws-options-button {
+.mws-options-button,
+.mws-pause-button {
     font-size: 1.2rem;
     line-height: 1;
 }
@@ -604,7 +674,6 @@ body {
         padding: 1.5rem;
     }
 
-    .mws-timeline,
     .mws-audio-test,
     .mws-main-menu,
     .mws-help,
@@ -625,11 +694,6 @@ body {
         height: 100%;
         border-radius: 0;
         overflow-y: auto;
-    }
-
-    .mws-timeline-list {
-        overflow-x: auto;
-        flex-wrap: nowrap;
     }
 }
 

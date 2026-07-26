@@ -313,10 +313,10 @@
             await previous.RevokeAllAsync(JS);
         }
 
-        _loadingMessage = AppStrings.StartNewGame_PreparingAssets;
+        _loadingMessage = AppStrings.Common_PreparingAssets;
         _loadingDone = null;
         _loadingTotal = null;
-        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_PreparingAssetsPercent));
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.Common_PreparingAssetsPercent));
         return await loaded.WithPreloadedAssetsAsync(progress);
     }
 

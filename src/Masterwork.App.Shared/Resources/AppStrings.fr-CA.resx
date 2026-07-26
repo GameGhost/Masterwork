@@ -72,6 +72,8 @@
   <data name="Common_Unmute" xml:space="preserve"><value>Réactiver le son</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Sauvegarde automatique</value></data>
   <data name="Common_Loading" xml:space="preserve"><value>Chargement…</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Oui</value></data>
+  <data name="Common_No" xml:space="preserve"><value>Non</value></data>
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Aide</value></data>
@@ -150,8 +152,8 @@
   <data name="StartNewGame_InstallingPercent" xml:space="preserve"><value>Installation… {0} %</value></data>
   <data name="StartNewGame_Verifying" xml:space="preserve"><value>Vérification…</value></data>
   <data name="StartNewGame_VerifyingPercent" xml:space="preserve"><value>Vérification… {0} %</value></data>
-  <data name="StartNewGame_PreparingAssets" xml:space="preserve"><value>Préparation des ressources…</value></data>
-  <data name="StartNewGame_PreparingAssetsPercent" xml:space="preserve"><value>Préparation des ressources… {0} %</value></data>
+  <data name="Common_PreparingAssets" xml:space="preserve"><value>Préparation des ressources…</value></data>
+  <data name="Common_PreparingAssetsPercent" xml:space="preserve"><value>Préparation des ressources… {0} %</value></data>
 
   <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
   <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Volume de la musique de fond</value></data>
@@ -165,9 +167,9 @@
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer les modules</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quitter</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quitter?</value></data>
-  <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Votre progression dans cette session n'a pas encore été enregistrée sous forme de sauvegarde nommée.</value></data>
+  <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Voulez-vous terminer votre partie maintenant?</value></data>
   <data name="OptionsDialog_SaveAndQuit" xml:space="preserve"><value>Enregistrer et quitter</value></data>
-  <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Abandonner la partie</value></data>
+  <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Quitter</value></data>
   <data name="OptionsDialog_NameSaveTitle" xml:space="preserve"><value>Nommer cette sauvegarde</value></data>
 
   <data name="Play_NoSessionMessage" xml:space="preserve"><value>Aucune session active.</value></data>
@@ -175,8 +177,14 @@
   <data name="Play_NavErrorTitle" xml:space="preserve"><value>Un problème est survenu</value></data>
   <data name="Play_NavErrorBody" xml:space="preserve"><value>Impossible de continuer à partir de ce passage — probablement un lien ou une référence brisée dans le contenu du module.</value></data>
   <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Retourner à ce passage</value></data>
+  <data name="Play_Pause" xml:space="preserve"><value>Pause</value></data>
 
-  <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer ▶</value></data>
+  <data name="TimelineScrubber_Back" xml:space="preserve"><value>Retour</value></data>
+  <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer</value></data>
   <data name="TimelineScrubber_ReturnToPresent" xml:space="preserve"><value>Retour au présent</value></data>
-  <data name="TimelineScrubber_RestartFromHere" xml:space="preserve"><value>Recommencer à partir d'ici</value></data>
+  <data name="TimelineScrubber_CurrentLabel" xml:space="preserve"><value>Actuel</value></data>
+  <data name="TimelineScrubber_ResumeConfirmTitle" xml:space="preserve"><value>Reprendre à partir de « {0} »?</value></data>
+  <data name="TimelineScrubber_ResumeConfirmBody" xml:space="preserve"><value>Reprendre à partir d'ici annulera tous les instantanés et l'état, et réinitialisera la partie à cet instantané. Cette action est irréversible.</value></data>
+  <data name="TimelineScrubber_ResumeConfirmQuestion" xml:space="preserve"><value>Voulez-vous vraiment reprendre à partir d'ici?</value></data>
+  <data name="TimelineScrubber_ResumeFromHere" xml:space="preserve"><value>Reprendre à partir d'ici</value></data>
 </root>

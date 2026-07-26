@@ -74,6 +74,24 @@ public sealed class GameSession
     /// <summary>True when <see cref="StepForward"/> can be called.</summary>
     public bool CanStepForward => IsRewound;
 
+    /// <summary>
+    /// True when there's live-edge progress beyond the last real <see cref="Timeline"/> snapshot —
+    /// a non-state-affecting navigation has diverged from <c>Timeline[^1]</c>'s own anchor without
+    /// ever getting a bookmark of its own (see the remarks on <c>_activeState</c> above). A UI
+    /// showing the timeline should render an extra "current" entry after the last real snapshot
+    /// whenever this is true, distinct from that last snapshot itself.
+    /// </summary>
+    public bool HasActiveState => _activeState is not null;
+
+    /// <summary>
+    /// True while <see cref="CurrentRender"/> is showing that pending active state (see
+    /// <see cref="HasActiveState"/>) rather than either a historical snapshot or the live edge's own
+    /// anchor snapshot (shown instead via <see cref="StepBack"/>, see <c>_viewingAnchor</c>'s
+    /// remarks) — i.e. whether a timeline UI's "current" pseudo-entry, if <see cref="HasActiveState"/>,
+    /// is what's actually selected right now.
+    /// </summary>
+    public bool IsAtActiveState => HistoryIndex == _timeline.Count - 1 && _activeState is not null && !_viewingAnchor;
+
     /// <summary>Transient, non-persisted UI state for the current position.</summary>
     public SessionViewState ViewState { get; } = new();
 

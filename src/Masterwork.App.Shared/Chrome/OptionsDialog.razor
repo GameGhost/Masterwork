@@ -62,24 +62,20 @@
                     <button type="button" @onclick="Cancel">@AppStrings.Common_Cancel</button>
                 </div>
 
-                <div class="mws-dialog-footer">
-                    @if (DialogContext == OptionsDialogContext.MainMenu)
-                    {
+                @if (DialogContext == OptionsDialogContext.MainMenu)
+                {
+                    <div class="mws-dialog-footer">
                         <button type="button" @onclick="ManageModules">@AppStrings.OptionsDialog_ManageModules</button>
-                    }
-                    else
-                    {
-                        <button type="button" class="mws-quit-button" @onclick="() => _view = View.QuitConfirm">@AppStrings.OptionsDialog_Quit</button>
-                    }
-                </div>
+                    </div>
+                }
                 break;
 
             case View.QuitConfirm:
                 <h3>@AppStrings.OptionsDialog_QuitConfirmTitle</h3>
                 <p>@AppStrings.OptionsDialog_QuitConfirmBody</p>
                 <div class="mws-dialog-actions">
+                    <button type="button" class="mws-quit-button" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
                     <button type="button" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
-                    <button type="button" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
                     <button type="button" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
