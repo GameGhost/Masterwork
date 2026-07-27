@@ -239,7 +239,11 @@ h1:focus {
    A full-width panel fixed to the bottom of the screen — not a modal, so its own
    z-index sits below .mws-dialog-overlay (1100, see below) so the resume-confirm
    and quit dialogs it can open still stack above it, but above ordinary passage
-   content. */
+   content. Always mounted now (see Play.razor) rather than added/removed via @if, so it can slide
+   in/out — the transform/transition below is a generic default (translate fully off-screen when
+   closed); a module can override the visual specifics (border art, exact offset) on the same
+   .mws-pause-bar/.mws-pause-bar--open selectors, which win by cascade order (its <style> tag is
+   appended to <head> after this file's <link>). */
 .mws-pause-bar {
     position: fixed;
     left: 0;
@@ -253,6 +257,14 @@ h1:focus {
     background: #1c1c1c;
     color: #fff;
     box-shadow: 0 -0.25rem 0.75rem rgba(0, 0, 0, 0.35);
+    transform: translateY(100%);
+    transition: transform 0.25s ease;
+    pointer-events: none;
+}
+
+.mws-pause-bar.mws-pause-bar--open {
+    transform: translateY(0);
+    pointer-events: auto;
 }
 
 .mws-pause-scrubber-row {
@@ -382,7 +394,7 @@ body {
 .mws-play-chrome {
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.5rem;
     margin-bottom: 1rem;
     /* Stays above every overlay (popup backdrop, options dialog) and above scrolled passage
@@ -604,18 +616,29 @@ body {
     width: 100%;
 }
 
+/* Label stacked above its controls (not inline) — flex-direction: column here is the structural
+   default; a module's own CSS skins the input/value/checkbox pieces on top (see .mws-options-input
+   etc. below). The controls themselves (slider, value, mute checkbox+label) stay in their own
+   horizontal row via .mws-options-controls, nested inside. */
 .mws-options-row {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
     margin: 0.5rem 0;
 }
 
-.mws-options-row input[type="range"] {
+.mws-options-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mws-options-controls input[type="range"] {
     flex: 1;
 }
 
-.mws-options-row select {
+.mws-options-controls select {
     flex: 1;
 }
 

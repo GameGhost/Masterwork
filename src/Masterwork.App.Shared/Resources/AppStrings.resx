@@ -69,7 +69,6 @@
   <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
   <data name="Common_TryAgain" xml:space="preserve"><value>Try again</value></data>
   <data name="Common_Mute" xml:space="preserve"><value>Mute</value></data>
-  <data name="Common_Unmute" xml:space="preserve"><value>Unmute</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Autosave</value></data>
   <data name="Common_Loading" xml:space="preserve"><value>Loading…</value></data>
   <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
@@ -178,6 +177,7 @@
   <data name="Play_NavErrorBody" xml:space="preserve"><value>This passage couldn't continue — likely a broken link or reference in the module content.</value></data>
   <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Return to this passage</value></data>
   <data name="Play_Pause" xml:space="preserve"><value>Pause</value></data>
+  <data name="Play_Options" xml:space="preserve"><value>Options</value></data>
 
   <data name="TimelineScrubber_Back" xml:space="preserve"><value>Back</value></data>
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Forward</value></data>

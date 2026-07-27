@@ -9,57 +9,72 @@
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <div class="mws-dialog-overlay">
-    <div class="mws-dialog mws-options-dialog">
+    <div class="mws-dialog @(_view == View.Options ? "mws-options-dialog" : "mws-dialog--sm")">
         @switch (_view)
         {
             case View.Options:
                 <h3>@AppStrings.OptionsDialog_Heading</h3>
                 <label class="mws-options-row">
-                    @AppStrings.OptionsDialog_BgmVolume
-                    <input type="range" min="0" max="100" value="@((int)(_draft.BgmVolume * 100))"
-                           @oninput="OnBgmVolumeInput" disabled="@_draft.BgmMuted" />
-                    <button type="button" class="mws-mute-toggle" @onclick="ToggleBgmMuted">@(_draft.BgmMuted ? AppStrings.Common_Unmute : AppStrings.Common_Mute)</button>
+                    <span class="mws-options-label">@AppStrings.OptionsDialog_BgmVolume</span>
+                    <div class="mws-options-controls">
+                        <input type="range" class="mws-options-input" min="1" max="100" value="@((int)(_draft.BgmVolume * 100))"
+                               @oninput="OnBgmVolumeInput" disabled="@_draft.BgmMuted" />
+                        <span class="mws-options-value">@((int)(_draft.BgmVolume * 100))%</span>
+                        <input type="checkbox" class="mws-mute-checkbox" checked="@_draft.BgmMuted" @onchange="OnBgmMutedChanged" />
+                        <span class="mws-mute-label">@AppStrings.Common_Mute</span>
+                    </div>
                 </label>
                 <label class="mws-options-row">
-                    @AppStrings.OptionsDialog_SfxVolume
-                    <input type="range" min="0" max="100" value="@((int)(_draft.SfxVolume * 100))"
-                           @oninput="OnSfxVolumeInput" disabled="@_draft.SfxMuted" />
-                    <button type="button" class="mws-mute-toggle" @onclick="ToggleSfxMuted">@(_draft.SfxMuted ? AppStrings.Common_Unmute : AppStrings.Common_Mute)</button>
+                    <span class="mws-options-label">@AppStrings.OptionsDialog_SfxVolume</span>
+                    <div class="mws-options-controls">
+                        <input type="range" class="mws-options-input" min="1" max="100" value="@((int)(_draft.SfxVolume * 100))"
+                               @oninput="OnSfxVolumeInput" disabled="@_draft.SfxMuted" />
+                        <span class="mws-options-value">@((int)(_draft.SfxVolume * 100))%</span>
+                        <input type="checkbox" class="mws-mute-checkbox" checked="@_draft.SfxMuted" @onchange="OnSfxMutedChanged" />
+                        <span class="mws-mute-label">@AppStrings.Common_Mute</span>
+                    </div>
                 </label>
                 <label class="mws-options-row">
-                    @AppStrings.OptionsDialog_TextSize
-                    <input type="range" min="0" max="5" step="1" value="@_draft.TextSizeStep" @oninput="OnTextSizeInput" />
+                    <span class="mws-options-label">@AppStrings.OptionsDialog_TextSize</span>
+                    <div class="mws-options-controls">
+                        <input type="range" class="mws-options-input" min="0" max="5" step="1" value="@_draft.TextSizeStep" @oninput="OnTextSizeInput" />
+                        <span class="mws-options-value">@TextSizePercent(_draft.TextSizeStep)%</span>
+                    </div>
                 </label>
 
                 @if (DialogContext == OptionsDialogContext.MainMenu)
                 {
                     <label class="mws-options-row">
-                        @AppStrings.OptionsDialog_UiLanguage
-                        <select value="@_draft.UiLocale" @onchange="OnUiLocaleChanged">
-                            @foreach (var culture in AppUiCultures.Supported)
-                            {
-                                <option value="@culture.Code">@culture.DisplayName</option>
-                            }
-                        </select>
-                        <span class="mws-options-hint" title="@AppStrings.OptionsDialog_UiLanguageHint">ⓘ</span>
+                        <span class="mws-options-label">@AppStrings.OptionsDialog_UiLanguage</span>
+                        <div class="mws-options-controls">
+                            <select value="@_draft.UiLocale" @onchange="OnUiLocaleChanged">
+                                @foreach (var culture in AppUiCultures.Supported)
+                                {
+                                    <option value="@culture.Code">@culture.DisplayName</option>
+                                }
+                            </select>
+                            <span class="mws-options-hint" title="@AppStrings.OptionsDialog_UiLanguageHint">ⓘ</span>
+                        </div>
                     </label>
 
                     <label class="mws-options-row">
-                        @AppStrings.OptionsDialog_PreferredModuleLanguage
-                        <select value="@(_draft.PreferredModuleLanguage ?? "")" @onchange="OnPreferredModuleLanguageChanged">
-                            <option value="">@AppStrings.OptionsDialog_NoPreference</option>
-                            @foreach (var lang in _availableModuleLanguages)
-                            {
-                                <option value="@lang">@lang</option>
-                            }
-                        </select>
-                        <span class="mws-options-hint" title="@AppStrings.OptionsDialog_ModuleLanguageHint">ⓘ</span>
+                        <span class="mws-options-label">@AppStrings.OptionsDialog_PreferredModuleLanguage</span>
+                        <div class="mws-options-controls">
+                            <select value="@(_draft.PreferredModuleLanguage ?? "")" @onchange="OnPreferredModuleLanguageChanged">
+                                <option value="">@AppStrings.OptionsDialog_NoPreference</option>
+                                @foreach (var lang in _availableModuleLanguages)
+                                {
+                                    <option value="@lang">@lang</option>
+                                }
+                            </select>
+                            <span class="mws-options-hint" title="@AppStrings.OptionsDialog_ModuleLanguageHint">ⓘ</span>
+                        </div>
                     </label>
                 }
 
                 <div class="mws-dialog-actions">
-                    <button type="button" @onclick="Apply">@AppStrings.Common_Apply</button>
-                    <button type="button" @onclick="Cancel">@AppStrings.Common_Cancel</button>
+                    <button type="button" class="style-btn-green" @onclick="Apply">@AppStrings.Common_Apply</button>
+                    <button type="button" class="style-btn-red" @onclick="Cancel">@AppStrings.Common_Cancel</button>
                 </div>
 
                 @if (DialogContext == OptionsDialogContext.MainMenu)
@@ -74,9 +89,9 @@
                 <h3>@AppStrings.OptionsDialog_QuitConfirmTitle</h3>
                 <p>@AppStrings.OptionsDialog_QuitConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-quit-button" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
-                    <button type="button" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
-                    <button type="button" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
+                    <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
 
@@ -84,8 +99,8 @@
                 <h3>@AppStrings.OptionsDialog_NameSaveTitle</h3>
                 <input type="text" @bind="_saveName" @bind:event="oninput" class="mws-save-name-input" />
                 <div class="mws-dialog-actions">
-                    <button type="button" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
-                    <button type="button" @onclick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
         }
@@ -158,6 +173,11 @@
     private void OnBgmVolumeInput(ChangeEventArgs e) => _draft = _draft with { BgmVolume = ParsePercent(e.Value) };
     private void OnSfxVolumeInput(ChangeEventArgs e) => _draft = _draft with { SfxVolume = ParsePercent(e.Value) };
     private void OnTextSizeInput(ChangeEventArgs e) => _draft = _draft with { TextSizeStep = ParseInt(e.Value, _draft.TextSizeStep) };
+
+    // Mirrors wwwroot/appSettings.js's own SCALES array exactly — the step index itself is
+    // meaningless to a player, but the actual --mws-text-scale percentage it drives is.
+    private static readonly int[] TextSizeStepPercents = [80, 90, 100, 115, 130, 150];
+    private static int TextSizePercent(int step) => TextSizeStepPercents[Math.Clamp(step, 0, TextSizeStepPercents.Length - 1)];
     private void OnUiLocaleChanged(ChangeEventArgs e) => _draft = _draft with { UiLocale = e.Value?.ToString() ?? AppUiCultures.Default };
 
     private void OnPreferredModuleLanguageChanged(ChangeEventArgs e)
@@ -166,8 +186,8 @@
         _draft = _draft with { PreferredModuleLanguage = string.IsNullOrEmpty(value) ? null : value };
     }
 
-    private void ToggleBgmMuted() => _draft = _draft with { BgmMuted = !_draft.BgmMuted };
-    private void ToggleSfxMuted() => _draft = _draft with { SfxMuted = !_draft.SfxMuted };
+    private void OnBgmMutedChanged(ChangeEventArgs e) => _draft = _draft with { BgmMuted = e.Value is true };
+    private void OnSfxMutedChanged(ChangeEventArgs e) => _draft = _draft with { SfxMuted = e.Value is true };
 
     private static double ParsePercent(object? value) =>
         double.TryParse(value?.ToString(), out var pct) ? pct / 100.0 : 1.0;

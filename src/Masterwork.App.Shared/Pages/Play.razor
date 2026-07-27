@@ -22,8 +22,8 @@ else
     @if (!_paused)
     {
         <div class="mws-play-chrome">
-            <button type="button" class="mws-pause-button" @onclick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause">⏸</button>
-            <button type="button" class="mws-options-button" @onclick="() => _showOptions = true">⚙</button>
+            <button type="button" class="mws-pause-button" @onclick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause"></button>
+            <button type="button" class="mws-options-button" @onclick="() => _showOptions = true" aria-label="@AppStrings.Play_Options" title="@AppStrings.Play_Options"></button>
         </div>
     }
 
@@ -64,11 +64,11 @@ else
                        OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
     }
 
-    @if (_paused)
-    {
-        <PauseBar Session="State.Session" OnStateChanged="Refresh" OnResumed="() => _paused = false"
-                  OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
-    }
+    @* Always mounted (not @if-gated) once a session exists, so PauseBar's own IsOpen-driven CSS
+       transform can animate a slide in/out — an @if would destroy/recreate the component on every
+       pause/resume, leaving no element for a transition to animate. *@
+    <PauseBar Session="State.Session" IsOpen="_paused" OnStateChanged="Refresh" OnResumed="() => _paused = false"
+              OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
 
     @if (_showQuitFromBackNav)
     {

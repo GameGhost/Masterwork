@@ -6,10 +6,10 @@
 @inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
-<div class="mws-pause-bar">
+<div class="mws-pause-bar @(IsOpen ? "mws-pause-bar--open" : "")" inert="@(!IsOpen)">
     <div class="mws-pause-scrubber-row">
         <button type="button" class="mws-pause-nav-button mws-pause-back" disabled="@(!Session.CanStepBack)"
-                @onclick="StepBack" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back">◀</button>
+                @onclick="StepBack" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></button>
         <ol class="mws-timeline-list">
             @for (var i = 0; i < Session.Timeline.Count; i++)
             {
@@ -17,40 +17,42 @@
                 var snapshot = Session.Timeline[index];
                 var label = snapshot.DisplayLabel ?? snapshot.PassageId;
                 var isCurrent = index == Session.HistoryIndex && !Session.IsAtActiveState;
-                <li @ref="_entryRefs[index]" class="mws-timeline-entry @(isCurrent ? "current" : "") @(snapshot.Kind == SnapshotKind.Checkpoint ? "checkpoint" : "")" title="@label">
+                <li @key="index" @ref="_entryRefs[index]" class="mws-timeline-entry @(isCurrent ? "current" : "") @(snapshot.Kind == SnapshotKind.Checkpoint ? "checkpoint" : "")" title="@label">
                     <span class="mws-timeline-label">@label</span>
                 </li>
             }
             @if (Session.HasActiveState)
             {
-                <li @ref="_entryRefs[Session.Timeline.Count]" class="mws-timeline-entry mws-timeline-current-marker @(Session.IsAtActiveState ? "current" : "")" title="@AppStrings.TimelineScrubber_CurrentLabel">
+                <li @key="Session.Timeline.Count" @ref="_entryRefs[Session.Timeline.Count]" class="mws-timeline-entry mws-timeline-current-marker @(Session.IsAtActiveState ? "current" : "")" title="@AppStrings.TimelineScrubber_CurrentLabel">
                     <span class="mws-timeline-label">@AppStrings.TimelineScrubber_CurrentLabel</span>
                 </li>
             }
         </ol>
         <div class="mws-pause-forward-group">
             <button type="button" class="mws-pause-nav-button mws-pause-forward" disabled="@(!Session.CanStepForward)"
-                    @onclick="StepForward" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward">▶</button>
+                    @onclick="StepForward" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></button>
             <button type="button" class="mws-pause-nav-button mws-pause-jump-to-present" disabled="@(!Session.IsRewound)"
-                    @onclick="JumpToPresent" aria-label="@AppStrings.TimelineScrubber_ReturnToPresent" title="@AppStrings.TimelineScrubber_ReturnToPresent">⏭</button>
+                    @onclick="JumpToPresent" aria-label="@AppStrings.TimelineScrubber_ReturnToPresent" title="@AppStrings.TimelineScrubber_ReturnToPresent"></button>
         </div>
     </div>
     <div class="mws-pause-actions-row">
-        <button type="button" class="mws-quit-button" @onclick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</button>
-        <button type="button" @onclick="OnResumeClicked">@(Session.IsRewound ? AppStrings.TimelineScrubber_ResumeFromHere : AppStrings.Common_Resume)</button>
+        <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" @onclick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</button>
+        <button type="button" class="mws-resume-button mws-btn-sm style-btn-green @(Session.IsRewound ? "mws-resume-button--long" : "")" @onclick="OnResumeClicked">
+            <span class="mws-resume-button-text">@(Session.IsRewound ? AppStrings.TimelineScrubber_ResumeFromHere : AppStrings.Common_Resume)</span>
+        </button>
     </div>
 </div>
 
 @if (_showResumeConfirm)
 {
     <div class="mws-dialog-overlay">
-        <div class="mws-dialog">
+        <div class="mws-dialog mws-dialog--sm">
             <h3>@string.Format(AppStrings.EffectiveCulture, AppStrings.TimelineScrubber_ResumeConfirmTitle, Session.Current.DisplayLabel ?? Session.Current.PassageId)</h3>
             <p>@AppStrings.TimelineScrubber_ResumeConfirmBody</p>
             <p>@AppStrings.TimelineScrubber_ResumeConfirmQuestion</p>
             <div class="mws-dialog-actions">
-                <button type="button" @onclick="ConfirmResumeFromHere">@AppStrings.Common_Yes</button>
-                <button type="button" @onclick="() => _showResumeConfirm = false">@AppStrings.Common_No</button>
+                <button type="button" class="style-btn-red mws-btn-sm" @onclick="ConfirmResumeFromHere">@AppStrings.Common_Yes</button>
+                <button type="button" class="style-btn-brown mws-btn-sm" @onclick="() => _showResumeConfirm = false">@AppStrings.Common_No</button>
             </div>
         </div>
     </div>
@@ -67,6 +69,16 @@
     /// <summary>The active session to display and navigate.</summary>
     [Parameter, EditorRequired]
     public GameSession Session { get; set; } = null!;
+
+    /// <summary>
+    /// Whether the bar is slid into view. This component is always mounted once a session exists
+    /// (see Play.razor) rather than being added/removed via <c>@if</c>, specifically so the
+    /// open/closed CSS transform below can animate — an unmounted component has no element to
+    /// transition. <c>inert</c> follows this so the bar's buttons/scrubber aren't reachable by
+    /// keyboard or click while slid off-screen.
+    /// </summary>
+    [Parameter]
+    public bool IsOpen { get; set; }
 
     /// <summary>Invoked after stepping back/forward, jumping to present, or resuming from history.</summary>
     [Parameter]
@@ -93,9 +105,21 @@
     private ElementReference[] _entryRefs = [];
     private int _lastCenteredIndex = -1;
     private IJSObjectReference? _jsModule;
+    private bool _wasOpen;
 
     protected override void OnParametersSet()
     {
+        // Defensive only (not reachable via the normal Resume/Quit flows, which already clear these
+        // before IsOpen flips) — cheap insurance now that the bar stays mounted across pause/resume
+        // instead of being torn down, so nothing carries over stale into the next time it opens.
+        if (_wasOpen && !IsOpen)
+        {
+            _showResumeConfirm = false;
+            _showQuitDialog = false;
+        }
+
+        _wasOpen = IsOpen;
+
         var totalEntries = Session.Timeline.Count + (Session.HasActiveState ? 1 : 0);
         if (_entryRefs.Length != totalEntries)
         {
@@ -110,6 +134,18 @@
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/timelineScrubber.js");
         }
 
+        // Skipped entirely while closed — the panel is inert/slid off-screen, so there's nothing
+        // meaningful to scroll into view yet. Now that this component stays mounted across
+        // pause/resume instead of unmounting (see IsOpen's own remarks), skipping here matters: this
+        // would otherwise fire on the very first page load, before the player has ever opened the
+        // bar, against elements the interactive runtime may not have fully attached to yet.
+        // _lastCenteredIndex is deliberately left untouched so the next time it opens is still
+        // treated as "changed" and centers correctly.
+        if (!IsOpen)
+        {
+            return;
+        }
+
         // Only re-centers when the selected entry actually changes — every unrelated re-render
         // (e.g. an input keystroke elsewhere) would otherwise re-trigger the scroll animation.
         var currentIndex = Session.IsAtActiveState ? Session.Timeline.Count : Session.HistoryIndex;
@@ -121,7 +157,17 @@
         _lastCenteredIndex = currentIndex;
         if (_jsModule is not null && currentIndex >= 0 && currentIndex < _entryRefs.Length)
         {
-            await _jsModule.InvokeVoidAsync("centerElement", _entryRefs[currentIndex]);
+            try
+            {
+                await _jsModule.InvokeVoidAsync("centerElement", _entryRefs[currentIndex]);
+            }
+            catch (JSException)
+            {
+                // Best-effort UX polish only (keeps the highlighted entry scrolled into view) —
+                // rapid clicking can race a re-render that swaps the referenced <li> out from under
+                // this call before it resolves. Not worth surfacing an error over; the entry is
+                // still correctly highlighted either way, just not necessarily re-centered this time.
+            }
         }
     }
 

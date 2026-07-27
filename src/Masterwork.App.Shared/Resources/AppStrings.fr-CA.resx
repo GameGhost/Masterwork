@@ -69,7 +69,6 @@
   <data name="Common_Save" xml:space="preserve"><value>Enregistrer</value></data>
   <data name="Common_TryAgain" xml:space="preserve"><value>Réessayer</value></data>
   <data name="Common_Mute" xml:space="preserve"><value>Muet</value></data>
-  <data name="Common_Unmute" xml:space="preserve"><value>Réactiver le son</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Sauvegarde automatique</value></data>
   <data name="Common_Loading" xml:space="preserve"><value>Chargement…</value></data>
   <data name="Common_Yes" xml:space="preserve"><value>Oui</value></data>
@@ -178,6 +177,7 @@
   <data name="Play_NavErrorBody" xml:space="preserve"><value>Impossible de continuer à partir de ce passage — probablement un lien ou une référence brisée dans le contenu du module.</value></data>
   <data name="Play_NavErrorReturnButton" xml:space="preserve"><value>Retourner à ce passage</value></data>
   <data name="Play_Pause" xml:space="preserve"><value>Pause</value></data>
+  <data name="Play_Options" xml:space="preserve"><value>Options</value></data>
 
   <data name="TimelineScrubber_Back" xml:space="preserve"><value>Retour</value></data>
   <data name="TimelineScrubber_Forward" xml:space="preserve"><value>Avancer</value></data>
