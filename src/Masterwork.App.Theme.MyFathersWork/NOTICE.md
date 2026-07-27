@@ -17,4 +17,15 @@ from `Masterwork-Design\Reference\` (see the code repo's own `CLAUDE.md`) — th
 broader CC BY-NC-SA reference material used for content extraction, not this specific community
 release.
 
-Fonts, CSS, and any other original content in this project are Masterwork's own work.
+Some `wwwroot/images/main-menu/` files (`button_brown.png`, `button_green.png`, `button_red.png`)
+were copied from `my-fathers-work-template`'s already-cropped versions of the same underlying
+Renegade Game Studios source art (`Masterwork-Modules` repo) rather than re-derived from
+`Reference/` directly — same provenance, just via an already-processed copy.
+
+`wwwroot/fonts/germania-one-v21-latin-regular.woff2` and
+`wwwroot/fonts/averia-libre-v16-latin-regular.woff2` are Google Fonts (SIL Open Font License) — an
+unrelated, separately-licensed source, copied here (also via `my-fathers-work-template`, which
+bundles the full family) purely for visual consistency between in-game chrome and the app's own
+shell, not part of the RGS asset exception above.
+
+CSS and any other original content in this project are Masterwork's own work.

@@ -10,16 +10,38 @@
 <PageTitle>Masterwork - My Father's Work</PageTitle>
 
 <div class="mws-main-menu">
-    <h1>Masterwork</h1>
-    <p>@((MarkupString)AppStrings.MainMenu_Tagline)</p>
+    @* Pure structural div stack for the theme's own layered scene art — app.css/App.Shared has no
+       awareness of any specific image; theme.css supplies every background-image here, same split
+       already established for module content and the in-game chrome. Back-to-front stacking order
+       matches the reference composition: sky behind the mountain/village/manor silhouettes, the
+       foreground rock silhouette (mws-main-menu-vignette) closest to camera, the frame on top of
+       all of it. aria-hidden since it's pure decoration, not content. *@
+    <div class="mws-main-menu-scene" aria-hidden="true">
+        <div class="mws-main-menu-layer mws-main-menu-sky"></div>
+        <div class="mws-main-menu-layer mws-main-menu-mountain"></div>
+        <div class="mws-main-menu-layer mws-main-menu-village"></div>
+        <div class="mws-main-menu-layer mws-main-menu-manor"></div>
+        <div class="mws-main-menu-layer mws-main-menu-rocks"></div>
+    </div>
+    <div class="mws-main-menu-border" aria-hidden="true"></div>
 
-    <nav class="mws-main-menu-buttons">
-        <button type="button" @onclick='() => Nav.NavigateTo("/help")'>@AppStrings.MainMenu_Help</button>
-        <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
-        <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
-        <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
-        <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
-    </nav>
+    <h1 class="mws-visually-hidden">Masterwork - My Father's Work</h1>
+
+    <button type="button" class="mws-main-menu-help" @onclick='() => Nav.NavigateTo("/help")'>
+        <span class="mws-visually-hidden">@AppStrings.MainMenu_Help</span>
+    </button>
+
+    <div class="mws-main-menu-content">
+        <div class="mws-main-menu-logo" role="img" aria-label="My Father's Work"></div>
+        <p class="mws-main-menu-tagline">@((MarkupString)AppStrings.MainMenu_Tagline)</p>
+
+        <nav class="mws-main-menu-buttons">
+            <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
+            <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
+            <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
+            <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
+        </nav>
+    </div>
 </div>
 
 @if (_showOptions)
