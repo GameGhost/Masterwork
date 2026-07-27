@@ -131,6 +131,12 @@ Frozen prior-version references (`mws-format-v0.1.md`, `mws-format-v0.2.md`) wer
 - **Never commit** content from `c:\Projects\Masterwork-Design\Reference\` to this repo. That directory contains CC BY-NC-SA 4.0 derived content from the official app.
 - `_extracted/` output directories are also off-limits for commits here.
 - The Masterwork source code itself (this repo) is a separate work from the reference content.
+- **Exception**: `src/Masterwork.App.Theme.MyFathersWork/` is a documented, deliberate exception to
+  the rule above. Its assets come from Renegade Game Studios' own community-resources release for
+  *My Father's Work* (linked in that project's own `NOTICE.md`), not the general CC BY-NC-SA
+  reference material used for content extraction — individual files may be copied/modified per that
+  release's terms, just not mirrored wholesale. The blanket rule above still applies to everything
+  else under `Reference/`.
 
 ---
 

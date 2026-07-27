@@ -6,7 +6,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
 
-  <Identity Name="ca.digitalghost.masterwork.app" Publisher="CN=Masterwork" Version="1.0.0.0" />
+  <Identity Name="ca.digitalghost.masterwork.app" Publisher="CN=Masterwork" Version="0.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="4418B6C2-5FE0-4FFB-AB40-72876A4EADC4" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

@@ -3,6 +3,7 @@ using Masterwork.App.Shared.Services;
 using Masterwork.ModuleFormat;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.LifecycleEvents;
 
 namespace Masterwork.App;
 
@@ -55,6 +56,29 @@ public static class MauiProgram
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
+#endif
+
+#if WINDOWS
+        // WinUI3's own title bar (and taskbar/Alt-Tab preview) reads from AppWindow.SetIcon, not
+        // from the exe's embedded Win32 icon resource that MauiIcon/Resizetizer already wires via
+        // ApplicationIcon — the two are set independently, so the title bar needs this separate
+        // call even though the taskbar/File-Explorer icon already works without it. appicon.ico is
+        // the same file Resizetizer generates from MauiIcon and copies next to the exe.
+        builder.ConfigureLifecycleEvents(events =>
+        {
+            events.AddWindows(windows => windows.OnWindowCreated(window =>
+            {
+                var iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
+                if (!File.Exists(iconPath))
+                {
+                    return;
+                }
+
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+                var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+                Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId).SetIcon(iconPath);
+            }));
+        });
 #endif
 
         return builder.Build();

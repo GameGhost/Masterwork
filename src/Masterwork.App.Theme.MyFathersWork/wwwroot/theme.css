@@ -1,0 +1,14 @@
+/* "My Father's Work" app theme — the default visual skin for every screen outside actual gameplay
+ * (main menu, module select, continue list, manage modules, help, achievements) plus the
+ * options/pause chrome when opened with no module loaded (see Masterwork.App.Shared's app.css,
+ * which keeps only structural mws-* hooks and no colors/images of its own — same split already
+ * established for module content). See NOTICE.md for asset provenance.
+ *
+ * Loaded via a <link> in both host pages, immediately after app.css's own <link> — cascade order
+ * lets this file win on any selector it shares with app.css, the same principle module CSS already
+ * relies on.
+ *
+ * Screens are themed incrementally; this file starts empty and fills in per the project's phased
+ * plan (architecture first, then MainMenu, Module Select, Options/Pause default skin, then the
+ * remaining lower-fidelity screens).
+ */

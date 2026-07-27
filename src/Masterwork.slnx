@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="Masterwork.App/Masterwork.App.csproj" />
   <Project Path="Masterwork.App.Shared/Masterwork.App.Shared.csproj" />
+  <Project Path="Masterwork.App.Theme.MyFathersWork/Masterwork.App.Theme.MyFathersWork.csproj" />
   <Project Path="Masterwork.App.Web/Masterwork.App.Web.csproj" />
   <Project Path="Masterwork.App.Web.Client/Masterwork.App.Web.Client.csproj" />
   <Project Path="Masterwork.Editor/Masterwork.Editor.csproj" />

@@ -9,6 +9,6 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
-        return new Window(new MainPage()) { Title = "Masterwork.App" };
+        return new Window(new MainPage()) { Title = "Masterwork - My Father's Work" };
     }
 }

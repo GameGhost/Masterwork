@@ -24,6 +24,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
+    <!-- Pure static-web-asset reference — pulls the theme's wwwroot content through the standard
+         RCL mechanism (_content/Masterwork.App.Theme.MyFathersWork/...), same as this project's own
+         wwwroot reaches both host apps. -->
+    <ProjectReference Include="..\Masterwork.App.Theme.MyFathersWork\Masterwork.App.Theme.MyFathersWork.csproj" />
   </ItemGroup>
 
   <ItemGroup>
