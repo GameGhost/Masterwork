@@ -47,6 +47,10 @@ public static class MauiProgram
         // Overrides Shared's NullModuleFilePicker default — see IModuleFilePicker's own remarks for
         // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload.
         builder.Services.AddScoped<IModuleFilePicker, MauiModuleFilePicker>();
+        // The active theme — swapping themes is a build-time decision (this line), not a runtime
+        // one; see IMainMenuTheme's own remarks for why this wiring lives in each host rather than
+        // the theme project registering itself.
+        builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene)));
 
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the

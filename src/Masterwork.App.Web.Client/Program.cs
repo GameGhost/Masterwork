@@ -30,6 +30,10 @@ builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 // No WebView2 host here — the InputFile element StartNewGame.razor uses for module upload doesn't
 // hit the crash IModuleFilePicker documents, so this default (never actually called) is enough.
 builder.Services.AddScoped<IModuleFilePicker, NullModuleFilePicker>();
+// The active theme — swapping themes is a build-time decision (this line), not a runtime one; see
+// IMainMenuTheme's own remarks for why this wiring lives in each host rather than the theme project
+// registering itself.
+builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene)));
 
 var host = builder.Build();
 

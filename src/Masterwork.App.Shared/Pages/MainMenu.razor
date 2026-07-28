@@ -5,23 +5,22 @@
 
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
+@inject IMainMenuTheme? Theme
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>Masterwork - My Father's Work</PageTitle>
 
 <div class="mws-main-menu">
-    @* Pure structural div stack for the theme's own layered scene art — app.css/App.Shared has no
-       awareness of any specific image; theme.css supplies every background-image here, same split
-       already established for module content and the in-game chrome. Back-to-front stacking order
-       matches the reference composition: sky behind the mountain/village/manor silhouettes, the
-       foreground rock silhouette (mws-main-menu-vignette) closest to camera, the frame on top of
-       all of it. aria-hidden since it's pure decoration, not content. *@
+    @* The background scene's whole structure (not just its images) is theme-provided — see
+       IMainMenuTheme's own remarks for why (a structurally different future theme might not have a
+       "manor"/"mountain" concept at all). Falls back to nothing rather than crashing if no theme is
+       registered (a "bare" build) — just the plain background color from theme.css/app.css.
+       aria-hidden since it's pure decoration, not content. *@
     <div class="mws-main-menu-scene" aria-hidden="true">
-        <div class="mws-main-menu-layer mws-main-menu-sky"></div>
-        <div class="mws-main-menu-layer mws-main-menu-mountain"></div>
-        <div class="mws-main-menu-layer mws-main-menu-village"></div>
-        <div class="mws-main-menu-layer mws-main-menu-manor"></div>
-        <div class="mws-main-menu-layer mws-main-menu-rocks"></div>
+        @if (Theme is not null)
+        {
+            <DynamicComponent Type="Theme.SceneComponentType" />
+        }
     </div>
     <div class="mws-main-menu-border" aria-hidden="true"></div>
 

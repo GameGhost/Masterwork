@@ -1,10 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
-  <!-- No .razor components — this project exists purely to package the "My Father's Work" theme's
-       static assets (wwwroot) as a Razor Class Library, so they're published under
-       _content/Masterwork.App.Theme.MyFathersWork/... via the same static-web-asset mechanism
-       Masterwork.App.Shared already uses, transitively reaching both host apps through the ordinary
-       ProjectReference graph — no custom build step needed. See NOTICE.md for asset provenance. -->
+  <!-- Packages the "My Father's Work" theme's static assets (wwwroot) as a Razor Class Library, so
+       they're published under _content/Masterwork.App.Theme.MyFathersWork/... via the same
+       static-web-asset mechanism Masterwork.App.Shared already uses, transitively reaching both
+       host apps through the ordinary ProjectReference graph — no custom build step needed. Also
+       holds real .razor components (see MainMenuScene.razor) for the parts of a screen whose whole
+       structure (not just image/color) can vary per theme.
+
+       Deliberately has NO reference to Masterwork.App.Shared (that would create a cycle — Shared
+       already references this project for its static assets). This project stays a self-contained
+       content pack with no coupling to Shared's abstractions (IMainMenuTheme etc.); each host
+       project (Masterwork.App, Masterwork.App.Web.Client — the two places that already reference
+       both this project and Shared) does the small job of wiring this theme's component types into
+       Shared's DI-registered interfaces at startup. See NOTICE.md for asset provenance. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -14,6 +22,10 @@
 
   <ItemGroup>
     <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
   </ItemGroup>
 
 </Project>

@@ -76,8 +76,8 @@
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Aide</value></data>
-  <data name="MainMenu_Achievements" xml:space="preserve"><value>Réussites</value></data>
-  <data name="MainMenu_Options" xml:space="preserve"><value>Options</value></data>
+  <data name="MainMenu_Achievements" xml:space="preserve"><value>Fins</value></data>
+  <data name="MainMenu_Options" xml:space="preserve"><value>Paramètres</value></data>
   <data name="MainMenu_Continue" xml:space="preserve"><value>Continuer</value></data>
   <data name="MainMenu_StartNewGame" xml:space="preserve"><value>Nouvelle partie</value></data>
 

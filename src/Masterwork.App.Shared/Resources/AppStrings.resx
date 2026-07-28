@@ -76,10 +76,10 @@
 
   <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Help</value></data>
-  <data name="MainMenu_Achievements" xml:space="preserve"><value>Achievements</value></data>
-  <data name="MainMenu_Options" xml:space="preserve"><value>Options</value></data>
+  <data name="MainMenu_Achievements" xml:space="preserve"><value>Endings</value></data>
+  <data name="MainMenu_Options" xml:space="preserve"><value>Settings</value></data>
   <data name="MainMenu_Continue" xml:space="preserve"><value>Continue</value></data>
-  <data name="MainMenu_StartNewGame" xml:space="preserve"><value>Start New Game</value></data>
+  <data name="MainMenu_StartNewGame" xml:space="preserve"><value>New Game</value></data>
 
   <data name="Help_PageTitle" xml:space="preserve"><value>Masterwork — Help</value></data>
   <data name="Help_Topic_HowToUse" xml:space="preserve"><value>How to use</value></data>

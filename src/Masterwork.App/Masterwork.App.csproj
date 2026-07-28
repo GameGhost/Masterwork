@@ -97,6 +97,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
+    <!-- Direct reference (not just transitive via App.Shared) needed for compile-time visibility of
+         MainMenuScene and any other theme component types this host wires into Shared's
+         IMainMenuTheme/etc. at startup — App.Shared's own reference to this project only carries its
+         static web assets through, not C# type visibility. -->
+    <ProjectReference Include="..\Masterwork.App.Theme.MyFathersWork\Masterwork.App.Theme.MyFathersWork.csproj" />
   </ItemGroup>
 
 </Project>

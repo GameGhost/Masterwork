@@ -17,10 +17,11 @@ from `Masterwork-Design\Reference\` (see the code repo's own `CLAUDE.md`) — th
 broader CC BY-NC-SA reference material used for content extraction, not this specific community
 release.
 
-Some `wwwroot/images/main-menu/` files (`button_brown.png`, `button_green.png`, `button_red.png`)
-were copied from `my-fathers-work-template`'s already-cropped versions of the same underlying
-Renegade Game Studios source art (`Masterwork-Modules` repo) rather than re-derived from
-`Reference/` directly — same provenance, just via an already-processed copy.
+Some files under `wwwroot/images/ui/` (`button_brown.png`, `button_green.png`, `button_red.png`,
+`button_question.png`) and `wwwroot/images/backgrounds/` (`border.png`) were copied from
+`my-fathers-work-template`'s already-cropped/processed versions of the same underlying Renegade
+Game Studios source art (`Masterwork-Modules` repo) rather than re-derived from `Reference/`
+directly — same provenance, just via an already-processed copy.
 
 `wwwroot/fonts/germania-one-v21-latin-regular.woff2` and
 `wwwroot/fonts/averia-libre-v16-latin-regular.woff2` are Google Fonts (SIL Open Font License) — an

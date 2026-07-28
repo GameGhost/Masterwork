@@ -1,0 +1,14 @@
+@* The main menu's background scene — rendered by MainMenu.razor via
+   <DynamicComponent Type="Theme.SceneComponentType" /> (see IMainMenuTheme in Masterwork.App.Shared).
+   Every class here is styled entirely by this project's own wwwroot/theme.css — no code-behind,
+   no parameters, purely decorative markup. A structurally different future theme provides its own
+   version of this component with whatever layer count/composition it needs; MainMenu.razor itself
+   never has to change. *@
+
+<div class="mws-main-menu-sky"></div>
+<div class="mws-main-menu-mountain"></div>
+<div class="mws-main-menu-village"></div>
+<div class="mws-main-menu-tree mws-main-menu-tree-left"></div>
+<div class="mws-main-menu-manor"></div>
+<div class="mws-main-menu-tree mws-main-menu-tree-right"></div>
+<div class="mws-main-menu-rocks"></div>
