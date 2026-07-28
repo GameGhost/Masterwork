@@ -39,10 +39,11 @@
  * A full-bleed hero screen that must never scroll, regardless of viewport -- position: fixed (not
  * just height: 100vh) takes it out of document flow entirely, so nothing about its own box model
  * can ever contribute to a body-level scrollbar; overflow: hidden below then clips the
- * intentionally-oversized scene layers instead of exposing them via scroll. Also overrides
- * app.css's generic @media (min-width: 48rem) rule (a plain reading-column max-width every other
- * page container wants, wrong for a full-bleed hero) -- same override my-fathers-work-template
- * already applies to its own full-bleed .mws-passage layouts.
+ * intentionally-oversized scene layers instead of exposing them via scroll. app.css's generic
+ * @media (min-width: 48rem) max-width/margin:auto rule (a plain reading-column treatment every
+ * other page container wants) deliberately excludes .mws-main-menu from its selector list --
+ * wrong for a full-bleed hero, same reasoning my-fathers-work-template already applies to its own
+ * full-bleed .mws-passage layouts.
  *
  * Layout is expressed almost entirely in vh (not vw/%) per your steer: every scene element's own
  * size is driven by viewport *height*, so on a narrower-but-not-shorter viewport (a phone in
@@ -51,12 +52,8 @@
  * separate per-breakpoint size rules needed for the scene layers themselves (only the interactive
  * content -- logo/buttons -- needs its own narrow-viewport layout, further down).
  *
- * --mws-mm-cluster-x is the one shared knob for the whole manor+trees group's horizontal position
- * (a fixed vh-based distance left of center) -- change this one value to shift the entire cluster
- * together rather than three separate offsets drifting out of sync. */
+ */
 .mws-main-menu {
-    --mws-mm-cluster-x: calc(50% - 38vh);
-
     position: fixed;
     inset: 0;
     overflow: hidden;
@@ -77,12 +74,11 @@
    First-pass numbers, tune live. */
 .mws-main-menu-sky {
     position: absolute;
-    top: 0;
-    left: 50%;
+    top: 22px;
+    left: 0;
     z-index: 1;
-    width: 200%;
-    height: 62vh;
-    transform: translateX(-50%);
+    width: 100%;
+    height: 70vh;
     background-image: url('images/backgrounds/sky-dome.png');
     background-repeat: no-repeat;
     background-size: 100% 100%;
@@ -91,13 +87,18 @@
 
 /* Mountain/village -- both centered, bottom-anchored, sized in vh so they scale with viewport
    height and naturally overflow left/right on a narrow-but-tall viewport instead of shrinking.
-   Both are square (2048x2048) source canvases, so width mirrors height directly rather than
-   needing a separate aspect-ratio calculation. First-pass numbers, tune live. */
+   Both are square (2048x2048) source canvases, so height drives the "natural" width directly --
+   but width is `max(<vh>, 100%)`, not the vh value alone: on a viewport that's narrow *without*
+   being especially tall (a resized desktop window, not a true phone-portrait aspect), the vh value
+   alone can come out smaller than the viewport itself, leaving the scene stranded as a small
+   floating square with visible background on both sides instead of the intended "extends past the
+   edges" look. The max() guarantees it never shrinks narrower than the viewport; it can still grow
+   past 100% on genuinely tall viewports same as before. First-pass numbers, tune live. */
 .mws-main-menu-mountain,
 .mws-main-menu-village {
     position: absolute;
     left: 50%;
-    bottom: 0;
+    bottom: 22px;
     transform: translateX(-50%);
     background-repeat: no-repeat;
     background-size: 100% 100%;
@@ -106,15 +107,15 @@
 
 .mws-main-menu-mountain {
     z-index: 2;
-    width: 58vh;
-    height: 58vh;
+    width: 100%;
+    height: 70vh;
     background-image: url('images/backgrounds/mountain.png');
 }
 
 .mws-main-menu-village {
     z-index: 3;
-    width: 52vh;
-    height: 52vh;
+    width: 100%;
+    height: 70vh;
     background-image: url('images/backgrounds/village.png');
 }
 
@@ -123,52 +124,25 @@
    mountain/village above. First-pass numbers, tune live. */
 .mws-main-menu-manor {
     position: absolute;
-    left: var(--mws-mm-cluster-x);
     bottom: 0;
+    left: 22px;
     z-index: 4;
-    width: 62vh;
-    height: 62vh;
-    background-image: url('images/backgrounds/manor.png');
+    height: 110vh;
+    aspect-ratio: 1;
+    background-image: url(
+    'images/backgrounds/manor-combined.png');
     background-repeat: no-repeat;
     background-size: 100% 100%;
     background-position: left bottom;
 }
 
-/* Trees -- standalone sprites (not part of the manor/mountain/village shared-canvas alignment
-   group, so each is cropped to its own content, unlike those full-canvas layers), positioned
-   relative to the manor's own left edge (--mws-mm-cluster-x) rather than the viewport, and in
-   front of the manor (higher z-index) -- they're foreground to it, not flanking behind/beside.
-   First-pass numbers, tune live. */
-.mws-main-menu-tree {
+.mws-main-menu-effect {
     position: absolute;
-    bottom: 0;
-    z-index: 5;
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-}
-
-.mws-main-menu-tree-left {
-    left: calc(var(--mws-mm-cluster-x) - 14vh);
-    width: 22vh;
-    height: 22vh;
-    background-image: url('images/backgrounds/trees-1.png');
-}
-
-.mws-main-menu-tree-right {
-    left: calc(var(--mws-mm-cluster-x) + 46vh);
-    width: 12vh;
-    height: 24vh;
-    background-image: url('images/backgrounds/tree-4.png');
-}
-
-.mws-main-menu-rocks {
-    position: absolute;
-    left: 50%;
+    left: 0;
     bottom: 0;
     z-index: 6;
-    width: 200%;
-    height: 30vh;
-    transform: translateX(-50%);
+    width: 100%;
+    height: 100%;
     background-image: url('images/backgrounds/vignette.png');
     background-repeat: no-repeat;
     background-size: 100% 100%;
@@ -198,8 +172,8 @@
 
 .mws-main-menu-help {
     position: absolute;
-    top: max(4vh, env(safe-area-inset-top) + 1rem);
-    left: max(4vw, env(safe-area-inset-left) + 1rem);
+    top: 36px;
+    left: 75px;
     z-index: 20;
     width: 3.25rem;
     aspect-ratio: 1;
@@ -213,37 +187,49 @@
     background-image: url('images/ui/button_question.png');
 }
 
+/* Fixed rem width, not vw-derived -- this block should stay put at a constant on-screen size and
+   position as the window is resized (large-layout domain only; the narrow breakpoint below switches
+   it to a completely different static/stacked layout), not visibly grow or shrink with viewport
+   width. */
 .mws-main-menu-content {
     position: absolute;
-    top: max(6vh, env(safe-area-inset-top) + 1.5rem);
-    right: max(5vw, env(safe-area-inset-right) + 1.5rem);
+    top: 40px;
+    right: 50px;
     z-index: 20;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 1.25rem;
-    width: min(42vw, 30rem);
+    width: 25rem;
+    height: calc(100vh - 80px);
 }
 
 .mws-main-menu-logo {
     width: 100%;
+    flex: 1;
     aspect-ratio: 1;
     background-image: url('images/myfatherswork-logo-1024x1024.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
+    margin: -50px;
 }
 
 .mws-main-menu-tagline {
     margin: 0;
     text-align: center;
-    font-size: 0.9em;
+    font-size: 1.4em;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    background: rgba(32, 32, 45, 0.7);
 }
 
 .mws-main-menu-tagline em {
     font-style: normal;
     color: #f2b17b;
+}
+.mws-main-menu-tagline em::before {
+    content: '\A';
+    white-space: pre;
 }
 
 .mws-main-menu-buttons {
@@ -290,88 +276,152 @@
 }
 
 /* -- Narrow (phone portrait) -----------------------------------------------------------------
- * The side-anchored content/two-column grid don't have room to breathe; stack everything centered
- * in normal flow instead, and crop the border to just its top/bottom edges -- the exact
- * transform: scaleX trick my-fathers-work-template already uses for the same "side posts too
- * chunky at this width" problem on its own bordered layouts (border-image-width is a fixed px
- * regardless of viewport, so at a narrow width the vertical posts dominate unless pushed
- * off-screen this way). First-pass breakpoint/values, tune live. */
+ * The side-anchored content/two-column grid don't have room to breathe; overlay a compact,
+ * centered column on top of the scene instead (position: absolute + inset: 0, NOT position:
+ * static -- static pulls it into normal document flow, which was pushing the button rows below
+ * the visible/bordered area entirely on tall content), and crop the border to just its top/bottom
+ * edges -- the exact transform: scaleX trick my-fathers-work-template already uses for the same
+ * "side posts too chunky at this width" problem on its own bordered layouts (border-image-width is
+ * a fixed px regardless of viewport, so at a narrow width the vertical posts dominate unless
+ * pushed off-screen this way).
+ *
+ * Portrait needs its own background positioning independent of the large/landscape layouts (e.g.
+ * shifting the manor mostly off the left edge) -- add .mws-main-menu-sky / -mountain / -village /
+ * -effect override rules in this block as needed; only .mws-main-menu-manor needs one so far.
+ * First-pass breakpoint/values, tune live. */
 @media (max-width: 45.99rem) {
     .mws-main-menu-border {
         transform: scaleX(1.6667);
     }
 
+    .mws-main-menu-manor {
+        left: -22vh;
+    }
+
+    .mws-main-menu-help {
+        top: 44px;
+        left: 16px;
+    }
+
+    /* Logo occupies whatever vertical room is left above the tagline/buttons (flex: 1 1 auto +
+       min-height: 0, no aspect-ratio -- background-size: contain on the logo itself already
+       preserves the art's own aspect ratio inside whatever box results, so the box doesn't need
+       to), full width; tagline and buttons then land directly after it, which -- since this
+       container spans the full inset: 0 height -- naturally pins them near the bottom edge without
+       any explicit bottom-anchoring. padding-bottom is the "stay inside the border" margin. */
     .mws-main-menu-content {
-        position: static;
-        height: 100%;
+        position: absolute;
+        inset: 0;
+        height: auto;
         width: 100%;
         max-width: 24rem;
         margin: 0 auto;
-        padding: 4rem 1.5rem 2rem;
-        justify-content: center;
+        padding: 4.5rem 1.25rem 2.5rem;
+        justify-content: flex-start;
+        gap: 0.75rem;
     }
 
     .mws-main-menu-logo {
-        width: 70%;
+        flex: 1 1 auto;
+        min-height: 0;
+        aspect-ratio: auto;
+        width: 100%;
+        margin: 0;
     }
 
     .mws-main-menu-buttons {
         grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+
+    .mws-main-menu-buttons button {
+        aspect-ratio: 5 / 1;
+        font-size: 1.35rem;
     }
 }
 
 /* -- Wide (phone landscape) --------------------------------------------------------------------
- * Width is ample here (keeps the side-anchored large-viewport layout, full 4-sided border), but
- * height is tight -- the vh-driven scene sizes above would otherwise push content off the bottom
- * edge or crowd the frame, so this scales several of them down and shrinks the content column's
- * own vertical rhythm. Matches my-fathers-work-template's own short-viewport breakpoint.
- * First-pass values, tune live. */
+ * Width is ample here (keeps the full 4-sided border), but height is tight -- the vh-driven scene
+ * sizes above would otherwise push content off the bottom edge or crowd the frame. The content
+ * block switches from the large layout's right-anchored column to a single row spanning the full
+ * width between the border's own left/right inset (40px, matching border-image-width), with the
+ * button grid going to one row of four instead of stacking. Matches my-fathers-work-template's own
+ * short-viewport breakpoint.
+ *
+ * When a viewport is narrow enough to also match the portrait breakpoint above (a small square-ish
+ * window, not a real phone aspect), this block must win -- it comes later in the file (cascade
+ * order decides ties between equal-specificity rules on the same selector), but only for
+ * properties it actually restates. Every property the portrait block sets on a shared selector is
+ * restated here explicitly (even where the value doesn't otherwise need to change for landscape
+ * itself) so nothing from the portrait block leaks through in that overlap case.
+ *
+ * Add .mws-main-menu-mountain / -village / -effect override rules here as needed; only
+ * sky/manor/help need one so far. First-pass values, tune live. */
 @media (max-height: 30rem) {
-    .mws-main-menu {
-        --mws-mm-cluster-x: calc(50% - 24vh);
+    .mws-main-menu-border {
+        transform: none;
     }
 
     .mws-main-menu-sky {
         height: 80vh;
     }
 
-    .mws-main-menu-mountain {
-        width: 70vh;
-        height: 70vh;
-    }
-
-    .mws-main-menu-village {
-        width: 62vh;
-        height: 62vh;
-    }
-
     .mws-main-menu-manor {
-        width: 78vh;
-        height: 78vh;
+        height: 140vh;
     }
 
-    .mws-main-menu-tree-left {
-        left: calc(var(--mws-mm-cluster-x) - 18vh);
-        width: 28vh;
-        height: 28vh;
+    .mws-main-menu-help {
+        top: 36px;
+        left: 75px;
     }
 
-    .mws-main-menu-tree-right {
-        left: calc(var(--mws-mm-cluster-x) + 58vh);
-        width: 15vh;
-        height: 30vh;
-    }
-
+    /* Full-height row spanning between the border's own left/right inset (40px, matching
+       border-image-width) and a matching top/bottom inset -- logo fills the leftover vertical
+       space above the buttons (flex: 1 1 auto + min-height: 0, same technique as portrait) but
+       right-aligned (align-self) instead of full-width; tagline and buttons stretch to the row's
+       full width by the container's own align-items: stretch. Buttons land at the very bottom
+       because they're the last flex child in a container spanning the full available height, same
+       "let flex-grow above them do the bottom-anchoring" approach as the portrait block. */
     .mws-main-menu-content {
-        top: max(3vh, env(safe-area-inset-top) + 0.75rem);
-        gap: 0.5rem;
+        position: absolute;
+        top: 44px;
+        right: 40px;
+        bottom: 44px;
+        left: 40px;
+        width: auto;
+        height: auto;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 0.4rem;
     }
 
-    .mws-main-menu-tagline {
-        display: none;
+    .mws-main-menu-logo {
+        flex: 1 1 auto;
+        min-height: 0;
+        aspect-ratio: auto;
+        align-self: flex-end;
+        width: min(40%, 14rem);
+        margin: 0;
+        margin-right: 50px;
+        transform: scale(1.4);
+    }
+
+    /* Ample width here, unlike portrait -- the forced line-break before the emphasized phrase
+       (added for the narrow column) isn't needed. */
+    .mws-main-menu-tagline em::before {
+        content: none;
+    }
+
+    .mws-main-menu-buttons {
+        grid-template-columns: repeat(4, 1fr);
+        width: 100%;
     }
 
     .mws-main-menu-buttons button {
-        font-size: 1.1rem;
+        aspect-ratio: 17 / 6;
+        font-size: 1.5rem;
     }
 }
