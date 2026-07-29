@@ -461,3 +461,292 @@
     border-color: rgba(229, 224, 216, 0.3);
     border-top-color: #f2b17b;
 }
+
+/* -- Settings dialog (OptionsDialog.razor) ------------------------------------------------------
+ * The app's own chrome only ever emits structural class hooks (.mws-dialog-overlay/-dialog,
+ * .mws-options-dialog vs. .mws-dialog--sm, .mws-options-row/-controls/-input/-value,
+ * .mws-mute-checkbox, .mws-save-name-input, .style-btn-brown/-green/-red) -- app.css gives them a
+ * plain generic fallback look (white box, browser-default controls), same as every other screen
+ * this theme hasn't reached yet. This section is deliberately a close port of
+ * my-fathers-work-template's own OptionsDialog skin (same asset choices, same border-image/slider/
+ * checkbox numbers) rather than a fresh design -- the app's default "no module loaded" dialog and
+ * a loaded module's in-game dialog should look like the same UI, not two different ones. The only
+ * real difference from the module version is the asset URIs themselves: plain relative url(...)
+ * paths here instead of that module's image://slug indirection (AssetResolver's URI scheme only
+ * exists while a module is loaded and injecting its own CSS -- this file is active before any
+ * module loads too). button_brown/green/red.png are the same files already bundled for the main
+ * menu's own buttons (images/ui/), reused as-is rather than duplicated. */
+
+/* Standard brown/green/red buttons -- Apply/Cancel/Quit/Resume/Save/Abandon all go through these
+   three classes (see OptionsDialog.razor and PauseBar.razor), so this skins both at once. */
+.style-btn-brown,
+.style-btn-green,
+.style-btn-red {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13rem;
+    aspect-ratio: 17 / 6;
+    flex-shrink: 0;
+    padding: 0;
+    background-size: 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    appearance: none;
+    font-family: 'Germania One', 'Averia Libre', serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    line-height: 1rem;
+    letter-spacing: 0.1rem;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.style-btn-brown {
+    background-image: url('images/ui/button_brown.png');
+    color: #2b2016;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.style-btn-green {
+    background-image: url('images/ui/button_green.png');
+    color: #152218;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.style-btn-red {
+    background-image: url('images/ui/button_red.png');
+    color: #2b0d0d;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+}
+
+.style-btn-brown:hover:not(:disabled),
+.style-btn-green:hover:not(:disabled),
+.style-btn-red:hover:not(:disabled) {
+    filter: brightness(1.15);
+}
+
+.style-btn-brown:active:not(:disabled),
+.style-btn-green:active:not(:disabled),
+.style-btn-red:active:not(:disabled) {
+    transform: scale(0.85);
+    opacity: 0.75;
+}
+
+.style-btn-brown:disabled,
+.style-btn-green:disabled,
+.style-btn-red:disabled {
+    filter: grayscale(1);
+    cursor: default;
+}
+
+/* Quit-confirm/resume-confirm/save-name's 3-across small buttons (PauseBar/OptionsDialog). */
+.mws-btn-sm.style-btn-brown,
+.mws-btn-sm.style-btn-green,
+.mws-btn-sm.style-btn-red {
+    width: 9rem;
+    font-size: 1.1rem;
+}
+
+/* Big Options panel -- panel_general.png (866x688), 9-slice border-image so corner ironwork stays
+   a fixed on-screen thickness regardless of dialog size. */
+.mws-options-dialog {
+    position: relative;
+    max-width: 32rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 20px;
+    border-image-source: url('images/backgrounds/panel_general.png');
+    border-image-slice: 11.6% 9.2% fill;
+    border-image-width: 40px;
+    border-image-repeat: stretch;
+    box-sizing: border-box;
+    background: #14161c;
+    box-shadow: none;
+    border-radius: 0;
+    color: #e8c9a0;
+    font-family: 'Averia Libre', serif;
+}
+
+.mws-options-dialog h3 {
+    margin: 0 0 0.75em;
+    color: #f2c879;
+    font-size: 1.6em;
+    text-align: center;
+    font-family: 'Germania One', 'Averia Libre', serif;
+}
+
+.mws-options-dialog .mws-dialog-actions {
+    justify-content: center;
+}
+
+/* Small general panel -- quit-confirm, resume-confirm, and the save-name prompt (panel_general_small.png,
+   866x417). Same border-image technique as the big panel above, scaled for this asset's shorter
+   height. */
+.mws-dialog--sm {
+    position: relative;
+    max-width: 36rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 20px;
+    border-image-source: url('images/backgrounds/panel_general_small.png');
+    border-image-slice: 19.2% 9.2% fill;
+    border-image-width: 40px;
+    border-image-repeat: stretch;
+    box-sizing: border-box;
+    background: #14161c;
+    box-shadow: none;
+    border-radius: 0;
+    text-align: center;
+    font-family: 'Averia Libre', serif;
+}
+
+.mws-dialog--sm h3 {
+    margin: 0 0 0.5em;
+    color: #f2b17b;
+    font-size: 1.375em;
+    font-weight: bolder;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: 'Germania One', 'Averia Libre', serif;
+}
+
+.mws-dialog--sm p {
+    color: #fff;
+    font-size: 1.25em;
+}
+
+.mws-dialog--sm .mws-dialog-actions {
+    justify-content: center;
+}
+
+@media (max-width: 35rem) {
+    .mws-dialog--sm .mws-dialog-actions,
+    .mws-options-dialog .mws-dialog-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+/* Volume/text-size sliders -- slider_base.png (400x28) track, slider_button.png (64x64) thumb. */
+.mws-options-input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 28px;
+    background-image: url('images/ui/slider_base.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border-radius: 0;
+}
+
+.mws-options-input[type="range"]::-webkit-slider-runnable-track,
+.mws-options-input[type="range"]::-moz-range-track {
+    height: 28px;
+    background: transparent;
+    border: none;
+}
+
+.mws-options-input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    background-image: url('images/ui/slider_button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.mws-options-input[type="range"]::-moz-range-thumb {
+    width: 28px;
+    height: 28px;
+    background-image: url('images/ui/slider_button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.mws-options-input[type="range"]:disabled {
+    filter: grayscale(1);
+    cursor: default;
+}
+
+.mws-options-input[type="range"]:disabled::-webkit-slider-thumb,
+.mws-options-input[type="range"]:disabled::-moz-range-thumb {
+    cursor: default;
+}
+
+.mws-options-value {
+    display: inline-block;
+    width: 3ch;
+    flex-shrink: 0;
+    text-align: right;
+    color: #f2b781;
+    font-weight: 700;
+}
+
+/* Mute checkbox -- checkbox_outline.png/checkbox_checkmark.png, scaled to the slider's own 28px
+   row height. */
+.mws-mute-checkbox {
+    appearance: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+    background-image: url('images/ui/checkbox_outline.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.mws-mute-checkbox:checked {
+    background-image: url('images/ui/checkbox_checkmark.png'), url('images/ui/checkbox_outline.png');
+    background-size: 75% 75%, 100% 100%;
+    background-position: center, 0;
+}
+
+.mws-mute-label {
+    color: #e8c9a0;
+    font-size: 0.9em;
+}
+
+/* Save-name prompt's text input -- input_small.png, 9-slice so a typed name of any length doesn't
+   distort the asset's rounded end caps. */
+.mws-save-name-input {
+    display: block;
+    width: 100%;
+    height: 3rem;
+    margin-top: 0.75rem;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 15px;
+    border-image-source: url('images/ui/input_small.png');
+    border-image-slice: 20% 15% fill;
+    border-image-width: 15px 48px;
+    border-image-repeat: stretch;
+    box-sizing: border-box;
+    background-color: transparent;
+    padding: 0 0.75rem;
+    text-align: center;
+    color: #f2b781;
+    font-family: 'Averia Libre', serif;
+    font-size: 1.2em;
+    outline: none;
+}

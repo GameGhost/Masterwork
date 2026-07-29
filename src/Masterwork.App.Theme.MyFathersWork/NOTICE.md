@@ -18,10 +18,12 @@ broader CC BY-NC-SA reference material used for content extraction, not this spe
 release.
 
 Some files under `wwwroot/images/ui/` (`button_brown.png`, `button_green.png`, `button_red.png`,
-`button_question.png`) and `wwwroot/images/backgrounds/` (`border.png`) were copied from
-`my-fathers-work-template`'s already-cropped/processed versions of the same underlying Renegade
-Game Studios source art (`Masterwork-Modules` repo) rather than re-derived from `Reference/`
-directly — same provenance, just via an already-processed copy.
+`button_question.png`, `slider_base.png`, `slider_button.png`, `checkbox_outline.png`,
+`checkbox_checkmark.png`, `input_small.png`) and `wwwroot/images/backgrounds/` (`border.png`,
+`panel_general.png`, `panel_general_small.png`) were copied from `my-fathers-work-template`'s
+already-cropped/processed versions of the same underlying Renegade Game Studios source art
+(`Masterwork-Modules` repo) rather than re-derived from `Reference/` directly — same provenance,
+just via an already-processed copy.
 
 `wwwroot/fonts/germania-one-v21-latin-regular.woff2` and
 `wwwroot/fonts/averia-libre-v16-latin-regular.woff2` are Google Fonts (SIL Open Font License) — an
