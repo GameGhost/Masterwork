@@ -4,11 +4,11 @@
   "description": "A community companion app for My Father's Work",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#14161c",
-  "theme_color": "#7c3aed",
+  "background_color": "#0d1420",
+  "theme_color": "#0d1420",
   "icons": [
     {
-      "src": "_content/Masterwork.App.Theme.MyFathersWork/images/app-icon.png",
+      "src": "_content/Masterwork.App.Theme.MyFathersWork/images/myfatherswork-logo-1024x1024.png",
       "sizes": "1024x1024",
       "type": "image/png"
     }

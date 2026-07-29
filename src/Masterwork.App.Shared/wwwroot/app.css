@@ -720,7 +720,9 @@ body {
 }
 
 /* Web-only: shown in Components/App.razor while the WASM bundle downloads and boots (prerendering
-   is off — see masterwork-plan-rev17.md), removed once Blazor.start() resolves. */
+   is off — see masterwork-plan-rev17.md), removed once Blazor.start() resolves. Structural only —
+   same split as .mws-main-menu: colors/logo/tagline art come from the theme's own theme.css
+   (.mws-splash / .mws-splash-logo / .mws-splash-tagline), not from here. */
 .mws-splash {
     position: fixed;
     inset: 0;
@@ -729,26 +731,20 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    background: #7c3aed;
-    color: #fff;
     z-index: 9999;
 }
 
-.mws-splash h1 {
+.mws-splash-tagline {
     margin: 0;
-    font-size: 2rem;
-}
-
-.mws-splash p {
-    margin: 0;
-    opacity: 0.85;
+    max-width: 26rem;
+    text-align: center;
 }
 
 .mws-spinner {
     width: 2rem;
     height: 2rem;
-    border: 0.25rem solid rgba(255, 255, 255, 0.35);
-    border-top-color: #fff;
+    border-width: 0.25rem;
+    border-style: solid;
     border-radius: 50%;
     animation: mws-spin 0.8s linear infinite;
 }

@@ -425,3 +425,39 @@
         font-size: 1.5rem;
     }
 }
+
+/* -- Web splash --------------------------------------------------------------------------------
+ * Shown by Masterwork.App.Web/Components/App.razor while the WASM bundle downloads and boots --
+ * see that file and app.css's own .mws-splash rule for why it exists and what stays structural
+ * there vs. themed here. Same background/text colors as the main menu (the actual "blue-grey used
+ * elsewhere") so there's no color jump between this and the main menu it hands off to. */
+.mws-splash {
+    background: #0d1420;
+    color: #e5e0d8;
+    font-family: 'Averia Libre', serif;
+}
+
+.mws-splash-logo {
+    width: min(60vw, 16rem);
+    aspect-ratio: 1;
+    background-image: url('images/myfatherswork-logo-1024x1024.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.mws-splash-tagline {
+    font-size: 1rem;
+    opacity: 0.9;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.mws-splash-tagline em {
+    font-style: normal;
+    color: #f2b17b;
+}
+
+.mws-spinner {
+    border-color: rgba(229, 224, 216, 0.3);
+    border-top-color: #f2b17b;
+}

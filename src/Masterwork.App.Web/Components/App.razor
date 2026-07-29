@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+﻿@using Masterwork.App.Shared.Resources
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -6,12 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link rel="icon" href="_content/Masterwork.App.Theme.MyFathersWork/images/app-icon.png" />
+    <link rel="icon" href="_content/Masterwork.App.Theme.MyFathersWork/images/myfatherswork-logo-512x512.png" />
     <link rel="stylesheet" href="_content/Masterwork.App.Shared/app.css" />
     <link rel="stylesheet" href="_content/Masterwork.App.Theme.MyFathersWork/theme.css" />
     <link rel="stylesheet" href="Masterwork.App.Web.styles.css" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#7c3aed" />
+    <meta name="theme-color" content="#0d1420" />
     <ImportMap />
     <HeadOutlet @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
 </head>
@@ -25,8 +26,10 @@
          own promise: that resolves before the app's first real render, which left a blank white gap
          between the splash disappearing and content appearing. -->
     <div id="mws-splash" class="mws-splash">
-        <h1>Masterwork</h1>
-        <p>Loading…</p>
+        <h1 class="mws-visually-hidden">Masterwork - My Father's Work</h1>
+        <div class="mws-splash-logo" role="img" aria-label="My Father's Work"></div>
+        <p class="mws-splash-tagline">@((MarkupString)AppStrings.MainMenu_Tagline)</p>
+        <p class="mws-visually-hidden">Loading…</p>
         <div class="mws-spinner" aria-hidden="true"></div>
     </div>
     <Routes @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
