@@ -637,6 +637,31 @@
     }
 }
 
+/* Both panels can scroll (overflow-y: auto) when their content exceeds 90vh -- the default OS
+   scrollbar is wide and light-colored, clashing with the dark parchment panel; thin + a color
+   matching the panel's own border tone reads as part of the design instead of browser chrome. */
+.mws-options-dialog,
+.mws-dialog--sm {
+    scrollbar-width: thin;
+    scrollbar-color: #6b4a2e #14161c;
+}
+
+.mws-options-dialog::-webkit-scrollbar,
+.mws-dialog--sm::-webkit-scrollbar {
+    width: 8px;
+}
+
+.mws-options-dialog::-webkit-scrollbar-track,
+.mws-dialog--sm::-webkit-scrollbar-track {
+    background: #14161c;
+}
+
+.mws-options-dialog::-webkit-scrollbar-thumb,
+.mws-dialog--sm::-webkit-scrollbar-thumb {
+    background-color: #6b4a2e;
+    border-radius: 4px;
+}
+
 /* Volume/text-size sliders -- slider_base.png (400x28) track, slider_button.png (64x64) thumb. */
 .mws-options-input[type="range"] {
     appearance: none;
