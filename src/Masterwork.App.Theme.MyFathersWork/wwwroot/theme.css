@@ -750,3 +750,44 @@
     font-size: 1.2em;
     outline: none;
 }
+
+/* Manage Modules -- longer label than the standard button width was tuned for ("Apply"/"Cancel"/
+   the main menu's own words), so it gets its own wider size rather than wrapping/overflowing.
+   Centered via the footer's own text-align, not a per-button margin. */
+.mws-manage-modules-button.style-btn-brown {
+    width: 17rem;
+    padding: 0 0.75rem;
+}
+
+.mws-dialog-footer {
+    text-align: center;
+    border-top-color: rgba(232, 201, 160, 0.25);
+}
+
+/* Language dropdowns (UI language / preferred module language, MainMenu context only) --
+   dropdown_button.png supplies just the arrow-toggle graphic; appearance: none drops the native
+   arrow so it doesn't double up. The closed control is fully stylable this way, but a native
+   select's own open/expanded option list isn't -- there's no standard, cross-browser way to draw
+   custom rounded-panel/checkmark chrome around it, so this only reaches the closed box and each
+   option's own color/background (which most engines do respect). */
+.mws-options-controls select {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 2.5rem;
+    padding: 0 2.5rem 0 0.75rem;
+    background-color: #14161c;
+    background-image: url('images/ui/dropdown_button.png');
+    background-repeat: no-repeat;
+    background-position: right 0.25rem center;
+    background-size: 1.75rem;
+    border: 2px solid #6b3226;
+    border-radius: 0.3rem;
+    color: #fff;
+    font-family: 'Averia Libre', serif;
+    font-size: 1rem;
+}
+
+.mws-options-controls select option {
+    background-color: #14161c;
+    color: #f2b781;
+}

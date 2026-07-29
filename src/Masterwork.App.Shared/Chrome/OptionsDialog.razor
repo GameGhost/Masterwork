@@ -13,7 +13,6 @@
         @switch (_view)
         {
             case View.Options:
-                <h3>@AppStrings.OptionsDialog_Heading</h3>
                 <label class="mws-options-row">
                     <span class="mws-options-label">@AppStrings.OptionsDialog_BgmVolume</span>
                     <div class="mws-options-controls">
@@ -73,14 +72,14 @@
                 }
 
                 <div class="mws-dialog-actions">
-                    <button type="button" class="style-btn-green" @onclick="Apply">@AppStrings.Common_Apply</button>
-                    <button type="button" class="style-btn-red" @onclick="Cancel">@AppStrings.Common_Cancel</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="Apply">@AppStrings.Common_Apply</button>
+                    <button type="button" class="mws-btn-sm style-btn-red" @onclick="Cancel">@AppStrings.Common_Cancel</button>
                 </div>
 
                 @if (DialogContext == OptionsDialogContext.MainMenu)
                 {
                     <div class="mws-dialog-footer">
-                        <button type="button" @onclick="ManageModules">@AppStrings.OptionsDialog_ManageModules</button>
+                        <button type="button" class="mws-manage-modules-button style-btn-brown" @onclick="ManageModules">@AppStrings.OptionsDialog_ManageModules</button>
                     </div>
                 }
                 break;

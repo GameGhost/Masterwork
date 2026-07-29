@@ -154,7 +154,6 @@
   <data name="Common_PreparingAssets" xml:space="preserve"><value>Preparing assets…</value></data>
   <data name="Common_PreparingAssetsPercent" xml:space="preserve"><value>Preparing assets… {0}%</value></data>
 
-  <data name="OptionsDialog_Heading" xml:space="preserve"><value>Options</value></data>
   <data name="OptionsDialog_BgmVolume" xml:space="preserve"><value>Background Volume</value></data>
   <data name="OptionsDialog_SfxVolume" xml:space="preserve"><value>Sound Effects Volume</value></data>
   <data name="OptionsDialog_TextSize" xml:space="preserve"><value>Text Size</value></data>
