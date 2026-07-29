@@ -701,8 +701,7 @@ body {
     .mws-help,
     .mws-achievements,
     .mws-manage-modules,
-    .mws-continue-list,
-    .mws-start-new-game {
+    .mws-continue-list {
         max-width: 40rem;
         margin-left: auto;
         margin-right: auto;

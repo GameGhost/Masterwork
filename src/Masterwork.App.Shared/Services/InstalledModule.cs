@@ -11,11 +11,19 @@ namespace Masterwork.App.Shared.Services;
 /// persisted here so a same-version re-upload only ever needs to hash the new upload, never re-fetch
 /// and re-hash the already-installed copy.
 /// </param>
+/// <param name="ThumbnailImageUrl">
+/// The module's <c>thumbnail.image</c> (see <see cref="Masterwork.ModuleFormat.ModuleThumbnail"/>),
+/// already resolved to a displayable URL by <see cref="ModuleThumbnailResolver"/> — or
+/// <see langword="null"/> if the module declares none. The carousel tile's own border/selection
+/// chrome is theme-owned CSS, not sourced from the module, so only the raw thumbnail art travels
+/// through here — see <c>ModuleThumbnail.BorderInactive</c>/<c>BorderActive</c>'s own remarks.
+/// </param>
 public sealed record InstalledModule(
     string ModuleId,
     string Version,
     string Title,
     string Description,
     IReadOnlyList<string> AvailableLanguages,
-    string Sha256
+    string Sha256,
+    string? ThumbnailImageUrl = null
 );

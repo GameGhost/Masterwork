@@ -40,14 +40,32 @@ export async function putModuleMeta(meta) {
     });
 }
 
+// Deliberately returns only the fields the module-select carousel/list actually needs, not the
+// full record getModuleMeta(id) does -- getAll() itself reads every row's full object cheaply
+// in-process, but the *next* step (JSInterop marshaling the result across to .NET as JSON) is not
+// cheap, and a module's passages/restext/layouts (its entire playable text) can be multiple MB per
+// module. Stripping them here, before that marshal, is the same principle
+// getModuleAssetAsObjectUrl already applies to asset bytes (never cross the boundary if the caller
+// doesn't need the bytes on this side) -- this was the actual cause of multi-second stalls just
+// opening Start New Game, not anything about resolving thumbnails.
 export async function listModuleMeta() {
     const db = await openDb();
-    return new Promise((resolve, reject) => {
+    const rows = await new Promise((resolve, reject) => {
         const tx = db.transaction(META_STORE, "readonly");
         const req = tx.objectStore(META_STORE).getAll();
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
+
+    return rows.map(m => ({
+        id: m.id,
+        title: m.title,
+        version: m.version,
+        description: m.description,
+        languages: m.languages,
+        sha256: m.sha256,
+        manifestYaml: m.manifestYaml,
+    }));
 }
 
 export async function getModuleMeta(id) {

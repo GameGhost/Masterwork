@@ -33,6 +33,27 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         Dictionary<string, string> RestextOverridesByLocale
     );
 
+    // What ListAsync actually needs -- mirrors listModuleMeta()'s own deliberately-trimmed return
+    // shape (see that function's comment for why: the full ModuleMetaRecord above carries a whole
+    // module's playable text, multiple MB for a full module, none of which the carousel/list uses).
+    private sealed record ModuleMetaSummary(
+        string Id,
+        string Title,
+        string Version,
+        string? Description,
+        string[] Languages,
+        string Sha256,
+        string? ManifestYaml
+    );
+
+    // Thumbnails resolve to blob: object URLs (see ResolveThumbnailAsync) that must be revoked or the
+    // browser keeps their backing data alive for the tab's remaining lifetime (same concern
+    // PreloadedModuleAssetSource.RevokeAllAsync exists for). This store is DI-scoped, which on
+    // WASM/MAUI BlazorWebView effectively means "app lifetime" (see AssetResolver's own remarks on the
+    // same lifetime), so the previous batch is revoked at the top of every ListAsync call rather than
+    // needing a Razor component to remember to clean up after itself.
+    private readonly List<string> _thumbnailBlobUrls = [];
+
     private async Task<IJSObjectReference> ModuleAsync() =>
         await js.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/moduleStore.js");
 
@@ -40,8 +61,39 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
     public async Task<IReadOnlyList<InstalledModule>> ListAsync()
     {
         var jsModule = await ModuleAsync();
-        var rows = await jsModule.InvokeAsync<ModuleMetaRecord[]>("listModuleMeta");
-        return rows.Select(m => new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256)).ToList();
+
+        foreach (var url in _thumbnailBlobUrls)
+        {
+            await jsModule.InvokeVoidAsync("revokeObjectUrl", url);
+        }
+        _thumbnailBlobUrls.Clear();
+
+        var rows = await jsModule.InvokeAsync<ModuleMetaSummary[]>("listModuleMeta");
+        var result = new List<InstalledModule>(rows.Length);
+        foreach (var m in rows)
+        {
+            var thumbnailUrl = await ResolveThumbnailAsync(jsModule, m.Id, m.ManifestYaml);
+            if (thumbnailUrl is not null)
+            {
+                _thumbnailBlobUrls.Add(thumbnailUrl);
+            }
+
+            result.Add(new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256, thumbnailUrl));
+        }
+
+        return result;
+    }
+
+    private static async Task<string?> ResolveThumbnailAsync(IJSObjectReference jsModule, string moduleId, string? manifestYaml)
+    {
+        if (manifestYaml is null)
+        {
+            return null;
+        }
+
+        var manifest = new ManifestParser().Parse(manifestYaml);
+        var assets = new IndexedDbModuleAssetSource(jsModule, moduleId);
+        return await ModuleThumbnailResolver.ResolveAsync(assets, manifest.Thumbnail?.Image);
     }
 
     /// <inheritdoc/>
@@ -127,6 +179,10 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
             [.. additionalVariableYamls], restextByLocale, restextOverridesByLocale);
         await jsModule.InvokeVoidAsync("putModuleMeta", meta);
 
+        // ThumbnailImageUrl is left null here rather than resolved — StartNewGame.razor's own caller
+        // always re-lists right after a successful install (to refresh the whole carousel), so
+        // resolving a second blob URL here just to have it immediately superseded (and needing its own
+        // tracking to avoid leaking it, on top of ListAsync's) isn't worth it.
         return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256);
     }
 

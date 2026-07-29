@@ -13,13 +13,20 @@ public sealed record ModuleDependency
 /// <summary>Module-select thumbnail image/border asset refs (<c>image://</c> URIs), if declared.</summary>
 public sealed record ModuleThumbnail
 {
-    /// <summary>The thumbnail artwork itself.</summary>
+    /// <summary>
+    /// The thumbnail artwork itself — the only field the app's default rendering currently consumes
+    /// (see <c>Masterwork.App.Shared.Services.ModuleThumbnailResolver</c>).
+    /// </summary>
     public string? Image { get; init; }
 
-    /// <summary>Border shown when the module is not the currently-selected one.</summary>
+    /// <summary>
+    /// Border shown when the module is not the currently-selected one. Kept in the format for a
+    /// module that wants to override the theme's own default tile border, but the app's default
+    /// carousel rendering doesn't read this yet — that border is theme-owned CSS.
+    /// </summary>
     public string? BorderInactive { get; init; }
 
-    /// <summary>Border shown when the module is the currently-selected one.</summary>
+    /// <summary>Border shown when the module is the currently-selected one. See <see cref="BorderInactive"/>'s remarks.</summary>
     public string? BorderActive { get; init; }
 }
 

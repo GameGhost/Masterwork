@@ -19,100 +19,132 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
+@* Back button lives outside ErrorBoundary (always rendered, even if the content below crashes) --
+   same reason it was already structured this way before this screen grew its own chrome. Wrapping
+   both it and the ErrorBoundary in .mws-scenario-screen gives the whole page (crashed or not) the
+   same leather background + main-menu border, rather than only the happy-path content getting it. *@
+<div class="mws-scenario-screen">
+    <div class="mws-scenario-border" aria-hidden="true"></div>
+    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+        <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
+    </button>
 
-<ErrorBoundary @ref="_errorBoundary">
-    <ChildContent>
-        <div class="mws-start-new-game">
-            <div class="mws-module-toolbar">
-                <button type="button" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
-                @if (FilePicker.IsAvailable)
-                {
-                    <button type="button" class="mws-upload-button" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
-                }
-                else
-                {
-                    <label for="mws-upload-input" class="mws-upload-button">@AppStrings.StartNewGame_UploadModule</label>
-                    <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
-                               accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
-                }
-            </div>
-            @if (_uploadError is not null)
-            {
-                <p class="mws-version-warning">@_uploadError</p>
-            }
-
-            <div class="mws-module-carousel">
-                @foreach (var module in _modules)
-                {
-                    <div class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" @onclick="() => SelectModule(module.ModuleId)">
-                        <strong>@module.Title</strong>
-                        <span class="mws-tile-version">v@(module.Version)</span>
-                    </div>
-                }
-            </div>
-
-            @if (_selected is null)
-            {
-                <p class="mws-empty-state">@AppStrings.StartNewGame_SelectPrompt</p>
-            }
-            else
-            {
-                <div class="mws-module-detail">
-                    <p>@_selected.Description</p>
-                    <button type="button" @onclick="() => Play(_selected)">@AppStrings.StartNewGame_Play</button>
-                    <select class="mws-module-language" value="@_selectedLanguage" disabled="@(_selected.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
-                        @foreach (var lang in _selected.AvailableLanguages)
-                        {
-                            <option value="@lang">@lang</option>
-                        }
-                    </select>
+    <ErrorBoundary @ref="_errorBoundary">
+        <ChildContent>
+            <div class="mws-start-new-game">
+                <div class="mws-module-toolbar">
+                    <button type="button" class="style-btn-brown" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
+                    @if (FilePicker.IsAvailable)
+                    {
+                        <button type="button" class="mws-upload-button style-btn-brown" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
+                    }
+                    else
+                    {
+                        <label for="mws-upload-input" class="mws-upload-button style-btn-brown">@AppStrings.StartNewGame_UploadModule</label>
+                        <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
+                                   accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
+                    }
                 </div>
-            }
+                @if (_uploadError is not null)
+                {
+                    <p class="mws-version-warning">@_uploadError</p>
+                }
 
-            @if (_conflictModule is not null)
-            {
-                <div class="mws-dialog-overlay">
-                    <div class="mws-dialog">
-                        <h3>@AppStrings.StartNewGame_ConflictTitle</h3>
-                        <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_ConflictBody, _conflictModule.Title)</p>
-                        @if (ConflictSaveSummary() is { } summary)
-                        {
-                            <p class="mws-save-timestamp">@summary</p>
-                        }
-                        <div class="mws-dialog-actions">
-                            <button type="button" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
-                            <button type="button" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
-                            <button type="button" @onclick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</button>
+                <div class="mws-scenario-content">
+                    <div class="mws-module-carousel-row">
+                        <button type="button" class="mws-carousel-nav-button mws-carousel-back" disabled="@(!CanStepCarousel(-1))"
+                                @onclick="() => StepCarousel(-1)" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></button>
+                        <div class="mws-module-carousel">
+                            @for (var i = 0; i < _modules.Count; i++)
+                            {
+                                var module = _modules[i];
+                                var index = i;
+                                <div @key="module.ModuleId" @ref="_tileRefs[index]"
+                                     class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" title="@module.Title" @onclick="() => SelectModule(module.ModuleId)">
+                                    <div class="mws-module-tile-image">
+                                        <div class="mws-module-tile-thumb" style="@(module.ThumbnailImageUrl is { } url ? $"background-image:url('{url}')" : null)"></div>
+                                        <div class="mws-module-tile-border" aria-hidden="true"></div>
+                                        <span class="mws-tile-version">v@(module.Version)</span>
+                                    </div>
+                                    <strong class="mws-module-tile-title">@module.Title</strong>
+                                </div>
+                            }
+                        </div>
+                        <button type="button" class="mws-carousel-nav-button mws-carousel-forward" disabled="@(!CanStepCarousel(1))"
+                                @onclick="() => StepCarousel(1)" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></button>
+                    </div>
+
+                    @if (_selected is null)
+                    {
+                        <p class="mws-empty-state">@AppStrings.StartNewGame_SelectPrompt</p>
+                    }
+                    else
+                    {
+                        <div class="mws-module-detail">
+                            <div class="mws-module-detail-header">
+                                <strong class="mws-module-detail-title" title="@_selected.Title">@_selected.Title</strong>
+                                <select class="mws-module-language" value="@_selectedLanguage" disabled="@(_selected.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
+                                    @foreach (var lang in _selected.AvailableLanguages)
+                                    {
+                                        <option value="@lang">@lang</option>
+                                    }
+                                </select>
+                                <button type="button" class="mws-scenario-play-button" @onclick="() => Play(_selected)">
+                                    <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
+                                </button>
+                            </div>
+                            <div class="mws-module-detail-text">
+                                <p>@_selected.Description</p>
+                            </div>
+                            <span class="mws-module-detail-version">v@(_selected.Version)</span>
+                        </div>
+                    }
+                </div>
+
+                @if (_conflictModule is not null)
+                {
+                    <div class="mws-dialog-overlay">
+                        <div class="mws-dialog mws-dialog--sm">
+                            <h3>@AppStrings.StartNewGame_ConflictTitle</h3>
+                            <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_ConflictBody, _conflictModule.Title)</p>
+                            @if (ConflictSaveSummary() is { } summary)
+                            {
+                                <p class="mws-save-timestamp">@summary</p>
+                            }
+                            <div class="mws-dialog-actions">
+                                <button type="button" class="mws-btn-sm style-btn-green" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
+                                <button type="button" class="mws-btn-sm style-btn-red" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
+                                <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
+                }
 
-            @if (_pendingUpload is not null)
-            {
-                <div class="mws-dialog-overlay">
-                    <div class="mws-dialog">
-                        <h3>@_pendingUpload.Title</h3>
-                        <p>@_pendingUpload.Message</p>
-                        <div class="mws-dialog-actions">
-                            <button type="button" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
-                            <button type="button" @onclick="() => _pendingUpload = null">@AppStrings.Common_Cancel</button>
+                @if (_pendingUpload is not null)
+                {
+                    <div class="mws-dialog-overlay">
+                        <div class="mws-dialog mws-dialog--sm">
+                            <h3>@_pendingUpload.Title</h3>
+                            <p>@_pendingUpload.Message</p>
+                            <div class="mws-dialog-actions">
+                                <button type="button" class="mws-btn-sm style-btn-green" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
+                                <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingUpload = null">@AppStrings.Common_Cancel</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
+                }
 
-            <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
-        </div>
-    </ChildContent>
-    <ErrorContent>
-        <div class="mws-start-new-game">
-            <p class="mws-version-warning">@AppStrings.StartNewGame_ErrorFallback</p>
-            <button type="button" @onclick="Recover">@AppStrings.Common_TryAgain</button>
-        </div>
-    </ErrorContent>
-</ErrorBoundary>
+                <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
+            </div>
+        </ChildContent>
+        <ErrorContent>
+            <div class="mws-start-new-game">
+                <p class="mws-version-warning">@AppStrings.StartNewGame_ErrorFallback</p>
+                <button type="button" class="style-btn-brown" @onclick="Recover">@AppStrings.Common_TryAgain</button>
+            </div>
+        </ErrorContent>
+    </ErrorBoundary>
+</div>
 
 @code {
     private sealed record PendingUpload(byte[] Bytes, string Sha256, string Title, string Message, string ConfirmLabel);
@@ -132,6 +164,13 @@
     private int? _loadingDone;
     private int? _loadingTotal;
 
+    // Carousel back/forward + click-to-select scrolling, same "hide the native scrollbar, scroll
+    // the selected element into view via JS" technique PauseBar.razor's own timeline scrubber
+    // already uses (see timelineScrubber.js's own remarks) -- kept the same, not reinvented.
+    private ElementReference[] _tileRefs = [];
+    private string? _lastCenteredId;
+    private IJSObjectReference? _jsModule;
+
     protected override async Task OnInitializedAsync()
     {
         if (!RendererInfo.IsInteractive)
@@ -144,6 +183,7 @@
         try
         {
             _modules = await ModuleStore.ListAsync();
+            _tileRefs = new ElementReference[_modules.Count];
             _appSettings = await SettingsStore.LoadAsync();
             // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
             // auto-committed to whatever happened to load first.
@@ -152,6 +192,70 @@
         {
             _loading = false;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/timelineScrubber.js");
+        }
+
+        // Only re-centers when the selection actually changes — every unrelated re-render
+        // (e.g. an upload progress tick) would otherwise re-trigger the scroll animation. Same
+        // guard PauseBar's own centering uses (_lastCenteredIndex there).
+        if (_jsModule is null || _selectedId == _lastCenteredId)
+        {
+            return;
+        }
+
+        _lastCenteredId = _selectedId;
+        var index = SelectedIndex();
+        if (index < 0 || index >= _tileRefs.Length)
+        {
+            return;
+        }
+
+        try
+        {
+            await _jsModule.InvokeVoidAsync("centerElement", _tileRefs[index]);
+        }
+        catch (JSException)
+        {
+            // Best-effort UX polish only, same as PauseBar's own scrubber centering — rapid
+            // clicking can race a re-render that swaps the referenced tile out from under this
+            // call before it resolves. The correct tile is still selected either way.
+        }
+    }
+
+    private int SelectedIndex()
+    {
+        for (var i = 0; i < _modules.Count; i++)
+        {
+            if (_modules[i].ModuleId == _selectedId)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private bool CanStepCarousel(int direction)
+    {
+        var next = SelectedIndex() + direction;
+        return next >= 0 && next < _modules.Count;
+    }
+
+    private void StepCarousel(int direction)
+    {
+        var next = SelectedIndex() + direction;
+        if (next < 0 || next >= _modules.Count)
+        {
+            return;
+        }
+
+        SelectModule(_modules[next].ModuleId);
     }
 
     private void Recover()
@@ -526,6 +630,7 @@
         {
             var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
             _modules = await ModuleStore.ListAsync();
+            _tileRefs = new ElementReference[_modules.Count];
             SelectModule(installed.ModuleId);
             Logger.LogInformation("Module upload: installed {ModuleId} v{Version}", installed.ModuleId, installed.Version);
         }

@@ -111,7 +111,14 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
         var (restextByLocale, _) = ReadRestextFiles(moduleDir);
         var languages = ModuleLocales.SortedLocales(restextByLocale);
 
-        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256);
+        // Resolved once here, not re-resolved on every ListAsync — unlike IndexedDbModuleStore's blob:
+        // URLs (which don't survive past the browser session that created them), FileModuleAssetSource
+        // returns a plain data: URI, which is fine to bake into index.json and read back verbatim for
+        // as long as the module stays installed.
+        var thumbnailAssets = new FileModuleAssetSource(moduleDir);
+        var thumbnailUrl = await ModuleThumbnailResolver.ResolveAsync(thumbnailAssets, manifest.Thumbnail?.Image);
+
+        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, thumbnailUrl);
         var index = await ReadIndexAsync();
         var updated = index.Where(m => m.ModuleId != entryRecord.ModuleId).Append(entryRecord).ToList();
         await WriteIndexAsync(updated);

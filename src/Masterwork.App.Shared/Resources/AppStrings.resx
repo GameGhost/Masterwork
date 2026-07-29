@@ -71,6 +71,7 @@
   <data name="Common_Mute" xml:space="preserve"><value>Mute</value></data>
   <data name="Common_Autosave" xml:space="preserve"><value>Autosave</value></data>
   <data name="Common_Loading" xml:space="preserve"><value>Loading…</value></data>
+  <data name="Common_ComingSoon" xml:space="preserve"><value>Coming soon…</value></data>
   <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
   <data name="Common_No" xml:space="preserve"><value>No</value></data>
 
@@ -122,17 +123,17 @@
   <data name="ContinueList_ResumeError_Exception" xml:space="preserve"><value>Couldn't resume this save: {0}</value></data>
 
   <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Start New Game</value></data>
-  <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Download Modules</value></data>
+  <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Download</value></data>
   <data name="StartNewGame_DownloadModulesHint" xml:space="preserve"><value>Coming soon — needs a hosted module registry (Phase 6)</value></data>
-  <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Upload Module</value></data>
+  <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Add</value></data>
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Select a module to get started.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Play</value></data>
   <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Resume in-progress session?</value></data>
   <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} already has a session in progress.</value></data>
-  <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Discard previous session</value></data>
+  <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Restart</value></data>
   <data name="StartNewGame_AlreadyInstalledTitle" xml:space="preserve"><value>Already installed</value></data>
   <data name="StartNewGame_AlreadyInstalledBody" xml:space="preserve"><value>"{0}" v{1} is already installed and this file is identical.</value></data>
-  <data name="StartNewGame_ReinstallAnyway" xml:space="preserve"><value>Reinstall anyway</value></data>
+  <data name="StartNewGame_ReinstallAnyway" xml:space="preserve"><value>Reinstall</value></data>
   <data name="StartNewGame_SameVersionDiffContentTitle" xml:space="preserve"><value>Same version, different content</value></data>
   <data name="StartNewGame_SameVersionDiffContentBody" xml:space="preserve"><value>"{0}" v{1} is already installed, but this file's content differs from what's installed.{2}</value></data>
   <data name="StartNewGame_ReplaceAnyway" xml:space="preserve"><value>Replace anyway</value></data>

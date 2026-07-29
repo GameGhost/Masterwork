@@ -35,10 +35,10 @@
         <p class="mws-main-menu-tagline">@((MarkupString)AppStrings.MainMenu_Tagline)</p>
 
         <nav class="mws-main-menu-buttons">
-            <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
             <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
+            <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
             <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
-            <button type="button" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
+            <button type="button" disabled title="@AppStrings.Common_ComingSoon" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
         </nav>
     </div>
 </div>
