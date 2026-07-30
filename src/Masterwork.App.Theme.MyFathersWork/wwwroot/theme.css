@@ -501,7 +501,7 @@ body {
     justify-content: center;
     width: 6em;
     height: auto;
-    padding: 0;
+    padding: 0.8em 0.2em;
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-color: transparent;
@@ -511,7 +511,6 @@ body {
     font-family: 'Germania One', 'Averia Libre', serif;
     font-weight: 700;
     font-size: 1.6em;
-    line-height: 2.2em;
     letter-spacing: 0.1em;
     text-align: center;
     text-decoration: none;
@@ -562,7 +561,7 @@ body {
 .mws-btn-sm.style-btn-brown,
 .mws-btn-sm.style-btn-green,
 .mws-btn-sm.style-btn-red {
-    width: 6em;
+    width: 12em;
     font-size: 1em;
 }
 
@@ -794,7 +793,6 @@ body {
    Centered via the footer's own text-align, not a per-button margin. */
 .mws-manage-modules-button.style-btn-brown {
     width: 10em;
-    padding: 0 0.75rem;
 }
 
 .mws-dialog-footer {
@@ -982,7 +980,7 @@ body {
 .mws-module-toolbar .style-btn-brown,
 .mws-upload-button.style-btn-brown {
     width: 7em;
-    font-size: 1em;
+    font-size: 1.2em;
 }
 
 /* The two content regions -- carousel and detail well -- split whatever vertical space is left
