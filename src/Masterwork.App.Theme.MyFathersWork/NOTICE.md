@@ -21,11 +21,12 @@ Some files under `wwwroot/images/ui/` (`button_brown.png`, `button_green.png`, `
 `button_question.png`, `slider_base.png`, `slider_button.png`, `checkbox_outline.png`,
 `checkbox_checkmark.png`, `input_small.png`, `button_back_orange.png`, `button_forward_orange.png`,
 `arrow_left.png`, `arrow_right.png`),
-`wwwroot/images/backgrounds/` (`border.png`, `panel_general.png`, `panel_general_small.png`), and
-`wwwroot/images/module-select/` (`hub-section-border.png`, `leather-background.png`) were copied
-from `my-fathers-work-template`'s already-cropped/processed versions of the same underlying
-Renegade Game Studios source art (`Masterwork-Modules` repo) rather than re-derived from
-`Reference/` directly — same provenance, just via an already-processed copy.
+`wwwroot/images/backgrounds/` (`border.png`, `panel_general.png`, `panel_general_small.png`),
+`wwwroot/images/module-select/` (`hub-section-border.png`, `leather-background.png`), and
+`wwwroot/images/help/` (`popup-parchment-border.png`) were copied from `my-fathers-work-template`'s
+already-cropped/processed versions of the same underlying Renegade Game Studios source art
+(`Masterwork-Modules` repo) rather than re-derived from `Reference/` directly — same provenance,
+just via an already-processed copy.
 
 `wwwroot/images/module-select/tile-border-inactive.png` and `tile-border-active.png` are a
 different case: they were moved here from the `cost-of-disease` module's own `assets/images/`

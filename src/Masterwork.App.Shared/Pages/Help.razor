@@ -6,31 +6,38 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.Help_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
+<div class="mws-scenario-screen">
+    <div class="mws-scenario-border" aria-hidden="true"></div>
+    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+        <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
+    </button>
 
-<div class="mws-help">
-    <nav class="mws-help-topics">
-        @foreach (var topic in Topics)
-        {
-            <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@TopicLabel(topic)</button>
-        }
-    </nav>
-    <div class="mws-help-content">
-        @switch (_selected)
-        {
-            case HelpTopic.HowToUse:
-                <h3>@AppStrings.Help_HowToUse_Title</h3>
-                <p>@((MarkupString)AppStrings.Help_HowToUse_Body)</p>
-                break;
-            case HelpTopic.TimelineAndRewind:
-                <h3>@AppStrings.Help_TimelineRewind_Title</h3>
-                <p>@AppStrings.Help_TimelineRewind_Body</p>
-                break;
-            case HelpTopic.Saves:
-                <h3>@AppStrings.Help_Saves_Title</h3>
-                <p>@AppStrings.Help_Saves_Body</p>
-                break;
-        }
+    <h2 class="mws-screen-title">@AppStrings.Help_Heading</h2>
+
+    <div class="mws-help">
+        <nav class="mws-help-topics">
+            @foreach (var topic in Topics)
+            {
+                <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@TopicLabel(topic)</button>
+            }
+        </nav>
+        <div class="mws-help-content">
+            @switch (_selected)
+            {
+                case HelpTopic.HowToUse:
+                    <h3 class="mws-help-content-title">@AppStrings.Help_HowToUse_Title</h3>
+                    <div class="mws-help-content-body"><p>@((MarkupString)AppStrings.Help_HowToUse_Body)</p></div>
+                    break;
+                case HelpTopic.TimelineAndRewind:
+                    <h3 class="mws-help-content-title">@AppStrings.Help_TimelineRewind_Title</h3>
+                    <div class="mws-help-content-body"><p>@AppStrings.Help_TimelineRewind_Body</p></div>
+                    break;
+                case HelpTopic.Saves:
+                    <h3 class="mws-help-content-title">@AppStrings.Help_Saves_Title</h3>
+                    <div class="mws-help-content-body"><p>@AppStrings.Help_Saves_Body</p></div>
+                    break;
+            }
+        </div>
     </div>
 </div>
 

@@ -83,6 +83,7 @@
   <data name="MainMenu_StartNewGame" xml:space="preserve"><value>Nouvelle partie</value></data>
 
   <data name="Help_PageTitle" xml:space="preserve"><value>Masterwork — Aide</value></data>
+  <data name="Help_Heading" xml:space="preserve"><value>Aide</value></data>
   <data name="Help_Topic_HowToUse" xml:space="preserve"><value>Comment jouer</value></data>
   <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Chronologie et retour en arrière</value></data>
   <data name="Help_Topic_Saves" xml:space="preserve"><value>Sauvegardes</value></data>

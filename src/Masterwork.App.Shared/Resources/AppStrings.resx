@@ -83,6 +83,7 @@
   <data name="MainMenu_StartNewGame" xml:space="preserve"><value>New Game</value></data>
 
   <data name="Help_PageTitle" xml:space="preserve"><value>Masterwork — Help</value></data>
+  <data name="Help_Heading" xml:space="preserve"><value>Help</value></data>
   <data name="Help_Topic_HowToUse" xml:space="preserve"><value>How to use</value></data>
   <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Timeline and rewind</value></data>
   <data name="Help_Topic_Saves" xml:space="preserve"><value>Saves</value></data>

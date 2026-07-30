@@ -179,7 +179,7 @@ body {
     position: absolute;
     top: 36px;
     left: 75px;
-    z-index: 20;
+    z-index: 25;
     width: 3.25rem;
     aspect-ratio: 1;
     padding: 0;
@@ -324,7 +324,7 @@ body {
         width: 100%;
         max-width: 24rem;
         margin: 0 auto;
-        padding: 50px 20px;
+        padding: 50px 0;
         justify-content: flex-start;
         gap: 0.75rem;
     }
@@ -981,8 +981,8 @@ body {
 
 .mws-module-toolbar .style-btn-brown,
 .mws-upload-button.style-btn-brown {
-    width: 9rem;
-    font-size: 1rem;
+    width: 7em;
+    font-size: 1em;
 }
 
 /* The two content regions -- carousel and detail well -- split whatever vertical space is left
@@ -1392,4 +1392,166 @@ body {
 .mws-save-actions {
     flex-direction: column;
     align-items: flex-end;
+}
+
+/* -- Help (Help.razor) -------------------------------------------------------------------------
+ * Same .mws-scenario-screen/-border/-back-button/-screen-title chrome as Continue/Manage Modules
+ * (see that section's own comment for the reasoning). The original app's help screen used a
+ * pre-baked 3-tab border image (MFW_InstructionsText_Panel.png-style asset) -- not usable here
+ * since Help.razor already supports an arbitrary topic count (Topics is a plain array, not
+ * hardcoded to 3), and a pre-sliced 3-slot border can't stretch to fit a 4th tab. The hub border
+ * (same hub_section.png used for every other list/entry panel in this theme) covers the sidebar
+ * instead, with plain CSS gradients distinguishing hover/selected tabs rather than baked-in art --
+ * scales to any number of topics for free. The content pane reuses
+ * my-fathers-work-template's popup_parchment_border.png (same border-image numbers as that
+ * template's score_panel/score_help cards: 6% 4% fill slice, 20px width) for the "torn parchment
+ * page" look, which is why its text color is dark brown (#2b2016) rather than this theme's usual
+ * light-on-dark palette -- parchment is a light background, unlike everything else in this file. */
+.mws-help {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    gap: 1.5rem;
+}
+
+/* Sidebar -- hub border around the whole tab list, not each tab individually (matches the
+   reference screenshot's single bordered panel with internal dividers, not N separate bordered
+   buttons). Scrolls on its own if there are enough topics to need it -- thin scrollbar, same dark
+   panel treatment as the settings dialog / Manage Modules / Continue. */
+.mws-help-topics {
+    flex: 0 0 14rem;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    min-height: 0;
+    overflow-y: auto;
+    gap: 0;
+    background: rgba(18, 15, 13, 0.55);
+    border: 7px silver solid;
+    border-image-source: url('images/module-select/hub-section-border.png');
+    border-image-slice: 14;
+    border-image-width: 7px;
+    border-image-repeat: stretch;
+    border-radius: 15px;
+    padding: 0.4em;
+    scrollbar-width: thin;
+    scrollbar-color: #6b4a2e #14161c;
+}
+
+.mws-help-topics::-webkit-scrollbar {
+    width: 8px;
+}
+
+.mws-help-topics::-webkit-scrollbar-track {
+    background: #14161c;
+}
+
+.mws-help-topics::-webkit-scrollbar-thumb {
+    background-color: #6b4a2e;
+    border-radius: 4px;
+}
+
+.mws-help-topics button {
+    flex: none;
+    width: 100%;
+    text-align: left;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.12));
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0;
+    color: #9a9a9a;
+    font-family: 'Germania One', 'Averia Libre', serif;
+    font-size: 1.05em;
+    cursor: pointer;
+}
+
+.mws-help-topics button:last-child {
+    border-bottom: none;
+}
+
+.mws-help-topics button:hover:not(.selected) {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0.08));
+    color: #c9b8a0;
+}
+
+.mws-help-topics button.selected {
+    background: linear-gradient(to bottom, rgba(94, 116, 148, 0.6), rgba(38, 48, 63, 0.45));
+    color: #f2c879;
+}
+
+/* Content pane -- fixed title above a scrollable body, same "header stays put, body scrolls"
+   split as Start New Game's own detail well (.mws-module-detail-header/-text). */
+.mws-help-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    border-style: solid;
+    border-color: transparent;
+    border-width: 20px;
+    border-image-source: url('images/help/popup-parchment-border.png');
+    border-image-slice: 6% 4% fill;
+    border-image-width: 20px;
+    border-image-repeat: stretch;
+    background: transparent;
+    color: #2b2016;
+    padding: 8px 24px 24px;
+}
+
+.mws-help-content-title {
+    flex: none;
+    margin: 0 0 0.6em;
+    color: #2b2016;
+    font-family: 'Germania One', 'Averia Libre', serif;
+}
+
+.mws-help-content-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #8a6a4a rgba(0, 0, 0, 0.1);
+}
+
+.mws-help-content-body p {
+    margin: 0;
+}
+
+.mws-help-content-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.mws-help-content-body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.mws-help-content-body::-webkit-scrollbar-thumb {
+    background-color: #8a6a4a;
+    border-radius: 4px;
+}
+
+/* Narrow (portrait) -- side by side doesn't fit a phone width; stack topics above content instead.
+   .mws-help's own align-items: stretch (base rule, was sizing row-height before this switches it
+   to column) now stretches both to full width for free, so margin: 0 5px is the only sizing needed
+   for "full width minus 5px on the sides." Topics gets a fixed height (not flex: 1) sized for
+   about 3 visible rows -- enough to browse without a tab list that dominates the screen -- with
+   the content pane (already flex: 1 1 auto from the base rule) taking whatever's left. No
+   landscape override exists yet for this screen, so there's no tie-breaking precedence to note
+   here (unlike Manage Modules/Continue's own reversed-precedence comment) -- if one gets added
+   later, decide then which wins. */
+@media (max-width: 45.99rem) {
+    .mws-help {
+        flex-direction: column;
+    }
+
+    .mws-help-topics {
+        flex: 0 0 10rem;
+        margin: 0 5px;
+    }
+
+    .mws-help-content {
+        margin: 0 5px;
+    }
 }
