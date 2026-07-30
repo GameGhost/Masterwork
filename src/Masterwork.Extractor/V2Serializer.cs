@@ -139,13 +139,17 @@ public static partial class V2Serializer
                     i = j;
                 }
                 AddSrcSentinel(result, heading.SourceLine, ctx);
-                result.Add(TransformSection(heading.Text, bodyNodes, headingSourceLine: heading.SourceLine, ctx: ctx));
+                // style: "hub-card" is what my-fathers-work-template's own CSS (.mws-section.style-hub-card)
+                // targets for a hub passage's individually-framed location cards — TransformSection's
+                // style parameter existed for exactly this but was never actually passed at either
+                // call site, so every hub-card section silently fell back to style-default (unstyled).
+                result.Add(TransformSection(heading.Text, bodyNodes, style: "hub-card", headingSourceLine: heading.SourceLine, ctx: ctx));
                 continue;
             }
             if (node is SectionBodyNode orphanBody)
             {
                 AddSrcSentinel(result, orphanBody.SourceLine, ctx);
-                result.Add(TransformSection(null, orphanBody.Nodes, headingSourceLine: orphanBody.SourceLine, ctx: ctx));
+                result.Add(TransformSection(null, orphanBody.Nodes, style: "hub-card", headingSourceLine: orphanBody.SourceLine, ctx: ctx));
                 continue;
             }
 

@@ -94,6 +94,50 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void SectionHeadingAndBody_EmitsHubCardStyle()
+    {
+        // Regression: TransformSection's style parameter existed specifically for this pairing but
+        // was never passed at either call site, so every hub passage's location cards silently fell
+        // back to style-default — my-fathers-work-template's .mws-section.style-hub-card border never
+        // matched anything a real extracted module actually emitted.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.SectionHeadingNode { Text = "Attracting Attention" },
+                new Masterwork.Extractor.SectionBodyNode { Nodes = [new Masterwork.Extractor.TextNode { Template = "Body" }] },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("section", node["type"]);
+        Assert.Equal("hub-card", node["style"]);
+        Assert.Equal("Attracting Attention", node["title"]);
+    }
+
+    [Fact]
+    public void OrphanSectionBody_EmitsHubCardStyle()
+    {
+        // A hub location without its own heading (hubDetails with no preceding hubTitle) still gets
+        // the hub-card border — same reasoning as the titled case above.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes = [new Masterwork.Extractor.SectionBodyNode { Nodes = [new Masterwork.Extractor.TextNode { Template = "Body" }] }],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("section", node["type"]);
+        Assert.Equal("hub-card", node["style"]);
+        Assert.False(node.ContainsKey("title"));
+    }
+
+    [Fact]
     public void OnShowBiddingCall_EmitsNestedCountdownPopup()
     {
         // ViewBiddingSystem.instance.OnShowBidding("Target", BiddingSystem.Bidding) — the reference
