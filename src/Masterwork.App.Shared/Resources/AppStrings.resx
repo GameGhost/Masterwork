@@ -117,6 +117,8 @@
   <data name="ContinueList_ResumeConfirmBody" xml:space="preserve"><value>Resuming will overwrite {0}'s autosave with this save's progress.</value></data>
   <data name="ContinueList_ResumeAnyway" xml:space="preserve"><value>Resume anyway</value></data>
   <data name="ContinueList_ResumeErrorTitle" xml:space="preserve"><value>Couldn't resume</value></data>
+  <data name="ContinueList_DeleteConfirmTitle" xml:space="preserve"><value>Delete this save?</value></data>
+  <data name="ContinueList_DeleteConfirmBody" xml:space="preserve"><value>This can't be undone.</value></data>
   <data name="ContinueList_VersionWarning_Newer" xml:space="preserve"><value>Saved with module v{0}, installed is v{1} — this save is newer than the installed module and may not load correctly.</value></data>
   <data name="ContinueList_VersionWarning_Moved" xml:space="preserve"><value>Saved with module v{0}, installed is v{1} — the module has moved on since this save and it may not be compatible.</value></data>
   <data name="ContinueList_ResumeError_ModuleMissing" xml:space="preserve"><value>This save's module isn't installed anymore. Uninstalling a module doesn't remove its saves automatically — delete this one manually if it's no longer needed.</value></data>

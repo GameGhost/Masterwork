@@ -15,89 +15,109 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ContinueList_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
+<div class="mws-scenario-screen">
+    <div class="mws-scenario-border" aria-hidden="true"></div>
+    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+        <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
+    </button>
 
-<div class="mws-continue-list">
-    <h2>@AppStrings.ContinueList_Heading</h2>
+    <h2 class="mws-screen-title">@AppStrings.ContinueList_Heading</h2>
 
-    @if (_saves.Count == 0)
-    {
-        <p>@AppStrings.ContinueList_Empty</p>
-    }
-    else
-    {
-        @foreach (var save in _saves.OrderByDescending(s => s.LastPlayedUtc))
+    <div class="mws-continue-list">
+        @if (_saves.Count == 0)
         {
-            var installed = _modulesById.GetValueOrDefault(save.ModuleId);
-            var moduleTitle = installed?.Title ?? save.ModuleId;
-            var versionWarning = VersionWarning(save, installed);
-
-            <div class="mws-save-row">
-                <div class="mws-save-info">
-                    <strong>@(save.DisplayName ?? (save.IsAutosave ? AppStrings.Common_Autosave : AppStrings.ContinueList_UnnamedSave))</strong>
-                    <span>@moduleTitle</span>
-                    <span>@(save.LastStateLabel ?? "")</span>
-                    <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture)</span>
-                    @if (save.Language is not null)
-                    {
-                        <span class="mws-save-language">@save.Language</span>
-                    }
-                    @if (installed is null)
-                    {
-                        <span class="mws-version-warning">⚠ @AppStrings.ContinueList_ModuleMissing</span>
-                    }
-                    else if (versionWarning is not null)
-                    {
-                        <span class="mws-version-warning">⚠ @versionWarning</span>
-                    }
-                </div>
-                <div class="mws-save-actions">
-                    <button type="button" disabled="@(installed is null)"
-                            title="@(installed is null ? AppStrings.ContinueList_ModuleMissingTitle : null)"
-                            @onclick="() => Resume(save)">@AppStrings.Common_Resume</button>
-                    <button type="button" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
-                    <button type="button" @onclick="() => Delete(save)">@AppStrings.Common_Delete</button>
-                </div>
-            </div>
+            <p>@AppStrings.ContinueList_Empty</p>
         }
+        else
+        {
+            @foreach (var save in _saves.OrderByDescending(s => s.LastPlayedUtc))
+            {
+                var installed = _modulesById.GetValueOrDefault(save.ModuleId);
+                var moduleTitle = installed?.Title ?? save.ModuleId;
+                var versionWarning = VersionWarning(save, installed);
+
+                <div class="mws-save-row">
+                    <div class="mws-save-info">
+                        <strong>@(save.DisplayName ?? (save.IsAutosave ? AppStrings.Common_Autosave : AppStrings.ContinueList_UnnamedSave))</strong>
+                        <span>@moduleTitle</span>
+                        <span>@(save.LastStateLabel ?? "")</span>
+                        <span class="mws-save-timestamp">@save.LastPlayedUtc.ToLocalTime().ToString("g", AppStrings.EffectiveCulture)</span>
+                        @if (save.Language is not null)
+                        {
+                            <span class="mws-save-language">@save.Language</span>
+                        }
+                        @if (installed is null)
+                        {
+                            <span class="mws-version-warning">⚠ @AppStrings.ContinueList_ModuleMissing</span>
+                        }
+                        else if (versionWarning is not null)
+                        {
+                            <span class="mws-version-warning">⚠ @versionWarning</span>
+                        }
+                    </div>
+                    <div class="mws-save-actions">
+                        <button type="button" class="mws-btn-sm style-btn-green" disabled="@(installed is null)"
+                                title="@(installed is null ? AppStrings.ContinueList_ModuleMissingTitle : null)"
+                                @onclick="() => Resume(save)">@AppStrings.Common_Resume</button>
+                        <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
+                        <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => _pendingDelete = save">@AppStrings.Common_Delete</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @if (_pendingResume is not null)
+    {
+        var moduleTitle = _modulesById.GetValueOrDefault(_pendingResume.ModuleId)?.Title ?? _pendingResume.ModuleId;
+
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ContinueList_ResumeConfirmTitle</h3>
+                <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeConfirmBody, moduleTitle)</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingResume = null">@AppStrings.Common_Cancel</button>
+                </div>
+            </div>
+        </div>
     }
+
+    @if (_pendingDelete is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ContinueList_DeleteConfirmTitle</h3>
+                <p>@AppStrings.ContinueList_DeleteConfirmBody</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => Delete(_pendingDelete)">@AppStrings.Common_Yes</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingDelete = null">@AppStrings.Common_No</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_resumeError is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ContinueList_ResumeErrorTitle</h3>
+                <p>@_resumeError</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _resumeError = null">@AppStrings.Common_Ok</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
 </div>
-
-@if (_pendingResume is not null)
-{
-    var moduleTitle = _modulesById.GetValueOrDefault(_pendingResume.ModuleId)?.Title ?? _pendingResume.ModuleId;
-
-    <div class="mws-dialog-overlay">
-        <div class="mws-dialog">
-            <h3>@AppStrings.ContinueList_ResumeConfirmTitle</h3>
-            <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeConfirmBody, moduleTitle)</p>
-            <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
-                <button type="button" @onclick="() => _pendingResume = null">@AppStrings.Common_Cancel</button>
-            </div>
-        </div>
-    </div>
-}
-
-@if (_resumeError is not null)
-{
-    <div class="mws-dialog-overlay">
-        <div class="mws-dialog">
-            <h3>@AppStrings.ContinueList_ResumeErrorTitle</h3>
-            <p>@_resumeError</p>
-            <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => _resumeError = null">@AppStrings.Common_Ok</button>
-            </div>
-        </div>
-    </div>
-}
-
-<LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
 
 @code {
     private List<SaveEntry> _saves = [];
     private Dictionary<string, InstalledModule> _modulesById = [];
     private SaveEntry? _pendingResume;
+    private SaveEntry? _pendingDelete;
     private string? _resumeError;
     private bool _loading;
     private string _loadingMessage = "";
@@ -268,8 +288,14 @@
         await SaveStore.ExportAsync(entry.Id, fileName, json);
     }
 
-    private async Task Delete(SaveEntry entry)
+    private async Task Delete(SaveEntry? entry)
     {
+        if (entry is null)
+        {
+            return;
+        }
+
+        _pendingDelete = null;
         await SaveStore.DeleteAsync(entry.Id);
         await RefreshAsync();
     }

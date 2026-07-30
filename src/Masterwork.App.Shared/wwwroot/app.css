@@ -579,21 +579,34 @@ body {
 .mws-save-info {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.5em;
+}
+
+.mws-save-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    flex-wrap: wrap;
+}
+
+.mws-module-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
 }
 
 .mws-save-timestamp {
-    font-size: 0.85rem;
+    font-size: 0.85em;
     color: #666;
 }
 
 .mws-save-language {
-    font-size: 0.75rem;
+    font-size: 0.75em;
     color: #999;
 }
 
 .mws-version-warning {
-    font-size: 0.85rem;
+    font-size: 0.85em;
     color: #b32121;
 }
 
@@ -612,7 +625,7 @@ body {
     background: #fff;
     padding: 1.5rem;
     border-radius: 0.5rem;
-    max-width: 26rem;
+    max-width: 26em;
     width: 100%;
 }
 
@@ -688,24 +701,6 @@ body {
 body {
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     margin: 0;
-}
-
-@media (min-width: 48rem) {
-    .mws-passage {
-        max-width: 40rem;
-        margin: 0 auto;
-        padding: 1.5rem;
-    }
-
-    .mws-audio-test,
-    .mws-help,
-    .mws-achievements,
-    .mws-manage-modules,
-    .mws-continue-list {
-        max-width: 40rem;
-        margin-left: auto;
-        margin-right: auto;
-    }
 }
 
 @media (max-width: 47.99rem) {

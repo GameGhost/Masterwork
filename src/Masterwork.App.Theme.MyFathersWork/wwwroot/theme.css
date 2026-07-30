@@ -35,6 +35,11 @@
     src: url('fonts/averia-libre-v16-latin-regular.woff2') format('woff2');
 }
 
+body {
+    background: #0d1420;
+    color: #e5e0d8;
+}
+
 /* -- Main menu -----------------------------------------------------------------------------------
  * A full-bleed hero screen that must never scroll, regardless of viewport -- position: fixed (not
  * just height: 100vh) takes it out of document flow entirely, so nothing about its own box model
@@ -209,7 +214,7 @@
     flex: 1 1 auto;
     min-height: 0;
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-1024x1024.png');
+    background-image: url('images/myfatherswork-logo-512x512.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -448,7 +453,7 @@
 .mws-splash-logo {
     width: min(60vw, 16rem);
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-1024x1024.png');
+    background-image: url('images/myfatherswork-logo-512x512.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -491,13 +496,13 @@
 .style-btn-green,
 .style-btn-red {
     display: inline-flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 13rem;
-    aspect-ratio: 17 / 6;
-    flex-shrink: 0;
+    width: 6em;
+    height: auto;
     padding: 0;
-    background-size: 100%;
+    background-size: 100% 100%;
     background-repeat: no-repeat;
     background-color: transparent;
     border: none;
@@ -505,9 +510,9 @@
     appearance: none;
     font-family: 'Germania One', 'Averia Libre', serif;
     font-weight: 700;
-    font-size: 1.6rem;
-    line-height: 1rem;
-    letter-spacing: 0.1rem;
+    font-size: 1.6em;
+    line-height: 2.2em;
+    letter-spacing: 0.1em;
     text-align: center;
     text-decoration: none;
     text-transform: uppercase;
@@ -557,8 +562,8 @@
 .mws-btn-sm.style-btn-brown,
 .mws-btn-sm.style-btn-green,
 .mws-btn-sm.style-btn-red {
-    width: 9rem;
-    font-size: 1.1rem;
+    width: 6em;
+    font-size: 1em;
 }
 
 /* Big Options panel -- panel_general.png (866x688), 9-slice border-image so corner ironwork stays
@@ -788,7 +793,7 @@
    the main menu's own words), so it gets its own wider size rather than wrapping/overflowing.
    Centered via the footer's own text-align, not a per-button margin. */
 .mws-manage-modules-button.style-btn-brown {
-    width: 17rem;
+    width: 10em;
     padding: 0 0.75rem;
 }
 
@@ -1296,4 +1301,95 @@
         max-height: 0;
         margin-right: 1rem;
     }
+}
+
+/* -- Manage Modules / Continue (ManageModules.razor, ContinueList.razor) -----------------------
+ * Both reuse .mws-scenario-screen/-border/-back-button verbatim (same leather background + main
+ * frame + back button as Start New Game -- no reason to fork identical chrome into differently
+ * named rules for what's visually the same wrapper). Unlike Start New Game, there's no carousel/
+ * well split here -- just a fixed title above a plain scrollable list -- so the only additions
+ * needed are the title's own flex: none (it's a sibling of the list, not inside it, so it stays
+ * put while the list scrolls under it) and making the list itself the scrolling region
+ * (flex: 1 1 auto + min-height: 0 + overflow-y: auto) inside the otherwise-non-scrolling screen,
+ * same principle as every other split-region screen in this file. app.css's own reading-column
+ * @media (min-width: 48rem) rule still applies to both (unlike Start New Game's carousel, a list
+ * of rows reads fine at 40rem, no reason to go full-bleed).
+ *
+ * Breakpoint precedence note (differs from every other screen in this file!): Start New Game/the
+ * main menu deliberately make the landscape (max-height: 30rem) breakpoint win over the narrow
+ * (max-width: 45.99rem) one in the rare both-true case, by placing the landscape block later in
+ * the file. These two screens want the opposite -- portrait wins -- so any future landscape
+ * override added for .mws-manage-modules/.mws-continue-list must be placed BEFORE the narrow
+ * block below, not after. */
+.mws-manage-modules,
+.mws-continue-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #6b4a2e #14161c;
+}
+
+.mws-manage-modules::-webkit-scrollbar,
+.mws-continue-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.mws-manage-modules::-webkit-scrollbar-track,
+.mws-continue-list::-webkit-scrollbar-track {
+    background: #14161c;
+}
+
+.mws-manage-modules::-webkit-scrollbar-thumb,
+.mws-continue-list::-webkit-scrollbar-thumb {
+    background-color: #6b4a2e;
+    border-radius: 4px;
+}
+
+/* Above the scrollable list (a sibling, not a child -- see the flex comment above), same treatment
+   as my-fathers-work-template's own .mws-section.style-hub-card > h3 (hub_section.png's own
+   heading style), just sized up for a page-level title instead of a card-level one. */
+.mws-screen-title {    
+    flex: none;
+    text-align: center;
+    margin: 10px 57px 0.75rem;
+    color: #f2b17b;
+    text-shadow: 4px 6px 4px rgba(0, 0, 0, 0.8);
+    font-size: 2.6em;
+    letter-spacing: 0.05em;
+    font-weight: bolder;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: 'Germania One', 'Averia Libre', serif;
+}
+
+/* Entries -- same hub_section.png border-image treatment as Start New Game's own detail well (see
+   that rule's comment for the full reasoning: a thin frame around a transparent interior, not a
+   filled panel graphic, hence border-image over a background-image panel). */
+.mws-module-row,
+.mws-save-row {
+    background: rgba(18, 15, 13, 0.55);
+    border: 7px silver solid;
+    border-image-source: url('images/module-select/hub-section-border.png');
+    border-image-slice: 14;
+    border-image-width: 7px;
+    border-image-repeat: stretch;
+    border-radius: 15px;
+}
+
+.mws-module-version,
+.mws-save-info span,
+.mws-save-timestamp,
+.mws-save-language {
+    color: #c9b8a0;
+}
+
+.mws-save-info strong,
+.mws-module-row-info strong {
+    color: #e5e0d8;
+}
+
+.mws-save-actions {
+    flex-direction: column;
+    align-items: flex-end;
 }

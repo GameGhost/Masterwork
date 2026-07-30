@@ -117,6 +117,8 @@
   <data name="ContinueList_ResumeConfirmBody" xml:space="preserve"><value>Reprendre écrasera la sauvegarde automatique de {0} avec la progression de cette sauvegarde.</value></data>
   <data name="ContinueList_ResumeAnyway" xml:space="preserve"><value>Reprendre quand même</value></data>
   <data name="ContinueList_ResumeErrorTitle" xml:space="preserve"><value>Impossible de reprendre</value></data>
+  <data name="ContinueList_DeleteConfirmTitle" xml:space="preserve"><value>Supprimer cette sauvegarde?</value></data>
+  <data name="ContinueList_DeleteConfirmBody" xml:space="preserve"><value>Cette action est irréversible.</value></data>
   <data name="ContinueList_VersionWarning_Newer" xml:space="preserve"><value>Sauvegardée avec le module v{0}, la version installée est v{1} — cette sauvegarde est plus récente que le module installé et pourrait ne pas se charger correctement.</value></data>
   <data name="ContinueList_VersionWarning_Moved" xml:space="preserve"><value>Sauvegardée avec le module v{0}, la version installée est v{1} — le module a évolué depuis cette sauvegarde et pourrait ne pas être compatible.</value></data>
   <data name="ContinueList_ResumeError_ModuleMissing" xml:space="preserve"><value>Le module de cette sauvegarde n'est plus installé. Désinstaller un module ne supprime pas automatiquement ses sauvegardes — supprimez celle-ci manuellement si elle n'est plus nécessaire.</value></data>

@@ -8,39 +8,44 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ManageModules_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
+<div class="mws-scenario-screen">
+    <div class="mws-scenario-border" aria-hidden="true"></div>
+    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+        <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
+    </button>
 
-<div class="mws-manage-modules">
-    <h2>@AppStrings.ManageModules_Heading</h2>
+    <h2 class="mws-screen-title">@AppStrings.ManageModules_Heading</h2>
 
-    @foreach (var module in _modules)
-    {
-        <div class="mws-module-row">
-            <div>
-                <strong>@module.Title</strong>
-                <span class="mws-module-version">v@(module.Version)</span>
+    <div class="mws-manage-modules">
+        @foreach (var module in _modules)
+        {
+            <div class="mws-module-row">
+                <div class="mws-module-row-info">
+                    <strong>@module.Title</strong>
+                    <span class="mws-module-version">v@(module.Version)</span>
+                </div>
+                <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
             </div>
-            <button type="button" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
+        }
+    </div>
+
+    @if (_confirmingDeleteId is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
+                <p>@AppStrings.ManageModules_ConfirmBody</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
+                    <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</button>
+                </div>
+            </div>
         </div>
     }
+
+    <LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
 </div>
-
-@if (_confirmingDeleteId is not null)
-{
-    <div class="mws-dialog-overlay">
-        <div class="mws-dialog">
-            <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
-            <p>@AppStrings.ManageModules_ConfirmBody</p>
-            <div class="mws-dialog-actions">
-                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
-                <button type="button" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
-                <button type="button" @onclick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</button>
-            </div>
-        </div>
-    </div>
-}
-
-<LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
 
 @code {
     private IReadOnlyList<InstalledModule> _modules = [];
