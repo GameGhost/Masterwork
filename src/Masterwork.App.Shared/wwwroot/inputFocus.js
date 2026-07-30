@@ -8,7 +8,18 @@
 // keyboard appearing on mobile browsers), then remove readonly on the next tick. Desktop is
 // unaffected either way — the field is focused immediately and editable a moment later, well before
 // a human could react and start typing.
-export function focusWithoutMobileKeyboard(element) {
+//
+// Takes a DOM id (looked up here), not an ElementReference passed in from .NET via @ref — this
+// input can vanish between one render and the next of the *same* passage (e.g. a conditional
+// node whose branch flips from "show the input" to "show a popup" via a non-snapshotted,
+// same-passage RenderInPlace navigation, not a full passage transition), and @ref's own
+// ElementReferenceCapture render-tree frame hit a genuine Blazor diffing bug in exactly that
+// situation (`RenderTreeDiffBuilder.RemoveOldFrame` throwing "Unexpected frame type...
+// ElementReferenceCapture") that a @key on the conditionally-rendered element didn't avoid.
+// RenderedInputView.razor never emits @ref at all now, sidestepping the frame type entirely
+// rather than chasing the exact framework-internal trigger further.
+export function focusWithoutMobileKeyboard(elementId) {
+    const element = document.getElementById(elementId);
     if (!element) {
         return;
     }

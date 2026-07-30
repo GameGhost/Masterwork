@@ -17,13 +17,13 @@
                 var snapshot = Session.Timeline[index];
                 var label = snapshot.DisplayLabel ?? snapshot.PassageId;
                 var isCurrent = index == Session.HistoryIndex && !Session.IsAtActiveState;
-                <li @key="index" @ref="_entryRefs[index]" class="mws-timeline-entry @(isCurrent ? "current" : "") @(snapshot.Kind == SnapshotKind.Checkpoint ? "checkpoint" : "")" title="@label">
+                <li @key="index" id="@EntryElementId(index)" class="mws-timeline-entry @(isCurrent ? "current" : "") @(snapshot.Kind == SnapshotKind.Checkpoint ? "checkpoint" : "")" title="@label">
                     <span class="mws-timeline-label">@label</span>
                 </li>
             }
             @if (Session.HasActiveState)
             {
-                <li @key="Session.Timeline.Count" @ref="_entryRefs[Session.Timeline.Count]" class="mws-timeline-entry mws-timeline-current-marker @(Session.IsAtActiveState ? "current" : "")" title="@AppStrings.TimelineScrubber_CurrentLabel">
+                <li @key="Session.Timeline.Count" id="@EntryElementId(Session.Timeline.Count)" class="mws-timeline-entry mws-timeline-current-marker @(Session.IsAtActiveState ? "current" : "")" title="@AppStrings.TimelineScrubber_CurrentLabel">
                     <span class="mws-timeline-label">@AppStrings.TimelineScrubber_CurrentLabel</span>
                 </li>
             }
@@ -102,10 +102,17 @@
 
     private bool _showResumeConfirm;
     private bool _showQuitDialog;
-    private ElementReference[] _entryRefs = [];
     private int _lastCenteredIndex = -1;
     private IJSObjectReference? _jsModule;
     private bool _wasOpen;
+
+    // A stable per-index DOM id, not an ElementReference captured via @ref — the timeline <li>s are
+    // rendered in a @for whose item count changes every time the player advances or steps back, and
+    // @ref on a conditionally-present list item hit a genuine Blazor diffing bug in that situation
+    // (RenderTreeDiffBuilder.RemoveOldFrame throwing "Unexpected frame type... ElementReferenceCapture")
+    // that persisted even with a @key on the element. timelineScrubber.js looks the element up by id
+    // instead. See RenderedInputView.razor's inputFocus.js for the first place this same fix landed.
+    private string EntryElementId(int index) => $"mws-timeline-entry-{index}";
 
     protected override void OnParametersSet()
     {
@@ -119,12 +126,6 @@
         }
 
         _wasOpen = IsOpen;
-
-        var totalEntries = Session.Timeline.Count + (Session.HasActiveState ? 1 : 0);
-        if (_entryRefs.Length != totalEntries)
-        {
-            _entryRefs = new ElementReference[totalEntries];
-        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -155,11 +156,11 @@
         }
 
         _lastCenteredIndex = currentIndex;
-        if (_jsModule is not null && currentIndex >= 0 && currentIndex < _entryRefs.Length)
+        if (_jsModule is not null && currentIndex >= 0)
         {
             try
             {
-                await _jsModule.InvokeVoidAsync("centerElement", _entryRefs[currentIndex]);
+                await _jsModule.InvokeVoidAsync("centerElement", EntryElementId(currentIndex));
             }
             catch (JSException)
             {

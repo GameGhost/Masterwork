@@ -9,6 +9,7 @@
     @if (Node.InputType == InputValueType.Boolean)
     {
         <input type="checkbox"
+               @key="Node.InputType"
                checked="@_checked"
                disabled="@IsRewound"
                @onchange="HandleCheckboxChange" />
@@ -16,11 +17,12 @@
     else
     {
         <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
+               @key="Node.InputType"
+               id="@InputElementId"
                min="@Node.Min" max="@Node.Max"
                value="@_value"
                disabled="@IsRewound"
                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               @ref="_inputElement"
                @oninput="HandleInput" />
     }
 </label>
@@ -60,7 +62,12 @@
 
     private string _value = "";
     private bool _checked;
-    private ElementReference _inputElement;
+
+    // A plain DOM id, not an ElementReference captured via @ref — see inputFocus.js's own comment
+    // on OnAfterRenderAsync's call below for why. Prefixed against collision with anything else on
+    // the page; Node.Id itself is just an author-chosen variable name, not guaranteed DOM-id-safe
+    // or page-unique on its own.
+    private string InputElementId => $"mws-input-{Node.Id}";
 
     protected override void OnParametersSet()
     {
@@ -88,7 +95,7 @@
         if (firstRender && !IsRewound && Node.InputType != InputValueType.Boolean && Node.Id == FirstFocusableInputId)
         {
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/inputFocus.js");
-            await module.InvokeVoidAsync("focusWithoutMobileKeyboard", _inputElement);
+            await module.InvokeVoidAsync("focusWithoutMobileKeyboard", InputElementId);
         }
     }
 

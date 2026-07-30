@@ -58,8 +58,7 @@
                             @for (var i = 0; i < _modules.Count; i++)
                             {
                                 var module = _modules[i];
-                                var index = i;
-                                <div @key="module.ModuleId" @ref="_tileRefs[index]"
+                                <div @key="module.ModuleId" id="@TileElementId(module.ModuleId)"
                                      class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" title="@module.Title" @onclick="() => SelectModule(module.ModuleId)">
                                     <div class="mws-module-tile-image">
                                         <div class="mws-module-tile-thumb" style="@(module.ThumbnailImageUrl is { } url ? $"background-image:url('{url}')" : null)"></div>
@@ -167,9 +166,12 @@
     // Carousel back/forward + click-to-select scrolling, same "hide the native scrollbar, scroll
     // the selected element into view via JS" technique PauseBar.razor's own timeline scrubber
     // already uses (see timelineScrubber.js's own remarks) -- kept the same, not reinvented.
-    private ElementReference[] _tileRefs = [];
+    // Tiles are addressed by a DOM id built from ModuleId, not an @ref array -- see
+    // PauseBar.razor's EntryElementId for why @ref was dropped from this pattern entirely.
     private string? _lastCenteredId;
     private IJSObjectReference? _jsModule;
+
+    private static string TileElementId(string moduleId) => $"mws-module-tile-{moduleId}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,7 +185,6 @@
         try
         {
             _modules = await ModuleStore.ListAsync();
-            _tileRefs = new ElementReference[_modules.Count];
             _appSettings = await SettingsStore.LoadAsync();
             // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
             // auto-committed to whatever happened to load first.
@@ -210,15 +211,14 @@
         }
 
         _lastCenteredId = _selectedId;
-        var index = SelectedIndex();
-        if (index < 0 || index >= _tileRefs.Length)
+        if (_selectedId is null)
         {
             return;
         }
 
         try
         {
-            await _jsModule.InvokeVoidAsync("centerElement", _tileRefs[index]);
+            await _jsModule.InvokeVoidAsync("centerElement", TileElementId(_selectedId));
         }
         catch (JSException)
         {
@@ -630,7 +630,6 @@
         {
             var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
             _modules = await ModuleStore.ListAsync();
-            _tileRefs = new ElementReference[_modules.Count];
             SelectModule(installed.ModuleId);
             Logger.LogInformation("Module upload: installed {ModuleId} v{Version}", installed.ModuleId, installed.Version);
         }
