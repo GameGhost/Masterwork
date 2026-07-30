@@ -63,24 +63,31 @@ public static class MauiProgram
 #endif
 
 #if WINDOWS
-        // WinUI3's own title bar (and taskbar/Alt-Tab preview) reads from AppWindow.SetIcon, not
-        // from the exe's embedded Win32 icon resource that MauiIcon/Resizetizer already wires via
-        // ApplicationIcon — the two are set independently, so the title bar needs this separate
-        // call even though the taskbar/File-Explorer icon already works without it. appicon.ico is
-        // the same file Resizetizer generates from MauiIcon and copies next to the exe.
         builder.ConfigureLifecycleEvents(events =>
         {
             events.AddWindows(windows => windows.OnWindowCreated(window =>
             {
-                var iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
-                if (!File.Exists(iconPath))
-                {
-                    return;
-                }
-
                 var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
                 var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-                Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId).SetIcon(iconPath);
+                var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+
+                // WinUI3's own title bar (and taskbar/Alt-Tab preview) reads from AppWindow.SetIcon,
+                // not from the exe's embedded Win32 icon resource that MauiIcon/Resizetizer already
+                // wires via ApplicationIcon — the two are set independently, so the title bar needs
+                // this separate call even though the taskbar/File-Explorer icon already works
+                // without it. appicon.ico is the same file Resizetizer generates from MauiIcon and
+                // copies next to the exe.
+                var iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
+                if (File.Exists(iconPath))
+                {
+                    appWindow.SetIcon(iconPath);
+                }
+
+                // F11 fullscreen toggle — see FullscreenToggle's own remarks for why this hands off
+                // to a JS keydown listener (wwwroot/fullscreenToggle.js) instead of a native WinUI
+                // KeyboardAccelerator (tried first; didn't fire with focus inside the BlazorWebView,
+                // and left a stuck "F11" hint tooltip on screen).
+                Masterwork.App.Platforms.Windows.FullscreenToggle.Initialize(appWindow);
             }));
         });
 #endif

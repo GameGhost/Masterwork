@@ -9,6 +9,15 @@ public partial class App : Application
 
     protected override Window CreateWindow(IActivationState? activationState)
     {
-        return new Window(new MainPage()) { Title = "Masterwork - My Father's Work" };
+        // MinimumWidth/Height are MAUI's own cross-platform Window properties (DIPs, not raw
+        // pixels) -- on Windows this maps to OverlappedPresenter.PreferredMinimumWidth/Height
+        // under the hood, already DPI-correct, so there's no need to reach for the native WinUI
+        // AppWindow API the way the fullscreen toggle (MauiProgram.cs) has to.
+        return new Window(new MainPage())
+        {
+            Title = "Masterwork - My Father's Work",
+            MinimumWidth = 800,
+            MinimumHeight = 600,
+        };
     }
 }
