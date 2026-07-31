@@ -1,5 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
+  <!-- Required for `dotnet publish -p:RuntimeIdentifierOverride=win-x64` (unpackaged Windows
+       publish) to work at all — works around a Windows App SDK bug where the implicit RID picked
+       for an unpackaged Release build doesn't match what publish actually needs. Only takes effect
+       when RuntimeIdentifierOverride is explicitly passed; a plain build/publish is unaffected.
+       See https://github.com/microsoft/WindowsAppSDK/issues/3337 and
+       https://learn.microsoft.com/dotnet/maui/windows/deployment/publish-unpackaged-cli. -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(RuntimeIdentifierOverride)' != ''">
+    <RuntimeIdentifier>$(RuntimeIdentifierOverride)</RuntimeIdentifier>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- iOS/MacCatalyst deferred for now (no Mac build host available). Re-add
          "net10.0-ios;net10.0-maccatalyst" to TargetFrameworks below when ready. -->
@@ -40,8 +50,10 @@
     <ApplicationId>ca.digitalghost.masterwork.app</ApplicationId>
 
     <!-- Versions — pre-release; ApplicationVersion (Android versionCode / build number) stays a
-         positive integer regardless of the 0.x display version, per platform requirements. -->
-    <ApplicationDisplayVersion>0.0.1</ApplicationDisplayVersion>
+         positive integer regardless of the 0.x display version, per platform requirements. Bump
+         ApplicationVersion on every release that changes the Android build, even between the same
+         ApplicationDisplayVersion — Android treats versionCode as the sole update/downgrade signal. -->
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
     <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
