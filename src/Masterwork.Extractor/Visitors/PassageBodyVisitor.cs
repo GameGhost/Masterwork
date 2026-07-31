@@ -669,9 +669,7 @@ public class PassageBodyVisitor
         }
 
         // ViewController.instance.ChangeView(ViewController.instance.<view>) — every real
-        // story-script call site passes .scoreEntry (or, in Fear of the Unknown, .generations);
-        // .mainMenu never actually occurs in any story-script source, but is kept as a defensive
-        // case since it's cheap to keep correct.
+        // story-script call site passes .scoreEntry, .generations, or .mainMenu.
         if (expr is InvocationExpressionSyntax cvi && TryGetChangeViewTarget(cvi, out var viewName))
         {
             if (viewName == "scoreEntry")
@@ -682,6 +680,15 @@ public class PassageBodyVisitor
             if (viewName == "mainMenu")
             {
                 return [new GotoMenuNode { Target = "main_menu" }];
+            }
+
+            // .generations (Fear of the Unknown's Privatized3) just switches which native UI panel
+            // Unity displays — the hub view the player's already navigating to via ordinary MWS
+            // links regardless. No MWS equivalent needed, same "pure view navigation" category as
+            // EnableDisableContinueBtn/IsIgnorableCall above — dropped, not emitted as a node.
+            if (viewName == "generations")
+            {
+                return [];
             }
 
             _report.AddWarning(_passageName, $"ChangeView(...{viewName}) has no recognized mapping", sourceLine: GetLine(cvi));
@@ -2571,7 +2578,10 @@ public class PassageBodyVisitor
         var name = GetSimpleMethodName(inv);
         // Unity API calls with no MWS equivalent — logged but not emitted as nodes. ShowEventPopup
         // used to be here too — it has a real MWS equivalent now, see IsShowEventPopupCall above,
-        // checked earlier in the dispatch so it never reaches this list.
+        // checked earlier in the dispatch so it never reaches this list. ChangeView is NOT here —
+        // every ChangeView(...) call is already claimed earlier by the more specific
+        // TryGetChangeViewTarget branch above, which handles the "no MWS equivalent, safe to drop"
+        // .generations case itself; adding "ChangeView" to this list would be unreachable dead code.
         return name is "Clear" or "EnableDisableContinueBtn" or "OnGenerationBtn"
             or "PassageValueNumber" or "Log";
     }
