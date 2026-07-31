@@ -68,3 +68,12 @@ _extracted/
 
 # Machine-local MSBuild overrides (JDK/Android SDK paths, etc.) — see Directory.Build.local.props.example
 Directory.Build.local.props
+
+# Android release signing key — long-lived secret, never committed. Back it up outside git.
+*.keystore
+*.jks
+
+# Publish/release output built for GitHub Releases — build artifacts, not source
+*.zip
+*.apk
+*.aab
