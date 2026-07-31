@@ -225,6 +225,43 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void ExpandLink_NoMarker_EmitsRevealLayoutWithCancel()
+    {
+        // Real shape, matching cost-of-disease's Gen1-CreepyTrackRes (00179): an enchantHook/Replace
+        // whose fragment carries no setup/EOG/EOR/bidding marker at all — just narrative text ending
+        // in a real choice link. Structurally, this popup would otherwise have no layout AND no way
+        // to close itself (no okay/cancel/target) — TransformPopup's final fallback branch gives it
+        // layout: 'reveal' plus a generic Cancel so the player can back out.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Once you are ready, click here to reveal your secret conversation.",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.TextNode { Template = "It was unorthodox for..." },
+                        new Masterwork.Extractor.LinkNode { Label = "Accept the offer.", Target = "Yes", StateAffecting = true },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var outer = Nodes0(d);
+
+        Assert.Equal("popup", outer["type"]);
+        Assert.Equal("reveal", outer["layout"]);
+        Assert.Equal("Close", outer["cancel"]);
+        Assert.False(outer.ContainsKey("okay"));
+        Assert.False(outer.ContainsKey("target"));
+        Assert.Equal(true, outer["snapshot"]);
+    }
+
+    [Fact]
     public void ParagraphBreak_EmitsBreakWithParagraphStyle()
     {
         var passage = new MwsPassage
@@ -291,7 +328,7 @@ public class V2SerializerTests
         var then = (List<Dictionary<string, object?>>)cond["then"]!;
         var popup = Assert.Single(then);
         Assert.Equal("popup", popup["type"]);
-        Assert.Equal("input-popup", popup["layout"]);
+        Assert.Equal("prompt", popup["layout"]);
         Assert.Equal("Feverheart", popup["target"]);
         Assert.Equal("Continue", popup["okay"]);
         Assert.Equal(true, popup["snapshot"]);

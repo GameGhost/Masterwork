@@ -958,6 +958,23 @@ public static partial class V2Serializer
             // "no footer at all" trap without an explicit okay (see TransformEndOfGeneration's note).
             d["okay"] = "Confirm";
         }
+        else
+        {
+            // No known marker (setup/EOG/EOR/bidding-voting, handled above) and no plain redirect
+            // target either — structurally, this popup has no way to close itself except through a
+            // link inside its own content. That's exactly the "hand the device to one player, reveal
+            // a private passage of text that ends in a real choice link" pattern (e.g. Cost of
+            // Disease's Gen1-CreepyTrackRes) — a Harlowe enchantHook/Replace with none of the other
+            // special-purpose wrappers. It's a structural rule, not a Cradle-marker match, so it also
+            // covers any future occurrence of the same shape regardless of source. `layout: 'reveal'`
+            // gives it a real visual treatment (my-fathers-work-template/assets/style.css) instead of
+            // silently falling back to an unstyled popup; the generic Cancel lets the player back out
+            // without having made a choice yet (RenderedPopupView.razor's Cancel discards the
+            // sandboxed content with no commit) — styled as a corner close button, so the label text
+            // itself is never actually shown.
+            d["layout"] = "reveal";
+            d["cancel"] = "Close";
+        }
 
         // CheckProgress always records state, so force snapshot regardless of the source link's own
         // enchant command (None vs Replace) — matches the forcing StitchFragments used to apply when
@@ -1008,6 +1025,11 @@ public static partial class V2Serializer
             ["type"] = "popup",
             ["layout"] = "countdown_action",
             ["label"] = startButton,
+            // Without this, the trigger renders as a plain bracketed link (style-default) instead
+            // of the green button the reference screenshots show — my-fathers-work-template's own
+            // hand-authored demo (Showcase_Popup_RevealCountdown.mws.yaml) already sets this; the
+            // real extraction path was missing it.
+            ["style"] = "countdown-trigger",
             // Four stacked text nodes (style-timed via CSS opacity keyframes, see the template's
             // own style.css), not a single node whose text changes — REVEAL needs to be
             // localizable, and a CSS `content`-cycling pseudo-element never could be.
@@ -1073,7 +1095,14 @@ public static partial class V2Serializer
         var popup = new Dictionary<string, object?>
         {
             ["type"] = "popup",
-            ["layout"] = "input-popup",
+            // 'prompt' (not 'input-popup') — matches the layout my-fathers-work-template's own
+            // style.css actually styles for exactly this shape (single input + Okay, centered card,
+            // footer-count-agnostic so an Okay-only popup like this one renders correctly too — see
+            // its "prompt popup (single input — numeric or text)" block and its own Okay+Cancel
+            // demo in 01_Entry.mws.yaml). 'input-popup' had no template CSS at all — every real
+            // occurrence (Feverheart, EnvPasscode, NewMaster3A-E, ScoreEntryP1-5, ...) was rendering
+            // completely unstyled.
+            ["layout"] = "prompt",
             ["content"] = new List<Dictionary<string, object?>>
             {
                 new() { ["type"] = "text", ["value"] = input.Text },

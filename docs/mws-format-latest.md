@@ -1190,12 +1190,18 @@ branches on its value to decide *what* to render — it always renders the same 
 regions (a passage's node list; a popup's `header`/`content`/`okay`/`cancel`) — the value is only
 ever carried through as a `layout-{value}` CSS class for module stylesheets to target. Every layout
 value — `hub`/`event`/`narration`/`introduction` on passages, `setup`/`end_of_generation`/
-`end_of_round`/`input-popup`/anything module-defined on popups — renders through the fully generic
-path; all visual differentiation comes from module CSS keyed on the `layout-{value}` class (see
-`Masterwork.App.Shared`'s `PassageView.razor`/`RenderedPopupView.razor`, and e.g.
+`end_of_round`/`reveal`/`prompt`/anything module-defined on popups — renders through the fully
+generic path; all visual differentiation comes from module CSS keyed on the `layout-{value}` class
+(see `Masterwork.App.Shared`'s `PassageView.razor`/`RenderedPopupView.razor`, and e.g.
 `Masterwork-Modules/cost-of-disease/assets/style.css`'s `.mws-popup-overlay.layout-setup`
 rules for a worked example). There is no manifest-declared `layouts:`/`popups:` registry — layout
 values are just strings the extractor and a module's own CSS agree on.
+
+`reveal` is one such extractor-emitted value (`V2Serializer.TransformPopup`'s fallback for a
+click-triggered popup with no other special-purpose marker — see its own remarks): a private,
+often lengthy passage of text handed to one player, ending in one or more real choice links, with
+no `okay`/`target` of its own — the player leaves via whichever link they click, or backs out via
+the popup's generic `cancel`. Cost of Disease's `Gen1-CreepyTrackRes` passage is a worked example.
 
 `voting`/`bidding` used to be the one exception — a bespoke countdown-then-reveal component
 (`VotingPopupContent`) rendered those two popup layout values specially, bypassing module CSS
