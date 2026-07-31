@@ -72,7 +72,7 @@
                 }
 
                 <div class="mws-dialog-actions">
-                    <button type="button" class="style-btn-green" @onclick="Apply">@AppStrings.Common_Apply</button>
+                    <button type="button" class="style-btn-green" disabled="@_busy" @onclick="Apply">@AppStrings.Common_Apply</button>
                     <button type="button" class="style-btn-red" @onclick="Cancel">@AppStrings.Common_Cancel</button>
                 </div>
 
@@ -88,7 +88,7 @@
                 <h3>@AppStrings.OptionsDialog_QuitConfirmTitle</h3>
                 <p>@AppStrings.OptionsDialog_QuitConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
+                    <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
                     <button type="button" class="mws-btn-sm style-btn-green" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
                     <button type="button" class="mws-btn-sm style-btn-brown" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
@@ -98,7 +98,7 @@
                 <h3>@AppStrings.OptionsDialog_NameSaveTitle</h3>
                 <input type="text" @bind="_saveName" @bind:event="oninput" class="mws-save-name-input" />
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
                     <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</button>
                 </div>
                 break;
@@ -148,6 +148,13 @@
     private string _saveName = "";
     private IReadOnlyList<string> _availableModuleLanguages = [];
 
+    // Guards Apply/ConfirmSaveAndQuit/AbandonGame against a double-click re-invoking them before
+    // the first invocation's re-render disables the button — see RenderedLinkView's HandleClick for
+    // why a plain bool set before the first await is sufficient under Blazor's cooperative event
+    // dispatch. Matters most for the quit actions, which commit a save or discard progress via
+    // Play.razor's SaveAndQuit/AbandonGame.
+    private bool _busy;
+
     protected override async Task OnInitializedAsync()
     {
         if (StartAtQuit)
@@ -196,9 +203,22 @@
 
     private async Task Apply()
     {
-        await SettingsStore.SaveAsync(_draft);
-        await AppSettingsApplier.ApplyAsync(_draft, AudioPlayer, JS);
-        await OnClose.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await SettingsStore.SaveAsync(_draft);
+            await AppSettingsApplier.ApplyAsync(_draft, AudioPlayer, JS);
+            await OnClose.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task Cancel() => await OnClose.InvokeAsync();
@@ -224,13 +244,39 @@
 
     private async Task ConfirmSaveAndQuit()
     {
-        await OnSaveAndQuit.InvokeAsync(_saveName);
-        await OnClose.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await OnSaveAndQuit.InvokeAsync(_saveName);
+            await OnClose.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task AbandonGame()
     {
-        await OnAbandonGame.InvokeAsync();
-        await OnClose.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await OnAbandonGame.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

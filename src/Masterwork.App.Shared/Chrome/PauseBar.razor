@@ -8,7 +8,7 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <div class="mws-pause-bar @(IsOpen ? "mws-pause-bar--open" : "")" inert="@(!IsOpen)">
     <div class="mws-pause-scrubber-row">
-        <button type="button" class="mws-pause-nav-button mws-pause-back" disabled="@(!Session.CanStepBack)"
+        <button type="button" class="mws-pause-nav-button mws-pause-back" disabled="@(_busy || !Session.CanStepBack)"
                 @onclick="StepBack" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></button>
         <ol class="mws-timeline-list">
             @for (var i = 0; i < Session.Timeline.Count; i++)
@@ -29,15 +29,15 @@
             }
         </ol>
         <div class="mws-pause-forward-group">
-            <button type="button" class="mws-pause-nav-button mws-pause-forward" disabled="@(!Session.CanStepForward)"
+            <button type="button" class="mws-pause-nav-button mws-pause-forward" disabled="@(_busy || !Session.CanStepForward)"
                     @onclick="StepForward" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></button>
-            <button type="button" class="mws-pause-nav-button mws-pause-jump-to-present" disabled="@(!Session.IsRewound)"
+            <button type="button" class="mws-pause-nav-button mws-pause-jump-to-present" disabled="@(_busy || !Session.IsRewound)"
                     @onclick="JumpToPresent" aria-label="@AppStrings.TimelineScrubber_ReturnToPresent" title="@AppStrings.TimelineScrubber_ReturnToPresent"></button>
         </div>
     </div>
     <div class="mws-pause-actions-row">
-        <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" @onclick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</button>
-        <button type="button" class="mws-resume-button mws-btn-sm style-btn-green @(Session.IsRewound ? "mws-resume-button--long" : "")" @onclick="OnResumeClicked">
+        <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</button>
+        <button type="button" class="mws-resume-button mws-btn-sm style-btn-green @(Session.IsRewound ? "mws-resume-button--long" : "")" disabled="@_busy" @onclick="OnResumeClicked">
             <span class="mws-resume-button-text">@(Session.IsRewound ? AppStrings.TimelineScrubber_ResumeFromHere : AppStrings.Common_Resume)</span>
         </button>
     </div>
@@ -51,7 +51,7 @@
             <p>@AppStrings.TimelineScrubber_ResumeConfirmBody</p>
             <p>@AppStrings.TimelineScrubber_ResumeConfirmQuestion</p>
             <div class="mws-dialog-actions">
-                <button type="button" class="style-btn-red mws-btn-sm" @onclick="ConfirmResumeFromHere">@AppStrings.Common_Yes</button>
+                <button type="button" class="style-btn-red mws-btn-sm" disabled="@_busy" @onclick="ConfirmResumeFromHere">@AppStrings.Common_Yes</button>
                 <button type="button" class="style-btn-brown mws-btn-sm" @onclick="() => _showResumeConfirm = false">@AppStrings.Common_No</button>
             </div>
         </div>
@@ -105,6 +105,13 @@
     private int _lastCenteredIndex = -1;
     private IJSObjectReference? _jsModule;
     private bool _wasOpen;
+
+    // Guards every scrubber/resume action below against a double-click re-invoking it before the
+    // first invocation's re-render disables the button — see RenderedLinkView's HandleClick for why
+    // a plain bool set before the first await is sufficient under Blazor's cooperative event
+    // dispatch. Shared across all of them (not one flag per method) since they're all mutually
+    // exclusive actions on the same Session.
+    private bool _busy;
 
     // A stable per-index DOM id, not an ElementReference captured via @ref — the timeline <li>s are
     // rendered in a @for whose item count changes every time the player advances or steps back, and
@@ -174,20 +181,59 @@
 
     private async Task StepBack()
     {
-        Session.StepBack();
-        await OnStateChanged.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Session.StepBack();
+            await OnStateChanged.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task StepForward()
     {
-        Session.StepForward();
-        await OnStateChanged.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Session.StepForward();
+            await OnStateChanged.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task JumpToPresent()
     {
-        Session.JumpToPresent();
-        await OnStateChanged.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Session.JumpToPresent();
+            await OnStateChanged.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     // At current, Resume is non-destructive — there's nothing rewound to discard, so it just closes
@@ -195,9 +241,22 @@
     // (and any pending active state) before actually resuming from that point.
     private async Task OnResumeClicked()
     {
+        if (_busy)
+        {
+            return;
+        }
+
         if (!Session.IsRewound)
         {
-            await OnResumed.InvokeAsync();
+            _busy = true;
+            try
+            {
+                await OnResumed.InvokeAsync();
+            }
+            finally
+            {
+                _busy = false;
+            }
             return;
         }
 
@@ -206,9 +265,22 @@
 
     private async Task ConfirmResumeFromHere()
     {
-        _showResumeConfirm = false;
-        Session.ResumeFromHere();
-        await OnStateChanged.InvokeAsync();
-        await OnResumed.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _showResumeConfirm = false;
+            Session.ResumeFromHere();
+            await OnStateChanged.InvokeAsync();
+            await OnResumed.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

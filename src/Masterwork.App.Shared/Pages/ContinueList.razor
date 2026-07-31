@@ -56,11 +56,11 @@
                         }
                     </div>
                     <div class="mws-save-actions">
-                        <button type="button" class="mws-btn-sm style-btn-green" disabled="@(installed is null)"
+                        <button type="button" class="mws-btn-sm style-btn-green" disabled="@(_busy || installed is null)"
                                 title="@(installed is null ? AppStrings.ContinueList_ModuleMissingTitle : null)"
                                 @onclick="() => Resume(save)">@AppStrings.Common_Resume</button>
-                        <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
-                        <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => _pendingDelete = save">@AppStrings.Common_Delete</button>
+                        <button type="button" class="mws-btn-sm style-btn-brown" disabled="@_busy" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
+                        <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => _pendingDelete = save">@AppStrings.Common_Delete</button>
                     </div>
                 </div>
             }
@@ -76,7 +76,7 @@
                 <h3>@AppStrings.ContinueList_ResumeConfirmTitle</h3>
                 <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeConfirmBody, moduleTitle)</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
                     <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingResume = null">@AppStrings.Common_Cancel</button>
                 </div>
             </div>
@@ -90,7 +90,7 @@
                 <h3>@AppStrings.ContinueList_DeleteConfirmTitle</h3>
                 <p>@AppStrings.ContinueList_DeleteConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => Delete(_pendingDelete)">@AppStrings.Common_Yes</button>
+                    <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => Delete(_pendingDelete)">@AppStrings.Common_Yes</button>
                     <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingDelete = null">@AppStrings.Common_No</button>
                 </div>
             </div>
@@ -123,6 +123,13 @@
     private string _loadingMessage = "";
     private int? _loadingDone;
     private int? _loadingTotal;
+
+    // Guards ConfirmResume/Export/Delete against a double-click re-invoking one of them before the
+    // first invocation's re-render disables the buttons -- see RenderedLinkView.HandleClick for why
+    // a plain bool set before the first await is sufficient under Blazor's cooperative event
+    // dispatch. Resume() itself doesn't need its own check: it's synchronous except for a tail call
+    // into ConfirmResume, so guarding ConfirmResume alone already covers a double-click on Resume.
+    private bool _busy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -196,6 +203,12 @@
 
     private async Task ConfirmResume(SaveEntry entry)
     {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
         _pendingResume = null;
 
         _loading = true;
@@ -241,6 +254,7 @@
         finally
         {
             _loading = false;
+            _busy = false;
         }
     }
 
@@ -278,25 +292,46 @@
 
     private async Task Export(SaveEntry entry)
     {
-        var json = await SaveStore.LoadAsync(entry.Id);
-        if (json is null)
+        if (_busy)
         {
             return;
         }
 
-        var fileName = $"masterwork-save-{entry.Id}.json";
-        await SaveStore.ExportAsync(entry.Id, fileName, json);
+        _busy = true;
+        try
+        {
+            var json = await SaveStore.LoadAsync(entry.Id);
+            if (json is null)
+            {
+                return;
+            }
+
+            var fileName = $"masterwork-save-{entry.Id}.json";
+            await SaveStore.ExportAsync(entry.Id, fileName, json);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task Delete(SaveEntry? entry)
     {
-        if (entry is null)
+        if (_busy || entry is null)
         {
             return;
         }
 
-        _pendingDelete = null;
-        await SaveStore.DeleteAsync(entry.Id);
-        await RefreshAsync();
+        _busy = true;
+        try
+        {
+            _pendingDelete = null;
+            await SaveStore.DeleteAsync(entry.Id);
+            await RefreshAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

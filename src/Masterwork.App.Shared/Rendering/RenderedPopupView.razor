@@ -62,7 +62,7 @@ else
                     }
                     @if (Node.Okay is not null)
                     {
-                        <button type="button" class="mws-popup-okay" disabled="@(!Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
+                        <button type="button" class="mws-popup-okay" disabled="@(_busy || !Session.AreInputsValid(Node.Actions))" @onclick="Accept">@Node.Okay</button>
                     }
                 </div>
             }
@@ -130,10 +130,29 @@ else
         Session.ViewState.ExpandedPopups.Add(Node.Id);
     }
 
+    // Guards against a double-click double-firing ClosePopupAsync — see RenderedLinkView's
+    // HandleClick for why checking a plain bool set before the first await is sufficient under
+    // Blazor's cooperative (one-synchronous-chunk-at-a-time) event dispatch. Not applied to Cancel,
+    // which only ever touches local view state and is naturally idempotent either way.
+    private bool _busy;
+
     private async Task Accept()
     {
-        await Session.ClosePopupAsync(Node.Id, accept: true);
-        await OnStateChanged.InvokeAsync();
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Session.ClosePopupAsync(Node.Id, accept: true);
+            await OnStateChanged.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task Cancel()

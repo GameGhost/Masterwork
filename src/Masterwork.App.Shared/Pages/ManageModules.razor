@@ -36,8 +36,8 @@
                 <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
                 <p>@AppStrings.ManageModules_ConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
-                    <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
+                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_loading" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
+                    <button type="button" class="mws-btn-sm style-btn-red" disabled="@_loading" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
                     <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</button>
                 </div>
             </div>
@@ -70,9 +70,15 @@
         }
     }
 
+    // The disabled bindings above are just visual feedback -- this check is what actually matters:
+    // _loading is set synchronously below, before any await, so it also works as a re-entrancy
+    // guard against a double-click firing this twice before the re-render disables the buttons (see
+    // RenderedLinkView.HandleClick for why that ordering is sufficient under Blazor's cooperative
+    // event dispatch). Unlike StartNewGame's multi-phase _busy flag, this method's _loading stays
+    // true for its entire body in one contiguous try/finally, so reusing it as the guard is safe.
     private async Task ConfirmDelete(string? moduleId, bool deleteSaves)
     {
-        if (moduleId is null)
+        if (_loading || moduleId is null)
         {
             return;
         }

@@ -36,7 +36,7 @@
                     <button type="button" class="style-btn-brown" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
                     @if (FilePicker.IsAvailable)
                     {
-                        <button type="button" class="mws-upload-button style-btn-brown" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
+                        <button type="button" class="mws-upload-button style-btn-brown" disabled="@_busy" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
                     }
                     else
                     {
@@ -88,7 +88,7 @@
                                         <option value="@lang">@lang</option>
                                     }
                                 </select>
-                                <button type="button" class="mws-scenario-play-button" @onclick="() => Play(_selected)">
+                                <button type="button" class="mws-scenario-play-button" disabled="@_busy" @onclick="() => Play(_selected)">
                                     <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
                                 </button>
                             </div>
@@ -111,8 +111,8 @@
                                 <p class="mws-save-timestamp">@summary</p>
                             }
                             <div class="mws-dialog-actions">
-                                <button type="button" class="mws-btn-sm style-btn-green" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
-                                <button type="button" class="mws-btn-sm style-btn-red" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
+                                <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
+                                <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
                                 <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</button>
                             </div>
                         </div>
@@ -126,7 +126,7 @@
                             <h3>@_pendingUpload.Title</h3>
                             <p>@_pendingUpload.Message</p>
                             <div class="mws-dialog-actions">
-                                <button type="button" class="mws-btn-sm style-btn-green" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
+                                <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
                                 <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingUpload = null">@AppStrings.Common_Cancel</button>
                             </div>
                         </div>
@@ -162,6 +162,17 @@
     private string _loadingMessage = "";
     private int? _loadingDone;
     private int? _loadingTotal;
+
+    // Guards Play/ResumeConflicting/DiscardAndStartFresh/ConfirmPendingUpload/the upload handlers
+    // against a double-click re-invoking one of them (or racing a different one) before the first
+    // invocation's re-render disables the buttons -- see RenderedLinkView.HandleClick for why a
+    // plain bool set before the first await is sufficient under Blazor's cooperative event dispatch.
+    // Distinct from _loading (which only drives the LoadingOverlay's visibility/message and is
+    // toggled on and off multiple times within a single one of these flows) -- _busy stays true for
+    // an entry method's *entire* body, which is what double-clicking "Play" actually needs guarded:
+    // without it, two clicks could both pass the pre-loading conflict check and each start their own
+    // GameSession/State.Start, racing each other into /play.
+    private bool _busy;
 
     // Carousel back/forward + click-to-select scrolling, same "hide the native scrollbar, scroll
     // the selected element into view via JS" technique PauseBar.razor's own timeline scrubber
@@ -324,83 +335,101 @@
 
     private async Task Play(InstalledModule? module)
     {
-        if (module is null)
+        if (_busy || module is null)
         {
             return;
         }
 
-        // Whichever save (autosave or named) was actually played most recently wins — a manual save
-        // taken after the autosave supersedes it here, same as it does everywhere else now (see
-        // Play.razor's Save-and-Quit/Abandon, which both leave the autosave in place, and
-        // ContinueList's own newer-autosave check).
-        var saves = await SaveStore.ListAsync();
-        var mostRecent = saves.Where(s => s.ModuleId == module.ModuleId).OrderByDescending(s => s.LastPlayedUtc).FirstOrDefault();
-        if (mostRecent is not null)
+        _busy = true;
+        try
         {
-            _conflictModule = module;
-            _conflictSave = mostRecent;
-            return;
-        }
+            // Whichever save (autosave or named) was actually played most recently wins — a manual
+            // save taken after the autosave supersedes it here, same as it does everywhere else now
+            // (see Play.razor's Save-and-Quit/Abandon, which both leave the autosave in place, and
+            // ContinueList's own newer-autosave check).
+            var saves = await SaveStore.ListAsync();
+            var mostRecent = saves.Where(s => s.ModuleId == module.ModuleId).OrderByDescending(s => s.LastPlayedUtc).FirstOrDefault();
+            if (mostRecent is not null)
+            {
+                _conflictModule = module;
+                _conflictSave = mostRecent;
+                return;
+            }
 
-        await StartFreshAsync(module, _selectedLanguage);
+            await StartFreshAsync(module, _selectedLanguage);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task ResumeConflicting()
     {
-        if (_conflictModule is null || _conflictSave is null)
+        if (_busy || _conflictModule is null || _conflictSave is null)
         {
             return;
         }
 
-        var module = _conflictModule;
-        var saveEntry = _conflictSave;
-        _conflictModule = null;
-        _conflictSave = null;
-
-        var json = await SaveStore.LoadAsync(saveEntry.Id);
-        if (json is null)
-        {
-            await StartFreshAsync(module, _selectedLanguage);
-            return;
-        }
-
-        SessionSave? save;
+        _busy = true;
         try
         {
-            save = JsonSerializer.Deserialize<SessionSave>(json);
-        }
-        catch (JsonException)
-        {
-            // A save from an incompatible/older save-format revision — treat exactly like no save
-            // existing rather than crashing the app on a stale format the player can't do anything
-            // about (see SnapshotKind's remarks for a concrete example of how this happens).
-            save = null;
-        }
+            var module = _conflictModule;
+            var saveEntry = _conflictSave;
+            _conflictModule = null;
+            _conflictSave = null;
 
-        if (save is null)
-        {
-            await StartFreshAsync(module, _selectedLanguage);
-            return;
-        }
+            var json = await SaveStore.LoadAsync(saveEntry.Id);
+            if (json is null)
+            {
+                await StartFreshAsync(module, _selectedLanguage);
+                return;
+            }
 
-        // Resuming always uses the save's own recorded language, not whatever's currently picked in
-        // the dropdown — the save state is what decides, per the "preserved in the save state" rule.
-        _loading = true;
-        _loadingMessage = AppStrings.Common_Loading;
-        _loadingDone = null;
-        _loadingTotal = null;
-        try
-        {
-            var loaded = await ModuleStore.LoadAsync(module.ModuleId, saveEntry.Language);
-            loaded = await PreloadAssetsAsync(loaded);
-            var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
-            State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session);
-            await StyleInjector.ApplyAsync(loaded.StyleCss);
-            Nav.NavigateTo("/play");
+            SessionSave? save;
+            try
+            {
+                save = JsonSerializer.Deserialize<SessionSave>(json);
+            }
+            catch (JsonException)
+            {
+                // A save from an incompatible/older save-format revision — treat exactly like no
+                // save existing rather than crashing the app on a stale format the player can't do
+                // anything about (see SnapshotKind's remarks for a concrete example of how this
+                // happens).
+                save = null;
+            }
+
+            if (save is null)
+            {
+                await StartFreshAsync(module, _selectedLanguage);
+                return;
+            }
+
+            // Resuming always uses the save's own recorded language, not whatever's currently
+            // picked in the dropdown — the save state is what decides, per the "preserved in the
+            // save state" rule.
+            _loading = true;
+            _loadingMessage = AppStrings.Common_Loading;
+            _loadingDone = null;
+            _loadingTotal = null;
+            try
+            {
+                var loaded = await ModuleStore.LoadAsync(module.ModuleId, saveEntry.Language);
+                loaded = await PreloadAssetsAsync(loaded);
+                var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
+                State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session);
+                await StyleInjector.ApplyAsync(loaded.StyleCss);
+                Nav.NavigateTo("/play");
+            }
+            finally
+            {
+                _loading = false;
+            }
         }
         finally
         {
-            _loading = false;
+            _busy = false;
         }
     }
 
@@ -426,19 +455,27 @@
 
     private async Task DiscardAndStartFresh()
     {
-        if (_conflictModule is null)
+        if (_busy || _conflictModule is null)
         {
             return;
         }
 
-        var module = _conflictModule;
-        _conflictModule = null;
-        _conflictSave = null;
-        // No save is ever deleted here. Starting fresh implicitly overwrites the module's autosave
-        // (Play.razor's first-render PersistAutosaveAsync upserts it via its deterministic id), but a
-        // manual save is a distinct id entirely — it's left alone regardless of whether it was the
-        // one just offered, still resumable later from Continue.
-        await StartFreshAsync(module, _selectedLanguage);
+        _busy = true;
+        try
+        {
+            var module = _conflictModule;
+            _conflictModule = null;
+            _conflictSave = null;
+            // No save is ever deleted here. Starting fresh implicitly overwrites the module's
+            // autosave (Play.razor's first-render PersistAutosaveAsync upserts it via its
+            // deterministic id), but a manual save is a distinct id entirely — it's left alone
+            // regardless of whether it was the one just offered, still resumable later from Continue.
+            await StartFreshAsync(module, _selectedLanguage);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task StartFreshAsync(InstalledModule module, string? language)
@@ -464,24 +501,37 @@
 
     private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
     {
-        Logger.LogInformation("Module upload: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
-        _uploadError = null;
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory);
-            var bytes = memory.ToArray();
-            Logger.LogInformation("Module upload: read {Size} bytes from InputFile", bytes.Length);
+            Logger.LogInformation("Module upload: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
+            _uploadError = null;
+            try
+            {
+                using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                var bytes = memory.ToArray();
+                Logger.LogInformation("Module upload: read {Size} bytes from InputFile", bytes.Length);
 
-            await ProcessUploadedBytesAsync(bytes);
+                await ProcessUploadedBytesAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Module upload: InputFile read/process failed");
+                // ex.Message is an internal exception message (English, per the "behind the scenes
+                // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            Logger.LogError(ex, "Module upload: InputFile read/process failed");
-            // ex.Message is an internal exception message (English, per the "behind the scenes
-            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
-            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            _busy = false;
         }
     }
 
@@ -489,24 +539,37 @@
     // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected.
     private async Task OnNativePickerClicked()
     {
-        Logger.LogInformation("Module upload: native picker opened");
-        _uploadError = null;
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
         try
         {
-            var bytes = await FilePicker.PickAsync();
-            if (bytes is null)
+            Logger.LogInformation("Module upload: native picker opened");
+            _uploadError = null;
+            try
             {
-                Logger.LogInformation("Module upload: native picker cancelled");
-                return;
-            }
-            Logger.LogInformation("Module upload: read {Size} bytes from native picker", bytes.Length);
+                var bytes = await FilePicker.PickAsync();
+                if (bytes is null)
+                {
+                    Logger.LogInformation("Module upload: native picker cancelled");
+                    return;
+                }
+                Logger.LogInformation("Module upload: read {Size} bytes from native picker", bytes.Length);
 
-            await ProcessUploadedBytesAsync(bytes);
+                await ProcessUploadedBytesAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Module upload: native picker read/process failed");
+                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            Logger.LogError(ex, "Module upload: native picker read/process failed");
-            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            _busy = false;
         }
     }
 
@@ -606,15 +669,23 @@
 
     private async Task ConfirmPendingUpload()
     {
-        if (_pendingUpload is null)
+        if (_busy || _pendingUpload is null)
         {
             return;
         }
 
-        var bytes = _pendingUpload.Bytes;
-        var sha256 = _pendingUpload.Sha256;
-        _pendingUpload = null;
-        await InstallBytesAsync(bytes, sha256);
+        _busy = true;
+        try
+        {
+            var bytes = _pendingUpload.Bytes;
+            var sha256 = _pendingUpload.Sha256;
+            _pendingUpload = null;
+            await InstallBytesAsync(bytes, sha256);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task InstallBytesAsync(byte[] bytes, string sha256)

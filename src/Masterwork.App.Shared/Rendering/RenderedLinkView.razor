@@ -2,7 +2,7 @@
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
 
-<button type="button" class="mws-link style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@(IsRewound || !Session.AreCurrentInputsValid())" @onclick="HandleClick">
+<button type="button" class="mws-link style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@(_busy || IsRewound || !Session.AreCurrentInputsValid())" @onclick="HandleClick">
     @Node.Label
 </button>
 
@@ -23,14 +23,30 @@
     [Parameter]
     public EventCallback OnStateChanged { get; set; }
 
+    // Blazor dispatches UI events one synchronous chunk at a time (cooperative, not truly
+    // concurrent) -- a rapid double-click can still invoke this handler twice before the first
+    // click's re-render disables the button, but the second invocation's synchronous prefix always
+    // runs after the first's, so checking _busy here (set before the first await) reliably blocks
+    // it. Without this, two clicks on a state-affecting link raced FollowLinkAsync against itself,
+    // which could try to start a second passage transition mid-navigation.
+    private bool _busy;
+
     private async Task HandleClick()
     {
-        if (IsRewound || !Session.AreCurrentInputsValid())
+        if (_busy || IsRewound || !Session.AreCurrentInputsValid())
         {
             return;
         }
 
-        await Session.FollowLinkAsync(Node.Id);
-        await OnStateChanged.InvokeAsync();
+        _busy = true;
+        try
+        {
+            await Session.FollowLinkAsync(Node.Id);
+            await OnStateChanged.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }
