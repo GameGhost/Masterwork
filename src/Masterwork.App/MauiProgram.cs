@@ -44,9 +44,10 @@ public static class MauiProgram
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
         builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
-        // Overrides Shared's NullModuleFilePicker default — see IModuleFilePicker's own remarks for
-        // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload.
-        builder.Services.AddScoped<IModuleFilePicker, MauiModuleFilePicker>();
+        // Overrides Shared's NullNativeFilePicker default — see INativeFilePicker's own remarks for
+        // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload /
+        // save import.
+        builder.Services.AddScoped<INativeFilePicker, MauiNativeFilePicker>();
         // The active theme — swapping themes is a build-time decision (this line), not a runtime
         // one; see IMainMenuTheme's own remarks for why this wiring lives in each host rather than
         // the theme project registering itself.
@@ -88,6 +89,10 @@ public static class MauiProgram
                 // KeyboardAccelerator (tried first; didn't fire with focus inside the BlazorWebView,
                 // and left a stuck "F11" hint tooltip on screen).
                 Masterwork.App.Platforms.Windows.FullscreenToggle.Initialize(appWindow);
+
+                // See MainWindowState's own remarks — MauiModuleFilePicker needs this WindowId to
+                // associate the native file picker with this window.
+                Masterwork.App.Platforms.Windows.MainWindowState.Initialize(windowId);
             }));
         });
 #endif

@@ -53,7 +53,7 @@
          positive integer regardless of the 0.x display version, per platform requirements. Bump
          ApplicationVersion on every release that changes the Android build, even between the same
          ApplicationDisplayVersion — Android treats versionCode as the sole update/downgrade signal. -->
-    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>0.1.1</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
     <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->

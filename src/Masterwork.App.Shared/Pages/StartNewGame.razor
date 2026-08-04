@@ -13,7 +13,7 @@
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
 @inject ILogger<StartNewGame> Logger
-@inject IModuleFilePicker FilePicker
+@inject INativeFilePicker FilePicker
 @inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -535,7 +535,7 @@
         }
     }
 
-    // MAUI-only path (FilePicker.IsAvailable) — see IModuleFilePicker's own remarks for why this
+    // MAUI-only path (FilePicker.IsAvailable) — see INativeFilePicker's own remarks for why this
     // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected.
     private async Task OnNativePickerClicked()
     {
@@ -551,7 +551,7 @@
             _uploadError = null;
             try
             {
-                var bytes = await FilePicker.PickAsync();
+                var bytes = await FilePicker.PickAsync(NativeFileKind.ModulePackage);
                 if (bytes is null)
                 {
                     Logger.LogInformation("Module upload: native picker cancelled");

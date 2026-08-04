@@ -5,10 +5,18 @@ namespace Masterwork.App.Services;
 
 /// <inheritdoc cref="ISaveStore"/>
 /// <remarks>
-/// Backed by <see cref="FileSystem"/>'s app data directory and the MAUI <see cref="Share"/> API for
-/// export. MAUI-only — lives in the MAUI head rather than the platform-agnostic Shared project. The
-/// full list of <see cref="SaveEntry"/> metadata is kept as one JSON array file (<see cref="IndexPath"/>),
-/// mirroring <see cref="LocalStorageSaveStore"/>'s index-plus-per-id-blob layout.
+/// Backed by <see cref="FileSystem"/>'s app data directory. MAUI-only — lives in the MAUI head
+/// rather than the platform-agnostic Shared project. The full list of <see cref="SaveEntry"/>
+/// metadata is kept as one JSON array file (<see cref="IndexPath"/>), mirroring
+/// <see cref="LocalStorageSaveStore"/>'s index-plus-per-id-blob layout.
+///
+/// <see cref="ExportAsync"/> uses <see cref="Microsoft.Windows.Storage.Pickers.FileSavePicker"/>
+/// directly on Windows instead of the MAUI <see cref="Share"/> API — the same class of fix as
+/// <c>MauiNativeFilePicker</c> (see its own remarks): <c>Share.Default.RequestAsync</c> wraps WinRT's
+/// <c>DataTransferManager</c> share UI, which — like the old <c>FilePicker</c> — needs a window
+/// association to display, and a real-world report confirmed the same failure class (the file-picker
+/// import fix worked; export via Share still failed the same way for the same user). Android is
+/// unaffected — it keeps using <see cref="Share"/>, which has no equivalent report against it.
 /// </remarks>
 public sealed class FileSaveStore : ISaveStore
 {
@@ -54,6 +62,24 @@ public sealed class FileSaveStore : ISaveStore
     /// <inheritdoc/>
     public async Task ExportAsync(string id, string fileName, string json)
     {
+#if WINDOWS
+        var windowId = Masterwork.App.Platforms.Windows.MainWindowState.WindowId
+            ?? throw new InvalidOperationException("MainWindowState.Initialize hasn't run yet — the app window isn't ready.");
+
+        var picker = new Microsoft.Windows.Storage.Pickers.FileSavePicker(windowId)
+        {
+            SuggestedFileName = Path.GetFileNameWithoutExtension(fileName),
+        };
+        picker.FileTypeChoices.Add("Masterwork save", [".mwsave"]);
+
+        var result = await picker.PickSaveFileAsync();
+        if (result is null)
+        {
+            return;
+        }
+
+        await File.WriteAllTextAsync(result.Path, json);
+#else
         var exportPath = Path.Combine(FileSystem.CacheDirectory, fileName);
         await File.WriteAllTextAsync(exportPath, json);
         await Share.Default.RequestAsync(new ShareFileRequest
@@ -61,6 +87,7 @@ public sealed class FileSaveStore : ISaveStore
             Title = "Export Masterwork save",
             File = new ShareFile(exportPath),
         });
+#endif
     }
 
     private static async Task<List<SaveEntry>> ReadIndexAsync()

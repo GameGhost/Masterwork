@@ -27,9 +27,10 @@ builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
-// No WebView2 host here — the InputFile element StartNewGame.razor uses for module upload doesn't
-// hit the crash IModuleFilePicker documents, so this default (never actually called) is enough.
-builder.Services.AddScoped<IModuleFilePicker, NullModuleFilePicker>();
+// No WebView2 host here — the InputFile elements StartNewGame.razor/ContinueList.razor use for
+// module upload/save import don't hit the crash INativeFilePicker documents, so this default
+// (never actually called) is enough.
+builder.Services.AddScoped<INativeFilePicker, NullNativeFilePicker>();
 // The active theme — swapping themes is a build-time decision (this line), not a runtime one; see
 // IMainMenuTheme's own remarks for why this wiring lives in each host rather than the theme project
 // registering itself.
