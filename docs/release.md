@@ -1,0 +1,156 @@
+# Release Process
+
+Reusable runbook for cutting a Masterwork release: Windows build, signed Android build, and the
+GitHub Releases on both this repo and the companion `Masterwork-Modules` repo. Follow top to bottom.
+
+## 0. Version bump
+
+In `src/Masterwork.App/Masterwork.App.csproj`:
+
+```xml
+<ApplicationDisplayVersion>0.1.1</ApplicationDisplayVersion>
+<ApplicationVersion>1</ApplicationVersion>
+```
+
+- `ApplicationDisplayVersion` is the user-facing semver (`X.Y.Z`) — bump on every release.
+- `ApplicationVersion` is Android's `versionCode` — a plain incrementing integer, independent of the
+  display version. Bump it on every release that changes the Android build, even between releases
+  that share the same `ApplicationDisplayVersion` — Android treats `versionCode` as the sole
+  update/downgrade signal, so a repeat value means the Play Store / sideload install will refuse to
+  treat the new APK as an update.
+
+Commit the version bump with (or ahead of) whatever change is driving the release.
+
+## 1. Pre-flight
+
+```powershell
+dotnet build src/Masterwork.slnx
+dotnet test src/Masterwork.Tests/Masterwork.Tests.csproj
+```
+
+All tests must pass. Confirm `git status` is clean and everything intended for the release is
+committed and pushed to `origin/main` — the GitHub release should point at a commit that's actually
+on the remote.
+
+## 2. Windows build (self-contained, unpackaged)
+
+```powershell
+# Make sure no debug instance of the app is running first — it locks the exe and the publish will
+# silently produce a stale/incomplete output:
+Get-Process Masterwork.App -ErrorAction SilentlyContinue
+
+dotnet publish src/Masterwork.App/Masterwork.App.csproj `
+  -f net10.0-windows10.0.19041.0 -c Release `
+  -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true `
+  -p:BuildAndroid=false
+
+$src = "src\Masterwork.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish"
+$dest = "Masterwork-<VERSION>-win-x64.zip"
+if (Test-Path $dest) { Remove-Item $dest -Force }
+Compress-Archive -Path "$src\*" -DestinationPath $dest
+```
+
+`PublishSingleFile=true` does **not** work for MAUI Windows apps — don't try to add it. The
+`RuntimeIdentifierOverride`-conditional `PropertyGroup` already in `Masterwork.App.csproj` is a
+required workaround for [WindowsAppSDK#3337](https://github.com/microsoft/WindowsAppSDK/issues/3337);
+don't remove it.
+
+## 3. Android build (signed APK)
+
+**Run this step yourself, in a terminal Claude Code doesn't share** — the signing password
+shouldn't be typed into an agent-visible shell. Claude Code can prep everything else and verify the
+result afterward, but not run this command.
+
+Keystore location: `C:\Projects\Masterwork\masterwork-release.keystore` (gitignored — back it up
+somewhere outside this repo; there's no recovery if it's lost, and a differently-signed APK can't
+update an install made from the original key).
+
+```powershell
+$env:MwSigningPass = "<your password>"   # not committed anywhere, not shared with the agent
+
+dotnet publish src/Masterwork.App/Masterwork.App.csproj `
+  -f net10.0-android -c Release `
+  -p:AndroidPackageFormats=apk `
+  -p:AndroidSigningKeyStore=C:\Projects\Masterwork\masterwork-release.keystore `
+  -p:AndroidSigningKeyAlias=<key-alias> `
+  -p:AndroidSigningKeyPass=env:MwSigningPass `
+  -p:AndroidSigningStorePass=env:MwSigningPass
+```
+
+- `env:MwSigningPass` (no `$`) is an MSBuild-parsed prefix meaning "look up this OS environment
+  variable at build time" — it is **not** PowerShell interpolation. Using `$env:MwSigningPass` here
+  would leak the literal password onto the command line/process listing. The only place the `$`
+  belongs is the `$env:MwSigningPass = "..."` assignment line above.
+- If you don't remember `<key-alias>`, run `keytool -list -v -keystore masterwork-release.keystore`
+  (prompts for the store password) to see it.
+- Output APK: `src\Masterwork.App\bin\Release\net10.0-android\...\ca.digitalghost.masterwork.app-Signed.apk`.
+- **If a rebuild produces a file with an unchanged timestamp**, the signing/packaging target didn't
+  actually re-run (a stale incremental build bug seen during the v0.1.0 release — the output file
+  looked signed but wasn't). Delete `src\Masterwork.App\bin\Release\net10.0-android` and
+  `src\Masterwork.App\obj\Release\net10.0-android`, then re-run the publish.
+
+Once built, verify it's genuinely signed before handing it off:
+
+```powershell
+apksigner verify --print-certs "<path-to-apk>"
+```
+
+Should show a v2/v3 signature with the expected certificate DN. Rename the output to
+`Masterwork-<VERSION>-android.apk` for the release.
+
+## 4. GitHub Release — Masterwork
+
+Tag format: `v<VERSION>` (e.g. `v0.1.1`), matching `ApplicationDisplayVersion`.
+
+```powershell
+gh release create v<VERSION> `
+  "Masterwork-<VERSION>-win-x64.zip" `
+  "Masterwork-<VERSION>-android.apk" `
+  --repo GameGhost/Masterwork `
+  --title "v<VERSION>" `
+  --notes "<release notes — see template below>"
+```
+
+Release notes template (see `v0.1.0`'s release for a full example):
+
+```markdown
+<One paragraph: what changed in this release and why, from a player's perspective.>
+
+**Installing:**
+- **Windows**: download `Masterwork-<VERSION>-win-x64.zip`, unzip anywhere, run `Masterwork.App.exe`.
+  No separate .NET install needed (self-contained build).
+- **Android**: download the `.apk`, enable "install from unknown sources" for your browser/file
+  manager, then open the file to install.
+
+Get a scenario to play from the [Masterwork-Modules releases](https://github.com/GameGhost/Masterwork-Modules/releases).
+```
+
+## 5. Companion release — Masterwork-Modules
+
+Only needed if module content changed since the last module release. From `Masterwork-Modules`:
+
+```powershell
+# Re-bundle any module whose content changed (repeat per module):
+dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- cost-of-disease cost-of-disease.mwm
+
+gh release create v<VERSION> `
+  "cost-of-disease.mwm" `
+  "fear-of-the-unknown.mwm" `
+  "a-time-of-war.mwm" `
+  --repo GameGhost/Masterwork-Modules `
+  --title "v<VERSION>" `
+  --notes "<what changed in the module content>"
+```
+
+The Modules repo's own release version doesn't need to track the app's version lockstep — only cut
+one when module content actually changed.
+
+## 6. Post-release checklist
+
+- Verify the Windows zip actually launches on a clean machine (or at minimum, unzip-and-run
+  locally) — don't rely on the publish succeeding as proof it works.
+- Verify the Android APK's signature (step 3) before it's linked from the release.
+- If the release fixes a bug reported by a specific user, follow up with them once the real
+  (non-debug, non-test-build) release artifact is out.
+- Check `README.md` and any other docs for hardcoded version numbers or stale "latest release"
+  claims that should now point at the new version.
