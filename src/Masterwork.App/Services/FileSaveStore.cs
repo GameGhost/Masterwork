@@ -10,7 +10,7 @@ namespace Masterwork.App.Services;
 /// metadata is kept as one JSON array file (<see cref="IndexPath"/>), mirroring
 /// <see cref="LocalStorageSaveStore"/>'s index-plus-per-id-blob layout.
 ///
-/// <see cref="ExportAsync"/> uses <see cref="Microsoft.Windows.Storage.Pickers.FileSavePicker"/>
+/// <see cref="ExportAsync"/> uses <c>Microsoft.Windows.Storage.Pickers.FileSavePicker</c>
 /// directly on Windows instead of the MAUI <see cref="Share"/> API — the same class of fix as
 /// <c>MauiNativeFilePicker</c> (see its own remarks): <c>Share.Default.RequestAsync</c> wraps WinRT's
 /// <c>DataTransferManager</c> share UI, which — like the old <c>FilePicker</c> — needs a window

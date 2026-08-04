@@ -10,7 +10,7 @@ namespace Masterwork.App.Services;
 /// WebView2 (Windows) / native WebView (Android) host, which is the whole point — see
 /// <see cref="INativeFilePicker"/>'s own remarks for why that matters.
 ///
-/// Windows uses <see cref="Microsoft.Windows.Storage.Pickers.FileOpenPicker"/> directly instead of
+/// Windows uses <c>Microsoft.Windows.Storage.Pickers.FileOpenPicker</c> directly instead of
 /// <see cref="Microsoft.Maui.Storage.FilePicker"/> — a real-world report (v0.1.0, unpackaged
 /// self-contained build) hit <c>COMException 0x80004005</c> from MAUI's own picker every time on
 /// one user's machine while never reproducing on others, on a build already confirmed to have the

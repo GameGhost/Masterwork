@@ -70,30 +70,45 @@ $env:MwSigningPass = "<your password>"   # not committed anywhere, not shared wi
 
 dotnet publish src/Masterwork.App/Masterwork.App.csproj `
   -f net10.0-android -c Release `
+  -p:AndroidKeyStore=true `
   -p:AndroidPackageFormats=apk `
   -p:AndroidSigningKeyStore=C:\Projects\Masterwork\masterwork-release.keystore `
-  -p:AndroidSigningKeyAlias=<key-alias> `
+  -p:AndroidSigningKeyAlias=masterwork `
   -p:AndroidSigningKeyPass=env:MwSigningPass `
   -p:AndroidSigningStorePass=env:MwSigningPass
+
+Remove-Item env:\MwSigningPass
 ```
 
+- **`-p:AndroidKeyStore=true` is required** — it defaults to `false`, and when it's missing every
+  other `AndroidSigning*` property below is silently ignored (no error, no warning). The build still
+  "succeeds" and still names its output `-Signed.apk`, but MAUI falls back to auto-signing with its
+  own debug key instead — verify (below) always, don't trust the filename. Confirmed against
+  [Microsoft's own publish-cli docs](https://learn.microsoft.com/en-us/dotnet/maui/android/deployment/publish-cli?view=net-maui-10.0),
+  whose own example command includes it.
 - `env:MwSigningPass` (no `$`) is an MSBuild-parsed prefix meaning "look up this OS environment
   variable at build time" — it is **not** PowerShell interpolation. Using `$env:MwSigningPass` here
   would leak the literal password onto the command line/process listing. The only place the `$`
-  belongs is the `$env:MwSigningPass = "..."` assignment line above.
-- If you don't remember `<key-alias>`, run `keytool -list -v -keystore masterwork-release.keystore`
-  (prompts for the store password) to see it.
+  belongs is the `$env:MwSigningPass = "..."` assignment line above. This is a real, currently-documented
+  `AndroidSigningKeyPass`/`AndroidSigningStorePass` feature (same source as above) — not generic
+  MSBuild property syntax, so it won't work on unrelated `-p:` properties, only these two. Not
+  supported when `AndroidPackageFormats` is `aab` (use `file:` instead there).
 - Output APK: `src\Masterwork.App\bin\Release\net10.0-android\...\ca.digitalghost.masterwork.app-Signed.apk`.
 - **If a rebuild produces a file with an unchanged timestamp**, the signing/packaging target didn't
   actually re-run (a stale incremental build bug seen during the v0.1.0 release — the output file
   looked signed but wasn't). Delete `src\Masterwork.App\bin\Release\net10.0-android` and
   `src\Masterwork.App\obj\Release\net10.0-android`, then re-run the publish.
 
-Once built, verify it's genuinely signed before handing it off:
+Once built, **always** verify it's genuinely signed with your release key before handing it off —
+both the missing-`AndroidKeyStore` and the stale-build failure modes above produce a file that looks
+correct (right name, right rough size) but isn't:
 
 ```powershell
 apksigner verify --print-certs "<path-to-apk>"
 ```
+
+The certificate DN must be the one from your own keystore, not `CN=Android Debug, O=Android, C=US`
+(that's the auto-generated debug key — a sure sign one of the two failure modes above happened).
 
 Should show a v2/v3 signature with the expected certificate DN. Rename the output to
 `Masterwork-<VERSION>-android.apk` for the release.
