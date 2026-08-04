@@ -10,6 +10,8 @@
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
+@inject ILogger<ContinueList> Logger
+@inject INativeFilePicker FilePicker
 @inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -21,12 +23,28 @@
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
     </button>
 
+    <div class="mws-module-toolbar">
+        @if (FilePicker.IsAvailable)
+        {
+            <button type="button" class="mws-upload-button mws-import-save-button style-btn-brown" disabled="@_busy" @onclick="OnNativePickerClicked">@AppStrings.ContinueList_ImportSave</button>
+        }
+        else
+        {
+            <label for="mws-import-input" class="mws-upload-button mws-import-save-button style-btn-brown">@AppStrings.ContinueList_ImportSave</label>
+            <InputFile id="mws-import-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected" accept=".mwsave" />
+        }
+    </div>
+    @if (_importError is not null)
+    {
+        <p class="mws-version-warning">@_importError</p>
+    }
+
     <h2 class="mws-screen-title">@AppStrings.ContinueList_Heading</h2>
 
     <div class="mws-continue-list">
         @if (_saves.Count == 0)
         {
-            <p>@AppStrings.ContinueList_Empty</p>
+            <p class="mws-continue-empty">@AppStrings.ContinueList_Empty</p>
         }
         else
         {
@@ -97,6 +115,20 @@
         </div>
     }
 
+    @if (_pendingImport is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ContinueList_ImportConfirmTitle</h3>
+                <p>@_pendingImport.Message</p>
+                <div class="mws-dialog-actions">
+                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmPendingImport">@AppStrings.Common_Yes</button>
+                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingImport = null">@AppStrings.Common_No</button>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_resumeError is not null)
     {
         <div class="mws-dialog-overlay">
@@ -114,21 +146,26 @@
 </div>
 
 @code {
+    private sealed record PendingImport(SaveExport Export, string Message);
+
     private List<SaveEntry> _saves = [];
     private Dictionary<string, InstalledModule> _modulesById = [];
     private SaveEntry? _pendingResume;
     private SaveEntry? _pendingDelete;
+    private PendingImport? _pendingImport;
     private string? _resumeError;
+    private string? _importError;
     private bool _loading;
     private string _loadingMessage = "";
     private int? _loadingDone;
     private int? _loadingTotal;
 
-    // Guards ConfirmResume/Export/Delete against a double-click re-invoking one of them before the
-    // first invocation's re-render disables the buttons -- see RenderedLinkView.HandleClick for why
-    // a plain bool set before the first await is sufficient under Blazor's cooperative event
-    // dispatch. Resume() itself doesn't need its own check: it's synchronous except for a tail call
-    // into ConfirmResume, so guarding ConfirmResume alone already covers a double-click on Resume.
+    // Guards ConfirmResume/Export/Delete/the import handlers against a double-click re-invoking one
+    // of them before the first invocation's re-render disables the buttons -- see
+    // RenderedLinkView.HandleClick for why a plain bool set before the first await is sufficient
+    // under Blazor's cooperative event dispatch. Resume() itself doesn't need its own check: it's
+    // synchronous except for a tail call into ConfirmResume, so guarding ConfirmResume alone already
+    // covers a double-click on Resume.
     private bool _busy;
 
     protected override async Task OnInitializedAsync()
@@ -290,6 +327,17 @@
         StateHasChanged();
     }
 
+    // Bundles the save's own SaveEntry metadata alongside its raw session JSON -- a bare SessionSave
+    // blob (what SaveStore.LoadAsync returns) carries no module id/version/display name at all, so
+    // without this wrapper an imported file would have nothing to validate against the importing
+    // machine's installed modules. See SaveExport's own remarks.
+    //
+    // The autosave has no DisplayName of its own (SaveEntry's own remarks) -- exporting it with a
+    // null name would both produce an unreadable id-based filename (SaveIds.Autosave embeds a ':',
+    // not a valid filename character) and, on import, show up as "Unnamed save" in the list (Import
+    // always lands as a named save, never as the autosave -- see FinishImportAsync). Synthesizing
+    // "<module> - <date>" here fixes both at once: it becomes the exported filename's basis *and*
+    // the DisplayName Import lands on this save with.
     private async Task Export(SaveEntry entry)
     {
         if (_busy)
@@ -306,13 +354,179 @@
                 return;
             }
 
-            var fileName = $"masterwork-save-{entry.Id}.json";
-            await SaveStore.ExportAsync(entry.Id, fileName, json);
+            var moduleTitle = _modulesById.GetValueOrDefault(entry.ModuleId)?.Title ?? entry.ModuleId;
+            var displayName = entry.DisplayName ?? $"{moduleTitle} - {entry.LastPlayedUtc.ToLocalTime():yyyy-MM-dd}";
+
+            using var sessionDoc = JsonDocument.Parse(json);
+            var export = new SaveExport(entry.ModuleId, entry.ModuleVersion, displayName,
+                entry.LastStateLabel, entry.LastPlayedUtc, entry.Language, sessionDoc.RootElement.Clone());
+            var exportJson = JsonSerializer.Serialize(export);
+
+            var fileName = $"{SanitizeFileName(displayName)}.mwsave";
+            await SaveStore.ExportAsync(entry.Id, fileName, exportJson);
         }
         finally
         {
             _busy = false;
         }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string([.. name.Select(c => invalid.Contains(c) ? '_' : c)]).Trim();
+        return cleaned.Length > 0 ? cleaned : "save";
+    }
+
+    private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Logger.LogInformation("Save import: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
+            _importError = null;
+            try
+            {
+                using var stream = e.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                await ProcessImportedBytesAsync(memory.ToArray());
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Save import: InputFile read/process failed");
+                // ex.Message is an internal exception message (English, per the "behind the scenes
+                // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+                _importError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ImportError_Generic, ex.Message);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // MAUI-only path (FilePicker.IsAvailable) — see INativeFilePicker's own remarks for why this
+    // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected.
+    private async Task OnNativePickerClicked()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            Logger.LogInformation("Save import: native picker opened");
+            _importError = null;
+            try
+            {
+                var bytes = await FilePicker.PickAsync(NativeFileKind.SaveFile);
+                if (bytes is null)
+                {
+                    Logger.LogInformation("Save import: native picker cancelled");
+                    return;
+                }
+
+                await ProcessImportedBytesAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Save import: native picker read/process failed");
+                _importError = string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ImportError_Generic, ex.Message);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Shared by both import paths above. Validates the uploaded file against whatever's installed
+    // on this machine before ever touching the save store -- an unrecognized module id or a version
+    // that doesn't match needs a confirmation, everything else imports straight away.
+    private async Task ProcessImportedBytesAsync(byte[] bytes)
+    {
+        SaveExport? export;
+        try
+        {
+            export = JsonSerializer.Deserialize<SaveExport>(bytes);
+        }
+        catch (JsonException)
+        {
+            _importError = AppStrings.ContinueList_ImportError_Invalid;
+            return;
+        }
+
+        if (export is null || string.IsNullOrEmpty(export.ModuleId))
+        {
+            _importError = AppStrings.ContinueList_ImportError_Invalid;
+            return;
+        }
+
+        var installed = _modulesById.GetValueOrDefault(export.ModuleId);
+        if (installed is null)
+        {
+            _pendingImport = new PendingImport(export, AppStrings.ContinueList_ImportModuleMissingBody);
+            return;
+        }
+
+        if (SemVer.Compare(export.ModuleVersion, installed.Version) != 0)
+        {
+            _pendingImport = new PendingImport(export, string.Format(AppStrings.EffectiveCulture,
+                AppStrings.ContinueList_ImportVersionMismatchBody, installed.Title, installed.Version, export.ModuleVersion));
+            return;
+        }
+
+        await FinishImportAsync(export);
+    }
+
+    private async Task ConfirmPendingImport()
+    {
+        if (_busy || _pendingImport is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var export = _pendingImport.Export;
+            _pendingImport = null;
+            await FinishImportAsync(export);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Always lands as a new named save, never an autosave -- SaveIds.Autosave is a deterministic,
+    // continuously-overwritten id keyed by module, and an imported file silently becoming "the"
+    // autosave for whatever's currently installed would be surprising and could clobber real
+    // in-progress play. IsAutosave is therefore always false here regardless of what the exported
+    // save originally was.
+    private async Task FinishImportAsync(SaveExport export)
+    {
+        var entry = new SaveEntry(
+            Id: SaveIds.NewNamedSave(),
+            ModuleId: export.ModuleId,
+            ModuleVersion: export.ModuleVersion,
+            IsAutosave: false,
+            DisplayName: export.DisplayName,
+            LastStateLabel: export.LastStateLabel,
+            LastPlayedUtc: export.LastPlayedUtc,
+            Language: export.Language);
+
+        await SaveStore.SaveAsync(entry, export.Session.GetRawText());
+        Logger.LogInformation("Save import: imported {ModuleId} v{Version} as {Id}", export.ModuleId, export.ModuleVersion, entry.Id);
+        await RefreshAsync();
     }
 
     private async Task Delete(SaveEntry? entry)

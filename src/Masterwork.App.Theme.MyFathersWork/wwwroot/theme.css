@@ -1392,6 +1392,27 @@ body {
     align-items: flex-end;
 }
 
+/* Import Save button -- reuses .mws-upload-button's base look (Start New Game's own "Add" button)
+   but needs its own width/font-size: "Import Save" is a longer label than "Add", and 7em/1.2em
+   (that rule's own sizing) clips it. Three-class selector deliberately outweighs
+   .mws-upload-button.style-btn-brown's own specificity so this doesn't depend on source order. */
+.mws-import-save-button.mws-upload-button.style-btn-brown {
+    width: 8.5em;
+    font-size: 1em;
+}
+
+/* Empty state -- reachable now that the main menu's Continue button no longer hides behind a
+   "has any save" guard, so a genuinely-empty list needs to read clearly rather than as a blank
+   panel (a first-time player, or one who imports before their first save exists). Plain centered
+   text against the leather background, same muted-but-legible color as .mws-save-info span/etc.,
+   not a bordered panel -- there's nothing to frame. */
+.mws-continue-empty {
+    color: #c9b8a0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    padding: 3rem 1rem;
+    font-size: 1.1em;
+}
+
 /* -- Help (Help.razor) -------------------------------------------------------------------------
  * Same .mws-scenario-screen/-border/-back-button/-screen-title chrome as Continue/Manage Modules
  * (see that section's own comment for the reasoning). The original app's help screen used a

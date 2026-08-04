@@ -124,6 +124,12 @@
   <data name="ContinueList_VersionWarning_Moved" xml:space="preserve"><value>Sauvegardée avec le module v{0}, la version installée est v{1} — le module a évolué depuis cette sauvegarde et pourrait ne pas être compatible.</value></data>
   <data name="ContinueList_ResumeError_ModuleMissing" xml:space="preserve"><value>Le module de cette sauvegarde n'est plus installé. Désinstaller un module ne supprime pas automatiquement ses sauvegardes — supprimez celle-ci manuellement si elle n'est plus nécessaire.</value></data>
   <data name="ContinueList_ResumeError_Exception" xml:space="preserve"><value>Impossible de reprendre cette sauvegarde : {0}</value></data>
+  <data name="ContinueList_ImportSave" xml:space="preserve"><value>Importer une sauvegarde</value></data>
+  <data name="ContinueList_ImportConfirmTitle" xml:space="preserve"><value>Importer cette sauvegarde?</value></data>
+  <data name="ContinueList_ImportModuleMissingBody" xml:space="preserve"><value>Le module de cette sauvegarde n'est pas installé. Importer quand même?</value></data>
+  <data name="ContinueList_ImportVersionMismatchBody" xml:space="preserve"><value>La version de {0} installée est v{1}. Cette sauvegarde a été créée avec la v{2}. La sauvegarde pourrait ne pas être compatible avec le module actuellement installé. Importer quand même?</value></data>
+  <data name="ContinueList_ImportError_Invalid" xml:space="preserve"><value>Ce fichier n'est pas une exportation de sauvegarde Masterwork valide.</value></data>
+  <data name="ContinueList_ImportError_Generic" xml:space="preserve"><value>Impossible d'importer cette sauvegarde : {0}</value></data>
 
   <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Nouvelle partie</value></data>
   <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Télécharger</value></data>

@@ -124,6 +124,12 @@
   <data name="ContinueList_VersionWarning_Moved" xml:space="preserve"><value>Saved with module v{0}, installed is v{1} — the module has moved on since this save and it may not be compatible.</value></data>
   <data name="ContinueList_ResumeError_ModuleMissing" xml:space="preserve"><value>This save's module isn't installed anymore. Uninstalling a module doesn't remove its saves automatically — delete this one manually if it's no longer needed.</value></data>
   <data name="ContinueList_ResumeError_Exception" xml:space="preserve"><value>Couldn't resume this save: {0}</value></data>
+  <data name="ContinueList_ImportSave" xml:space="preserve"><value>Import Save</value></data>
+  <data name="ContinueList_ImportConfirmTitle" xml:space="preserve"><value>Import this save?</value></data>
+  <data name="ContinueList_ImportModuleMissingBody" xml:space="preserve"><value>The module for this save is not installed. Import anyway?</value></data>
+  <data name="ContinueList_ImportVersionMismatchBody" xml:space="preserve"><value>The version of {0} installed is v{1}. This save was created by v{2}. The save may not be compatible with the module currently installed. Import anyway?</value></data>
+  <data name="ContinueList_ImportError_Invalid" xml:space="preserve"><value>This file isn't a valid Masterwork save export.</value></data>
+  <data name="ContinueList_ImportError_Generic" xml:space="preserve"><value>Couldn't import that save: {0}</value></data>
 
   <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Start New Game</value></data>
   <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Download</value></data>

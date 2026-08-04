@@ -454,6 +454,13 @@ body {
     color: #666;
 }
 
+.mws-continue-empty {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+    padding: 2rem 1rem;
+}
+
 .mws-achievement-module {
     margin: 1rem 0;
     padding: 0.5rem 1rem;

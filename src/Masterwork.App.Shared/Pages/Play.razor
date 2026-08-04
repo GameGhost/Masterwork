@@ -223,7 +223,7 @@ else
     private string DefaultSaveName()
     {
         var townName = State.Session?.Current.Variables.TryGetValue("townname", out var v) == true ? v.AsString() : "Session";
-        return $"{townName} — {DateTime.Now.ToString("yyyy-MM-dd", AppStrings.EffectiveCulture)}";
+        return $"{townName} - {DateTime.Now.ToString("yyyy-MM-dd", AppStrings.EffectiveCulture)}";
     }
 
     private async Task SaveAndQuit(string name)

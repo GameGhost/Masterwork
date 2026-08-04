@@ -3,7 +3,6 @@
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 
-@inject ISaveStore SaveStore
 @inject NavigationManager Nav
 @inject IMainMenuTheme? Theme
 
@@ -36,7 +35,7 @@
 
         <nav class="mws-main-menu-buttons">
             <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
-            <button type="button" disabled="@(!_hasAnySave)" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
+            <button type="button" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
             <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
             <button type="button" disabled title="@AppStrings.Common_ComingSoon" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
         </nav>
@@ -51,21 +50,5 @@
 }
 
 @code {
-    private bool _hasAnySave;
     private bool _showOptions;
-
-    protected override async Task OnInitializedAsync()
-    {
-        // ISaveStore may use IJSRuntime (browser localStorage), which throws if called during the
-        // server-side static prerender pass. This component gets re-initialized once the
-        // WebAssembly client takes over, when RendererInfo.IsInteractive is true and the check below
-        // stops skipping.
-        if (!RendererInfo.IsInteractive)
-        {
-            return;
-        }
-
-        var saves = await SaveStore.ListAsync();
-        _hasAnySave = saves.Count > 0;
-    }
 }
