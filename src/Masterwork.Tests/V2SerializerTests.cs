@@ -119,6 +119,43 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void LetRandomValues_MixedTemplateChoice_IsQuoted()
+    {
+        // Regression: StringValueToExpr's fallthrough returned a mixed literal-text-plus-{var}
+        // string unquoted, producing invalid expr syntax once the shuffled-array literal reached
+        // an actual '{' character — "Unexpected trailing input: '{'" at load time. Real-world
+        // crash: Fear of the Unknown's JunkPalaceSignIn passage, whose either() call mixes a
+        // concatenation-built choice ("...center of " + townname + " and met with " + warden)
+        // with two plain-literal choices. The mixed choice must stay a quoted string (braces
+        // survive as literal characters, interpolated later when the temp var is displayed via
+        // {tempVar} in a text node) — same conclusion as the other two choices, just also
+        // containing embedded {var} placeholders.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.LetNode
+                {
+                    Var = "_rnd_0",
+                    Random = new Masterwork.Extractor.VarRandom
+                    {
+                        RandomType = "choose-one",
+                        SeedKey = "P1_0",
+                        Values = ["center of {townname} and met with {warden}.", "plain choice"],
+                    },
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var expr = (string)Nodes0(d)["expr"]!;
+
+        Assert.Contains("\"center of {townname} and met with {warden}.\"", expr);
+        Assert.Contains("\"plain choice\"", expr);
+    }
+
+    [Fact]
     public void OrphanSectionBody_EmitsHubCardStyle()
     {
         // A hub location without its own heading (hubDetails with no preceding hubTitle) still gets

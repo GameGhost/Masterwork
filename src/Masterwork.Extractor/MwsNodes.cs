@@ -944,6 +944,23 @@ public static partial class MwsExprHelper
             return $"\"{EscapeStr(s)}\"";
         }
 
+        // A mixed string containing literal text AND {var} placeholders (but not the bare
+        // single-var wrapper handled above) is a display-text-style template, e.g. one choice of
+        // an either() call whose other arg was a concatenation ("...center of " + townname + "...").
+        // It is a VALUE to be stored (later interpolated at text-render time when the variable
+        // holding it is displayed), not runtime-interpolatable expr code — the engine's expr
+        // grammar has no {var} interpolation at all. Quote it so the braces survive as literal
+        // characters in the array element instead of producing invalid, unparseable expr syntax.
+        // Real-world crash: Fear of the Unknown's JunkPalaceSignIn passage, whose either() choices
+        // are picked via a LetNode and displayed later via {tempVar} — same root bug shape as
+        // VarSetStringToExpr's fallthrough (see PassageBodyVisitor's TryExtractExprConcat comment),
+        // but this one only ever feeds a stored VALUE, so quoting (not VarMath-style rerouting) is
+        // the correct fix here.
+        if (s.Contains('{'))
+        {
+            return $"\"{EscapeStr(s)}\"";
+        }
+
         return s;
     }
 
