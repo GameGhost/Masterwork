@@ -39,6 +39,15 @@ public sealed partial class RestextCollector
     private readonly Dictionary<string, string> _curatedValueToKey;
     private readonly HashSet<string> _curatedUsedKeys = new(StringComparer.Ordinal);
 
+    // Vars referenced via {varName} in a display field that DIDN'T get its own restext entry —
+    // specifically a bare single-var value like text.value: '{tempVar}' (no surrounding static
+    // text, so WalkTextNode/ExtractField deliberately skip extracting it — nothing to translate on
+    // its own). BuildTemplateVarNames' normal scan only sees {varName} placeholders that survive
+    // INTO an extracted entry's value, so a var consumed only this way would otherwise look
+    // "never displayed" to RestoreNonTemplateAssignments and get reverted to a raw literal even
+    // though it plainly IS shown to the player. See RegisterRawPlaceholderVarNames.
+    private readonly HashSet<string> _rawPlaceholderVarNames = new(StringComparer.Ordinal);
+
     // Tracks keys newly created from assign/let node extractions (not display-text fields).
     // Used by RestoreNonTemplateAssignments to prune entries whose variable is never used in templates.
     private sealed class AssignedKeyRecord(string value)
@@ -312,11 +321,12 @@ public sealed partial class RestextCollector
     }
 
     // Scans all extracted restext values for {varName} placeholders and returns the set of
-    // variable names that appear in display-text templates.
+    // variable names that appear in display-text templates. Also includes vars seen only via a
+    // bare single-var display field that never became its own entry (see _rawPlaceholderVarNames).
     // Skips non-template passages (e.g. notext developer docs) to avoid false positives.
     private HashSet<string> BuildTemplateVarNames()
     {
-        var varNames = new HashSet<string>(StringComparer.Ordinal);
+        var varNames = new HashSet<string>(_rawPlaceholderVarNames, StringComparer.Ordinal);
         foreach (var (fileName, entries) in _passages)
         {
             if (_nonTemplateFileNames.Contains(fileName))
@@ -326,20 +336,27 @@ public sealed partial class RestextCollector
 
             foreach (var entry in entries)
             {
-                foreach (Match m in PlaceholderRegex().Matches(entry.Value))
-                {
-                    var content = m.Value[1..^1]; // strip { }
-                    if (content.StartsWith("icon:", StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    var split = content.IndexOfAny(['.', '[']);
-                    varNames.Add(split >= 0 ? content[..split] : content);
-                }
+                RegisterPlaceholderVarNames(entry.Value, varNames);
             }
         }
         return varNames;
+    }
+
+    // Extracts the {varName} (or {varName.prop}/{varName[0]}) part of each placeholder in `text`
+    // into `varNames`. {icon:slug} placeholders are skipped — not a variable reference.
+    private static void RegisterPlaceholderVarNames(string text, HashSet<string> varNames)
+    {
+        foreach (Match m in PlaceholderRegex().Matches(text))
+        {
+            var content = m.Value[1..^1]; // strip { }
+            if (content.StartsWith("icon:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var split = content.IndexOfAny(['.', '[']);
+            varNames.Add(split >= 0 ? content[..split] : content);
+        }
     }
 
     private void ScanConditionLiteralsInNodeList(object? listObj)
@@ -620,9 +637,20 @@ public sealed partial class RestextCollector
     private void WalkTextNode(Dictionary<string, object?> d)
     {
         // v0.2: value field (combined template + inline style applied by V2Serializer)
-        if (d.TryGetValue("value", out var val) && val is string vs && !IsSingleVarRef(vs))
+        if (d.TryGetValue("value", out var val) && val is string vs)
         {
-            d["value"] = AllocKey(vs);
+            if (IsSingleVarRef(vs))
+            {
+                // No static text alongside the placeholder — nothing of its own to translate, so
+                // this field never gets a restext entry. But the var IS being displayed, so record
+                // it directly (see _rawPlaceholderVarNames) instead of relying on an entry that
+                // will never exist.
+                RegisterPlaceholderVarNames(vs, _rawPlaceholderVarNames);
+            }
+            else
+            {
+                d["value"] = AllocKey(vs);
+            }
         }
     }
 
@@ -636,9 +664,18 @@ public sealed partial class RestextCollector
 
     private void ExtractField(Dictionary<string, object?> d, string field)
     {
-        if (d.TryGetValue(field, out var val) && val is string s && !string.IsNullOrEmpty(s) && !IsSingleVarRef(s))
+        if (d.TryGetValue(field, out var val) && val is string s && !string.IsNullOrEmpty(s))
         {
-            d[field] = AllocKey(s);
+            if (IsSingleVarRef(s))
+            {
+                // See WalkTextNode's identical branch: no restext entry will exist for this field,
+                // but the var it references is still being displayed here.
+                RegisterPlaceholderVarNames(s, _rawPlaceholderVarNames);
+            }
+            else
+            {
+                d[field] = AllocKey(s);
+            }
         }
     }
 

@@ -158,4 +158,41 @@ public class RestextCollectorTests
             File.Delete(tempPath);
         }
     }
+
+    [Fact]
+    public void RestoreNonTemplateAssignments_ShuffledChoicesConsumedByBareVarTextNode_StayRestextified()
+    {
+        // Regression: a let node's shuffled-array choices are provisionally restext-extracted, then
+        // reverted by RestoreNonTemplateAssignments unless the let var appears as a {varName}
+        // placeholder in some ALREADY-EXTRACTED restext entry. But a text node whose value is
+        // EXACTLY '{tempVar}' (no surrounding static text) never gets its own entry — WalkTextNode
+        // deliberately skips bare single-var values, there being nothing of its own to translate —
+        // so the var was invisible to that check even though it's plainly displayed. Real-world
+        // bug: Fear of the Unknown's JunkPalaceSignIn and A Time of War's BattleTime, both
+        // text(macros1.either(...)) — the picked choice is shown via a bare {tempVar} text node,
+        // and every one of the either() choices silently reverted to raw literals.
+        var collector = new RestextCollector();
+        var dict = new Dictionary<string, object?>
+        {
+            ["nodes"] = new List<Dictionary<string, object?>>
+            {
+                new()
+                {
+                    ["type"] = "let",
+                    ["var"] = "_rnd_0",
+                    ["expr"] = """["First choice text here", "Second choice text here"].shuffled("P1_0")[0]""",
+                },
+                new() { ["type"] = "text", ["value"] = "{_rnd_0}" },
+            },
+        };
+
+        collector.CollectPassage("P1", "000-P1.mws.yaml", dict);
+        collector.RestoreNonTemplateAssignments();
+
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        var expr = (string)nodes[0]["expr"]!;
+        Assert.Contains("restext://", expr);
+        Assert.DoesNotContain("First choice text here", expr);
+        Assert.DoesNotContain("Second choice text here", expr);
+    }
 }
