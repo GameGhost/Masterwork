@@ -1001,7 +1001,16 @@ public static partial class MwsExprHelper
             return $"\"{EscapeStr(s)}\"";
         }
 
-        return s;
+        // A mixed string containing literal text AND {var} placeholders (but not the bare
+        // single-var wrapper handled above) is a display-text-style template — e.g. a
+        // concatenation like "The " + townname + " " + either(...). Now that the expression
+        // grammar supports {var} interpolation inside quoted string literals (see
+        // ExpressionEvaluator.ExpandTemplate), quoting it here is both crash-free AND
+        // semantically correct: the braces are interpolated at evaluation time, not frozen as
+        // literal text. This is also what makes the whole template eligible for restext
+        // extraction as its own translatable resource (RestextCollector.WalkExprNode's quoted-
+        // literal case) — see StringConcatWithEither_EmitsLetThenTemplate's regression comment.
+        return $"\"{EscapeStr(s)}\"";
     }
 
     public static string VarSetValueToExpr(object? val) => val switch

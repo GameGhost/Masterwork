@@ -1796,13 +1796,20 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void StringConcatWithEither_EmitsLetThenVarMath()
+    public void StringConcatWithEither_EmitsLetThenTemplate()
     {
-        // Same bug shape as RandomPlusVar_EmitsLetThenVarMath/ThreeOrMoreVarSumChain_EmitsVarMath,
-        // a third code path: a string concatenation mixing literal text, a plain variable, and an
-        // either() call used to emit VarSets with a {var}-braced display template, invalid inside
-        // an expr field. Real-world crash: Fear of the Unknown's FearoftheUnknownStart/
-        // ProperLetterHeading "newspaper" assign (Vars.newspaper = "The " + Vars.townname + " " +
+        // A string concatenation mixing literal text, a plain variable, and an either() call
+        // builds a {var}-braced VarSets display template (same as the plain InlineEither_
+        // EmitsLetThenTemplate case, just via VarSets instead of a TextNode). This used to crash
+        // ("Unexpected trailing input: '{'") because the expression grammar had no {var}
+        // interpolation and V2Serializer's VarSetStringToExpr left mixed-content strings
+        // unquoted — both now fixed (interpolation added to ExpressionEvaluator; StringValueToExpr/
+        // VarSetStringToExpr quote mixed-brace content), and using VarSets here (not VarMath) is
+        // what lets RestextCollector promote the whole combining template to its own translatable
+        // restext entry, with the individual either() choices staying translatable too since their
+        // temp var now appears as a placeholder inside that same entry's value.
+        // Real-world source: Fear of the Unknown's FearoftheUnknownStart/ProperLetterHeading
+        // "newspaper" assign (Vars.newspaper = "The " + Vars.townname + " " +
         // macros1.either("Ledger", "Gazette", ...)).
         var passages = Extract("""
             private void passage1_Init()
@@ -1821,14 +1828,12 @@ public class ExtractorTests
         Assert.Equal("choose-one", let.Random!.RandomType);
 
         var effect = nodes.OfType<EffectNode>().First();
-        Assert.Null(effect.VarSets);
-        Assert.NotNull(effect.VarMath);
-        var newspaperMath = effect.VarMath!["newspaper"];
-        Assert.DoesNotContain("{", newspaperMath);
-        Assert.DoesNotContain("}", newspaperMath);
-        Assert.Contains("townname", newspaperMath);
-        Assert.Contains(let.Var, newspaperMath);
-        Assert.StartsWith("= \"The \"", newspaperMath);
+        Assert.Null(effect.VarMath);
+        Assert.NotNull(effect.VarSets);
+        var newspaperTemplate = effect.VarSets!["newspaper"] as string;
+        Assert.Contains("{townname}", newspaperTemplate);
+        Assert.Contains($"{{{let.Var}}}", newspaperTemplate);
+        Assert.StartsWith("The ", newspaperTemplate);
     }
 
     [Fact]

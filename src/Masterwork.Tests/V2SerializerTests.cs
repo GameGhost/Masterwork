@@ -156,6 +156,35 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void VarSets_MixedTemplateValue_IsQuoted()
+    {
+        // Regression: VarSetStringToExpr's fallthrough used to return a mixed literal-text-plus-
+        // {var} string unquoted — "Unexpected trailing input: '{'" at load time, since the
+        // resulting bare braces aren't valid expr syntax. Real-world crash: Fear of the Unknown's
+        // FearoftheUnknownStart/ProperLetterHeading "newspaper" assign (Vars.newspaper = "The " +
+        // Vars.townname + " " + macros1.either(...)), extracted as a VarSets {var}-braced template.
+        // Now that ExpressionEvaluator interpolates {expr} inside quoted string literals, quoting
+        // this is correct (not just crash-avoidance) — see StringLiteral_MixedTextAndMultiple
+        // PlaceholdersInterpolates in ExpressionEvaluatorTests for the runtime half of this fix.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.EffectNode
+                {
+                    VarSets = new() { ["newspaper"] = "The {townname} {_rnd_0}" },
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var expr = (string)Nodes0(d)["expr"]!;
+
+        Assert.Equal("\"The {townname} {_rnd_0}\"", expr);
+    }
+
+    [Fact]
     public void OrphanSectionBody_EmitsHubCardStyle()
     {
         // A hub location without its own heading (hubDetails with no preceding hubTitle) still gets
