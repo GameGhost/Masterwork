@@ -1017,17 +1017,26 @@ public class PassageBodyVisitor
             return new EffectNode { VarSets = new() { [varName!] = $"{{{srcVar}}}" } };
         }
 
-        // String concatenation → template string: "The " + townname + " " + either([...])
+        // String concatenation → bare expression: "The " + townname + " " + either([...])
         // or title + " " + nameA.  Gate: all nodes are recognisable AND at least one is a
         // string literal or either() call (to avoid consuming arithmetic binary expressions).
+        // Must go through VarMath (a genuine bare expr), not VarSets' {var}-braced display-
+        // template path — same bug shape as RandomPlusVar_EmitsLetThenVarMath's own regression
+        // comment (real-world crash there: Cost of Disease's S5Fate2.mws.yaml hearttotal assign;
+        // here: Fear of the Unknown's FearoftheUnknownStart/ProperLetterHeading newspaper assign).
+        // RestextCollector's "template string" heuristic would otherwise silently promote the
+        // whole braced string to a restext:// key, and RestextResolver substitutes it back in
+        // verbatim at load time with the braces still there — the engine's expression parser has
+        // no {var} interpolation at all (that's a display-text-only mechanism), so it just chokes
+        // on the leading '{' as unexpected trailing input.
         if (right is BinaryExpressionSyntax concatBin && concatBin.OperatorToken.Text == "+"
             && IsTemplateConcatExpr(right) && ContainsStringOrEither(right))
         {
             var concatLets = new List<LetNode>();
-            var concatTmpl = new StringBuilder();
-            TryExtractTemplateConcat(right, concatLets, concatTmpl);
+            var concatParts = new List<string>();
+            TryExtractExprConcat(right, concatLets, concatParts);
             preamble = concatLets.Count > 0 ? concatLets.Cast<MwsNode>().ToList() : null;
-            return new EffectNode { VarSets = new() { [varName!] = concatTmpl.ToString() } };
+            return new EffectNode { VarMath = new() { [varName!] = $"= {string.Join(" + ", concatParts)}" } };
         }
 
         // int.Parse(this.Vars.X) + N  →  var_math "+N"
@@ -1711,6 +1720,45 @@ public class PassageBodyVisitor
         {
             TryExtractTemplateConcat(bin.Left, lets, template);
             TryExtractTemplateConcat(bin.Right, lets, template);
+        }
+    }
+
+    // Same walk as TryExtractTemplateConcat, but for a VarMath assign target instead of a VarSets
+    // one: builds a genuine bare expression (quoted string literals joined with " + " to bare
+    // identifiers) instead of a {var}-braced display template. either() calls still produce a let
+    // node exactly the same way — only how the concatenation itself is represented differs. See
+    // the VarSets/VarMath call site's own comment for why VarSets is wrong for this.
+    // Pre-condition: IsTemplateConcatExpr(expr) == true (all leaves are known types).
+    private void TryExtractExprConcat(ExpressionSyntax expr, List<LetNode> lets, List<string> parts)
+    {
+        expr = UnwrapParens(expr);
+
+        if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            parts.Add($"\"{MwsExprHelper.EscapeStr(lit.Token.ValueText)}\"");
+            return;
+        }
+        if (IsVarAccess(expr, out var varName))
+        {
+            parts.Add(varName!);
+            return;
+        }
+        if (expr is InvocationExpressionSyntax inv && GetSimpleMethodName(inv) == "either")
+        {
+            var values = ExtractMacroArgs(inv);
+            var rndName = $"_rnd_{_passageName}_{_varRandomSeq++}";
+            lets.Add(new LetNode
+            {
+                Var = rndName,
+                Random = new VarRandom { RandomType = "choose-one", Values = values },
+            });
+            parts.Add(rndName);
+            return;
+        }
+        if (expr is BinaryExpressionSyntax bin && bin.OperatorToken.Text == "+")
+        {
+            TryExtractExprConcat(bin.Left, lets, parts);
+            TryExtractExprConcat(bin.Right, lets, parts);
         }
     }
 

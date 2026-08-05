@@ -1796,6 +1796,42 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void StringConcatWithEither_EmitsLetThenVarMath()
+    {
+        // Same bug shape as RandomPlusVar_EmitsLetThenVarMath/ThreeOrMoreVarSumChain_EmitsVarMath,
+        // a third code path: a string concatenation mixing literal text, a plain variable, and an
+        // either() call used to emit VarSets with a {var}-braced display template, invalid inside
+        // an expr field. Real-world crash: Fear of the Unknown's FearoftheUnknownStart/
+        // ProperLetterHeading "newspaper" assign (Vars.newspaper = "The " + Vars.townname + " " +
+        // macros1.either("Ledger", "Gazette", ...)).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.newspaper = "The " + this.Vars.townname + " " + this.macros1.either("Ledger", "Gazette", "Mercury");
+                yield break;
+            }
+            """);
+
+        var nodes = passages[0].Nodes;
+        var let = nodes.OfType<LetNode>().First();
+        Assert.Equal("choose-one", let.Random!.RandomType);
+
+        var effect = nodes.OfType<EffectNode>().First();
+        Assert.Null(effect.VarSets);
+        Assert.NotNull(effect.VarMath);
+        var newspaperMath = effect.VarMath!["newspaper"];
+        Assert.DoesNotContain("{", newspaperMath);
+        Assert.DoesNotContain("}", newspaperMath);
+        Assert.Contains("townname", newspaperMath);
+        Assert.Contains(let.Var, newspaperMath);
+        Assert.StartsWith("= \"The \"", newspaperMath);
+    }
+
+    [Fact]
     public void ChainedTernaryEquality_EmitsSwitchNode()
     {
         var passages = Extract("""
