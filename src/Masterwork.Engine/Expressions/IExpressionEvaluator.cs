@@ -19,4 +19,14 @@ public interface IExpressionEvaluator
     /// for arrays of custom types use <c>"property: pattern"</c>.
     /// </summary>
     bool MatchesPattern(StoryValue value, string pattern);
+
+    /// <summary>
+    /// Replaces each <c>{expr}</c> placeholder in <paramref name="template"/> with the stringified
+    /// result of evaluating <c>expr</c> against <paramref name="ctx"/>. A <c>{icon:slug}</c>
+    /// placeholder is left untouched (resolved later, at text-render time, not here). Shared by
+    /// display-text templates (<see cref="VariableStore.ExpandTemplate"/>) and quoted string
+    /// literals inside expressions, which support the same <c>{expr}</c> syntax — see
+    /// <see cref="Expr.StringLiteral"/>'s evaluation in <see cref="ExpressionEvaluator"/>.
+    /// </summary>
+    string ExpandTemplate(string template, IStoryEvalContext ctx);
 }

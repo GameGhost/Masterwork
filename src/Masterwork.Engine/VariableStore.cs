@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
 using Masterwork.Engine.Expressions;
 using Masterwork.Engine.Session;
@@ -10,7 +9,7 @@ namespace Masterwork.Engine;
 /// variables (passage-scoped, cleared before each render). Implements <see cref="IStoryEvalContext"/>
 /// directly so it can be handed straight to <see cref="ExpressionEvaluator"/>.
 /// </summary>
-public sealed partial class VariableStore : IStoryEvalContext
+public sealed class VariableStore : IStoryEvalContext
 {
     private readonly Dictionary<string, StoryValue> _session = new(StringComparer.Ordinal);
     private readonly Dictionary<string, StoryValue> _let = new(StringComparer.Ordinal);
@@ -90,19 +89,12 @@ public sealed partial class VariableStore : IStoryEvalContext
     /// <summary>
     /// Resolves <c>{varName}</c>, <c>{var.property}</c>, <c>{arr[N]}</c>, <c>{arr[^1]}</c> via the
     /// expression evaluator. <c>{icon:slug}</c> references are passed through unchanged for the
-    /// App to render.
+    /// App to render. Delegates to <see cref="IExpressionEvaluator.ExpandTemplate"/> — the same
+    /// logic also backs quoted string literals inside expressions (see
+    /// <c>Expr.StringLiteral</c>'s evaluation), so display-text templates and expr-context
+    /// template strings share one implementation.
     /// </summary>
-    public string ExpandTemplate(string template) =>
-        PlaceholderRegex().Replace(template, m =>
-        {
-            var content = m.Groups[1].Value;
-            if (content.StartsWith("icon:", StringComparison.Ordinal))
-            {
-                return m.Value;
-            }
-
-            return _evaluator.Evaluate(content, this).AsString();
-        });
+    public string ExpandTemplate(string template) => _evaluator.ExpandTemplate(template, this);
 
     // Canonical zero per VarKind (empty string, 0, false, empty record, empty array) whenever
     // def.Default isn't set — see VarDef.Default's remarks on when it's set at all.
@@ -115,7 +107,4 @@ public sealed partial class VariableStore : IStoryEvalContext
             StoryValue.Of(new List<StoryValue>()),
         _ => StoryValue.Of(def.Default as string ?? ""), // VarKind.String
     };
-
-    [GeneratedRegex(@"\{([^{}]*)\}")]
-    private static partial Regex PlaceholderRegex();
 }

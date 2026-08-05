@@ -308,6 +308,57 @@ public class ExpressionEvaluatorTests
         Assert.Equal(3L, Eval("scores.countif(\">= 3\")", Vars(("scores", scores))).AsInt());
     }
 
+    // ── String literal interpolation ────────────────────────────────────────
+    // Quoted string literals support the same {expr} placeholder syntax as display-text templates
+    // (VariableStore.ExpandTemplate) — a combining assign like newspaper = "The {townname} {name}"
+    // evaluates the whole sentence in one place instead of needing a hand-built '+' chain.
+
+    [Fact]
+    public void StringLiteral_NoBraces_IsLiteral() =>
+        Assert.Equal("plain text", Eval("\"plain text\"").AsString());
+
+    [Fact]
+    public void StringLiteral_SingleVarPlaceholder_Interpolates() =>
+        Assert.Equal("Riverside", Eval("\"{townname}\"", Vars(("townname", StoryValue.Of("Riverside")))).AsString());
+
+    [Fact]
+    public void StringLiteral_MixedTextAndMultiplePlaceholders_Interpolates() =>
+        Assert.Equal(
+            "The Riverside Ledger",
+            Eval("\"The {townname} {name}\"", Vars(("townname", StoryValue.Of("Riverside")), ("name", StoryValue.Of("Ledger")))).AsString());
+
+    [Fact]
+    public void StringLiteral_PlaceholderIsFullExpression_NotJustBareVar() =>
+        // ExpandTemplate evaluates the whole {…} content as an expression, not just a variable
+        // lookup — matches VariableStoreTests' equivalent coverage for display-text templates
+        // (e.g. {elim[0]}, {entry.player_name}).
+        Assert.Equal("6", Eval("\"{a + b}\"", Vars(("a", StoryValue.Of(2L)), ("b", StoryValue.Of(4L)))).AsString());
+
+    [Fact]
+    public void StringLiteral_IconPlaceholder_PassesThroughUnexpanded() =>
+        // {icon:slug} is resolved later at text-render time, not by the expression evaluator —
+        // same as VariableStoreTests.ExpandTemplate_IconPlaceholder_PassesThrough for display text.
+        Assert.Equal("{icon:angrymob_icon}", Eval("\"{icon:angrymob_icon}\"").AsString());
+
+    [Fact]
+    public void StringLiteral_Interpolation_ReflectsCurrentContextEachEvaluation()
+    {
+        // Same cached AST, different ctx each call — interpolation must re-evaluate against the
+        // CURRENT variable value, not bake in whatever was live at parse/first-eval time.
+        var evaluator = new ExpressionEvaluator();
+        var expr = evaluator.GetOrParse("\"Hello {name}\"");
+        Assert.Equal("Hello Alice", evaluator.Evaluate(expr, new FakeExprContext(Vars(("name", StoryValue.Of("Alice"))))).AsString());
+        Assert.Equal("Hello Bob", evaluator.Evaluate(expr, new FakeExprContext(Vars(("name", StoryValue.Of("Bob"))))).AsString());
+    }
+
+    [Fact]
+    public void StringLiteral_InsideConcatenation_Interpolates() =>
+        // The exact "newspaper" shape: a mixed-template quoted literal combined via '+' with a
+        // separately-computed value (e.g. a random-chosen name fragment).
+        Assert.Equal(
+            "The Riverside Gazette",
+            Eval("\"The {townname} \" + name", Vars(("townname", StoryValue.Of("Riverside")), ("name", StoryValue.Of("Gazette")))).AsString());
+
     private static List<StoryValue> Arr(params string[] values) => values.Select(StoryValue.Of).ToList();
     private static List<StoryValue> IntArr(params long[] values) => values.Select(StoryValue.Of).ToList();
 }

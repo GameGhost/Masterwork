@@ -305,6 +305,40 @@ String literals in condition expressions may be `restext://` URIs when the strin
 - if: warwinner == "restext://Common_026"  # en-US.restext:33
 ```
 
+#### String Literal Interpolation
+
+A double-quoted expression string literal supports the same `{expr}` placeholder syntax as
+display-text templates (§3 Variable References / Array Element Access) — each `{...}` is evaluated
+as a full expression against the current variable scope and the stringified result is spliced in.
+Unlike display text, `{icon:slug}` inside an expression string literal is left untouched (icon
+resolution happens later, at text-render time, not during expression evaluation) — everything else
+about the two mechanisms is identical, including that indexing/property-access chains and even
+arithmetic are valid inside the braces, not just a bare variable name.
+
+This is what makes a combining assign — building one variable's value out of several pieces —
+directly expressible as a template, instead of a hand-built `+` concatenation:
+
+```yaml
+- type: 'assign'
+  var: 'newspaper'
+  expr: '"The {townname} {newspapername}"'
+```
+
+Combined with a `restext://` reference (see §3 i18n String References), the *whole* combining
+template becomes a translatable resource, not just its individual pieces — a locale can restructure
+word order, drop/add an article, etc., since the template is resolved from `.restext` before
+`{townname}`/`{newspapername}` are interpolated:
+
+```yaml
+- type: 'assign'
+  var: 'newspaper'
+  expr: '"restext://Common_012"'  # en-US.restext: The {townname} {newspapername}
+```
+
+Interpolation is re-evaluated on every evaluation of the expression (not baked in once at parse
+time), so it always reflects the current value of whatever variables it references — the same way
+a display-text template re-resolves on every render.
+
 ### Variable References
 
 Plain identifiers refer to the current scope. Dot notation accesses properties on custom-typed values:

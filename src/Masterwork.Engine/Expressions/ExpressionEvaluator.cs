@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -7,7 +8,7 @@ namespace Masterwork.Engine.Expressions;
 /// <inheritdoc cref="IExpressionEvaluator"/> Expressions are parsed once (see <see cref="GetOrParse"/>)
 /// and cached by source text, so repeated evaluation is a pure AST walk with no re-parsing cost.
 /// </summary>
-public sealed class ExpressionEvaluator : IExpressionEvaluator
+public sealed partial class ExpressionEvaluator : IExpressionEvaluator
 {
     private readonly IExpressionParser _parser;
     private readonly ILogger<ExpressionEvaluator> _logger;
@@ -50,7 +51,7 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
     public StoryValue Evaluate(Expr expr, IStoryEvalContext ctx) => expr switch
     {
         Expr.IntLiteral n => StoryValue.Of(n.Value),
-        Expr.StringLiteral s => StoryValue.Of(s.Value),
+        Expr.StringLiteral s => StoryValue.Of(ExpandTemplate(s.Value, ctx)),
         Expr.BoolLiteral b => StoryValue.Of(b.Value),
         Expr.VarRef v => ctx.GetVariable(v.Name),
         Expr.PropertyAccess p => EvalProperty(p, ctx),
@@ -64,6 +65,27 @@ public sealed class ExpressionEvaluator : IExpressionEvaluator
         Expr.RecordLiteral r => EvalRecordLiteral(r, ctx),
         _ => throw new StoryEvalException($"Unhandled expression node: {expr.GetType().Name}"),
     };
+
+    /// <inheritdoc/>
+    // Quoted string literals go through this same expansion (see Evaluate's Expr.StringLiteral
+    // case), so a combining assign like newspaper = "The {townname} {newspapername}" evaluates the
+    // full sentence in one place instead of needing a bare '+' concatenation built by hand — each
+    // {expr} is evaluated fresh against the CURRENT ctx, so re-evaluating the same literal (e.g. on
+    // a re-render) always reflects live variable values, not a value baked in at parse time.
+    public string ExpandTemplate(string template, IStoryEvalContext ctx) =>
+        TemplatePlaceholderRegex().Replace(template, m =>
+        {
+            var content = m.Groups[1].Value;
+            if (content.StartsWith("icon:", StringComparison.Ordinal))
+            {
+                return m.Value;
+            }
+
+            return Evaluate(content, ctx).AsString();
+        });
+
+    [GeneratedRegex(@"\{([^{}]*)\}")]
+    private static partial Regex TemplatePlaceholderRegex();
 
     private StoryValue EvalProperty(Expr.PropertyAccess p, IStoryEvalContext ctx)
     {
