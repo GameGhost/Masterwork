@@ -92,4 +92,81 @@ public class LoadedModuleContentTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // Regression test for the real-world bug this override fixes: a module's own raw extracted
+    // content carried a stray Begins-Here tag (from the original Cradle source) on a dead passage,
+    // silently hijacking session start away from the module's real, manifest-declared entry point.
+    [Fact]
+    public async Task BuildAsync_ManifestEntry_OverridesBeginsHereTag()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-content-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "assets"));
+        File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+            id: 'test.module'
+            title: 'Test Module'
+            version: '1.0.0'
+            entry: 'RealStart'
+            """);
+        // A decoy Begins-Here passage, standing in for the kind of stray source-carried tag that
+        // caused the real bug — the manifest's entry: must win over it.
+        File.WriteAllText(Path.Combine(dir, "001-Start.mws.yaml"), """
+            format: 'mws/0.3'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'hub'
+            nodes: []
+            """);
+        File.WriteAllText(Path.Combine(dir, "002-RealStart.mws.yaml"), """
+            format: 'mws/0.3'
+            passage_id: 'RealStart'
+            layout: 'hub'
+            nodes: []
+            """);
+
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets);
+
+            Assert.Equal("RealStart", loaded.Module.StartPassageId);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BuildAsync_ManifestEntry_UnknownPassage_FallsBackToBeginsHereAndWarns()
+    {
+        var dir = MakeSourceDirectory(includeStyle: false);
+        File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+            id: 'test.module'
+            title: 'Test Module'
+            version: '1.0.0'
+            entry: 'DoesNotExist'
+            """);
+
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets);
+
+            Assert.Equal("Start", loaded.Module.StartPassageId);
+            Assert.Contains(loaded.Module.Warnings.Items, w => w.Kind == "invalid_manifest_entry");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

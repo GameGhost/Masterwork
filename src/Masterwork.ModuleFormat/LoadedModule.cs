@@ -5,7 +5,14 @@ namespace Masterwork.ModuleFormat;
 /// locale dictionary, and any warnings accumulated while loading. Built by
 /// <see cref="Masterwork.ModuleFormat.ModuleLoader"/>.
 /// </summary>
-public sealed class LoadedModule
+/// <remarks>
+/// A record (not a plain class) specifically so <c>LoadedModuleContent.BuildAsync</c> (Masterwork.App.Shared)
+/// can produce a copy with <see cref="StartPassageId"/> overridden via <c>with</c> — the least
+/// invasive way to let <c>manifest.yaml</c>'s <c>entry:</c> field (see <see cref="ModuleManifest.Entry"/>)
+/// take priority over the <c>Begins-Here</c> tag scan below without threading manifest data through
+/// <see cref="ModuleLoader"/>'s own multiple call sites.
+/// </remarks>
+public sealed record LoadedModule
 {
     /// <summary>All passages, keyed by <c>passage_id</c>.</summary>
     public required IReadOnlyDictionary<string, MwsPassageDoc> Passages { get; init; }

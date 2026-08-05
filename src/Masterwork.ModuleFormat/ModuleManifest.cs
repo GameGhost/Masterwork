@@ -82,10 +82,12 @@ public sealed record ModuleManifest
     public ModuleInfo? Info { get; init; }
 
     /// <summary>
-    /// Entry passage id (masterwork-plan §9), if declared. Not yet consumed by
-    /// <see cref="ModuleLoader"/>, which still resolves the start passage via the
-    /// <c>Begins-Here</c> tag — exposed here for callers (e.g. the future Editor) that want to
-    /// show or validate the declared entry point.
+    /// Entry passage id (masterwork-plan §9), if declared. Authoritative over the <c>Begins-Here</c>
+    /// tag scan <see cref="ModuleLoader"/> falls back to — <c>LoadedModuleContent.BuildAsync</c>
+    /// (Masterwork.App.Shared) overrides <see cref="LoadedModule.StartPassageId"/> with this value
+    /// when it names a real passage, since <see cref="ModuleLoader"/> itself has no manifest
+    /// awareness to consume it directly. Declared by every real module's manifest today; the tag
+    /// scan remains only as a fallback for a module that omits <c>entry:</c>.
     /// </summary>
     public string? Entry { get; init; }
 
