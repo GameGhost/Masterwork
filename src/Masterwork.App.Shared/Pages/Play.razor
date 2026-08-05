@@ -44,13 +44,21 @@ else
             else
             {
                 <div class="mws-dialog-overlay">
-                    <div class="mws-dialog mws-nav-error-dialog">
+                    @* mws-dialog--sm alongside mws-nav-error-dialog (not instead of) — this dialog
+                       never got its own theme treatment, silently falling back to app.css's plain
+                       white .mws-dialog background while still inheriting the theme's light body
+                       text color, rendering almost unreadable. Every other confirm-style dialog in
+                       the app already combines mws-dialog--sm with its own distinguishing class the
+                       same way (see ContinueList.razor/StartNewGame.razor); mws-nav-error-dialog is
+                       kept for the exception-detail-specific styling hook (see app.css's
+                       .mws-nav-error-detail), not removed. *@
+                    <div class="mws-dialog mws-dialog--sm mws-nav-error-dialog">
                         <h3>@AppStrings.Play_NavErrorTitle</h3>
                         <p>@AppStrings.Play_NavErrorBody</p>
                         <p class="mws-nav-error-detail">@ex.Message</p>
                         <div class="mws-dialog-actions">
-                            <button type="button" @onclick="RecoverFromNavError">@AppStrings.Play_NavErrorReturnButton</button>
-                            <button type="button" class="mws-quit-button" @onclick="() => _showQuitFromNavError = true">@AppStrings.OptionsDialog_Quit</button>
+                            <button type="button" class="mws-btn-sm style-btn-green" @onclick="RecoverFromNavError">@AppStrings.Play_NavErrorReturnButton</button>
+                            <button type="button" class="mws-btn-sm style-btn-red mws-quit-button" @onclick="() => _showQuitFromNavError = true">@AppStrings.OptionsDialog_Quit</button>
                         </div>
                     </div>
                 </div>
