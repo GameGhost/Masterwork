@@ -619,19 +619,26 @@ public static partial class V2Serializer
     }
 
     // True when the LAST node in `nodes` is guaranteed to fire a goto by the time it finishes —
-    // either a bare GotoNode, or an exhaustive (has an else) ConditionalNode whose every branch also
+    // either a bare GotoNode, an exhaustive (has an else) ConditionalNode whose every branch also
+    // always navigates, or an exhaustive (has a default case) SwitchNode whose every case also
     // always navigates. Earlier nodes are irrelevant to this guarantee — they just run as ordinary
     // onclick prelude (assigns, lets, whatever) — so unlike IsNavigationOnly this doesn't require the
     // whole list to be nav-only, only that it can never fall through into a click that navigates
     // nowhere. Used to convert an expand-link like Cost of Disease's HospitalVisitCheck fragments
     // (an assign followed by an exhaustive if/elseif/.../else chain where every branch ends in an
-    // abort/goto) into a link with onclick instead of a popup with no way to close it.
+    // abort/goto) into a link with onclick instead of a popup with no way to close it. The SwitchNode
+    // case covers the same idiom written as an exhaustive if/elseif/else-if-int-equality chain that
+    // ChainedTernaryEquality's own switch-folding upstream turns into a switch before this ever runs
+    // (real occurrence: Fear of the Unknown's GainFamilyPlot fragment, an assign + several guarded
+    // assigns followed by a switch on `round` with cases 1/2/default, each just a goto).
     private static bool AlwaysNavigatesToGoto(List<MwsNode> nodes) =>
         nodes.Count > 0 && nodes[^1] switch
         {
             GotoNode => true,
             ConditionalNode { Branches: var branches } when branches.Any(b => b.Else == true) =>
                 branches.All(b => AlwaysNavigatesToGoto(b.Nodes)),
+            SwitchNode { Cases: var cases } when cases.Any(c => c.Default == true) =>
+                cases.All(c => AlwaysNavigatesToGoto(c.Nodes)),
             _ => false,
         };
 

@@ -2731,6 +2731,104 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void ExpandLink_AssignThenExhaustiveSwitchOfGotos_BecomesLinkWithOnclick()
+    {
+        // Regression: Masterwork-Modules/fear-of-the-unknown/passages/00203-GainFamilyPlot.mws.yaml.
+        // Same idiom as ExpandLink_AssignThenExhaustiveIfElseOfGotos_BecomesLinkWithOnclick, but the
+        // if/elseif/else chain here (3+ branches, single Vars.X == literal condition each) gets
+        // folded into a SwitchNode by TryConvertCompoundConditionalToSwitch before this ever runs —
+        // AlwaysNavigatesToGoto must recognize an exhaustive (has a default case) SwitchNode the same
+        // way it already recognized an exhaustive ConditionalNode, or this still falls through to a
+        // popup with no okay/close button that a goto inside content can never actually trigger.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                this.Vars.mobbed = "yes";
+                if (this.Vars.round == 1)
+                {
+                    yield return base.abort(goToPassage: "Mania");
+                }
+                else if (this.Vars.round == 2)
+                {
+                    yield return base.abort(goToPassage: "Mania2");
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "Mania3");
+                }
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("link", node["type"]);
+        Assert.Equal("Click to continue...", node["label"]);
+        Assert.False(node.ContainsKey("target"));
+
+        var onclick = (List<Dictionary<string, object?>>)node["onclick"]!;
+        Assert.Equal("assign", onclick[0]["type"]);
+        Assert.Equal("switch", onclick[1]["type"]);
+
+        var cases = (List<Dictionary<string, object?>>)onclick[1]["cases"]!;
+        Assert.Equal(2, cases.Count);
+        var case1Nodes = (List<Dictionary<string, object?>>)cases[0]["nodes"]!;
+        Assert.Equal("goto", case1Nodes[0]["type"]);
+        Assert.Equal("Mania", case1Nodes[0]["target"]);
+
+        var defaultNodes = (List<Dictionary<string, object?>>)onclick[1]["default"]!;
+        Assert.Equal("goto", defaultNodes[0]["type"]);
+        Assert.Equal("Mania3", defaultNodes[0]["target"]);
+    }
+
+    [Fact]
+    public void ExpandLink_AssignThenNonExhaustiveSwitchOfGotos_StaysPopup()
+    {
+        // Guardrail mirroring ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_StaysPopup: a
+        // switch with no default case isn't provably exhaustive (an unmatched `round` value would
+        // fall through with no goto), so this must still become a popup.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click to continue...", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                this.Vars.mobbed = "yes";
+                if (this.Vars.round == 1)
+                {
+                    yield return base.abort(goToPassage: "Mania");
+                }
+                else if (this.Vars.round == 2)
+                {
+                    yield return base.abort(goToPassage: "Mania2");
+                }
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+    }
+
+    [Fact]
     public void InlineEitherInConditional_HoistsToLetBeforeConditional()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00131-HospitalVisitCheck2.mws.yaml.
