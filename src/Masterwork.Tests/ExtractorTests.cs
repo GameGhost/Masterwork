@@ -1951,6 +1951,62 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void RedundantStringIsNullOrEmpty_CollapsesIntoCompoundFalsyNegation()
+    {
+        // Regression: Fear of the Unknown's PrivateHomeTile passage (source line 34908).
+        // "bhome == 0 || bhome == "" || String.IsNullOrEmpty(bhome)" — the first two clauses were
+        // already collapsed to !bhome by the compound-falsy rule, leaving "!bhome ||
+        // String.IsNullOrEmpty(bhome)" untranslated (the engine has no "String" namespace/type at
+        // all, so it threw "Unknown variable 'String'" at evaluation time). The IsNullOrEmpty clause
+        // is fully redundant with !bhome — StoryValue.AsBool already treats "" as falsy for a
+        // string, and there's no separate "null" StoryValue variant a variable could ever hold
+        // beyond that — so it must be dropped, not translated into some real MWS call.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.bhome == 0 || this.Vars.bhome == "" || String.IsNullOrEmpty(this.Vars.bhome))
+                {
+                    this.Vars.plA = 1;
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().Single();
+        Assert.Equal("!bhome", cond.Branches[0].Condition);
+    }
+
+    [Fact]
+    public void NegatedStringIsNullOrEmpty_CollapsesToBareTruthyCheck()
+    {
+        // Regression: A Time of War's newmeat check ("!String.IsNullOrEmpty(Vars.newmeat)"). Same
+        // translation gap as RedundantStringIsNullOrEmpty_CollapsesIntoCompoundFalsyNegation, but
+        // standalone rather than paired with an already-collapsed !x — "x is not null-or-empty"
+        // reduces to plain "x" (truthy), same StoryValue.AsBool reasoning.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (!String.IsNullOrEmpty(this.Vars.newmeat))
+                {
+                    this.Vars.plA = 1;
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().Single();
+        Assert.Equal("newmeat", cond.Branches[0].Condition);
+    }
+
+    [Fact]
     public void ChainedTernaryEquality_EmitsSwitchNode()
     {
         var passages = Extract("""

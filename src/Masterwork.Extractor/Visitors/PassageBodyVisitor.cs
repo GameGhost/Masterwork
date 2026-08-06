@@ -2618,6 +2618,22 @@ public class PassageBodyVisitor
         // Normalize compound falsy: "x == 0 || x == """ → "!x"
         cond = Regex.Replace(cond, @"(\w+)\s*==\s*0\s*\|\|\s*\1\s*==\s*""""", "!$1");
 
+        // String.IsNullOrEmpty(x) has no MWS equivalent — the engine has no "String" namespace/type
+        // at all, so it passed straight through untranslated and threw "Unknown variable 'String'"
+        // at evaluation time. There's no separate "null" StoryValue variant a variable could ever
+        // hold beyond an empty string, so StoryValue.AsBool's existing falsy handling (0/""/"0")
+        // already covers everything IsNullOrEmpty would check — these three rules translate it away
+        // entirely rather than trying to represent it as a real MWS call.
+        //   "!x || String.IsNullOrEmpty(x)" → "!x" — the clause is fully redundant with the just-
+        //   collapsed !x above (real occurrence: Fear of the Unknown's PrivateHomeTile, "bhome == 0
+        //   || bhome == "" || String.IsNullOrEmpty(bhome)").
+        cond = Regex.Replace(cond, @"!(\w+)\s*\|\|\s*String\.IsNullOrEmpty\(\1\)", "!$1");
+        //   "!String.IsNullOrEmpty(x)" → "x" (x is truthy, i.e. non-empty) — real occurrence: A
+        //   Time of War's newmeat check.
+        cond = Regex.Replace(cond, @"!String\.IsNullOrEmpty\((\w+)\)", "$1");
+        //   Any remaining un-prefixed "String.IsNullOrEmpty(x)" → "!x".
+        cond = Regex.Replace(cond, @"String\.IsNullOrEmpty\((\w+)\)", "!$1");
+
         // Mathf.Max(new T[] { a, b, c }) → max(a, b, c)
         cond = Regex.Replace(cond,
             @"Mathf\.Max\(\s*new\s+\w+\s*\[\s*\]\s*\{([^}]*)\}\s*\)",
