@@ -1318,20 +1318,29 @@ public class PassageBodyVisitor
         return (hoisted, new ConditionalNode { Branches = branches });
     }
 
-    // Finds every macros1.either(...) call embedded directly in a condition expression — as
-    // opposed to one used as the right-hand side of an assignment, which ProcessExpressionStatement
-    // already converts to a VarRandom — and hoists each into its own synthetic `let` node emitted
-    // as a sibling before the conditional, replacing the call's own source text with a reference to
-    // that temp variable. Cradle draws a fresh, independent value every time either() is called, so
-    // a condition can't call it inline (MWS conditions only test already-bound state); hoisting to a
-    // `let` right before the conditional preserves a once-per-occurrence draw with the same timing.
+    // Finds every macros1.either(...)/macros1.random(min, max) call embedded directly in a
+    // condition expression — as opposed to one used as the right-hand side of an assignment or in
+    // text position, which ProcessExpressionStatement/ProcessTextArg already convert to a VarRandom
+    // — and hoists each into its own synthetic `let` node emitted as a sibling before the
+    // conditional, replacing the call's own source text with a reference to that temp variable.
+    // Cradle draws a fresh, independent value every time either()/random() is called, so a condition
+    // can't call either inline (MWS conditions only test already-bound state); hoisting to a `let`
+    // right before the conditional preserves a once-per-occurrence draw with the same timing.
+    //
+    // The hoisted LetNode gets its own unique seed_key from CradleExtractor.AssignSeedKeys' general
+    // per-passage pass (every VarRandom without one already set gets "{passageId}_{counter}"), and
+    // SessionPrng.CreateRandom advances that key's own occurrence counter on every evaluation — so a
+    // passage re-entered via a fresh render (any normal navigation, including a goto loop back to
+    // itself) draws a genuinely new value each time, not a repeat of the first visit's roll. Real-
+    // world occurrence: Fear of the Unknown's BattleStart (macros1.random(1, 40) > Vars.tempagi, a
+    // to-hit roll), reached via a goto loop from later in the same battle sequence.
     private (List<MwsNode> Hoisted, string Condition) HoistInlineEithers(ExpressionSyntax condition)
     {
         var hoisted = new List<MwsNode>();
         var text = condition.ToString();
         foreach (var inv in condition.DescendantNodesAndSelf()
                      .OfType<InvocationExpressionSyntax>()
-                     .Where(i => GetSimpleMethodName(i) == "either"))
+                     .Where(i => GetSimpleMethodName(i) is "either" or "random"))
         {
             var original = inv.ToString();
             if (!text.Contains(original))
@@ -1339,9 +1348,22 @@ public class PassageBodyVisitor
                 continue; // already substituted by an earlier, textually-identical occurrence
             }
 
-            var values = ExtractMacroArgs(inv);
+            var macroName = GetSimpleMethodName(inv);
+            VarRandom varRandom;
+            if (macroName == "either")
+            {
+                varRandom = new VarRandom { RandomType = "choose-one", Values = ExtractMacroArgs(inv) };
+            }
+            else
+            {
+                var args = inv.ArgumentList.Arguments;
+                var min = args.Count > 0 ? TryParseInt(args[0].Expression) : null;
+                var max = args.Count > 1 ? TryParseInt(args[1].Expression) : null;
+                varRandom = new VarRandom { RandomType = "range", Min = min, Max = max };
+            }
+
             var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
-            hoisted.Add(new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } });
+            hoisted.Add(new LetNode { Var = tempVar, Random = varRandom });
             text = text.Replace(original, tempVar);
         }
 

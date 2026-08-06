@@ -3044,6 +3044,58 @@ public class ExtractorTests
         Assert.Contains(let.Var, innerIf);
     }
 
+    [Fact]
+    public void InlineRandomInConditional_HoistsToLetBeforeConditional()
+    {
+        // Regression: Fear of the Unknown's BattleStart passage (source line 25848):
+        // "if (macros1.random(1, 40) > Vars.tempagi)" — a to-hit combat roll. HoistInlineEithers
+        // only recognized either() calls embedded in a condition, not random(min, max); this passed
+        // straight through into the emitted `if:` expression untouched (SimplifyCondition only does
+        // textual Vars.X normalization), and would have failed at render time with "Unknown variable
+        // 'macros1'" the same way the either()-in-condition bug did before its own fix. Cradle draws
+        // a fresh value every random() call, so — same as either() — it must be hoisted into its own
+        // `let` right before the conditional, not left inline.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (macros1.random(1, 40) > this.Vars.tempagi)
+                {
+                    yield return base.text("hit");
+                }
+                else
+                {
+                    yield return base.text("miss");
+                }
+                yield break;
+            }
+            """);
+
+        var let = Assert.Single(passages[0].Nodes.OfType<LetNode>());
+        Assert.NotNull(let.Random);
+        Assert.Equal("range", let.Random!.RandomType);
+        Assert.Equal(1, let.Random.Min);
+        Assert.Equal(40, let.Random.Max);
+
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        var ifCond = cond.Branches.Single(b => b.Else != true).Condition!;
+        Assert.DoesNotContain("random", ifCond);
+        Assert.DoesNotContain("macros1", ifCond);
+        Assert.Contains(let.Var, ifCond);
+        Assert.Contains("tempagi", ifCond);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        var letDict = Assert.Single(nodes, n => (string)n["type"]! == "let");
+        Assert.Equal("rand_between(1, 40, \"P1_0\")", letDict["expr"]);
+
+        var condDict = Assert.Single(nodes, n => (string)n["type"]! == "conditional");
+        Assert.Equal($"{let.Var} > tempagi", condDict["if"]);
+    }
+
     // ── ViewController.instance.ChangeView(...) ──────────────────────────────
 
     [Fact]
