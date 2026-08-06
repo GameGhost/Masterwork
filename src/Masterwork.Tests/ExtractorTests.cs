@@ -1594,6 +1594,14 @@ public class ExtractorTests
     [Fact]
     public void LinqCountIfMax_EmitsMaxLetAndSubstitutesCondition()
     {
+        // Regression: Cost of Disease's MostInvestigated passage. The old output —
+        // max(scores) / countif(=max_scores, scores) — is invalid MWS on both counts: max(...) is
+        // a function taking individual scalar args, not an array (no array-taking max exists at
+        // all — "Cannot convert array to int" once `scores`, a genuine array per the LetNode.Array
+        // temporary-array mechanism, reached AsInt()); and countif is a METHOD on the array
+        // (arr.countif(pattern)), not a bare function, with an unquoted bare-text pattern the
+        // engine has no way to interpolate. Correct: max(<the scalars scores was built from>), and
+        // scores.countif("=" + max_scores) (a real quoted, concatenated pattern expression).
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -1612,10 +1620,40 @@ public class ExtractorTests
         Assert.Equal(2, lets.Count);
         Assert.Equal("scores", lets[0].Var);
         Assert.Equal("max_scores", lets[1].Var);
-        Assert.Equal("max(scores)", lets[1].Compute);
+        Assert.Equal("max(scoreA, scoreB)", lets[1].Compute);
 
         var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
-        Assert.Equal("countif(=max_scores, scores) > 1", cond.Branches[0].Condition);
+        Assert.Equal("scores.countif(\"=\" + max_scores) > 1", cond.Branches[0].Condition);
+    }
+
+    [Fact]
+    public void LinqCountIfMax_MethodSyntax_EmitsMaxLetAndSubstitutesCondition()
+    {
+        // Same idiom as LinqCountIfMax_EmitsMaxLetAndSubstitutesCondition, but the method-syntax
+        // spelling (arr.Where(x => x == arr.Max()).Count()) instead of query syntax — real
+        // occurrence: MostInvestigated's actual source uses this form, not the query-syntax one.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                List<int> play = new List<int>(new int[] { this.Vars.playA, this.Vars.playB, this.Vars.playC, this.Vars.playD, this.Vars.playE });
+                int numberOfMax = play.Where(value => value == play.Max()).Count();
+                if (numberOfMax > 1) { this.Vars.most = 0; }
+                yield break;
+            }
+            """);
+
+        var lets = passages[0].Nodes.OfType<LetNode>().ToList();
+        Assert.Equal(2, lets.Count);
+        Assert.Equal("play", lets[0].Var);
+        Assert.Equal("max_play", lets[1].Var);
+        Assert.Equal("max(playA, playB, playC, playD, playE)", lets[1].Compute);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().First();
+        Assert.Equal("play.countif(\"=\" + max_play) > 1", cond.Branches[0].Condition);
     }
 
     [Fact]

@@ -42,7 +42,7 @@ public class PassageBodyVisitor
     // Local array variables: name → list of member variable names (for let array nodes)
     private readonly Dictionary<string, List<string>> _localArrayVars = new(StringComparer.Ordinal);
     // Local computed variables: name → aggregate expression string (for condition substitution)
-    // e.g. "num" → "countif(==max_play, play)" from a LINQ Count-where-Max pattern
+    // e.g. "num" → "play.countif(\"=\" + max_play)" from a LINQ Count-where-Max pattern
     private readonly Dictionary<string, string> _localComputedVars = new(StringComparer.Ordinal);
     // Local List<int> variables: name → the Vars array variable they mirror (or null if unknown)
     private readonly Dictionary<string, string?> _localIntLists = new(StringComparer.Ordinal);
@@ -2945,8 +2945,8 @@ public class PassageBodyVisitor
     }
 
     // Recognizes: int num = (from value in <arr> where value == <arr>.Max() select value).Count<int>()
-    // Emits:      LetNode { Var = "max_<arr>", Compute = "max(<arr>)" }
-    // Tracks:     _localComputedVars[num] = "countif(==max_<arr>, <arr>)"
+    // Emits:      LetNode { Var = "max_<arr>", Compute = "max(<scalars making up arr>)" }
+    // Tracks:     _localComputedVars[num] = "<arr>.countif(\"=\" + max_<arr>)"
     private bool TryExtractLinqCountIf(string varName, ExpressionSyntax init, List<MwsNode> emittedNodes)
     {
         if (init is not InvocationExpressionSyntax countInv)
@@ -2987,9 +2987,7 @@ public class PassageBodyVisitor
                 return false;
             }
 
-            var maxVarName = $"max_{arrayVarName}";
-            emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
-            _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
+            EmitLinqCountIf(varName, arrayVarName, emittedNodes);
             return true;
         }
 
@@ -3005,14 +3003,40 @@ public class PassageBodyVisitor
                 lambdaBin.IsKind(SyntaxKind.EqualsExpression) &&
                 lambdaBin.Right.ToString().Equals($"{arrayVarName}.Max()", StringComparison.Ordinal))
             {
-                var maxVarName = $"max_{arrayVarName}";
-                emittedNodes.Add(new LetNode { Var = maxVarName, Compute = $"max({arrayVarName})" });
-                _localComputedVars[varName] = $"countif(={maxVarName}, {arrayVarName})";
+                EmitLinqCountIf(varName, arrayVarName, emittedNodes);
                 return true;
             }
         }
 
         return false;
+    }
+
+    // Shared by both TryExtractLinqCountIf branches (query syntax and method syntax), which
+    // recognize the identical "count elements tied for the max" idiom in two different C# spellings.
+    //
+    // max(...) is a FUNCTION taking individual scalar args (see ExpressionEvaluator.EvalFunction) —
+    // there is no array-taking max in the expression language, so max(<arr>) itself is invalid
+    // (throws "Cannot convert array to int" once <arr> — a genuine MWS array, per the LetNode.Array
+    // temporary-array mechanism TryExtractListInit emits for its declaration — reaches AsInt()).
+    // When <arr> was built from named scalars via that same mechanism (_localArrayVars, populated at
+    // its declaration site), use them directly: max(playA, playB, ...). Otherwise fall back to
+    // sorting descending and taking the first element — there's no dedicated "max element" array
+    // method either.
+    //
+    // countif(...) is a METHOD on the array (arr.countif(pattern), see EvalArrayMethod), not a bare
+    // function — and its pattern argument must be a real expression (quoted "=" concatenated with
+    // the computed max), not unquoted bare text, which the engine has no way to interpolate inside
+    // an expr (see the whole String.IsNullOrEmpty saga for why bare braces/text don't work either).
+    //
+    // Real-world crash: Cost of Disease's MostInvestigated passage.
+    private void EmitLinqCountIf(string varName, string arrayVarName, List<MwsNode> emittedNodes)
+    {
+        var maxVarName = $"max_{arrayVarName}";
+        var maxExpr = _localArrayVars.TryGetValue(arrayVarName, out var scalars)
+            ? $"max({string.Join(", ", scalars)})"
+            : $"{arrayVarName}.toSorted(\"descending\")[0]";
+        emittedNodes.Add(new LetNode { Var = maxVarName, Compute = maxExpr });
+        _localComputedVars[varName] = $"{arrayVarName}.countif(\"=\" + {maxVarName})";
     }
 
     // Builds an EogSetupMarkerNode from S_OnSetSpecialSetup?.Invoke(title, round, passageName, body).
