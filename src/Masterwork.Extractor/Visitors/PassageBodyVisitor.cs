@@ -1287,12 +1287,15 @@ public class PassageBodyVisitor
             hoisted.AddRange(condHoisted);
 
             var condStr = SimplifyCondition(condText);
-            // Translate localIntList.Count references to count(varsArrayRef)
+            // Translate localIntList.Count references to varsArrayRef.count() — the engine has no
+            // bare count(...) function (only rand_between/max/min/parseInt are registered function
+            // calls; array element count is the .count() method — see EvalArrayMethod), so the
+            // earlier count(varsArrayRef) form threw "Unknown function 'count'" at evaluation time.
             foreach (var (listName, varsRef) in _localIntLists)
             {
                 if (varsRef is not null)
                 {
-                    condStr = condStr.Replace($"{listName}.Count", $"count({varsRef})");
+                    condStr = condStr.Replace($"{listName}.Count", $"{varsRef}.count()");
                 }
             }
 

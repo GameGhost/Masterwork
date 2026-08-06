@@ -1921,6 +1921,36 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void LocalIntListCountCheck_EmitsArrayCountMethodNotBareFunction()
+    {
+        // Regression: Fear of the Unknown's FPFateHub passage (source lines 16628-16663).
+        // `fpfateList.Count > 0` — a local List<int> mirroring Vars.fpfate (matched via identical
+        // literal contents, see _localIntLists/_passageIntArrayVars) — used to translate to
+        // `count(fpfate) > 0`. The engine has no bare count(...) function (see ExpressionEvaluator.
+        // EvalFunction — only rand_between/max/min/parseInt are registered), only the arr.count()
+        // METHOD (EvalArrayMethod), so this threw "Unknown function 'count'" at evaluation time.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.fpfate = this.macros1.a(1, 2, 3, 4, 5, 6);
+                List<int> fpfateList = new List<int>() { 1, 2, 3, 4, 5, 6 };
+                if (fpfateList.Count > 0)
+                {
+                    this.Vars.plA = 1;
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().Single();
+        Assert.Equal("fpfate.count() > 0", cond.Branches[0].Condition);
+    }
+
+    [Fact]
     public void ChainedTernaryEquality_EmitsSwitchNode()
     {
         var passages = Extract("""
