@@ -1069,7 +1069,11 @@ public partial class CradleExtractor
     // reference app renders these as a distinct header. Two shapes both count as a legitimate
     // title+subtitle heading:
     //   1. One bold line with a "Title - Subtitle" split (e.g. Fever1's "YELLOW FEVER - Early
-    //      Years", HunterConfrontation's "The Grand Contest - April, 1902").
+    //      Years", HunterConfrontation's "The Grand Contest - April, 1902") or a
+    //      "GENERATION {roman}: Subtitle" colon split unique to the Generation-heading shape below
+    //      (e.g. Fear of the Unknown's "GENERATION I: Fear of the Unknown", A Time of War's
+    //      "GENERATION I: Taking Sides") — general colon-splitting is deliberately NOT supported,
+    //      only this specific Generation-prefixed shape (see SplitHeadingLine's remarks).
     //   2. Two bold text() calls separated by a lineBreak() *inside the same open styleScope*
     //      (e.g. Scenario5Start: "GENERATION I:" / lineBreak() / "Yellow Fever", all inside one
     //      `using (styleScope("bold", true))` block).
@@ -1082,8 +1086,20 @@ public partial class CradleExtractor
     // instruction like "Carefully hand this storybook to X...", a question, a second prompt),
     // never a genuine continuation of the heading — see Gen1-CreepyTrackRes.mws.yaml for a worked
     // example of the bug this avoids.
+    //
+    // Generation-label swap: in both shapes, when the extracted title is exactly "GENERATION
+    // {roman}" (I/II/III), the reference app displays it as a small subtitle beneath the actual
+    // descriptive title — not the other way around, even though it appears FIRST in the source
+    // text. SwapIfGenerationLabel applies this after each shape's own split logic determines the
+    // (title, subtitle) pair.
     [GeneratedRegex(@"^(.*?)\s+-\s+(.*)$")]
     private static partial Regex HeadingDashSplit();
+
+    [GeneratedRegex(@"^(GENERATION\s+I{1,3})\s*:\s*(.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex GenerationColonSplit();
+
+    [GeneratedRegex(@"^GENERATION\s+I{1,3}$", RegexOptions.IgnoreCase)]
+    private static partial Regex GenerationLabelPattern();
 
     private static (string? Title, string? Subtitle, List<MwsNode> Remaining) TryHoistHeadingTitleSubtitle(
         List<MwsNode> nodes, string layout)
@@ -1105,13 +1121,14 @@ public partial class CradleExtractor
                 TextNode { Style: "bold", Template.Length: > 0 } second, .. var rest]
             && rest is not [BreakNode, TextNode { Style: "bold" }, ..])
         {
-            return (TrimHeadingText(first.Template), TrimHeadingText(second.Template), rest);
+            var (shape2Title, shape2Subtitle) = SwapIfGenerationLabel(TrimHeadingText(first.Template), TrimHeadingText(second.Template));
+            return (shape2Title, shape2Subtitle, rest);
         }
 
-        // Shape 1: "Title - Subtitle" splits on the first standalone " - "; otherwise the whole
-        // line becomes the title with no subtitle. Whatever follows (including a break directly
-        // after this node) is left exactly as-is in the remaining body — not trimmed or merged
-        // further.
+        // Shape 1: "Title - Subtitle" or "GENERATION {roman}: Subtitle" splits on the first match;
+        // otherwise the whole line becomes the title with no subtitle. Whatever follows (including
+        // a break directly after this node) is left exactly as-is in the remaining body — not
+        // trimmed or merged further.
         var (title, subtitle) = SplitHeadingLine(first.Template);
         return (title, subtitle, nodes.Skip(1).ToList());
     }
@@ -1119,6 +1136,19 @@ public partial class CradleExtractor
     private static (string Title, string? Subtitle) SplitHeadingLine(string text)
     {
         var trimmed = text.Trim();
+
+        // "GENERATION {roman}: Subtitle" — a colon-separated single line, unique to the Generation
+        // heading shape. Deliberately narrower than a general "any colon splits" rule: A Time of
+        // War's ForewordScen2 ("A Time of War : A Memoir Across Three Generations") also has a
+        // colon in its single bold heading line but isn't a Generation-label heading and should
+        // stay unsplit, same as today. Group 1 is the Generation label by construction, so this
+        // always returns in the swapped (descriptive title, Generation label) order directly.
+        var genColon = GenerationColonSplit().Match(trimmed);
+        if (genColon.Success)
+        {
+            return (TrimHeadingText(genColon.Groups[2].Value), TrimHeadingText(genColon.Groups[1].Value));
+        }
+
         var m = HeadingDashSplit().Match(trimmed);
         if (m.Success)
         {
@@ -1126,11 +1156,17 @@ public partial class CradleExtractor
             var subtitlePart = TrimHeadingText(m.Groups[2].Value);
             if (titlePart.Length > 0 && subtitlePart.Length > 0)
             {
-                return (titlePart, subtitlePart);
+                return SwapIfGenerationLabel(titlePart, subtitlePart);
             }
         }
         return (TrimHeadingText(trimmed), null);
     }
+
+    // The reference app shows a bare "GENERATION {roman}" heading part as a small subtitle beneath
+    // the actual descriptive title, regardless of which order the source text puts them in — swap
+    // whenever the already-split title is exactly a Generation label.
+    private static (string Title, string? Subtitle) SwapIfGenerationLabel(string title, string? subtitle) =>
+        subtitle is not null && GenerationLabelPattern().IsMatch(title) ? (subtitle, title) : (title, subtitle);
 
     // Strips whitespace and stray ':' characters (e.g. a bold "GENERATION I:" line preceding a
     // subtitle) from extracted title/subtitle text. Runs whitespace-trim again after stripping

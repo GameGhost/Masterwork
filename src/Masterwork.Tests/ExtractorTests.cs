@@ -962,10 +962,94 @@ public class ExtractorTests
             }
             """);
 
-        Assert.Equal("GENERATION I", passages[0].Title);
-        Assert.Equal("Yellow Fever", passages[0].Subtitle);
+        // Swapped: the reference app shows "GENERATION I" as the small subtitle beneath the
+        // descriptive title, not the other way around, even though it's first in the source text
+        // — see SwapIfGenerationLabel.
+        Assert.Equal("Yellow Fever", passages[0].Title);
+        Assert.Equal("GENERATION I", passages[0].Subtitle);
         var body = passages[0].Nodes.OfType<TextNode>().Single();
         Assert.Equal("The siblings' arrival to claim their considerable inheritance...", body.Template);
+    }
+
+    [Fact]
+    public void IntroductionLayout_GenerationDashSplit_SwapsTitleAndSubtitle()
+    {
+        // Real-world source: A Time of War's PeaceIntro ("GENERATION III - Peace Through War").
+        // The plain dash-split already worked (title="GENERATION III", subtitle="Peace Through
+        // War"), just in the wrong order — same swap as the two-line shape above.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "INTRO" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("GENERATION III - Peace Through War");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Peace Through War", passages[0].Title);
+        Assert.Equal("GENERATION III", passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void IntroductionLayout_GenerationColonSplit_SplitsAndSwaps()
+    {
+        // Real-world source: Fear of the Unknown's FearoftheUnknownStart
+        // ("GENERATION I: Fear of the Unknown") and A Time of War's ATimeofWarIntro
+        // ("GENERATION I: Taking Sides") — a single bold line with no " - " dash at all, so the
+        // plain dash-split never fired and the whole line became an unsplit title. Colon-splitting
+        // is scoped specifically to this "GENERATION {roman}:" shape (see SplitHeadingLine's
+        // remarks) — a general "any colon splits" rule isn't safe (see the next test).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "INTRO" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("GENERATION I: Fear of the Unknown");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Fear of the Unknown", passages[0].Title);
+        Assert.Equal("GENERATION I", passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void IntroductionLayout_NonGenerationColonHeading_StaysUnsplit()
+    {
+        // Real-world source: A Time of War's ForewordScen2
+        // ("A Time of War : A Memoir Across Three Generations") — a single bold line with a colon
+        // that ISN'T the "GENERATION {roman}:" shape. Colon-splitting must not fire here.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { "INTRO" }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("A Time of War : A Memoir Across Three Generations");
+                }
+                StyleScope styleScope = null;
+                yield break;
+            }
+            """);
+
+        Assert.Equal("A Time of War : A Memoir Across Three Generations", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
     }
 
     [Fact]
