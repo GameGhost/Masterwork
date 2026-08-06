@@ -668,6 +668,90 @@ public static partial class V2Serializer
             ["onclick"] = TransformNodeList(expand.ExpandNodes, ctx),
         };
 
+    // ── Setup-notification-in-conditional collapse ─────────────────────────
+
+    // True when every branch of `cond` is a single-node body containing exactly a
+    // SetupNotificationNode with a literal (non-null) NextPassage. Mirrors
+    // CradleExtractor.TryCollapseCheckProgressConditional's arm-extraction, but for
+    // ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls, and without that
+    // method's "must already have an else" requirement — see CollapseSetupNotificationConditionals
+    // for why this one has to tolerate an absent else.
+    private static bool TryGetSetupTargetArms(ConditionalNode cond, out List<(string? Condition, string Target)> arms)
+    {
+        arms = [];
+        foreach (var branch in cond.Branches)
+        {
+            if (branch.Nodes is not [SetupNotificationNode { NextPassage: { } target }])
+            {
+                arms = [];
+                return false;
+            }
+
+            arms.Add((branch.Else == true ? null : branch.Condition, target));
+        }
+
+        return arms.Count > 0;
+    }
+
+    // Cradle sometimes writes a ViewItemObtain popup's destination as two or more independent
+    // `if` statements instead of one if/elseif/else chain — e.g. Fear of the Unknown's
+    // Payment1ThanksB fragment: "if (players > 2) SetupPassagename = "Payment1C"; if (players == 2)
+    // SetupPassagename = "Payment1Hub";" with no else at all (technically exhaustive since players
+    // is always >= 2, but that's domain knowledge the extractor can't verify from the syntax alone).
+    // TransformPopup's own top-level scan only recognizes a SetupNotificationNode as a direct
+    // child, never one nested inside a ConditionalNode, so this shape fell through as ordinary
+    // conditional content — never setting layout: setup or a target, instead of the setup popup the
+    // reference app actually shows. This absorbs a run of consecutive sibling ConditionalNodes with
+    // that shape (or a single one that already has an else) into one SetupNotificationNode whose
+    // NextPassage is a computed ${...} ternary, with an empty-string terminal fallback when no arm
+    // is unconditional — since the "later branches never actually get reached with an unmatched
+    // value" guarantee is exactly the domain knowledge just mentioned, not something provable here.
+    private static List<MwsNode> CollapseSetupNotificationConditionals(List<MwsNode> nodes)
+    {
+        var result = new List<MwsNode>(nodes.Count);
+        int i = 0;
+        while (i < nodes.Count)
+        {
+            if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms))
+            {
+                var sourceLine = firstCond.SourceLine;
+                int j = i + 1;
+                while (!arms.Any(a => a.Condition is null) &&
+                       j < nodes.Count && nodes[j] is ConditionalNode nextCond &&
+                       TryGetSetupTargetArms(nextCond, out var moreArms))
+                {
+                    arms.AddRange(moreArms);
+                    j++;
+                }
+
+                var elseIdx = arms.FindIndex(a => a.Condition is null);
+                if (elseIdx >= 0 && elseIdx != arms.Count - 1)
+                {
+                    var elseArm = arms[elseIdx];
+                    arms.RemoveAt(elseIdx);
+                    arms.Add(elseArm);
+                }
+                else if (elseIdx < 0)
+                {
+                    arms.Add((null, ""));
+                }
+
+                result.Add(new SetupNotificationNode
+                {
+                    NextPassage = "${" + CradleExtractor.BuildTernaryChain(arms) + "}",
+                    SourceLine = sourceLine,
+                });
+                i = j;
+                continue;
+            }
+
+            result.Add(nodes[i]);
+            i++;
+        }
+
+        return result;
+    }
+
     // ── Popup ─────────────────────────────────────────────────────────────
 
     // Matches: ViewBiddingSystem.instance.OnShowBidding("PassageId", BiddingSystem.Voting/Bidding)
@@ -801,11 +885,14 @@ public static partial class V2Serializer
         //   • EndOfRoundMarkerNode                → layout: end_of_round + target/okay/onclose
         //   • SetupNotificationNode               → layout: setup + onclose (ViewItemObtain popup)
         //   • SetupBlockNode                      → unwrap body nodes directly (no section wrapper)
+        // Collapse first: the scan below only recognizes a SetupNotificationNode as a direct child,
+        // not one nested inside a ConditionalNode — see CollapseSetupNotificationConditionals.
+        var expandNodes = CollapseSetupNotificationConditionals(expand.ExpandNodes);
         string? layout = null, onclose = null;
         EogSetupMarkerNode? eogMarker = null;
         EndOfRoundMarkerNode? eorMarker = null;
         var childNodes = new List<MwsNode>(expand.ExpandNodes.Count);
-        foreach (var child in expand.ExpandNodes)
+        foreach (var child in expandNodes)
         {
             if (child is UnknownNode unk)
             {

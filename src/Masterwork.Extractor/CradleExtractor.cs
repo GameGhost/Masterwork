@@ -927,7 +927,9 @@ public partial class CradleExtractor
         return true;
     }
 
-    private static string BuildTernaryChain(List<(string? Condition, string Target)> arms)
+    // internal: also used by V2Serializer.TransformPopup to collapse a SetupNotificationNode
+    // nested inside one or more ConditionalNodes into a single node with a computed target.
+    internal static string BuildTernaryChain(List<(string? Condition, string Target)> arms)
     {
         string Quoted(string s) => $"\"{MwsExprHelper.EscapeStr(s)}\"";
         string Build(int i) =>

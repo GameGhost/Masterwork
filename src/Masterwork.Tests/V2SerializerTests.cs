@@ -896,4 +896,72 @@ public class V2SerializerTests
         Assert.Equal(2, conditions.Count);
         Assert.NotNull(cond["else"]);
     }
+
+    [Fact]
+    public void ExpandLink_SetupPassagenameInSiblingConditionals_CollapsesToSetupPopupWithTernaryTarget()
+    {
+        // Regression: Fear of the Unknown's Payment1ThanksB passage (source lines 19902-19931).
+        // ViewItemObtain.SetupPassagename set inside TWO SEPARATE sibling `if` statements — no else
+        // at all ("if (players > 2) ...; if (players == 2) ...;", technically exhaustive since
+        // players is always >= 2, but the extractor can't verify that from syntax alone) — instead
+        // of one if/elseif/else chain. TransformPopup's own top-level scan only recognized a
+        // SetupNotificationNode as a direct child, never one nested inside a ConditionalNode, so
+        // this fell through as ordinary conditional content: layout stayed unset (defaulting to
+        // reveal) and no target/okay were ever produced — a broken popup a player could open but
+        // never correctly navigate away from.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click to continue...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "players > 2",
+                                    Nodes = [new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Payment1C" }],
+                                },
+                            ],
+                        },
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "players == 2",
+                                    Nodes = [new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Payment1Hub" }],
+                                },
+                            ],
+                        },
+                        new Masterwork.Extractor.SetupBlockNode
+                        {
+                            Nodes = [new Masterwork.Extractor.TextNode { Template = "Immediately pay ${Bcont} to the supply." }],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("setup", node["layout"]);
+        Assert.Equal("${players > 2 ? \"Payment1C\" : players == 2 ? \"Payment1Hub\" : \"\"}", node["target"]);
+        // "Close" (not "Accept") is the established label for any setup popup that has a target —
+        // see the pre-existing S4Blacksmith example; "Accept" is only for a target-less one.
+        Assert.Equal("Close", node["okay"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        Assert.Contains(content, c => c["type"] as string == "text");
+    }
 }
