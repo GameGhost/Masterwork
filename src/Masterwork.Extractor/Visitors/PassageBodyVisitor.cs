@@ -2623,16 +2623,28 @@ public class PassageBodyVisitor
         // at evaluation time. There's no separate "null" StoryValue variant a variable could ever
         // hold beyond an empty string, so StoryValue.AsBool's existing falsy handling (0/""/"0")
         // already covers everything IsNullOrEmpty would check — these three rules translate it away
-        // entirely rather than trying to represent it as a real MWS call.
+        // entirely rather than trying to represent it as a real MWS call. The argument is resolved
+        // through _localVars first — "string s = Vars.warriorA.ToString();" registers s as a
+        // {warriorA} alias (see the "string varName = Vars.X" declaration handling below), and
+        // String.IsNullOrEmpty is just as often called on that local alias as on Vars.X directly
+        // (real occurrence: Fear of the Unknown's Player1Statsfin — String.IsNullOrEmpty(s) — a bare
+        // "s" isn't a declared MWS variable at all, only "warriorA" is).
+        string ResolveLocalAlias(string name) =>
+            _localVars.TryGetValue(name, out var val) && val.StartsWith('{') && val.EndsWith('}')
+                ? val[1..^1]
+                : name;
         //   "!x || String.IsNullOrEmpty(x)" → "!x" — the clause is fully redundant with the just-
         //   collapsed !x above (real occurrence: Fear of the Unknown's PrivateHomeTile, "bhome == 0
         //   || bhome == "" || String.IsNullOrEmpty(bhome)").
-        cond = Regex.Replace(cond, @"!(\w+)\s*\|\|\s*String\.IsNullOrEmpty\(\1\)", "!$1");
+        cond = Regex.Replace(cond, @"!(\w+)\s*\|\|\s*String\.IsNullOrEmpty\(\1\)",
+            m => $"!{ResolveLocalAlias(m.Groups[1].Value)}");
         //   "!String.IsNullOrEmpty(x)" → "x" (x is truthy, i.e. non-empty) — real occurrence: A
         //   Time of War's newmeat check.
-        cond = Regex.Replace(cond, @"!String\.IsNullOrEmpty\((\w+)\)", "$1");
+        cond = Regex.Replace(cond, @"!String\.IsNullOrEmpty\((\w+)\)",
+            m => ResolveLocalAlias(m.Groups[1].Value));
         //   Any remaining un-prefixed "String.IsNullOrEmpty(x)" → "!x".
-        cond = Regex.Replace(cond, @"String\.IsNullOrEmpty\((\w+)\)", "!$1");
+        cond = Regex.Replace(cond, @"String\.IsNullOrEmpty\((\w+)\)",
+            m => $"!{ResolveLocalAlias(m.Groups[1].Value)}");
 
         // Mathf.Max(new T[] { a, b, c }) → max(a, b, c)
         cond = Regex.Replace(cond,

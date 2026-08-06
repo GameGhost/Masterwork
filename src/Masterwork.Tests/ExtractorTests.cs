@@ -2007,6 +2007,39 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void NegatedStringIsNullOrEmpty_OnLocalAlias_ResolvesToUnderlyingVar()
+    {
+        // Regression: Fear of the Unknown's Player1Statsfin passage ("string s = Vars.warriorA.
+        // ToString(); if (!String.IsNullOrEmpty(s)) ..."). The bare-identifier collapse from
+        // NegatedStringIsNullOrEmpty_CollapsesToBareTruthyCheck emitted the raw local alias name
+        // "s" verbatim — not a declared MWS variable at all, only "warriorA" is (see the "string
+        // varName = Vars.X" declaration handling registering s as a {warriorA} placeholder) — so
+        // this threw "Unknown variable 's'" at evaluation time. Must resolve through _localVars the
+        // same way the sibling s.Replace(...) text-position handling already does.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    string s = this.Vars.warriorA.ToString();
+                    if (!String.IsNullOrEmpty(s))
+                    {
+                        yield return base.text("has a name");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        var cond = passages[0].Nodes.OfType<ConditionalNode>().Single();
+        Assert.Equal("warriorA", cond.Branches[0].Condition);
+    }
+
+    [Fact]
     public void ChainedTernaryEquality_EmitsSwitchNode()
     {
         var passages = Extract("""
