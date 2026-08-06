@@ -2640,6 +2640,18 @@ public class PassageBodyVisitor
         // Normalize compound falsy: "x == 0 || x == """ → "!x"
         cond = Regex.Replace(cond, @"(\w+)\s*==\s*0\s*\|\|\s*\1\s*==\s*""""", "!$1");
 
+        // Harlowe's ordinal-string array indexer sugar: "x["1st"]" means "the first element of x"
+        // (1-based, "1st"/"2nd"/"3rd"/"4th"/"5th" — up to the game's 5-player max). MWS array
+        // indexing is a real, direct integer subscript, no such string-key sugar exists at all — a
+        // quoted ordinal string reaching the index position would evaluate as a genuine dictionary-
+        // style lookup key on an array value, throwing "Cannot convert string to int" once the
+        // engine tried to use it as an index. This is the exact same conversion the assignment-RHS
+        // path (ProcessAssignment's ElementAccessExpressionSyntax case, via HarloweOrdinalToIndex)
+        // already applies — reused here via the same helper, just missing for a condition.
+        // Real-world crash: Fear of the Unknown's BattleEnd passage (elim["1st"] == warriorA).
+        cond = Regex.Replace(cond, @"(\w+)\[""(\d+(?:st|nd|rd|th))""\]",
+            m => $"{m.Groups[1].Value}[{HarloweOrdinalToIndex(m.Groups[2].Value)}]");
+
         // String.IsNullOrEmpty(x) has no MWS equivalent — the engine has no "String" namespace/type
         // at all, so it passed straight through untranslated and threw "Unknown variable 'String'"
         // at evaluation time. There's no separate "null" StoryValue variant a variable could ever

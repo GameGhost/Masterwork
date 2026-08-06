@@ -3096,6 +3096,38 @@ public class ExtractorTests
         Assert.Equal($"{let.Var} > tempagi", condDict["if"]);
     }
 
+    [Fact]
+    public void HarloweOrdinalIndexerInConditional_ConvertsToZeroBasedIndex()
+    {
+        // Regression: Fear of the Unknown's BattleEnd passage (elim["1st"] == warriorA, source line
+        // 26122). Harlowe's ordinal-string array indexer sugar ("x["1st"]" meaning "the first
+        // element of x") already gets converted to a real zero-based integer index — x[0] — on an
+        // assignment's RHS (see ProcessAssignment's ElementAccessExpressionSyntax case, via
+        // HarloweOrdinalToIndex), but SimplifyCondition never applied the same conversion for the
+        // identical shape appearing inside a condition, so it passed through as a literal quoted
+        // string subscript — "elim[\"1st\"]" — which isn't valid MWS array indexing at all (a real
+        // integer subscript, no string-key sugar exists), throwing "Cannot convert string to int"
+        // once the engine tried to use it as an index.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.elim["1st"] == this.Vars.warriorA)
+                {
+                    yield return base.text("first eliminated was A");
+                }
+                yield break;
+            }
+            """);
+
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        var ifCond = cond.Branches.Single(b => b.Else != true).Condition!;
+        Assert.Equal("elim[0] == warriorA", ifCond);
+    }
+
     // ── ViewController.instance.ChangeView(...) ──────────────────────────────
 
     [Fact]
