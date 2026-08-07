@@ -1124,28 +1124,86 @@ public partial class CradleExtractor
             return (null, null, nodes);
         }
 
-        if (nodes is not [TextNode { Style: "bold", Template.Length: > 0 } first, ..])
+        if (nodes is [TextNode { Style: "bold", Template.Length: > 0 } first, ..])
         {
-            return (null, null, nodes);
+            // Shape 2: title + subtitle as two bold lines joined by a break that stayed inside the
+            // same styleScope. A third bold line right after (even scope-internal) disqualifies the
+            // hoist — that's more than a simple two-line heading and is left for the body to render.
+            if (nodes is [_, BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true },
+                    TextNode { Style: "bold", Template.Length: > 0 } second, .. var rest]
+                && rest is not [BreakNode, TextNode { Style: "bold" }, ..])
+            {
+                var (shape2Title, shape2Subtitle) = SwapIfGenerationLabel(TrimHeadingText(first.Template), TrimHeadingText(second.Template));
+                return (shape2Title, shape2Subtitle, rest);
+            }
+
+            // Shape 1: "Title - Subtitle" or "GENERATION {roman}: Subtitle" splits on the first
+            // match; otherwise the whole line becomes the title with no subtitle. Whatever follows
+            // (including a break directly after this node) is left exactly as-is in the remaining
+            // body — not trimmed or merged further.
+            var (title, subtitle) = SplitHeadingLine(first.Template);
+            return (title, subtitle, nodes.Skip(1).ToList());
         }
 
-        // Shape 2: title + subtitle as two bold lines joined by a break that stayed inside the
-        // same styleScope. A third bold line right after (even scope-internal) disqualifies the
-        // hoist — that's more than a simple two-line heading and is left for the body to render.
-        if (nodes is [_, BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true },
-                TextNode { Style: "bold", Template.Length: > 0 } second, .. var rest]
-            && rest is not [BreakNode, TextNode { Style: "bold" }, ..])
+        // Cradle idiom for a whole optional passage: "if (someFlag) { <real content> } else {
+        // goto SomewhereElse; }" — the guard makes the ENTIRE body conditional, so a plain flat-list
+        // check above never sees the leading bold heading; it's one level down, inside the branch
+        // that actually renders. Only promote when EXACTLY ONE branch/case has heading-shaped
+        // content of its own (recursing through this same function, so a multiply-nested guard
+        // chain is handled too) — if the other branch(es) ALSO start with their own bold heading,
+        // or none do, there's no single unambiguous title to hoist and this is left untouched, same
+        // as today. A branch whose only content is a popup-triggering link (no leading bold text)
+        // naturally fails the recursive check the same way it already fails the flat-list one above
+        // — no separate "ignore popups" special case needed. Real-world occurrence: A Time of War's
+        // TSBarracksPenalty ("if (barracks == "yes") { **Lack of Service Penalty** ... } else {
+        // goto SeedGUNS; }").
+        if (nodes is [ConditionalNode cond] &&
+            TryHoistFromOneBranch([.. cond.Branches.Select(b => b.Nodes)], layout,
+                out var condTitle, out var condSubtitle, out var condIdx, out var condRemaining))
         {
-            var (shape2Title, shape2Subtitle) = SwapIfGenerationLabel(TrimHeadingText(first.Template), TrimHeadingText(second.Template));
-            return (shape2Title, shape2Subtitle, rest);
+            cond.Branches[condIdx].Nodes = condRemaining;
+            return (condTitle, condSubtitle, nodes);
         }
 
-        // Shape 1: "Title - Subtitle" or "GENERATION {roman}: Subtitle" splits on the first match;
-        // otherwise the whole line becomes the title with no subtitle. Whatever follows (including
-        // a break directly after this node) is left exactly as-is in the remaining body — not
-        // trimmed or merged further.
-        var (title, subtitle) = SplitHeadingLine(first.Template);
-        return (title, subtitle, nodes.Skip(1).ToList());
+        if (nodes is [SwitchNode sw] &&
+            TryHoistFromOneBranch([.. sw.Cases.Select(c => c.Nodes)], layout,
+                out var swTitle, out var swSubtitle, out var swIdx, out var swRemaining))
+        {
+            sw.Cases[swIdx].Nodes = swRemaining;
+            return (swTitle, swSubtitle, nodes);
+        }
+
+        return (null, null, nodes);
+    }
+
+    // Tries each branch/case's own node list against TryHoistHeadingTitleSubtitle; succeeds only
+    // when EXACTLY ONE of them yields a title (see the call site's remarks for why more than one
+    // match is left ambiguous/untouched).
+    private static bool TryHoistFromOneBranch(List<List<MwsNode>> branchNodeLists, string layout,
+        out string? title, out string? subtitle, out int matchedIndex, out List<MwsNode> remaining)
+    {
+        title = null;
+        subtitle = null;
+        matchedIndex = -1;
+        remaining = [];
+
+        for (int i = 0; i < branchNodeLists.Count; i++)
+        {
+            var (t, s, r) = TryHoistHeadingTitleSubtitle(branchNodeLists[i], layout);
+            if (t is null)
+            {
+                continue;
+            }
+
+            if (matchedIndex >= 0)
+            {
+                return false;
+            }
+
+            (title, subtitle, matchedIndex, remaining) = (t, s, i, r);
+        }
+
+        return matchedIndex >= 0;
     }
 
     private static (string Title, string? Subtitle) SplitHeadingLine(string text)

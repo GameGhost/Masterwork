@@ -934,6 +934,94 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void NarrationLayout_RootConditionalWithOneContentBranchAndOneGotoSkipBranch_HoistsFromContentBranch()
+    {
+        // Regression: A Time of War's TSBarracksPenalty passage (source line 20057) — the reference
+        // app's own title/subtitle promotion still applies whenever this passage actually renders,
+        // but TryHoistHeadingTitleSubtitle only ever looked at the FLAT top-level node list; here
+        // the whole body is one root "if (barracks == "yes") { <bold heading + content> } else {
+        // goto SomewhereElse; }" idiom Cradle uses to make an entire optional passage a no-op when
+        // its guard doesn't hold — the bold heading is one level down, inside the branch that
+        // actually renders, so the flat check never saw it and no title was ever emitted.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.barracks == "yes")
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Lack of Service Penalty");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.lineBreak();
+                    yield return base.text("If any player's Caretaker remains in the barracks...");
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "SeedGUNS");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Lack of Service Penalty", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+
+        // Exactly one root ConditionalNode remains — the heading was stripped from its `then`
+        // branch only, the `else` (goto-only) branch untouched.
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        var thenBranch = cond.Branches.Single(b => b.Else != true);
+        var elseBranch = cond.Branches.Single(b => b.Else == true);
+        Assert.DoesNotContain(thenBranch.Nodes, n => n is TextNode { Style: "bold" });
+        var remainingText = Assert.Single(thenBranch.Nodes.OfType<TextNode>());
+        Assert.Equal("If any player's Caretaker remains in the barracks...", remainingText.Template);
+        Assert.Single(elseBranch.Nodes.OfType<GotoNode>());
+    }
+
+    [Fact]
+    public void NarrationLayout_RootConditionalBothBranchesHaveHeadings_AmbiguousNoHoist()
+    {
+        // Safety check: when BOTH branches of a root conditional have their own bold heading,
+        // there's no single unambiguous title to promote to the passage level — left untouched,
+        // same as before this fix (rather than arbitrarily picking one branch's heading).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.flag == "yes")
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Heading A");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Heading B");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        // No hoist happened — Title falls back to the bare passage id, same as any passage this
+        // mechanism never touches.
+        Assert.Equal("P1", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        Assert.All(cond.Branches, b => Assert.Contains(b.Nodes, n => n is TextNode { Style: "bold" }));
+    }
+
+    [Fact]
     public void IntroductionLayout_TwoBoldLinesInSameScope_HoistsToTitleAndSubtitle()
     {
         // Regression: Scenario5Start.mws.yaml (source lines 2246-2251) is a single
