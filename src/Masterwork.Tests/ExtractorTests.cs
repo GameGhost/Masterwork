@@ -3129,7 +3129,7 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void SetupPassagenameAssignedFromInlineEither_HoistsToSessionAssignBeforeSetupNotification()
+    public void SetupPassagenameAssignedFromInlineEither_ResolvesInlineWithNoHoisting()
     {
         // Regression: A Time of War's RumorD1 passage (source line 1958-1960):
         // "ViewItemObtain.SetupPassagename = macros1.either("RumorIngredient", "RumorKnowledge",
@@ -3138,18 +3138,20 @@ public class ExtractorTests
         // that IsSetupPassagenameAssignment's own fallback used to treat as generic "computed
         // expression" text, passing "macros1.either(...)" straight through SimplifyCondition (which
         // has no either()-hoisting logic of its own) into the emitted target — "${macros1.either(...)}"
-        // — untranslated and unrenderable. Cradle draws a fresh value every either() call, so it must
-        // be hoisted into its own assignment right before the SetupNotificationNode, mirroring the
-        // working "Vars.X = macros1.either(...)" assignment case.
+        // — untranslated and unrenderable.
         //
-        // Second regression, caught only after this fix shipped: the FIRST version of this fix
-        // hoisted into a `let`, not a session-variable `assign`. A popup's `target` is resolved
-        // against the live VariableStore at close time, after popup content's own mutations are
-        // committed (GameSession.ClosePopupAsync → ResolveTarget) — but that commit only ever copies
-        // VariableStore._session, never the separate, transient ._let scope a `let` writes to. The
+        // Two earlier fixes hoisted the draw into an intermediate variable before landing here — a
+        // `let` (reverted: a popup's `target` is resolved against the live VariableStore at close
+        // time, after popup content's own mutations are committed, but that commit only ever copies
+        // VariableStore._session, never the separate, transient ._let scope a `let` writes to — the
         // let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
-        // this SAME popup's own target tried to reference it after close. It must be a real
-        // EffectNode/VarRandom session assign, not a LetNode.
+        // the SAME popup's target tried to reference it after close), then a session `assign`
+        // (worked, but polluted popup content with an unrelated statement and needed a broader
+        // preamble-matching pattern elsewhere that caused its own regression — see git history).
+        // Neither hoist was actually necessary: the draw expression is a pure function of that
+        // visit's PRNG state, so SetupNotificationNode just carries the VarRandom directly and
+        // V2Serializer resolves it inline wherever the target string is needed — no intermediate
+        // node, no scope to cross.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -3162,27 +3164,26 @@ public class ExtractorTests
             }
             """);
 
-        // Must NOT be a LetNode — that's the exact shape that threw "Unknown variable" once the
-        // popup's target tried to reference it after the popup closed.
+        // No extra node of any kind — nothing to hoist.
         Assert.Empty(passages[0].Nodes.OfType<LetNode>());
-
-        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>(), e => e.VarRandom is { Count: 1 });
-        var (tempVar, random) = Assert.Single(effect.VarRandom!);
-        Assert.Equal("choose-one", random.RandomType);
-        Assert.Equal(["RumorIngredient", "RumorKnowledge", "RumorPitch"], random.Values);
+        Assert.Empty(passages[0].Nodes.OfType<EffectNode>());
 
         var setup = Assert.Single(passages[0].Nodes.OfType<SetupNotificationNode>());
-        Assert.Equal($"${{{tempVar}}}", setup.NextPassage);
-        Assert.DoesNotContain("macros1", setup.NextPassage);
-        Assert.DoesNotContain("either", setup.NextPassage);
-
-        // Ordering: the assign must precede the SetupNotificationNode it feeds.
-        Assert.True(passages[0].Nodes.IndexOf(effect) < passages[0].Nodes.IndexOf(setup));
+        Assert.Null(setup.NextPassage);
+        Assert.NotNull(setup.Random);
+        Assert.Equal("choose-one", setup.Random!.RandomType);
+        Assert.Equal(["RumorIngredient", "RumorKnowledge", "RumorPitch"], setup.Random.Values);
+        Assert.NotNull(setup.Random.SeedKey);
 
         var dict = V2Serializer.ToDict(passages[0]);
         var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
-        var assignDict = Assert.Single(nodes, n => (string)n["type"]! == "assign");
-        Assert.Equal(tempVar, assignDict["var"]);
+        // No sibling "assign"/"let" node landed in the output — the draw is embedded directly.
+        Assert.DoesNotContain(nodes, n => (string)n["type"]! is "assign" or "let");
+        var linkDict = Assert.Single(nodes, n => (string)n["type"]! == "link");
+        var target = (string)linkDict["target"]!;
+        Assert.Contains(".shuffled(", target);
+        Assert.DoesNotContain("macros1", target);
+        Assert.DoesNotContain("either", target);
     }
 
     // ── ViewController.instance.ChangeView(...) ──────────────────────────────

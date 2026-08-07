@@ -97,6 +97,9 @@ public partial class CradleExtractor
                 case LetNode let when let.Random is not null:
                     let.Random.SeedKey ??= $"{passageId}_{counter++}";
                     break;
+                case SetupNotificationNode sn when sn.Random is not null:
+                    sn.Random.SeedKey ??= $"{passageId}_{counter++}";
+                    break;
                 case ConditionalNode cond:
                     foreach (var branch in cond.Branches)
                     {
@@ -2455,6 +2458,9 @@ public partial class CradleExtractor
                     break;
                 case LetNode let when let.Random is not null:
                     let.Random = NormalizeVarRandom(let.Random);
+                    break;
+                case SetupNotificationNode sn when sn.Random is not null:
+                    sn.Random = NormalizeVarRandom(sn.Random);
                     break;
                 case ConditionalNode cond:
                     foreach (var b in cond.Branches)

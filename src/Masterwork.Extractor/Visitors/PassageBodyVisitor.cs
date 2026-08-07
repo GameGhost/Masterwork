@@ -663,10 +663,9 @@ public class PassageBodyVisitor
 
         // ViewItemObtain.SetupPassagename = "X"
         if (expr is AssignmentExpressionSyntax assignSetup &&
-            IsSetupPassagenameAssignment(assignSetup, out var nextPassage, out var setupHoisted))
+            IsSetupPassagenameAssignment(assignSetup, out var nextPassage, out var setupRandom))
         {
-            var setupNode = new SetupNotificationNode { NextPassage = nextPassage };
-            return setupHoisted is not null ? [..setupHoisted, setupNode] : [setupNode];
+            return [new SetupNotificationNode { NextPassage = nextPassage, Random = setupRandom }];
         }
 
         // ViewController.instance.ChangeView(ViewController.instance.<view>) — every real
@@ -2526,10 +2525,10 @@ public class PassageBodyVisitor
         return true;
     }
 
-    private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage, out List<MwsNode>? hoisted)
+    private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage, out VarRandom? random)
     {
         nextPassage = null;
-        hoisted = null;
+        random = null;
         if (!assign.Left.ToString().Contains("SetupPassagename"))
         {
             return false;
@@ -2544,30 +2543,27 @@ public class PassageBodyVisitor
 
         // ViewItemObtain.SetupPassagename = macros1.either(...) directly — Cradle draws a fresh
         // value every either() call, so it can't be evaluated inline inside a ${...} target
-        // expression (same reasoning as HoistInlineEithers for a condition's inline either() call,
-        // which this mirrors); the fallback below would otherwise pass the raw macros1.either(...)
-        // text straight through untranslated (SimplifyCondition has no either()-hoisting logic of
-        // its own — that only exists in HoistInlineEithers, called only for conditions). Hoist into
-        // a real session-variable assign (EffectNode.VarRandom), NOT a `let` — a popup's own `target`
-        // is resolved against the LIVE VariableStore at close time, after popup content's mutations
-        // are committed (GameSession.ClosePopupAsync → ResolveTarget), but that commit only ever
-        // copies VariableStore._session; `let` bindings live in the separate, transient VariableStore
-        // ._let scope (see VariableStore.SetLetVariable/SessionSnapshot) that's never part of it — a
-        // let-bound temp var here rendered fine as popup content but threw "Unknown variable" the
-        // instant the SAME popup's own target tried to reference it after close. `assign` writes to
-        // _session instead, exactly like the working "Vars.X = macros1.either(...)" assignment case
-        // already does elsewhere (and like RumorD1's own sibling branch, which assigns a real Cradle
-        // session var and successfully references it from the same popup's target). Real-world
-        // occurrences: A Time of War's RumorD1, Fear of the Unknown's EssentialSaltsRes (the latter
-        // inside an if/else branch, so this assign is one arm of a CollapseSetupNotificationConditionals
-        // ternary — see TryGetSetupTargetArms for why only this exact shape is safe to hoist out of
-        // its originating branch unconditionally).
+        // expression using SimplifyCondition's textual fallback below (it has no either()-hoisting
+        // logic of its own — that only exists in HoistInlineEithers, called only for conditions),
+        // which would otherwise pass the raw "macros1.either(...)" text straight through
+        // untranslated. Unlike the condition-context bug, though, this does NOT need hoisting into
+        // any intermediate variable: the resulting VarRandom is attached directly to the
+        // SetupNotificationNode and resolved into an inline choose_one/shuffled expression at
+        // serialization time (V2Serializer.ResolveSetupTarget) — a pure function of that visit's
+        // PRNG draw, safe to embed anywhere the resolved target string is used (popup target,
+        // ternary arm, etc.), exactly like any other expr. Two earlier attempts DID hoist into an
+        // intermediate variable (a `let`, then a session `assign`) and both were reverted — a `let`
+        // doesn't survive a popup's own content→target scope boundary, and an `assign` works but
+        // pollutes popup content with an unrelated statement and needlessly widened
+        // TryGetSetupTargetArms's branch-matching pattern (a real regression, since fixed — see git
+        // history for both). Real-world occurrences: A Time of War's RumorD1, Fear of the Unknown's
+        // EssentialSaltsRes (the latter inside an if/else branch — see
+        // CollapseSetupNotificationConditionals/BuildTernaryChain for how a branch's resolved target
+        // becomes one ternary arm).
         if (assign.Right is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
         {
             var values = ExtractMacroArgs(eitherInv);
-            var tempVar = $"_setup_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
-            hoisted = [new EffectNode { VarRandom = new() { [tempVar] = new VarRandom { RandomType = "choose-one", Values = values } } }];
-            nextPassage = $"${{{tempVar}}}";
+            random = new VarRandom { RandomType = "choose-one", Values = values };
             return true;
         }
 

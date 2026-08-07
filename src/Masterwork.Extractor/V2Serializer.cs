@@ -670,64 +670,36 @@ public static partial class V2Serializer
 
     // ── Setup-notification-in-conditional collapse ─────────────────────────
 
-    // True when every branch of `cond` is a body ending in a SetupNotificationNode with a literal
-    // (non-null) NextPassage — optionally preceded by a hoisted random-draw assign (from a
-    // SetupPassagename = macros1.either(...) assign in that branch; its own NextPassage is already
-    // a ${...}-wrapped reference to the hoisted temp var, which BuildTernaryChain knows to unwrap
-    // instead of quoting as a literal). Mirrors CradleExtractor.TryCollapseCheckProgressConditional's
-    // arm-extraction, but for ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls,
-    // and without that method's "must already have an else" requirement — see
-    // CollapseSetupNotificationConditionals for why this one has to tolerate an absent else.
-    //
-    // The preamble is deliberately restricted to a pure random-assign EffectNode (IsPureRandomAssign
-    // below) — NOT a LetNode, and not just anything. Two bugs shaped this:
-    //   - A `let` doesn't work here at all: the popup's own `target` is resolved against the LIVE
-    //     VariableStore at close time, after popup content's mutations are committed
-    //     (GameSession.ClosePopupAsync → ResolveTarget) — but that commit only ever copies
-    //     VariableStore._session, never the separate, transient ._let scope a `let` writes to. A
-    //     let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
-    //     the SAME popup's target tried to reference it after close — see
-    //     PassageBodyVisitor.IsSetupPassagenameAssignment for the full mechanism and why it now hoists
-    //     an `assign` (EffectNode.VarRandom) instead, which IS in _session and survives the commit.
-    //   - Regression caught via A Time of War's BlameResolve/ParadoxFirst: an earlier, looser version
-    //     of this pattern ([.. var pre, SetupNotificationNode {...}], accepting ANY preceding nodes)
-    //     matched branches whose "preamble" was real per-branch side effects (assign var/late/blame, a
-    //     nested conditional, a link) — CollapseSetupNotificationConditionals hoists preamble
-    //     unconditionally ahead of the merged popup, so those effects started running on EVERY visit
-    //     regardless of which branch's condition actually matched, silently corrupting `blame`/`late`
-    //     to whatever the last branch happened to assign. A pure random-assign is the one shape where
-    //     unconditional hoisting is harmless (worst case: a discarded, otherwise-inert extra draw when
-    //     its own branch didn't match — see BuildTernaryChain's TargetExpr, which only ever consumes it
-    //     via the matching arm); anything else must keep gating its branch's own conditional and fail
-    //     this match instead.
-    private static bool IsPureRandomAssignEffect(MwsNode n) =>
-        n is EffectNode
-        {
-            VarRandom.Count: 1,
-            VarSets: null or { Count: 0 },
-            VarMath: null or { Count: 0 },
-            VarPush: null or { Count: 0 },
-            VarPop: null,
-            VarSort: null or { Count: 0 },
-            VarRemove: null or { Count: 0 },
-        };
+    // Resolves a SetupNotificationNode's effective next-passage string, ready to drop directly into
+    // `target`/`onclose`/a ternary arm. Usually just NextPassage (a literal passage id, or an
+    // already-${...}-wrapped computed expression from IsSetupPassagenameAssignment's ternary
+    // fallback) — but when Random is set (SetupPassagename = macros1.either(...), which can't be
+    // evaluated as a literal at extraction time since Cradle draws a fresh value every call), builds
+    // a ${...}-wrapped choose_one/shuffled expression from it instead. Two earlier fixes hoisted that
+    // draw into an intermediate variable (a `let`, then a session `assign`) before landing here —
+    // both reverted: see SetupNotificationNode.Random's own remarks for why hoisting isn't needed at
+    // all — the draw expression is a pure function of that visit's PRNG state, safe to embed inline
+    // anywhere this resolved string ends up used, exactly like any other computed expression.
+    private static string? ResolveSetupTarget(SetupNotificationNode sn) =>
+        sn.Random is not null ? $"${{{MwsExprHelper.VarRandomToExpr(sn.Random)}}}" : sn.NextPassage;
 
-    private static bool TryGetSetupTargetArms(
-        ConditionalNode cond, out List<(string? Condition, string Target)> arms, out List<MwsNode> preamble)
+    // True when every branch of `cond` is a body consisting of exactly one SetupNotificationNode
+    // whose resolved target (ResolveSetupTarget) is non-null. Mirrors
+    // CradleExtractor.TryCollapseCheckProgressConditional's arm-extraction, but for
+    // ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls, and without that
+    // method's "must already have an else" requirement — see CollapseSetupNotificationConditionals
+    // for why this one has to tolerate an absent else.
+    private static bool TryGetSetupTargetArms(ConditionalNode cond, out List<(string? Condition, string Target)> arms)
     {
         arms = [];
-        preamble = [];
         foreach (var branch in cond.Branches)
         {
-            if (branch.Nodes is not [.. var pre, SetupNotificationNode { NextPassage: { } target }] ||
-                !pre.All(IsPureRandomAssignEffect))
+            if (branch.Nodes is not [SetupNotificationNode sn] || ResolveSetupTarget(sn) is not { } target)
             {
                 arms = [];
-                preamble = [];
                 return false;
             }
 
-            preamble.AddRange(pre);
             arms.Add((branch.Else == true ? null : branch.Condition, target));
         }
 
@@ -753,16 +725,15 @@ public static partial class V2Serializer
         int i = 0;
         while (i < nodes.Count)
         {
-            if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms, out var preamble))
+            if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms))
             {
                 var sourceLine = firstCond.SourceLine;
                 int j = i + 1;
                 while (!arms.Any(a => a.Condition is null) &&
                        j < nodes.Count && nodes[j] is ConditionalNode nextCond &&
-                       TryGetSetupTargetArms(nextCond, out var moreArms, out var morePreamble))
+                       TryGetSetupTargetArms(nextCond, out var moreArms))
                 {
                     arms.AddRange(moreArms);
-                    preamble.AddRange(morePreamble);
                     j++;
                 }
 
@@ -778,7 +749,6 @@ public static partial class V2Serializer
                     arms.Add((null, ""));
                 }
 
-                result.AddRange(preamble);
                 result.Add(new SetupNotificationNode
                 {
                     NextPassage = "${" + CradleExtractor.BuildTernaryChain(arms) + "}",
@@ -968,9 +938,9 @@ public static partial class V2Serializer
             if (child is SetupNotificationNode sn)
             {
                 layout = "setup";
-                if (sn.NextPassage is not null)
+                if (ResolveSetupTarget(sn) is { } resolved)
                 {
-                    onclose = sn.NextPassage;
+                    onclose = resolved;
                 }
 
                 continue;
@@ -1494,15 +1464,15 @@ public static partial class V2Serializer
 
         yield return new() { ["type"] = "section", ["style"] = "panel", ["content"] = nodes };
 
-        if (sn.NextPassage is not null)
+        if (ResolveSetupTarget(sn) is { } resolved)
         {
             var navD = new Dictionary<string, object?>
             {
                 ["type"] = "link",
                 ["label"] = "Continue",
-                ["target"] = sn.NextPassage,
+                ["target"] = resolved,
             };
-            AddLinkHint(navD, sn.NextPassage, ctx);
+            AddLinkHint(navD, resolved, ctx);
             navD["snapshot"] = true;
             yield return navD;
         }
@@ -1546,10 +1516,10 @@ public static partial class V2Serializer
         // acknowledgement button, even when there's no explicit destination passage (it just falls
         // through to whatever renders next, since target/onclose are independently optional).
         d["okay"] = "Accept";
-        if (sn.NextPassage is not null)
+        if (ResolveSetupTarget(sn) is { } resolved)
         {
-            d["target"] = sn.NextPassage;
-            AddLinkHint(d, sn.NextPassage, ctx);
+            d["target"] = resolved;
+            AddLinkHint(d, resolved, ctx);
             d["snapshot"] = true;
         }
 

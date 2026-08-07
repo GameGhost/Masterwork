@@ -966,32 +966,26 @@ public class V2SerializerTests
     }
 
     [Fact]
-    public void ExpandLink_SetupPassagenameIfElseWithHoistedEitherBranch_CollapsesTargetWithoutNestedTemplate()
+    public void ExpandLink_SetupPassagenameIfElseWithInlineEitherBranch_CollapsesTargetWithNoHoisting()
     {
         // Regression: Fear of the Unknown's EssentialSaltsRes passage (source lines 14014-14029):
         // "if (Vars.round == 19) { ViewItemObtain.SetupPassagename = "LiberalEvent3"; } else {
         // ViewItemObtain.SetupPassagename = macros1.either("LiberalEvent", "LiberalTaxes"); }" — one
-        // branch is a literal target, the other assigns from an inline either() call.
-        // IsSetupPassagenameAssignment now hoists that either() into a preamble session-variable
-        // assign (EffectNode.VarRandom) sitting before the branch's own SetupNotificationNode. Before
-        // this fix, TryGetSetupTargetArms's branch pattern required EXACTLY one node
-        // ([SetupNotificationNode]), so a branch with a preamble node wouldn't match at all — and
-        // even if it had, the else branch's target was already the buggy raw
-        // "${macros1.either(...)}" text, so BuildTernaryChain's naive re-quoting would have
-        // double-wrapped it as a literal string containing an unevaluated "${...}" fragment, never
-        // actually evaluated at render time. The fix: TryGetSetupTargetArms now captures leading
-        // preamble nodes per branch via a slice pattern ([.. var pre, SetupNotificationNode {...}]),
-        // CollapseSetupNotificationConditionals hoists that preamble out before the merged
-        // SetupNotificationNode, and BuildTernaryChain's TargetExpr helper unwraps an
-        // already-${...}-wrapped arm target instead of re-quoting it.
+        // branch is a literal target, the other assigns from an inline either() call. The buggy
+        // original: the else branch's target was the raw, untranslated "${macros1.either(...)}"
+        // text, so BuildTernaryChain's naive re-quoting double-wrapped it as a literal string
+        // containing an unevaluated "${...}" fragment, never actually evaluated at render time.
         //
-        // The preamble is an EffectNode assign, NOT a LetNode — a second regression, caught only
-        // after the LetNode version shipped: a popup's `target` is resolved against the live
-        // VariableStore at close time, after popup content's own mutations are committed
-        // (GameSession.ClosePopupAsync → ResolveTarget), but that commit only ever copies
-        // VariableStore._session, never the separate, transient ._let scope a `let` writes to. The
-        // let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
-        // this SAME popup's own target tried to reference it after close.
+        // Two earlier fixes hoisted the draw into a preamble node sitting before the branch's
+        // SetupNotificationNode — a `let` (reverted: doesn't survive a popup's own content→target
+        // scope boundary — see git history) and then a session `assign` (worked, but needed
+        // TryGetSetupTargetArms's branch pattern to tolerate a preamble node at all, which regressed
+        // on A Time of War's BlameResolve/ParadoxFirst — see git history). Neither hoist was actually
+        // needed: SetupNotificationNode carries the VarRandom directly (no preamble, no extra node —
+        // each branch here is still exactly one node), and V2Serializer.ResolveSetupTarget resolves
+        // it into a bare ${...}-free expression fragment that BuildTernaryChain's TargetExpr embeds
+        // directly into the ternary, the same way it already handles the "complex/ternary fallback"
+        // case for a plain computed-expression SetupPassagename.
         var passage = new MwsPassage
         {
             PassageId = "P1",
@@ -1017,19 +1011,15 @@ public class V2SerializerTests
                                     Else = true,
                                     Nodes =
                                     [
-                                        new Masterwork.Extractor.EffectNode
+                                        new Masterwork.Extractor.SetupNotificationNode
                                         {
-                                            VarRandom = new()
+                                            Random = new Masterwork.Extractor.VarRandom
                                             {
-                                                ["_setup_rnd_P1_0"] = new Masterwork.Extractor.VarRandom
-                                                {
-                                                    RandomType = "choose-one",
-                                                    Values = ["LiberalEvent", "LiberalTaxes"],
-                                                    SeedKey = "P1_0",
-                                                },
+                                                RandomType = "choose-one",
+                                                Values = ["LiberalEvent", "LiberalTaxes"],
+                                                SeedKey = "P1_0",
                                             },
                                         },
-                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "${_setup_rnd_P1_0}" },
                                     ],
                                 },
                             ],
@@ -1045,18 +1035,14 @@ public class V2SerializerTests
         Assert.Equal("popup", node["type"]);
         Assert.Equal("setup", node["layout"]);
         // A clean single-level ternary — no nested "${...}" string inside the outer expression.
-        Assert.Equal("${round == 19 ? \"LiberalEvent3\" : _setup_rnd_P1_0}", node["target"]);
+        Assert.Equal(
+            "${round == 19 ? \"LiberalEvent3\" : [\"LiberalEvent\", \"LiberalTaxes\"].shuffled(\"P1_0\")[0]}",
+            node["target"]);
         Assert.Equal("Close", node["okay"]);
 
-        // The hoisted assign becomes part of the popup's own eagerly-evaluated content (childNodes in
-        // TransformPopup — it's a sibling within the ExpandLinkNode's own children, not one of the
-        // few node types special-cased out of childNodes), not a sibling of the popup at the
-        // passage's top level. Unlike a `let`, an `assign` writes to VariableStore._session, which IS
-        // part of what ClosePopupAsync commits to the live store before target resolution runs — so
-        // the popup's own target can see it after close.
-        var content = (List<Dictionary<string, object?>>)node["content"]!;
-        var assignDict = Assert.Single(content, c => (string)c["type"]! == "assign");
-        Assert.Equal("_setup_rnd_P1_0", assignDict["var"]);
-        Assert.Equal("[\"LiberalEvent\", \"LiberalTaxes\"].shuffled(\"P1_0\")[0]", assignDict["expr"]);
+        // No extra node landed in content — nothing was hoisted, so there's nothing to place or
+        // scope correctly in the first place.
+        var content = node.GetValueOrDefault("content") as List<Dictionary<string, object?>>;
+        Assert.True(content is null or []);
     }
 }

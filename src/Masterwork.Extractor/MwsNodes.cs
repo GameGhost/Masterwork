@@ -719,6 +719,17 @@ public class SetupNotificationNode : MwsNode
     public string? Title { get; set; }
     public string? Text { get; set; }
     public string? NextPassage { get; set; }
+    // Set instead of NextPassage when the destination is a Cradle either()/random() draw
+    // (SetupPassagename = macros1.either(...)) — Cradle draws a fresh value every call, and the
+    // draw expression (e.g. ["A","B"].shuffled(seedKey)[0]) is a pure function of the PRNG state,
+    // so it can be embedded directly wherever the resolved target string is needed (V2Serializer's
+    // ResolveSetupTarget) instead of being hoisted into an intermediate variable. Two hoisting
+    // attempts were tried and reverted: a `let` doesn't survive a popup's own content→target scope
+    // boundary (see git history), and a session-variable `assign` works but pollutes popup content
+    // with an unrelated statement and needlessly widened TryGetSetupTargetArms's branch pattern
+    // (a real regression — see git history). Assigned a SeedKey later by
+    // CradleExtractor.AssignSeedKeysInNodes, same as every other VarRandom in the tree.
+    public VarRandom? Random { get; set; }
     public override Dictionary<string, object?> ToDict()
     {
         var d = new Dictionary<string, object?> { ["type"] = Type };
