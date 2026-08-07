@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
 using VarDef = Masterwork.ModuleFormat.VarDef;
@@ -1157,24 +1158,106 @@ public partial class CradleExtractor
         // — no separate "ignore popups" special case needed. Real-world occurrence: A Time of War's
         // TSBarracksPenalty ("if (barracks == "yes") { **Lack of Service Penalty** ... } else {
         // goto SeedGUNS; }").
-        if (nodes is [ConditionalNode cond] &&
-            TryHoistFromOneBranch([.. cond.Branches.Select(b => b.Nodes)], layout,
-                out var condTitle, out var condSubtitle, out var condIdx, out var condRemaining))
+        //
+        // The conditional/switch doesn't have to be the ONLY top-level node, or even the LAST one —
+        // any number of purely "invisible" siblings (IsHeadingInert: assigns, random draws, lets,
+        // breaks, or a nested conditional/switch whose every branch is entirely made of those) may
+        // surround it on either side. Real occurrence: SeedGUNS assigns `war` from a
+        // `switch (townname)` where every case is just an assign — no heading of its own —
+        // immediately before the `switch (gunsbonus)` whose cases each carry one, followed by three
+        // more trailing `lineBreak()` calls after the whole switch. Title/subtitle are passage-level
+        // fields, not interleaved with body content, so where within `nodes` the heading-bearing
+        // conditional sits doesn't matter — only that nothing else there could itself compete for
+        // the heading position.
+        if (TryFindSoleHeadingCandidate<ConditionalNode>(nodes, out var cond))
         {
-            cond.Branches[condIdx].Nodes = condRemaining;
-            return (condTitle, condSubtitle, nodes);
+            if (TryHoistFromOneBranch([.. cond.Branches.Select(b => b.Nodes)], layout,
+                    out var condTitle, out var condSubtitle, out var condIdx, out var condRemaining))
+            {
+                cond.Branches[condIdx].Nodes = condRemaining;
+                return (condTitle, condSubtitle, nodes);
+            }
+
+            var condArms = BuildTernaryArmsFromConditional(cond);
+            if (condArms is not null && TryBuildTernaryHeading(condArms, layout,
+                    out var chainTitle, out var chainSubtitle, out var chainRemaining))
+            {
+                for (int i = 0; i < cond.Branches.Count; i++)
+                {
+                    cond.Branches[i].Nodes = chainRemaining[i];
+                }
+
+                return (chainTitle, chainSubtitle, nodes);
+            }
         }
 
-        if (nodes is [SwitchNode sw] &&
-            TryHoistFromOneBranch([.. sw.Cases.Select(c => c.Nodes)], layout,
-                out var swTitle, out var swSubtitle, out var swIdx, out var swRemaining))
+        if (TryFindSoleHeadingCandidate<SwitchNode>(nodes, out var sw))
         {
-            sw.Cases[swIdx].Nodes = swRemaining;
-            return (swTitle, swSubtitle, nodes);
+            if (TryHoistFromOneBranch([.. sw.Cases.Select(c => c.Nodes)], layout,
+                    out var swTitle, out var swSubtitle, out var swIdx, out var swRemaining))
+            {
+                sw.Cases[swIdx].Nodes = swRemaining;
+                return (swTitle, swSubtitle, nodes);
+            }
+
+            var swArms = BuildTernaryArmsFromSwitch(sw);
+            if (swArms is not null && TryBuildTernaryHeading(swArms, layout,
+                    out var swChainTitle, out var swChainSubtitle, out var swChainRemaining))
+            {
+                for (int i = 0; i < sw.Cases.Count; i++)
+                {
+                    sw.Cases[i].Nodes = swChainRemaining[i];
+                }
+
+                return (swChainTitle, swChainSubtitle, nodes);
+            }
         }
 
         return (null, null, nodes);
     }
+
+    // True when `nodes` contains EXACTLY ONE node that is NOT "heading inert" (IsHeadingInert) —
+    // i.e. could compete for the passage's own heading — and that one node is of type T. Checking
+    // inertness FIRST (not "is it type T") matters: a T-typed node can itself be entirely inert
+    // (e.g. SeedGUNS's leading `switch (townname)`, every case of which is just an assign) and must
+    // not be mistaken for a second candidate alongside the real heading-bearing node of the same
+    // type — only a NON-inert node can ever be "the" candidate. The sole T is returned regardless
+    // of its position in the list (see the call sites' remarks for why it doesn't have to be first,
+    // last, or the only node at all).
+    private static bool TryFindSoleHeadingCandidate<T>(List<MwsNode> nodes, [NotNullWhen(true)] out T? candidate)
+        where T : MwsNode
+    {
+        candidate = null;
+        foreach (var node in nodes)
+        {
+            if (IsHeadingInert(node))
+            {
+                continue;
+            }
+
+            if (node is not T t || candidate is not null)
+            {
+                return false;
+            }
+
+            candidate = t;
+        }
+
+        return candidate is not null;
+    }
+
+    // True when `node` can never itself carry a heading — its only possible effect is a state
+    // change (assign, random draw, let), a break (no text of its own), or a nested conditional/
+    // switch whose every branch/case consists ENTIRELY of such nodes. See the call sites' remarks
+    // (SeedGUNS) for why this needs to look past nodes like this instead of requiring the
+    // heading-bearing conditional/switch to be the ONLY top-level node.
+    private static bool IsHeadingInert(MwsNode node) => node switch
+    {
+        EffectNode or LetNode or CheckpointNode or BreakNode or ParagraphBreakNode => true,
+        ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsHeadingInert)),
+        SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsHeadingInert)),
+        _ => false,
+    };
 
     // Tries each branch/case's own node list against TryHoistHeadingTitleSubtitle; succeeds only
     // when EXACTLY ONE of them yields a title (see the call site's remarks for why more than one
@@ -1205,6 +1288,125 @@ public partial class CradleExtractor
 
         return matchedIndex >= 0;
     }
+
+    // Tries to collapse EVERY branch/case's own heading into ONE ternary-chained title/subtitle —
+    // e.g. Cradle's "switch (gunsbonus) { case 1: **Knowledge Bonus** ...; case 2: **Ingredient
+    // Bonus** ...; case 3: **Wealth Bonus** ...; default: **Knowledge Bonus** ...; }" idiom, where
+    // the SAME switch determines both the passage's displayed content AND its title, per branch.
+    // Unlike TryHoistFromOneBranch (fires when exactly one branch has heading content and the rest
+    // are skip-only), this requires EVERY branch to have its own heading — a mix (some branches
+    // have a heading, some don't) is genuinely ambiguous and left untouched, same conservative
+    // philosophy as everywhere else in this function. Also requires a uniform shape across every
+    // branch (all-with-subtitle or all-without) — a per-branch mix of shape 1 (title only) and
+    // shape 2 (title + subtitle) headings would need per-arm subtitle logic MWS's flat `subtitle:`
+    // field can't express, so that's left untouched too. `{...}` template placeholders already
+    // evaluate a full expression, ternaries included (see docs/mws-format-latest.md §4 and
+    // ExpressionEvaluator.ExpandTemplate) — this just builds that expression the same way
+    // BuildTernaryChain already does for `target`/`goto`, wrapped in `{}` rather than `${}` since
+    // title/subtitle splice expressions into an otherwise-literal string rather than being a
+    // whole-field expression themselves. Real-world occurrence: A Time of War's SeedGUNS.
+    private static bool TryBuildTernaryHeading(
+        List<(string? Condition, List<MwsNode> Nodes)> arms, string layout,
+        out string? title, out string? subtitle, out List<List<MwsNode>> remainingPerArm)
+    {
+        title = null;
+        subtitle = null;
+        remainingPerArm = [];
+
+        if (arms.Count < 2)
+        {
+            return false;
+        }
+
+        var hoisted = new List<(string? Condition, string Title, string? Subtitle, List<MwsNode> Remaining)>();
+        foreach (var (armCondition, armNodes) in arms)
+        {
+            var (t, s, r) = TryHoistHeadingTitleSubtitle(armNodes, layout);
+            if (t is null)
+            {
+                return false;
+            }
+
+            hoisted.Add((armCondition, t, s, r));
+        }
+
+        var withSubtitle = hoisted.Count(h => h.Subtitle is not null);
+        if (withSubtitle != 0 && withSubtitle != hoisted.Count)
+        {
+            return false;
+        }
+
+        title = "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, h.Title))]) + "}";
+        subtitle = withSubtitle == 0
+            ? null
+            : "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, h.Subtitle!))]) + "}";
+        remainingPerArm = [.. hoisted.Select(h => h.Remaining)];
+        return true;
+    }
+
+    // Builds ternary arms from a ConditionalNode's branches for TryBuildTernaryHeading — null only
+    // when there's no `else` branch to anchor the ternary's unconditional trailing arm on
+    // (BuildTernaryChain requires the last arm to have a null Condition; without a real else,
+    // there's no branch whose heading can safely serve as the "none of the above" fallback title).
+    private static List<(string? Condition, List<MwsNode> Nodes)>? BuildTernaryArmsFromConditional(ConditionalNode cond)
+    {
+        if (!cond.Branches.Any(b => b.Else == true))
+        {
+            return null;
+        }
+
+        var arms = cond.Branches
+            .Select(b => (Condition: b.Else == true ? null : b.Condition, b.Nodes))
+            .ToList();
+        var elseIdx = arms.FindIndex(a => a.Condition is null);
+        if (elseIdx != arms.Count - 1)
+        {
+            var fallback = arms[elseIdx];
+            arms.RemoveAt(elseIdx);
+            arms.Add(fallback);
+        }
+
+        return arms;
+    }
+
+    // Builds ternary arms from a SwitchNode's cases for TryBuildTernaryHeading — null only when
+    // there's no `default` case (same reasoning as BuildTernaryArmsFromConditional's own remarks).
+    private static List<(string? Condition, List<MwsNode> Nodes)>? BuildTernaryArmsFromSwitch(SwitchNode sw)
+    {
+        if (!sw.Cases.Any(c => c.Default == true))
+        {
+            return null;
+        }
+
+        var arms = sw.Cases
+            .Select(c => (Condition: c.Default == true ? null : BuildSwitchCaseCondition(sw.On, c.Match), c.Nodes))
+            .ToList();
+        var defaultIdx = arms.FindIndex(a => a.Condition is null);
+        if (defaultIdx != arms.Count - 1)
+        {
+            var fallback = arms[defaultIdx];
+            arms.RemoveAt(defaultIdx);
+            arms.Add(fallback);
+        }
+
+        return arms;
+    }
+
+    private static readonly string[] SwitchCasePatternPrefixes = ["==", "!=", "<=", ">=", "<", ">"];
+
+    // Rebuilds an equivalent boolean condition string from a SwitchCase's `match` value — the
+    // inverse of BuildMatchValue (which strips an "==" op down to a bare literal, but keeps any
+    // other comparison operator as a raw "<=5"-style pattern string glued onto the value; see its
+    // own remarks). A compound (List<object>) match — from an OR'd chain like "on == "A" || on ==
+    // "B"" — becomes an equivalent "||"-joined condition.
+    private static string BuildSwitchCaseCondition(string on, object? match) => match switch
+    {
+        List<object> list => string.Join(" || ", list.Select(v => BuildSwitchCaseCondition(on, v))),
+        int n => $"{on} == {n}",
+        string s when SwitchCasePatternPrefixes.Any(s.StartsWith) => $"{on}{s}",
+        string s => $"{on} == \"{MwsExprHelper.EscapeStr(s)}\"",
+        _ => $"{on} == {match}",
+    };
 
     private static (string Title, string? Subtitle) SplitHeadingLine(string text)
     {

@@ -983,11 +983,15 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void NarrationLayout_RootConditionalBothBranchesHaveHeadings_AmbiguousNoHoist()
+    public void NarrationLayout_RootConditionalBothBranchesHaveHeadings_CollapsesToTernaryTitle()
     {
-        // Safety check: when BOTH branches of a root conditional have their own bold heading,
-        // there's no single unambiguous title to promote to the passage level — left untouched,
-        // same as before this fix (rather than arbitrarily picking one branch's heading).
+        // When EVERY branch of a root conditional has its own bold heading (not just one, with the
+        // rest skip-only), there's no single STATIC title — but title/subtitle's "{...}" template
+        // placeholder already evaluates a full expression (ternaries included, same evaluator as
+        // "${...}"), so the extractor can collapse per-branch headings into one ternary-chained
+        // title, the same way BuildTernaryChain already does for target/goto. Real-world shape:
+        // A Time of War's SeedGUNS (a switch, not a plain if/else — see the SwitchNode-shape sibling
+        // test — but the same collapse applies to a plain if/else conditional too).
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -1013,12 +1017,121 @@ public class ExtractorTests
             }
             """);
 
-        // No hoist happened — Title falls back to the bare passage id, same as any passage this
-        // mechanism never touches.
-        Assert.Equal("P1", passages[0].Title);
+        Assert.Equal("{flag == \"yes\" ? \"Heading A\" : \"Heading B\"}", passages[0].Title);
         Assert.Null(passages[0].Subtitle);
+
+        // The heading was stripped from BOTH branches this time (not just one).
         var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
-        Assert.All(cond.Branches, b => Assert.Contains(b.Nodes, n => n is TextNode { Style: "bold" }));
+        Assert.All(cond.Branches, b => Assert.DoesNotContain(b.Nodes, n => n is TextNode { Style: "bold" }));
+        Assert.All(cond.Branches, b => Assert.Empty(b.Nodes));
+    }
+
+    [Fact]
+    public void NarrationLayout_RootSwitchEveryCaseHasHeading_CollapsesToTernaryTitle()
+    {
+        // Regression: A Time of War's SeedGUNS passage (source line 14190) — after a couple of
+        // if-blocks with assigns (condensed to a switch), the rest of the passage is a switch on
+        // gunsbonus with 1/2/3/default cases, EACH starting with its own bold heading ("Knowledge
+        // Bonus"/"Ingredient Bonus"/"Wealth Bonus"/"Knowledge Bonus"). TryHoistFromOneBranch only
+        // fires when exactly one case has heading content; here every case does, so nothing was
+        // ever hoisted and the passage had no title at all. Fixed by collapsing every case's own
+        // heading into one ternary-chained title, matching the switch's own on/match/default shape
+        // (BuildSwitchCaseCondition rebuilds an equivalent boolean condition per case).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.gunsbonus == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Knowledge Bonus");
+                    }
+                }
+                else if (this.Vars.gunsbonus == 2)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Ingredient Bonus");
+                    }
+                }
+                else if (this.Vars.gunsbonus == 3)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Wealth Bonus");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Knowledge Bonus");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{gunsbonus == 1 ? \"Knowledge Bonus\" : gunsbonus == 2 ? \"Ingredient Bonus\" : gunsbonus == 3 ? \"Wealth Bonus\" : \"Knowledge Bonus\"}",
+            passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+
+        var sw = Assert.Single(passages[0].Nodes.OfType<SwitchNode>());
+        Assert.All(sw.Cases, c => Assert.DoesNotContain(c.Nodes, n => n is TextNode { Style: "bold" }));
+        Assert.All(sw.Cases, c => Assert.Empty(c.Nodes));
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingInertSwitchThenHeadingSwitch_StillCollapsesToTernaryTitle()
+    {
+        // SeedGUNS's actual shape (source lines 14192-14290): two SEPARATE sibling `if` statements
+        // (no `else`, each assigning `war`) get consolidated into a purely "invisible" switch
+        // (every case is just an assign, no heading of its own) that precedes the heading-bearing
+        // switch — the title-bearing switch is neither the only top-level node NOR the last one:
+        // three more lineBreak() calls follow it before yield break. IsHeadingInert must recognize
+        // both the leading switch and the trailing breaks as safe to skip past.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.townname == "Paradox")
+                {
+                    this.Vars.war = 1;
+                }
+                if (this.Vars.townname == "Destruction")
+                {
+                    this.Vars.war = 2;
+                }
+                if (this.Vars.gunsbonus == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Knowledge Bonus");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Ingredient Bonus");
+                    }
+                }
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield break;
+            }
+            """);
+
+        Assert.Equal("{gunsbonus == 1 ? \"Knowledge Bonus\" : \"Ingredient Bonus\"}", passages[0].Title);
     }
 
     [Fact]
