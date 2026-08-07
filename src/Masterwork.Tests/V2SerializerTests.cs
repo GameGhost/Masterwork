@@ -972,9 +972,9 @@ public class V2SerializerTests
         // "if (Vars.round == 19) { ViewItemObtain.SetupPassagename = "LiberalEvent3"; } else {
         // ViewItemObtain.SetupPassagename = macros1.either("LiberalEvent", "LiberalTaxes"); }" — one
         // branch is a literal target, the other assigns from an inline either() call.
-        // IsSetupPassagenameAssignment now hoists that either() into a preamble LetNode sitting
-        // before the branch's own SetupNotificationNode (mirroring HoistInlineEithers). Before this
-        // fix, TryGetSetupTargetArms's branch pattern required EXACTLY one node
+        // IsSetupPassagenameAssignment now hoists that either() into a preamble session-variable
+        // assign (EffectNode.VarRandom) sitting before the branch's own SetupNotificationNode. Before
+        // this fix, TryGetSetupTargetArms's branch pattern required EXACTLY one node
         // ([SetupNotificationNode]), so a branch with a preamble node wouldn't match at all — and
         // even if it had, the else branch's target was already the buggy raw
         // "${macros1.either(...)}" text, so BuildTernaryChain's naive re-quoting would have
@@ -984,6 +984,14 @@ public class V2SerializerTests
         // CollapseSetupNotificationConditionals hoists that preamble out before the merged
         // SetupNotificationNode, and BuildTernaryChain's TargetExpr helper unwraps an
         // already-${...}-wrapped arm target instead of re-quoting it.
+        //
+        // The preamble is an EffectNode assign, NOT a LetNode — a second regression, caught only
+        // after the LetNode version shipped: a popup's `target` is resolved against the live
+        // VariableStore at close time, after popup content's own mutations are committed
+        // (GameSession.ClosePopupAsync → ResolveTarget), but that commit only ever copies
+        // VariableStore._session, never the separate, transient ._let scope a `let` writes to. The
+        // let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
+        // this SAME popup's own target tried to reference it after close.
         var passage = new MwsPassage
         {
             PassageId = "P1",
@@ -1009,17 +1017,19 @@ public class V2SerializerTests
                                     Else = true,
                                     Nodes =
                                     [
-                                        new Masterwork.Extractor.LetNode
+                                        new Masterwork.Extractor.EffectNode
                                         {
-                                            Var = "_rnd_P1_0",
-                                            Random = new Masterwork.Extractor.VarRandom
+                                            VarRandom = new()
                                             {
-                                                RandomType = "choose-one",
-                                                Values = ["LiberalEvent", "LiberalTaxes"],
-                                                SeedKey = "P1_0",
+                                                ["_setup_rnd_P1_0"] = new Masterwork.Extractor.VarRandom
+                                                {
+                                                    RandomType = "choose-one",
+                                                    Values = ["LiberalEvent", "LiberalTaxes"],
+                                                    SeedKey = "P1_0",
+                                                },
                                             },
                                         },
-                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "${_rnd_P1_0}" },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "${_setup_rnd_P1_0}" },
                                     ],
                                 },
                             ],
@@ -1035,15 +1045,18 @@ public class V2SerializerTests
         Assert.Equal("popup", node["type"]);
         Assert.Equal("setup", node["layout"]);
         // A clean single-level ternary — no nested "${...}" string inside the outer expression.
-        Assert.Equal("${round == 19 ? \"LiberalEvent3\" : _rnd_P1_0}", node["target"]);
+        Assert.Equal("${round == 19 ? \"LiberalEvent3\" : _setup_rnd_P1_0}", node["target"]);
         Assert.Equal("Close", node["okay"]);
 
-        // The hoisted let becomes part of the popup's own eagerly-evaluated content (childNodes in
+        // The hoisted assign becomes part of the popup's own eagerly-evaluated content (childNodes in
         // TransformPopup — it's a sibling within the ExpandLinkNode's own children, not one of the
         // few node types special-cased out of childNodes), not a sibling of the popup at the
-        // passage's top level, and not silently dropped.
+        // passage's top level. Unlike a `let`, an `assign` writes to VariableStore._session, which IS
+        // part of what ClosePopupAsync commits to the live store before target resolution runs — so
+        // the popup's own target can see it after close.
         var content = (List<Dictionary<string, object?>>)node["content"]!;
-        var letDict = Assert.Single(content, c => (string)c["type"]! == "let");
-        Assert.Equal("[\"LiberalEvent\", \"LiberalTaxes\"].shuffled(\"P1_0\")[0]", letDict["expr"]);
+        var assignDict = Assert.Single(content, c => (string)c["type"]! == "assign");
+        Assert.Equal("_setup_rnd_P1_0", assignDict["var"]);
+        Assert.Equal("[\"LiberalEvent\", \"LiberalTaxes\"].shuffled(\"P1_0\")[0]", assignDict["expr"]);
     }
 }

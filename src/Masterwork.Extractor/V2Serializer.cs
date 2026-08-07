@@ -671,7 +671,7 @@ public static partial class V2Serializer
     // ── Setup-notification-in-conditional collapse ─────────────────────────
 
     // True when every branch of `cond` is a body ending in a SetupNotificationNode with a literal
-    // (non-null) NextPassage — optionally preceded by a hoisted-random-draw LetNode (from a
+    // (non-null) NextPassage — optionally preceded by a hoisted random-draw assign (from a
     // SetupPassagename = macros1.either(...) assign in that branch; its own NextPassage is already
     // a ${...}-wrapped reference to the hoisted temp var, which BuildTernaryChain knows to unwrap
     // instead of quoting as a literal). Mirrors CradleExtractor.TryCollapseCheckProgressConditional's
@@ -679,17 +679,39 @@ public static partial class V2Serializer
     // and without that method's "must already have an else" requirement — see
     // CollapseSetupNotificationConditionals for why this one has to tolerate an absent else.
     //
-    // The preamble is deliberately restricted to bare `LetNode { Random: not null }` — regression
-    // caught via A Time of War's BlameResolve/ParadoxFirst: an earlier, looser version of this
-    // pattern ([.. var pre, SetupNotificationNode {...}], accepting ANY preceding nodes) matched
-    // branches whose "preamble" was real per-branch side effects (assign var/late/blame, a nested
-    // conditional, a link) — CollapseSetupNotificationConditionals hoists preamble unconditionally
-    // ahead of the merged popup, so those effects started running on EVERY visit regardless of which
-    // branch's condition actually matched, silently corrupting `blame`/`late` to whatever the last
-    // branch happened to assign. A random-draw LetNode is the one shape where unconditional hoisting
-    // is harmless (worst case: a discarded, otherwise-inert extra draw when its own branch didn't
-    // match — see BuildTernaryChain's TargetExpr, which only ever consumes it via the matching arm);
-    // anything else must keep gating its branch's own conditional and fail this match instead.
+    // The preamble is deliberately restricted to a pure random-assign EffectNode (IsPureRandomAssign
+    // below) — NOT a LetNode, and not just anything. Two bugs shaped this:
+    //   - A `let` doesn't work here at all: the popup's own `target` is resolved against the LIVE
+    //     VariableStore at close time, after popup content's mutations are committed
+    //     (GameSession.ClosePopupAsync → ResolveTarget) — but that commit only ever copies
+    //     VariableStore._session, never the separate, transient ._let scope a `let` writes to. A
+    //     let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
+    //     the SAME popup's target tried to reference it after close — see
+    //     PassageBodyVisitor.IsSetupPassagenameAssignment for the full mechanism and why it now hoists
+    //     an `assign` (EffectNode.VarRandom) instead, which IS in _session and survives the commit.
+    //   - Regression caught via A Time of War's BlameResolve/ParadoxFirst: an earlier, looser version
+    //     of this pattern ([.. var pre, SetupNotificationNode {...}], accepting ANY preceding nodes)
+    //     matched branches whose "preamble" was real per-branch side effects (assign var/late/blame, a
+    //     nested conditional, a link) — CollapseSetupNotificationConditionals hoists preamble
+    //     unconditionally ahead of the merged popup, so those effects started running on EVERY visit
+    //     regardless of which branch's condition actually matched, silently corrupting `blame`/`late`
+    //     to whatever the last branch happened to assign. A pure random-assign is the one shape where
+    //     unconditional hoisting is harmless (worst case: a discarded, otherwise-inert extra draw when
+    //     its own branch didn't match — see BuildTernaryChain's TargetExpr, which only ever consumes it
+    //     via the matching arm); anything else must keep gating its branch's own conditional and fail
+    //     this match instead.
+    private static bool IsPureRandomAssignEffect(MwsNode n) =>
+        n is EffectNode
+        {
+            VarRandom.Count: 1,
+            VarSets: null or { Count: 0 },
+            VarMath: null or { Count: 0 },
+            VarPush: null or { Count: 0 },
+            VarPop: null,
+            VarSort: null or { Count: 0 },
+            VarRemove: null or { Count: 0 },
+        };
+
     private static bool TryGetSetupTargetArms(
         ConditionalNode cond, out List<(string? Condition, string Target)> arms, out List<MwsNode> preamble)
     {
@@ -698,7 +720,7 @@ public static partial class V2Serializer
         foreach (var branch in cond.Branches)
         {
             if (branch.Nodes is not [.. var pre, SetupNotificationNode { NextPassage: { } target }] ||
-                !pre.All(n => n is LetNode { Random: not null }))
+                !pre.All(IsPureRandomAssignEffect))
             {
                 arms = [];
                 preamble = [];

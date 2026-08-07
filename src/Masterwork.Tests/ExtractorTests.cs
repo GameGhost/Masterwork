@@ -3129,7 +3129,7 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void SetupPassagenameAssignedFromInlineEither_HoistsToLetBeforeSetupNotification()
+    public void SetupPassagenameAssignedFromInlineEither_HoistsToSessionAssignBeforeSetupNotification()
     {
         // Regression: A Time of War's RumorD1 passage (source line 1958-1960):
         // "ViewItemObtain.SetupPassagename = macros1.either("RumorIngredient", "RumorKnowledge",
@@ -3139,8 +3139,17 @@ public class ExtractorTests
         // expression" text, passing "macros1.either(...)" straight through SimplifyCondition (which
         // has no either()-hoisting logic of its own) into the emitted target — "${macros1.either(...)}"
         // — untranslated and unrenderable. Cradle draws a fresh value every either() call, so it must
-        // be hoisted into its own `let` right before the SetupNotificationNode, mirroring the working
-        // "Vars.X = macros1.either(...)" assignment case.
+        // be hoisted into its own assignment right before the SetupNotificationNode, mirroring the
+        // working "Vars.X = macros1.either(...)" assignment case.
+        //
+        // Second regression, caught only after this fix shipped: the FIRST version of this fix
+        // hoisted into a `let`, not a session-variable `assign`. A popup's `target` is resolved
+        // against the live VariableStore at close time, after popup content's own mutations are
+        // committed (GameSession.ClosePopupAsync → ResolveTarget) — but that commit only ever copies
+        // VariableStore._session, never the separate, transient ._let scope a `let` writes to. The
+        // let-bound temp var rendered fine as popup content but threw "Unknown variable" the instant
+        // this SAME popup's own target tried to reference it after close. It must be a real
+        // EffectNode/VarRandom session assign, not a LetNode.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -3153,18 +3162,27 @@ public class ExtractorTests
             }
             """);
 
-        var let = Assert.Single(passages[0].Nodes.OfType<LetNode>());
-        Assert.NotNull(let.Random);
-        Assert.Equal("choose-one", let.Random!.RandomType);
-        Assert.Equal(["RumorIngredient", "RumorKnowledge", "RumorPitch"], let.Random.Values);
+        // Must NOT be a LetNode — that's the exact shape that threw "Unknown variable" once the
+        // popup's target tried to reference it after the popup closed.
+        Assert.Empty(passages[0].Nodes.OfType<LetNode>());
+
+        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>(), e => e.VarRandom is { Count: 1 });
+        var (tempVar, random) = Assert.Single(effect.VarRandom!);
+        Assert.Equal("choose-one", random.RandomType);
+        Assert.Equal(["RumorIngredient", "RumorKnowledge", "RumorPitch"], random.Values);
 
         var setup = Assert.Single(passages[0].Nodes.OfType<SetupNotificationNode>());
-        Assert.Equal($"${{{let.Var}}}", setup.NextPassage);
+        Assert.Equal($"${{{tempVar}}}", setup.NextPassage);
         Assert.DoesNotContain("macros1", setup.NextPassage);
         Assert.DoesNotContain("either", setup.NextPassage);
 
-        // Ordering: the let must precede the SetupNotificationNode it feeds.
-        Assert.True(passages[0].Nodes.IndexOf(let) < passages[0].Nodes.IndexOf(setup));
+        // Ordering: the assign must precede the SetupNotificationNode it feeds.
+        Assert.True(passages[0].Nodes.IndexOf(effect) < passages[0].Nodes.IndexOf(setup));
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        var assignDict = Assert.Single(nodes, n => (string)n["type"]! == "assign");
+        Assert.Equal(tempVar, assignDict["var"]);
     }
 
     // ── ViewController.instance.ChangeView(...) ──────────────────────────────

@@ -2548,17 +2548,25 @@ public class PassageBodyVisitor
         // which this mirrors); the fallback below would otherwise pass the raw macros1.either(...)
         // text straight through untranslated (SimplifyCondition has no either()-hoisting logic of
         // its own — that only exists in HoistInlineEithers, called only for conditions). Hoist into
-        // its own let and reference the temp var, same as the working "Vars.X = macros1.either(...)"
-        // assignment case already does elsewhere. Real-world occurrences: A Time of War's RumorD1,
-        // Fear of the Unknown's EssentialSaltsRes (the latter inside an if/else branch, so this
-        // whole assign is one arm of a CollapseSetupNotificationConditionals ternary — the hoisted
-        // let still needs to land as a preceding sibling of the *outer* ConditionalNode, which the
-        // BuildConditional call site handles the same way HoistInlineEithers' own hoisted nodes do).
+        // a real session-variable assign (EffectNode.VarRandom), NOT a `let` — a popup's own `target`
+        // is resolved against the LIVE VariableStore at close time, after popup content's mutations
+        // are committed (GameSession.ClosePopupAsync → ResolveTarget), but that commit only ever
+        // copies VariableStore._session; `let` bindings live in the separate, transient VariableStore
+        // ._let scope (see VariableStore.SetLetVariable/SessionSnapshot) that's never part of it — a
+        // let-bound temp var here rendered fine as popup content but threw "Unknown variable" the
+        // instant the SAME popup's own target tried to reference it after close. `assign` writes to
+        // _session instead, exactly like the working "Vars.X = macros1.either(...)" assignment case
+        // already does elsewhere (and like RumorD1's own sibling branch, which assigns a real Cradle
+        // session var and successfully references it from the same popup's target). Real-world
+        // occurrences: A Time of War's RumorD1, Fear of the Unknown's EssentialSaltsRes (the latter
+        // inside an if/else branch, so this assign is one arm of a CollapseSetupNotificationConditionals
+        // ternary — see TryGetSetupTargetArms for why only this exact shape is safe to hoist out of
+        // its originating branch unconditionally).
         if (assign.Right is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
         {
             var values = ExtractMacroArgs(eitherInv);
-            var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
-            hoisted = [new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } }];
+            var tempVar = $"_setup_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+            hoisted = [new EffectNode { VarRandom = new() { [tempVar] = new VarRandom { RandomType = "choose-one", Values = values } } }];
             nextPassage = $"${{{tempVar}}}";
             return true;
         }
