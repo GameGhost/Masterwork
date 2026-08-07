@@ -670,23 +670,29 @@ public static partial class V2Serializer
 
     // ── Setup-notification-in-conditional collapse ─────────────────────────
 
-    // True when every branch of `cond` is a single-node body containing exactly a
-    // SetupNotificationNode with a literal (non-null) NextPassage. Mirrors
-    // CradleExtractor.TryCollapseCheckProgressConditional's arm-extraction, but for
-    // ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls, and without that
-    // method's "must already have an else" requirement — see CollapseSetupNotificationConditionals
-    // for why this one has to tolerate an absent else.
-    private static bool TryGetSetupTargetArms(ConditionalNode cond, out List<(string? Condition, string Target)> arms)
+    // True when every branch of `cond` is a body ending in a SetupNotificationNode with a literal
+    // (non-null) NextPassage — optionally preceded by other nodes (e.g. a LetNode hoisted from a
+    // SetupPassagename = macros1.either(...) assign in that branch; its own NextPassage is already
+    // a ${...}-wrapped reference to the hoisted temp var, which BuildTernaryChain knows to unwrap
+    // instead of quoting as a literal). Mirrors CradleExtractor.TryCollapseCheckProgressConditional's
+    // arm-extraction, but for ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls,
+    // and without that method's "must already have an else" requirement — see
+    // CollapseSetupNotificationConditionals for why this one has to tolerate an absent else.
+    private static bool TryGetSetupTargetArms(
+        ConditionalNode cond, out List<(string? Condition, string Target)> arms, out List<MwsNode> preamble)
     {
         arms = [];
+        preamble = [];
         foreach (var branch in cond.Branches)
         {
-            if (branch.Nodes is not [SetupNotificationNode { NextPassage: { } target }])
+            if (branch.Nodes is not [.. var pre, SetupNotificationNode { NextPassage: { } target }])
             {
                 arms = [];
+                preamble = [];
                 return false;
             }
 
+            preamble.AddRange(pre);
             arms.Add((branch.Else == true ? null : branch.Condition, target));
         }
 
@@ -712,15 +718,16 @@ public static partial class V2Serializer
         int i = 0;
         while (i < nodes.Count)
         {
-            if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms))
+            if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms, out var preamble))
             {
                 var sourceLine = firstCond.SourceLine;
                 int j = i + 1;
                 while (!arms.Any(a => a.Condition is null) &&
                        j < nodes.Count && nodes[j] is ConditionalNode nextCond &&
-                       TryGetSetupTargetArms(nextCond, out var moreArms))
+                       TryGetSetupTargetArms(nextCond, out var moreArms, out var morePreamble))
                 {
                     arms.AddRange(moreArms);
+                    preamble.AddRange(morePreamble);
                     j++;
                 }
 
@@ -736,6 +743,7 @@ public static partial class V2Serializer
                     arms.Add((null, ""));
                 }
 
+                result.AddRange(preamble);
                 result.Add(new SetupNotificationNode
                 {
                     NextPassage = "${" + CradleExtractor.BuildTernaryChain(arms) + "}",

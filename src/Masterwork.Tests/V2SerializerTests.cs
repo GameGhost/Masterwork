@@ -964,4 +964,86 @@ public class V2SerializerTests
         var content = (List<Dictionary<string, object?>>)node["content"]!;
         Assert.Contains(content, c => c["type"] as string == "text");
     }
+
+    [Fact]
+    public void ExpandLink_SetupPassagenameIfElseWithHoistedEitherBranch_CollapsesTargetWithoutNestedTemplate()
+    {
+        // Regression: Fear of the Unknown's EssentialSaltsRes passage (source lines 14014-14029):
+        // "if (Vars.round == 19) { ViewItemObtain.SetupPassagename = "LiberalEvent3"; } else {
+        // ViewItemObtain.SetupPassagename = macros1.either("LiberalEvent", "LiberalTaxes"); }" — one
+        // branch is a literal target, the other assigns from an inline either() call.
+        // IsSetupPassagenameAssignment now hoists that either() into a preamble LetNode sitting
+        // before the branch's own SetupNotificationNode (mirroring HoistInlineEithers). Before this
+        // fix, TryGetSetupTargetArms's branch pattern required EXACTLY one node
+        // ([SetupNotificationNode]), so a branch with a preamble node wouldn't match at all — and
+        // even if it had, the else branch's target was already the buggy raw
+        // "${macros1.either(...)}" text, so BuildTernaryChain's naive re-quoting would have
+        // double-wrapped it as a literal string containing an unevaluated "${...}" fragment, never
+        // actually evaluated at render time. The fix: TryGetSetupTargetArms now captures leading
+        // preamble nodes per branch via a slice pattern ([.. var pre, SetupNotificationNode {...}]),
+        // CollapseSetupNotificationConditionals hoists that preamble out before the merged
+        // SetupNotificationNode, and BuildTernaryChain's TargetExpr helper unwraps an
+        // already-${...}-wrapped arm target instead of re-quoting it.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click to continue...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "round == 19",
+                                    Nodes = [new Masterwork.Extractor.SetupNotificationNode { NextPassage = "LiberalEvent3" }],
+                                },
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Else = true,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.LetNode
+                                        {
+                                            Var = "_rnd_P1_0",
+                                            Random = new Masterwork.Extractor.VarRandom
+                                            {
+                                                RandomType = "choose-one",
+                                                Values = ["LiberalEvent", "LiberalTaxes"],
+                                                SeedKey = "P1_0",
+                                            },
+                                        },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "${_rnd_P1_0}" },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("setup", node["layout"]);
+        // A clean single-level ternary — no nested "${...}" string inside the outer expression.
+        Assert.Equal("${round == 19 ? \"LiberalEvent3\" : _rnd_P1_0}", node["target"]);
+        Assert.Equal("Close", node["okay"]);
+
+        // The hoisted let becomes part of the popup's own eagerly-evaluated content (childNodes in
+        // TransformPopup — it's a sibling within the ExpandLinkNode's own children, not one of the
+        // few node types special-cased out of childNodes), not a sibling of the popup at the
+        // passage's top level, and not silently dropped.
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        var letDict = Assert.Single(content, c => (string)c["type"]! == "let");
+        Assert.Equal("[\"LiberalEvent\", \"LiberalTaxes\"].shuffled(\"P1_0\")[0]", letDict["expr"]);
+    }
 }

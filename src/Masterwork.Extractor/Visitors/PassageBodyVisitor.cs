@@ -663,9 +663,10 @@ public class PassageBodyVisitor
 
         // ViewItemObtain.SetupPassagename = "X"
         if (expr is AssignmentExpressionSyntax assignSetup &&
-            IsSetupPassagenameAssignment(assignSetup, out var nextPassage))
+            IsSetupPassagenameAssignment(assignSetup, out var nextPassage, out var setupHoisted))
         {
-            return [new SetupNotificationNode { NextPassage = nextPassage }];
+            var setupNode = new SetupNotificationNode { NextPassage = nextPassage };
+            return setupHoisted is not null ? [..setupHoisted, setupNode] : [setupNode];
         }
 
         // ViewController.instance.ChangeView(ViewController.instance.<view>) — every real
@@ -2525,9 +2526,10 @@ public class PassageBodyVisitor
         return true;
     }
 
-    private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage)
+    private bool IsSetupPassagenameAssignment(AssignmentExpressionSyntax assign, out string? nextPassage, out List<MwsNode>? hoisted)
     {
         nextPassage = null;
+        hoisted = null;
         if (!assign.Left.ToString().Contains("SetupPassagename"))
         {
             return false;
@@ -2537,15 +2539,35 @@ public class PassageBodyVisitor
         if (literal is not null)
         {
             nextPassage = literal;
+            return true;
         }
-        else
+
+        // ViewItemObtain.SetupPassagename = macros1.either(...) directly — Cradle draws a fresh
+        // value every either() call, so it can't be evaluated inline inside a ${...} target
+        // expression (same reasoning as HoistInlineEithers for a condition's inline either() call,
+        // which this mirrors); the fallback below would otherwise pass the raw macros1.either(...)
+        // text straight through untranslated (SimplifyCondition has no either()-hoisting logic of
+        // its own — that only exists in HoistInlineEithers, called only for conditions). Hoist into
+        // its own let and reference the temp var, same as the working "Vars.X = macros1.either(...)"
+        // assignment case already does elsewhere. Real-world occurrences: A Time of War's RumorD1,
+        // Fear of the Unknown's EssentialSaltsRes (the latter inside an if/else branch, so this
+        // whole assign is one arm of a CollapseSetupNotificationConditionals ternary — the hoisted
+        // let still needs to land as a preceding sibling of the *outer* ConditionalNode, which the
+        // BuildConditional call site handles the same way HoistInlineEithers' own hoisted nodes do).
+        if (assign.Right is InvocationExpressionSyntax eitherInv && GetSimpleMethodName(eitherInv) == "either")
         {
-            // Complex or ternary expression — convert to MWS expression syntax and wrap in ${}.
-            var expr = SimplifyCondition(assign.Right.ToString());
-            nextPassage = $"${{{expr}}}";
-            _report.AddWarning(_passageName, "SetupPassagename uses a computed expression",
-                assign.Right.ToString(), GetLine(assign.Right));
+            var values = ExtractMacroArgs(eitherInv);
+            var tempVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+            hoisted = [new LetNode { Var = tempVar, Random = new VarRandom { RandomType = "choose-one", Values = values } }];
+            nextPassage = $"${{{tempVar}}}";
+            return true;
         }
+
+        // Complex or ternary expression — convert to MWS expression syntax and wrap in ${}.
+        var expr = SimplifyCondition(assign.Right.ToString());
+        nextPassage = $"${{{expr}}}";
+        _report.AddWarning(_passageName, "SetupPassagename uses a computed expression",
+            assign.Right.ToString(), GetLine(assign.Right));
         return true;
     }
 

@@ -931,11 +931,21 @@ public partial class CradleExtractor
     // nested inside one or more ConditionalNodes into a single node with a computed target.
     internal static string BuildTernaryChain(List<(string? Condition, string Target)> arms)
     {
-        string Quoted(string s) => $"\"{MwsExprHelper.EscapeStr(s)}\"";
+        // A target that's already a ${...}-wrapped dynamic expression (e.g. one arm hoisted a
+        // random choice into its own let — see V2Serializer.CollapseSetupNotificationConditionals'
+        // own remarks) unwraps to a bare fragment for the ternary instead of being quoted as a
+        // literal passage-id string — quoting it would nest an unevaluated "${...}" string inside
+        // the outer ternary's own string literal, never actually evaluated. TryCollapseCheckProgress
+        // Conditional's own callers never pass an already-dynamic target today (it bails out first —
+        // see its own guard), so this only changes behavior for genuinely dynamic arms.
+        string TargetExpr(string s) =>
+            s.StartsWith("${", StringComparison.Ordinal) && s.EndsWith('}')
+                ? s[2..^1]
+                : $"\"{MwsExprHelper.EscapeStr(s)}\"";
         string Build(int i) =>
             arms[i].Condition is null
-                ? Quoted(arms[i].Target)
-                : $"{arms[i].Condition} ? {Quoted(arms[i].Target)} : {Build(i + 1)}";
+                ? TargetExpr(arms[i].Target)
+                : $"{arms[i].Condition} ? {TargetExpr(arms[i].Target)} : {Build(i + 1)}";
         return Build(0);
     }
 

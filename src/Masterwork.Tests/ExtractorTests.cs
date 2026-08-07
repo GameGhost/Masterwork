@@ -3128,6 +3128,45 @@ public class ExtractorTests
         Assert.Equal("elim[0] == warriorA", ifCond);
     }
 
+    [Fact]
+    public void SetupPassagenameAssignedFromInlineEither_HoistsToLetBeforeSetupNotification()
+    {
+        // Regression: A Time of War's RumorD1 passage (source line 1958-1960):
+        // "ViewItemObtain.SetupPassagename = macros1.either("RumorIngredient", "RumorKnowledge",
+        // "RumorPitch");" — a direct standalone assignment, no intermediate variable. Unlike the
+        // condition-context either() bug (HoistInlineEithers), this is an assignment-RHS context
+        // that IsSetupPassagenameAssignment's own fallback used to treat as generic "computed
+        // expression" text, passing "macros1.either(...)" straight through SimplifyCondition (which
+        // has no either()-hoisting logic of its own) into the emitted target — "${macros1.either(...)}"
+        // — untranslated and unrenderable. Cradle draws a fresh value every either() call, so it must
+        // be hoisted into its own `let` right before the SetupNotificationNode, mirroring the working
+        // "Vars.X = macros1.either(...)" assignment case.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                ViewItemObtain.SetupPassagename = macros1.either("RumorIngredient", "RumorKnowledge", "RumorPitch");
+                yield break;
+            }
+            """);
+
+        var let = Assert.Single(passages[0].Nodes.OfType<LetNode>());
+        Assert.NotNull(let.Random);
+        Assert.Equal("choose-one", let.Random!.RandomType);
+        Assert.Equal(["RumorIngredient", "RumorKnowledge", "RumorPitch"], let.Random.Values);
+
+        var setup = Assert.Single(passages[0].Nodes.OfType<SetupNotificationNode>());
+        Assert.Equal($"${{{let.Var}}}", setup.NextPassage);
+        Assert.DoesNotContain("macros1", setup.NextPassage);
+        Assert.DoesNotContain("either", setup.NextPassage);
+
+        // Ordering: the let must precede the SetupNotificationNode it feeds.
+        Assert.True(passages[0].Nodes.IndexOf(let) < passages[0].Nodes.IndexOf(setup));
+    }
+
     // ── ViewController.instance.ChangeView(...) ──────────────────────────────
 
     [Fact]
