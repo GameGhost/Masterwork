@@ -2590,6 +2590,77 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void CheckProgress_TargetIsLocalTernaryAlsoReferencedInEarlierCondition_HoistsToSharedLet()
+    {
+        // Regression: A Time of War's TakeSides3 fragment (source line 2243-2258):
+        // "string pass = (Vars.barracks != "yes") ? (Vars.gunsbonus == 0) ? Vars.war == 1 ?
+        // "Warwarn" : "TowardsWar" : "SeedGUNS" : "TSBarracksPenalty"; if (pass == "Warwarn") { ... }
+        // PassageTracker.instance.CheckProgress("TakeSides3", pass);" — `pass` is a local C# var
+        // (not a Cradle session variable) referenced TWICE: once in an `if` condition, once as
+        // CheckProgress's target. The declaration site used to suppress the assignment entirely
+        // (tracked only in _localPassageConditionals, a node-tree used solely by
+        // BuildEogSetupMarker/S_OnSetSpecialSetup) and CheckProgress's own resolution separately
+        // re-derived/duplicated the ternary as a parallel tree of GotoNodes
+        // (BuildGotoNodesFromLetConditionals) — leaving the EARLIER `if (pass == "Warwarn")`
+        // condition referencing a variable that was never emitted anywhere, since nothing else ever
+        // consulted _localPassageConditionals. Fix: the declaration site now also collapses the
+        // ternary into one `let`, and CheckProgress resolution references it by name via a single
+        // dynamic goto instead of re-deriving/duplicating the branch structure.
+        var mapper = MakeProgressMapper("""{ "TakeSides3": { "progress": 3 } }""");
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["TakeSides3"] = new StoryPassage("TakeSides3", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0000009"))
+                    yield return base.link("Click here at the End of the Generation...", null, () => base.enchantHook("h0000009", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                string pass = (this.Vars.barracks != "yes") ? (this.Vars.gunsbonus == 0) ? this.Vars.war == 1 ? "Warwarn" : "TowardsWar" : "SeedGUNS" : "TSBarracksPenalty";
+                if (pass == "Warwarn")
+                {
+                    if (this.Vars.townname == "Paradox")
+                    {
+                        this.Vars.war = 1;
+                    }
+                }
+                PassageTracker.instance.CheckProgress("TakeSides3", pass);
+                yield break;
+            }
+            """, mapper, out _);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        var link = Assert.Single(nodes, n => (string)n["type"]! == "link");
+
+        // The trailing single-target goto folds directly into the link's own target — no leftover
+        // onclick goto needed.
+        Assert.Equal("${pass}", link["target"]);
+
+        var onclick = (List<Dictionary<string, object?>>)link["onclick"]!;
+        var letDict = Assert.Single(onclick, n => (string)n["type"]! == "let");
+        Assert.Equal("pass", letDict["var"]);
+        var expr = (string)letDict["expr"]!;
+        Assert.DoesNotContain("either", expr);
+        Assert.Contains("barracks", expr);
+        Assert.Contains("Warwarn", expr);
+
+        // The `let` must precede the condition that reads it, and the condition must reference the
+        // real variable — not an untranslated bare identifier that was never declared anywhere.
+        var letIdx = onclick.IndexOf(letDict);
+        var condIdx = onclick.FindIndex(n => (string)n["type"]! == "conditional");
+        Assert.True(letIdx >= 0 && letIdx < condIdx);
+        Assert.Equal("pass == \"Warwarn\"", onclick[condIdx]["if"]);
+
+        // No stray GotoNode-tree leftover from the old duplication.
+        Assert.DoesNotContain(onclick, n => (string)n["type"]! == "goto");
+    }
+
+    [Fact]
     public void LinkTarget_TernaryExpression_EmitsOneLinkHintPerConstant()
     {
         // Regression: link.target (and by extension popup.target, goto.target, etc. — all routed

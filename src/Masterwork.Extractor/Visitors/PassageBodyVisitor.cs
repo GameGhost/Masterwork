@@ -738,9 +738,16 @@ public class PassageBodyVisitor
                         return [.. progressPrefix, new GotoNode { Target = literalTarget }];
                     }
 
-                    if (_localPassageConditionals.TryGetValue(targetVar, out var psnNodes))
+                    if (_localPassageConditionals.ContainsKey(targetVar))
                     {
-                        return [.. progressPrefix, .. BuildGotoNodesFromLetConditionals(psnNodes)];
+                        // The local var's own `let` (its full ternary collapsed into one expression)
+                        // was already emitted at its declaration site — see the
+                        // TryBuildPassageNameConditional call site's remarks for why — so this just
+                        // references it by name via a single dynamic goto, exactly like the plain
+                        // session-variable case below. Real-world occurrence: A Time of War's
+                        // TakeSides3 (source line 2257, `CheckProgress("TakeSides3", pass)` where
+                        // `pass` is a local var assigned from a nested ternary at line 2245).
+                        return [.. progressPrefix, new GotoNode { Target = $"${{{targetVar}}}" }];
                     }
 
                     // Not a known local var — it's a session variable (Vars.X in the original
@@ -2937,6 +2944,25 @@ public class PassageBodyVisitor
                     if (condNodes is not null)
                     {
                         _localPassageConditionals[name] = condNodes;
+
+                        // Also emit a real `let` for this local var right here, collapsing the same
+                        // ternary into a single expression — so ANY other reference to it later in
+                        // this same statement list (not just a CheckProgress(...) target, which
+                        // resolves it separately below via _localPassageConditionals) resolves to a
+                        // genuine MWS variable instead of an untranslated bare identifier that never
+                        // existed anywhere in the output. Real-world regression: A Time of War's
+                        // TakeSides3 (source line 2246) references this same local var, `pass`, in an
+                        // `if (pass == "Warwarn")` condition — SimplifyCondition has no reason to
+                        // rewrite a bare, unprefixed identifier, so it passed straight through
+                        // referencing a variable that was never declared. BuildTernaryExprFromLetConditionals
+                        // reuses the tree just built above instead of re-walking the C# syntax a
+                        // second time.
+                        var ternaryExpr = BuildTernaryExprFromLetConditionals(condNodes);
+                        if (ternaryExpr is not null)
+                        {
+                            nodes.Add(new LetNode { Var = name, Compute = ternaryExpr, SourceLine = _currentStatementLine });
+                        }
+
                         anyHandled = true;
                         continue;
                     }
@@ -3178,34 +3204,22 @@ public class PassageBodyVisitor
     }
 
     // Deep-renames all LetNode.Var occurrences of oldName to newName within a node tree.
-    // Converts a conditional LetNode tree (from _localPassageConditionals) to GotoNodes.
-    // Each LetNode leaf with a quoted-string Compute value becomes a GotoNode with that target.
-    private static List<MwsNode> BuildGotoNodesFromLetConditionals(List<MwsNode> nodes)
+    // Collapses a conditional LetNode tree (from TryBuildPassageNameConditional/
+    // _localPassageConditionals — always a single LetNode leaf, or a single binary
+    // ConditionalNode with a condition branch and an else branch, recursively) into one MWS
+    // ternary expression string — the inverse of TryBuildPassageNameConditional's own recursive
+    // shape, used to hoist the local var's full definition into a single `let` instead of
+    // duplicating the branch structure at every place the local var is later referenced.
+    private static string? BuildTernaryExprFromLetConditionals(List<MwsNode> nodes) => nodes switch
     {
-        var result = new List<MwsNode>();
-        foreach (var node in nodes)
-        {
-            switch (node)
-            {
-                case LetNode let when let.Compute is { Length: >= 3 } c && c[0] == '"' && c[^1] == '"':
-                    result.Add(new GotoNode { Target = c[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\") });
-                    break;
-                case ConditionalNode cond:
-                    result.Add(new ConditionalNode
-                    {
-                        Branches = cond.Branches.Select(b => new ConditionalBranch
-                        {
-                            Condition = b.Condition,
-                            Else = b.Else,
-                            Nodes = BuildGotoNodesFromLetConditionals(b.Nodes),
-                        }).ToList(),
-                        SourceLine = cond.SourceLine,
-                    });
-                    break;
-            }
-        }
-        return result;
-    }
+        [LetNode { Compute: { } compute }] => compute,
+        [ConditionalNode { Branches: [{ Condition: { } cond } thenBranch, { Else: true } elseBranch] }] =>
+            BuildTernaryExprFromLetConditionals(thenBranch.Nodes) is { } trueExpr &&
+            BuildTernaryExprFromLetConditionals(elseBranch.Nodes) is { } falseExpr
+                ? $"{cond} ? ({trueExpr}) : ({falseExpr})"
+                : null,
+        _ => null,
+    };
 
     private static List<MwsNode> RenameLetVarInNodes(List<MwsNode> nodes, string oldName, string newName) =>
         nodes.Select(n => RenameLetVar(n, oldName, newName)).ToList();
