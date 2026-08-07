@@ -388,6 +388,49 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task FollowLink_StateAffecting_DisplayLabel_ExpandsTemplatePlaceholdersInTitle()
+    {
+        // Regression: DisplayLabel used to read the destination's raw MwsPassageDoc.Title/.Subtitle
+        // text directly (ResolvePassageTitle, since removed) without ever expanding "{expr}"
+        // placeholders — the on-screen title (PassageRenderResult.Title, via PassageRenderer's own
+        // ExpandOrNull/ExpandTemplate call) already expanded them correctly, so a title like
+        // "Journal of {randomname}" rendered fine on the page but showed up as the literal,
+        // unexpanded "{randomname}" text in the timeline scrubber. Fixed by reading
+        // result.Title/.Subtitle (ResolveDisplayLabel) — already expanded, from the same render.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'assign'
+              var: 'randomname'
+              expr: '"Alice"'
+            - type: 'link'
+              label: 'Go'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            title: 'Journal of {randomname}'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("Journal of Alice", session.Current.DisplayLabel);
+    }
+
+    [Fact]
     public async Task FollowLink_StateAffecting_DisplayLabel_FallsBackToPassageId_WhenNoTitle()
     {
         var (session, _) = MakeSimpleSession();

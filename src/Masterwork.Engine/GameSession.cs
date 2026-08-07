@@ -560,15 +560,12 @@ public sealed class GameSession
         _activeState = null;
         _viewingAnchor = false;
 
-        var snapshot = new SessionSnapshot
-        {
-            PassageId = passageId,
-            Kind = kind,
-            Variables = _store.SessionSnapshot(),
-            SeedOccurrences = _prng.SnapshotOccurrences(),
-            DisplayLabel = displayLabel ?? ResolvePassageTitle(passageId),
-            DiagnosticLabel = diagnosticLabel,
-        };
+        // Variables/SeedOccurrences must be captured pre-render (see SessionSnapshot's own
+        // remarks); DisplayLabel is deliberately deferred until after render below — it needs
+        // result.Title, which ResolveDisplayLabel reads instead of re-deriving from the module's
+        // raw, unexpanded title text (see that method's own remarks).
+        var variables = _store.SessionSnapshot();
+        var seedOccurrences = _prng.SnapshotOccurrences();
 
         // Render BEFORE committing the new timeline entry. RenderChainFrom can throw (e.g. a
         // malformed expression reachable from this passage) — _timeline, HistoryIndex, and
@@ -577,6 +574,16 @@ public sealed class GameSession
         // render of any component that reads it, bricking the session with no recovery short of a
         // full reload. Mirrors RenderInPlace's existing render-then-mutate ordering.
         var result = RenderChainFrom(passageId);
+
+        var snapshot = new SessionSnapshot
+        {
+            PassageId = passageId,
+            Kind = kind,
+            Variables = variables,
+            SeedOccurrences = seedOccurrences,
+            DisplayLabel = displayLabel ?? ResolveDisplayLabel(result),
+            DiagnosticLabel = diagnosticLabel,
+        };
 
         _timeline.Add(snapshot);
         HistoryIndex = _timeline.Count - 1;
@@ -684,7 +691,7 @@ public sealed class GameSession
                 Kind = SnapshotKind.Checkpoint,
                 Variables = _store.SessionSnapshot(),
                 SeedOccurrences = _prng.SnapshotOccurrences(),
-                DisplayLabel = cp.Display ?? ResolvePassageTitle(result.PassageId),
+                DisplayLabel = cp.Display ?? ResolveDisplayLabel(result),
                 DiagnosticLabel = cp.Diagnostic,
             });
             _cachedRenders.Add(result);
@@ -696,15 +703,21 @@ public sealed class GameSession
     // (link.snapshot/popup.snapshot's string form, checkpoint.display): the destination passage's
     // own title (plus subtitle, joined as "{title} - {subtitle}", when both are set), falling back
     // to its passage_id if the module doesn't set a title.
-    private string ResolvePassageTitle(string passageId)
-    {
-        if (!_module.Passages.TryGetValue(passageId, out var doc) || doc.Title is null)
-        {
-            return passageId;
-        }
-
-        return doc.Subtitle is not null ? $"{doc.Title} - {doc.Subtitle}" : doc.Title;
-    }
+    //
+    // Reads result.Title/.Subtitle — already expanded by PassageRenderer against the live store,
+    // as of the end of this same render (see PassageRenderResult.Title's own remarks) — rather
+    // than re-deriving from the module's raw MwsPassageDoc.Title/.Subtitle. Those are
+    // restext-resolved at load time but still contain unexpanded "{expr}" placeholders (a simple
+    // "{randomname}" splice, or a dynamic ternary title collapsed from multiple branches by the
+    // extractor — see docs/mws-format-latest.md and CradleExtractor.TryHoistHeadingTitleSubtitle)
+    // — the timeline used to show that literal "{...}" text to the player instead of its evaluated
+    // value, since nothing here ever called ExpandTemplate. Also naturally follows a goto chain
+    // correctly: result.Title reflects the passage actually landed on and shown, not whatever
+    // passage was originally requested before any goto redirected it.
+    private static string ResolveDisplayLabel(PassageRenderResult result) =>
+        result.Title is null
+            ? result.PassageId
+            : result.Subtitle is not null ? $"{result.Title} - {result.Subtitle}" : result.Title;
 
     private void TruncateFuture()
     {
