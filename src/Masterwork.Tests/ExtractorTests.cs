@@ -1955,6 +1955,38 @@ public class ExtractorTests
         Assert.Contains("{icon:", eog.Message);
     }
 
+    [Fact]
+    public void EitherArgs_ConvertsEmbeddedRichTextTags()
+    {
+        // Regression: A Time of War's Sabotage1Now ("...must <b>discard 1 Experiment</b>..."),
+        // PackingHeat1a/AdvancedWeaponryIntro/ReignHUB ("...1 <sprite=\"Creepy_Icon\" index=0>..."),
+        // Fear of the Unknown's AsylumTreatmentB ("<i>illegible</i>") — a macros1.either() array
+        // element sometimes has TextMesh Pro rich-text markup embedded directly in its own string
+        // literal instead of being wrapped with styleScope()/a plain text() call. ExtractMacroArgs
+        // used to extract these verbatim via LiteralValue, which has no rich-text handling of its
+        // own (unlike ordinary text() calls, which always route through AddPlainTextRuns) — the raw
+        // tags leaked straight into player-facing restext instead of MWS's own
+        // **bold**/_italic_/{icon:...}.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.outcome = macros1.either("<i>illegible</i>", "and must <b>discard 1 Experiment</b> they completed", "1 <sprite=\"Creepy_Icon\" index=0> and 1 Resource");
+                yield break;
+            }
+            """);
+
+        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>(), e => e.VarRandom is { Count: 1 });
+        var values = effect.VarRandom!["outcome"].Values.Cast<string>().ToList();
+        Assert.Contains("_illegible_", values);
+        Assert.Contains("and must **discard 1 Experiment** they completed", values);
+        Assert.Contains("1 {icon:creepy_icon} and 1 Resource", values);
+        Assert.DoesNotContain(values, v => v.Contains('<'));
+    }
+
     // ── Array operations ───────────────────────────────────────────────────
 
     [Fact]

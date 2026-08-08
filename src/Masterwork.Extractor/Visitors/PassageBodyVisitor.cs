@@ -2302,6 +2302,17 @@ public class PassageBodyVisitor
         var result = new List<object>();
         var args = inv.ArgumentList.Arguments;
 
+        // LiteralValue itself is a generic string/number/bool reader used well beyond macro args
+        // (e.g. switch match values, passage-id literals), so rich-text conversion doesn't belong
+        // inside it — applied narrowly here instead, only to either()/random() choose-one elements,
+        // which ARE always either display text or a passage-id-shaped string (never containing
+        // sprite/HTML markup, so this is a no-op for that case — see ConvertRichTextInline's remarks).
+        object ConvertLiteral(LiteralExpressionSyntax lit)
+        {
+            var value = LiteralValue(lit);
+            return value is string s ? ConvertRichTextInline(s) : value;
+        }
+
         foreach (var arg in args)
         {
             if (arg.Expression is ArrayCreationExpressionSyntax arr && arr.Initializer is not null)
@@ -2310,7 +2321,7 @@ public class PassageBodyVisitor
                 {
                     if (elem is LiteralExpressionSyntax lit2)
                     {
-                        result.Add(LiteralValue(lit2));
+                        result.Add(ConvertLiteral(lit2));
                     }
                     else if (IsVarAccess(elem, out var vn))
                     {
@@ -2324,7 +2335,7 @@ public class PassageBodyVisitor
             }
             else if (arg.Expression is LiteralExpressionSyntax lit3)
             {
-                result.Add(LiteralValue(lit3));
+                result.Add(ConvertLiteral(lit3));
             }
             else if (IsVarAccess(arg.Expression, out var vn2))
             {
@@ -3286,42 +3297,56 @@ public class PassageBodyVisitor
         return true;
     }
 
-    // Converts Unity Rich Text in EOG messages to MWS template strings.
-    // <sprite="X" index=N> → {icon:slug}, <b>text</b> → stripped (kept as plain text for now).
-    // TryParseRichText trims each segment, so we add spaces between adjacent segments to
-    // restore the word boundaries that surrounded the original sprite tags.
-    private string? BuildEogMessageTemplate(string? rawMessage)
+    // Converts Unity Rich Text in EOG messages to MWS template strings — a thin wrapper over
+    // ConvertRichTextInline for the one call site that can legitimately be null (no message arg).
+    private string? BuildEogMessageTemplate(string? rawMessage) =>
+        rawMessage is null ? null : ConvertRichTextInline(rawMessage);
+
+    // Converts embedded TextMesh Pro rich-text markup (<sprite="X" index=N> → {icon:slug}; <b>/<i>
+    // → MWS's own **bold**/_italic_, via SpriteMapper.StripLayoutTags/ConvertOrStripTag) within a
+    // raw string into a single flat MWS-ready string. TryParseRichText trims each segment, so we
+    // add spaces between adjacent segments to restore the word boundaries that surrounded the
+    // original tags; returns the input unchanged when neither tag shape is present (the common
+    // case) — safe to call on ANY string, not just narrative text, since a plain passage-id or
+    // seed-key literal never matches either pattern.
+    //
+    // Originally EOG-message-only (BuildEogMessageTemplate); generalized after a real leak: Cradle
+    // sometimes writes this markup directly inside a macros1.either()/random() string literal
+    // argument instead of wrapping it with styleScope()/a plain text() call — ExtractMacroArgs
+    // extracts those verbatim via LiteralValue, which has no rich-text handling of its own (unlike
+    // ordinary text() calls, which always route through AddPlainTextRuns), so the raw tags leaked
+    // straight into player-facing restext. Real-world occurrences: A Time of War's Sabotage1Now
+    // ("...must <b>discard 1 Experiment</b>..."), PackingHeat1a/AdvancedWeaponryIntro/ReignHUB
+    // ("...1 <sprite=\"Creepy_Icon\" index=0>..." and similar), Fear of the Unknown's
+    // AsylumTreatmentB ("<i>illegible</i>") — all either() array-literal elements.
+    private string ConvertRichTextInline(string raw)
     {
-        if (rawMessage is null)
+        var richRuns = _spriteMapper.TryParseRichText(raw);
+        if (richRuns is null)
         {
-            return null;
+            return raw;
         }
 
-        var richRuns = _spriteMapper.TryParseRichText(rawMessage);
-        if (richRuns is not null)
+        var sb = new System.Text.StringBuilder();
+        bool prevWasSeg = false;
+        foreach (var (text, assetRef) in richRuns)
         {
-            var sb = new System.Text.StringBuilder();
-            bool prevWasSeg = false;
-            foreach (var (text, assetRef) in richRuns)
+            if (prevWasSeg)
             {
-                if (prevWasSeg)
-                {
-                    sb.Append(' ');
-                }
-
-                if (assetRef is not null)
-                {
-                    sb.Append($"{{icon:{assetRef.Replace("icon://", "")}}}");
-                }
-                else if (text is not null)
-                {
-                    sb.Append(text);
-                }
-
-                prevWasSeg = true;
+                sb.Append(' ');
             }
-            return sb.ToString().Trim();
+
+            if (assetRef is not null)
+            {
+                sb.Append($"{{icon:{assetRef.Replace("icon://", "")}}}");
+            }
+            else if (text is not null)
+            {
+                sb.Append(text);
+            }
+
+            prevWasSeg = true;
         }
-        return _spriteMapper.StripLayoutTags(rawMessage).Trim();
+        return sb.ToString().Trim();
     }
 }
