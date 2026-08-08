@@ -1956,6 +1956,66 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void EogSetupMarker_ComputedPassageName_PromotesToPopupTarget()
+    {
+        // Regression: A Time of War's Martial2 fragment (source line 4041-4046): "string passage =
+        // Vars.warwinner == "Unified Monarchists" ? Vars.rumor2 == "visited" ? "AMessenger2" :
+        // "AfternoonTea" : Vars.wardestroy == 1 ? "ATOWSabotageIntro2Sep" : "ATOWSabotageIntro2";
+        // ViewEndOfGeneration.S_OnSetSpecialSetup?.Invoke("Special Setup", -1, passage, "...");" —
+        // `passage` is a local var computed via nested ternary, not a literal. BuildEogSetupMarker
+        // correctly tracked this as EogSetupMarkerNode.PassageNameNodes (a nested ConditionalNode
+        // tree with LetNode{Var="passageName"} leaves), and TransformPopup already promoted that
+        // tree into the popup's own content — but never used it to set the popup's target/onclose,
+        // so the "Confirm"/"Close" button had nowhere to navigate. Fixed by collapsing
+        // PassageNameNodes into a single ternary expression (via
+        // PassageBodyVisitor.BuildTernaryExprFromLetConditionals, the same collapse already used to
+        // hoist the local var's own `let`) and using it as the popup's target.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Martial2"] = new StoryPassage("Martial2", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0000024"))
+                    yield return base.link("Click here at the end of the round...", null, () => base.enchantHook("h0000024", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                string passage = Vars.warwinner == "Unified Monarchists" ? Vars.rumor2 == "visited" ? "AMessenger2" : "AfternoonTea" :
+                    Vars.wardestroy == 1 ? "ATOWSabotageIntro2Sep" : "ATOWSabotageIntro2";
+                ViewEndOfGeneration.S_OnSetSpecialSetup?.Invoke("Special Setup", -1, passage,
+                    "Do NOT perform the End of Round actions at this time.");
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_generation", node["layout"]);
+
+        var target = (string)node["target"]!;
+        Assert.StartsWith("${", target);
+        Assert.Contains("warwinner", target);
+        Assert.Contains("AMessenger2", target);
+        Assert.Contains("AfternoonTea", target);
+        Assert.Contains("ATOWSabotageIntro2Sep", target);
+        Assert.Contains("ATOWSabotageIntro2", target);
+        // Matches the sibling literal-passageName shape's own established wording (a target-bearing
+        // end_of_generation popup uses "Close", not "Confirm" — "Confirm" is reserved for the
+        // no-target case, see TransformPopup's own remarks).
+        Assert.Equal("Close", node["okay"]);
+
+        // The computed passageName conditional still lands in content too — TransformPopup already
+        // inserted it there before this fix, and this fix doesn't remove it (the target expression
+        // is a separate, self-contained collapse of the same tree, not a rewrite of this one).
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        Assert.Contains(content, c => c["type"] as string == "conditional");
+    }
+
+    [Fact]
     public void EitherArgs_ConvertsEmbeddedRichTextTags()
     {
         // Regression: A Time of War's Sabotage1Now ("...must <b>discard 1 Experiment</b>..."),

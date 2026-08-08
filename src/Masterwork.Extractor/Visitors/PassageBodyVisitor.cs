@@ -3278,8 +3278,10 @@ public class PassageBodyVisitor
     // ConditionalNode with a condition branch and an else branch, recursively) into one MWS
     // ternary expression string — the inverse of TryBuildPassageNameConditional's own recursive
     // shape, used to hoist the local var's full definition into a single `let` instead of
-    // duplicating the branch structure at every place the local var is later referenced.
-    private static string? BuildTernaryExprFromLetConditionals(List<MwsNode> nodes) => nodes switch
+    // duplicating the branch structure at every place the local var is later referenced. Internal
+    // (not private): also called from V2Serializer's EogSetupMarkerNode handling in TransformPopup,
+    // to collapse EogSetupMarkerNode.PassageNameNodes into the popup's own `target` expression.
+    internal static string? BuildTernaryExprFromLetConditionals(List<MwsNode> nodes) => nodes switch
     {
         [LetNode { Compute: { } compute }] => compute,
         [ConditionalNode { Branches: [{ Condition: { } cond } thenBranch, { Else: true } elseBranch] }] =>

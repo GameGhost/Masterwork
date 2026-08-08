@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Masterwork.Extractor.Visitors;
 using Masterwork.ModuleFormat;
 
 namespace Masterwork.Extractor;
@@ -1027,6 +1028,20 @@ public static partial class V2Serializer
                 if (eog.PassageName is not null)
                 {
                     onclose = eog.PassageName;
+                }
+                else if (eog.PassageNameNodes is not null &&
+                         PassageBodyVisitor.BuildTernaryExprFromLetConditionals(eog.PassageNameNodes) is { } computedTarget)
+                {
+                    // Computed (non-literal) passageName — e.g. A Time of War's Martial2:
+                    // "string passage = warwinner == "Unified Monarchists" ? (...) : (...);
+                    // S_OnSetSpecialSetup(..., passage, ...)". PassageNameNodes (the nested
+                    // conditional computing it) still lands in the popup's own content below via
+                    // eogPropNodes, same as before — this only additionally gives the popup a
+                    // navigation target, collapsing the same tree into one ternary expression
+                    // (mirrors ResolveSetupTarget's ${...} treatment for the ViewItemObtain setup
+                    // popup case). Without this, the popup's `okay` button had nothing to navigate
+                    // to at all.
+                    onclose = "${" + computedTarget + "}";
                 }
 
                 continue;
