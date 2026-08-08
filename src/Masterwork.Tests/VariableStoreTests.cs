@@ -138,4 +138,49 @@ public class VariableStoreTests
         store.ClearLetScope();
         Assert.Throws<StoryEvalException>(() => store.GetVariable("tempVal"));
     }
+
+    [Fact]
+    public void CommitChangesTo_AppliesOnlyWhatTheCloneItselfChanged()
+    {
+        var live = MakeStore();
+        live.SetSessionVariable("round", StoryValue.Of(1L));
+        live.SetSessionVariable("sepinc1", StoryValue.Of(""));
+
+        var sandbox = live.Clone();
+        sandbox.SetSessionVariable("round", StoryValue.Of(2L)); // popup's own content assign
+
+        sandbox.CommitChangesTo(live);
+
+        Assert.Equal(2L, live.GetVariable("round").AsInt());
+        Assert.Equal("", live.GetVariable("sepinc1").AsString());
+    }
+
+    [Fact]
+    public void CommitChangesTo_DoesNotOverwriteALiveChangeMadeAfterTheCloneWasTaken()
+    {
+        // Regression: A Time of War's AdvancedWeaponryIntro — a popup's sandbox is cloned partway
+        // through rendering the passage; sibling `assign` nodes positioned AFTER that popup in the
+        // SAME passage's own node list run directly against the live store afterward, during the
+        // SAME render, well before the player ever sees/accepts the popup. The sandbox has no idea
+        // that later assign happened — a wholesale RestoreSession-style replace at accept time would
+        // silently wipe it out. CommitChangesTo must only apply what THIS sandbox itself changed
+        // (relative to its own Clone()-time baseline), leaving any independent later live change —
+        // like sepinc1's assign here — untouched.
+        var live = MakeStore();
+        live.SetSessionVariable("sepinc1", StoryValue.Of(""));
+
+        var sandbox = live.Clone(); // popup rendered here, before sepinc1's own assign runs
+        live.SetSessionVariable("sepinc1", StoryValue.Of("Gained a Servant")); // trailing sibling assign
+
+        sandbox.CommitChangesTo(live); // player accepts the popup
+
+        Assert.Equal("Gained a Servant", live.GetVariable("sepinc1").AsString());
+    }
+
+    [Fact]
+    public void CommitChangesTo_NotCalledOnAClone_Throws()
+    {
+        var store = MakeStore();
+        Assert.Throws<InvalidOperationException>(() => store.CommitChangesTo(MakeStore()));
+    }
 }

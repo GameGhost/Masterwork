@@ -1188,6 +1188,52 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task PopupAccept_TrailingAssignAfterPopupInSamePassage_SurvivesPopupCommit()
+    {
+        // Regression: A Time of War's AdvancedWeaponryIntro — a top-level popup (target: Martial1)
+        // followed by several top-level `assign` nodes (sepinc1, sepinc2, ...) later in the SAME
+        // passage's own node list. Those assigns run during the passage's OWN render, directly
+        // against the live store, well before the player ever sees the popup — they're not part of
+        // the popup's own content, so they never touch its sandbox. Confirmed via a real save file:
+        // sepinc1 was still empty in the very next timeline snapshot after AdvancedWeaponryIntro,
+        // even though its own assign had already executed during that same render. Root cause:
+        // ClosePopupAsync used to commit the popup's sandbox via a wholesale replace (RestoreSession)
+        // — and that sandbox was cloned BEFORE the trailing assigns ran, so accepting the popup
+        // silently reverted them. See VariableStore.CommitChangesTo's own remarks for the fix.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              snapshot: true
+              target: 'P2'
+              okay: 'Continue'
+              content: []
+            - type: 'assign'
+              var: 'sepinc1'
+              expr: '"Gained a Servant"'
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        await session.ClosePopupAsync(popup.Id, accept: true);
+
+        Assert.Equal("Gained a Servant", session.Current.Variables["sepinc1"].AsString());
+    }
+
+    [Fact]
     public async Task PopupAccept_TimelineLabel_OverridesDestinationPassageTitle()
     {
         var module = new ModuleLoader().LoadFromSources(
@@ -1579,8 +1625,8 @@ public class GameSessionTests
     {
         // The popup's own committed state (its `round` assign) must still apply even though there's
         // nowhere to navigate — only the navigation itself is replaced by the gameover signal, not
-        // the transaction's state commit (see ClosePopupAsync's own remarks: _store.RestoreSession
-        // runs unconditionally, before the gameover target check). Not directly observable via
+        // the transaction's state commit (see ClosePopupAsync's own remarks: popup.Sandbox.
+        // CommitChangesTo runs unconditionally, before the gameover target check). Not directly observable via
         // session.Current.Variables here, since that reflects the last-pushed *snapshot* and no new
         // one is pushed for a gameover target (there's no destination passage to snapshot toward) —
         // checking the popup's own sandbox is the closest available proxy; a future "preserve

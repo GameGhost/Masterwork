@@ -304,7 +304,7 @@ public sealed class GameSession
             pendingGotoStateAffecting = onCloseResult.PendingGotoStateAffecting;
         }
 
-        _store.RestoreSession(popup.Sandbox.SessionSnapshot());
+        popup.Sandbox.CommitChangesTo(_store);
 
         if (pendingGoto is null && popup.Target is null)
         {
