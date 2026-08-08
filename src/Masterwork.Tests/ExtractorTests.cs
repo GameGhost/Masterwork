@@ -1987,6 +1987,92 @@ public class ExtractorTests
         Assert.DoesNotContain(values, v => v.Contains('<'));
     }
 
+    [Fact]
+    public void DirectLiteralAssignment_ConvertsEmbeddedRichTextTags()
+    {
+        // Regression: A Time of War's ReignHUB assigns Vars.ch1/ch2 = "Lose 2
+        // <sprite=\"Creepy_Icon\" index=0> ." for later display via {ch1}/{ch2} — a plain literal
+        // assignment (ProcessAssignment's "Direct literal assignment" branch), which never routed
+        // through rich-text conversion at all (unlike ordinary text() calls or either()/random()
+        // choices), so the raw sprite tag leaked straight into restext.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.ch1 = "Lose 2 <sprite=\"Creepy_Icon\" index=0> .";
+                yield break;
+            }
+            """);
+
+        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>(), e => e.VarSets is { Count: 1 });
+        Assert.Equal("Lose 2 {icon:creepy_icon} .", effect.VarSets!["ch1"]);
+    }
+
+    [Fact]
+    public void EitherArgs_ConcatenatedChoice_ConvertsEmbeddedRichTextTag()
+    {
+        // Regression: A Time of War's PackingHeat1a either() second choice is itself a
+        // "+"-concatenated literal (Cradle line-wraps long strings): "1 Resource of their choice
+        // and moves the <sprite=\"AngryMob_Icon\" index=0> Marke" + "r 1 space to the left." —
+        // ExtractMacroArgs' non-array-literal branch falls through to TryBuildConcatString for a
+        // concatenated argument, which used to return the merged string unconverted even though a
+        // plain (non-concatenated) literal choice in the same call already went through
+        // rich-text conversion.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.outcome = macros1.either("plain choice", "1 Resource of their choice and moves the <sprite=\"AngryMob_Icon\" index=0> Marke" +
+                    "r 1 space to the left.");
+                yield break;
+            }
+            """);
+
+        var effect = Assert.Single(passages[0].Nodes.OfType<EffectNode>(), e => e.VarRandom is { Count: 1 });
+        var values = effect.VarRandom!["outcome"].Values.Cast<string>().ToList();
+        Assert.Contains("1 Resource of their choice and moves the {icon:angrymob_icon} Marker 1 space to the left.", values);
+        Assert.DoesNotContain(values, v => v.Contains('<'));
+    }
+
+    [Fact]
+    public void TextConcat_SpriteTagSplitAcrossPlusBoundary_MergesBeforeConverting()
+    {
+        // Regression: A Time of War's Reign6 fragment splits a sprite tag literally across a C#
+        // line-continuation "+" with nothing (no variable, no either()) between the two literal
+        // halves: "...<b>lose 2 <" + "sprite=\"Creepy_Icon\" index=0>.</b> You gain 2VP.</i>".
+        // ProcessTextConcatPart used to convert each literal leaf independently via AddPlainTextRuns,
+        // so neither leaf on its own looked like a complete tag to TryParseRichText — the fix flattens
+        // the whole "+" chain first and merges adjacent literal leaves into one string before
+        // converting, so the reassembled tag is seen whole.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return text(" <i>This will result in: " + Vars.crownL + " All players <b>lose 2 <" +
+                    "sprite=\"Creepy_Icon\" index=0>.</b> You gain 2VP.</i>");
+                yield break;
+            }
+            """);
+
+        // A lone text() call keeps its extractor-internal Runs shape (Template is only populated
+        // by a later multi-node merge pass) — reconstruct the same way MwsNodes.TextNode.ToDict()
+        // and CradleExtractor.BuildTemplate both do, via BuildValueFromRuns.
+        var text = Assert.Single(passages[0].Nodes.OfType<TextNode>());
+        var value = MwsExprHelper.BuildValueFromRuns(text.Runs);
+        Assert.Contains("{icon:creepy_icon}", value);
+        Assert.DoesNotContain("<", value);
+        Assert.DoesNotContain("sprite=", value);
+    }
+
     // ── Array operations ───────────────────────────────────────────────────
 
     [Fact]

@@ -469,53 +469,97 @@ public class PassageBodyVisitor
         return [];
     }
 
-    // Recursively walks a + chain in text() argument position, adding runs for each recognisable
-    // leaf. either() calls flush pending text and emit a preceding EffectNode.
+    // Walks a + chain in text() argument position, adding runs for each recognisable leaf.
+    // either() calls flush pending text and emit a preceding EffectNode. Flattens the whole chain
+    // first so adjacent string-literal leaves can be merged before running rich-text conversion
+    // (via AddPlainTextRuns) — a leaf-by-leaf pass would miss a sprite/HTML tag that Cradle's own
+    // line-continuation splits across two adjacent literals with nothing (no var, no either())
+    // between them, e.g. A Time of War's Reign6 fragment: "...<b>lose 2 <" +
+    // "sprite=\"Creepy_Icon\" index=0>...". Merging first lets TryParseRichText see the whole tag.
+    //
+    // Only merges when EndsWithUnclosedTag says a tag is actually mid-split — merging every
+    // adjacent literal unconditionally regressed A Time of War's TimeTravel: "...Village
+    // Chronicle...it cannot be" + " completed...<sprite=...>...", neither leaf split a tag, but
+    // unconditional merging fed the combined string through TryParseRichText as one segment, whose
+    // own per-segment .Trim() (needed to avoid an awkward double-space around the tag) ate the
+    // *leaf-boundary* leading space that used to survive untouched — because that leaf, alone, had
+    // no tag and so never touched the trimming path at all. Gating on an actual unclosed tag keeps
+    // every other leaf boundary on that same original (untrimmed) path, unchanged from before.
     private List<MwsNode> ProcessTextConcatPart(ExpressionSyntax expr, string? style)
     {
-        expr = UnwrapParens(expr);
+        var leaves = new List<ExpressionSyntax>();
+        FlattenPlusChain(expr, leaves);
 
-        if (expr is LiteralExpressionSyntax lit2)
+        var result = new List<MwsNode>();
+        int i = 0;
+        while (i < leaves.Count)
         {
-            var raw2 = lit2.Token.ValueText;
-            if (raw2.Contains('\n'))
+            if (leaves[i] is LiteralExpressionSyntax firstLit)
             {
-                return ProcessTextLiteralWithBreaks(raw2, style);
+                var merged = new StringBuilder(firstLit.Token.ValueText);
+                i++;
+                while (i < leaves.Count && leaves[i] is LiteralExpressionSyntax nextLit && EndsWithUnclosedTag(merged.ToString()))
+                {
+                    merged.Append(nextLit.Token.ValueText);
+                    i++;
+                }
+
+                var raw2 = merged.ToString();
+                if (raw2.Contains('\n'))
+                {
+                    result.AddRange(ProcessTextLiteralWithBreaks(raw2, style));
+                }
+                else
+                {
+                    AddPlainTextRuns(raw2, style);
+                }
+                continue;
             }
 
-            AddPlainTextRuns(raw2, style);
-            return [];
-        }
-
-        if (IsVarAccess(expr, out var v2))
-        {
-            AddRun(new TextRun { Text = $"{{{v2}}}", Style = style });
-            return [];
-        }
-
-        if (expr is InvocationExpressionSyntax inv2 && GetSimpleMethodName(inv2) == "either")
-        {
-            var values2 = ExtractMacroArgs(inv2);
-            var preNodes = FlushText();
-            var tmpVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
-            preNodes.Add(new EffectNode
+            var expr2 = leaves[i];
+            if (IsVarAccess(expr2, out var v2))
             {
-                VarRandom = new() { [tmpVar] = new VarRandom { RandomType = "choose-one", Values = values2 } },
-            });
-            AddRun(new TextRun { Text = $"{{{tmpVar}}}", Style = style });
-            return preNodes;
+                AddRun(new TextRun { Text = $"{{{v2}}}", Style = style });
+            }
+            else if (expr2 is InvocationExpressionSyntax inv2 && GetSimpleMethodName(inv2) == "either")
+            {
+                var values2 = ExtractMacroArgs(inv2);
+                result.AddRange(FlushText());
+                var tmpVar = $"_rnd_{_passageName.Replace(" ", "_").Replace("-", "_")}_{_varRandomSeq++}";
+                result.Add(new EffectNode
+                {
+                    VarRandom = new() { [tmpVar] = new VarRandom { RandomType = "choose-one", Values = values2 } },
+                });
+                AddRun(new TextRun { Text = $"{{{tmpVar}}}", Style = style });
+            }
+
+            i++;
         }
 
+        return result;
+    }
+
+    // Flattens a "+" binary-expression tree (as far as it goes) into its leaves, in left-to-right
+    // order — stops descending at any non-"+"-binary node (literal, var access, either() call,
+    // etc.), which becomes a leaf itself. Unwraps parens on every node visited, leaves included.
+    private void FlattenPlusChain(ExpressionSyntax expr, List<ExpressionSyntax> leaves)
+    {
+        expr = UnwrapParens(expr);
         if (expr is BinaryExpressionSyntax bin2 && bin2.OperatorToken.Text == "+")
         {
-            var left2 = ProcessTextConcatPart(bin2.Left, style);
-            var right2 = ProcessTextConcatPart(bin2.Right, style);
-            left2.AddRange(right2);
-            return left2;
+            FlattenPlusChain(bin2.Left, leaves);
+            FlattenPlusChain(bin2.Right, leaves);
+            return;
         }
 
-        return [];
+        leaves.Add(expr);
     }
+
+    // True when raw's last "<" occurs after its last ">" — i.e. it ends mid-tag, with the closing
+    // ">" (and whatever comes after it) still to come in a later concatenation leaf. Relies on the
+    // same assumption SpriteTag/HtmlTag already make: "<"/">" in this source only ever appear as
+    // tag delimiters, never as literal display characters.
+    private static bool EndsWithUnclosedTag(string raw) => raw.LastIndexOf('<') > raw.LastIndexOf('>');
 
     // ── link() ────────────────────────────────────────────────────────────
 
@@ -976,12 +1020,18 @@ public class PassageBodyVisitor
             return setupImageNode;
         }
 
-        // Direct literal assignment
+        // Direct literal assignment. Real-world occurrence: A Time of War's ReignHUB assigns
+        // Vars.ch1/ch2 = "Lose 2 <sprite=\"Creepy_Icon\" index=0> ." for later display via {ch1}/
+        // {ch2} — same rich-text-leak class as ExtractMacroArgs' either()/random() literals
+        // (ConvertRichTextInline is a no-op for the vast majority of VarSets assignments, which
+        // aren't display text at all, since TryParseRichText only activates when a sprite/HTML tag
+        // is actually present).
         if (right is LiteralExpressionSyntax lit2)
         {
+            var litVal = LiteralValue(lit2);
             return new EffectNode
             {
-                VarSets = new() { [varName!] = LiteralValue(lit2) }
+                VarSets = new() { [varName!] = litVal is string s ? ConvertRichTextInline(s) : litVal }
             };
         }
 
@@ -2329,7 +2379,11 @@ public class PassageBodyVisitor
                     }
                     else
                     {
-                        result.Add((object?)TryBuildConcatString(elem) ?? elem.ToString());
+                        // TryBuildConcatString fully merges the "+"-chain into one string before
+                        // returning, so a tag split across a C# line-continuation (e.g. "...<b>lose
+                        // 2 <" + "sprite=\"X\" index=0>...") is already reassembled here — safe to
+                        // convert the whole result rather than needing to convert leaf-by-leaf.
+                        result.Add(TryBuildConcatString(elem) is { } concatElem ? ConvertRichTextInline(concatElem) : elem.ToString());
                     }
                 }
             }
@@ -2343,7 +2397,11 @@ public class PassageBodyVisitor
             }
             else if (TryBuildConcatString(arg.Expression) is { } sv)
             {
-                result.Add(sv);
+                // Real-world occurrence: A Time of War's PackingHeat1a either() second choice is
+                // itself a "+"-concatenated literal ("...Marke" + "r 1 space..."), which used to
+                // reach here unconverted even though the first (plain-literal) choice already went
+                // through ConvertLiteral above.
+                result.Add(ConvertRichTextInline(sv));
             }
         }
         return result;
