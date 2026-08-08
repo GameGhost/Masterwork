@@ -2800,6 +2800,56 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void SetEndOfRound_DirectCall_SynthesizesAutoDisplayPopup()
+    {
+        // Regression: A Time of War's MartialPre3/Martia1Pre2 — ViewEndOfRound.instance.
+        // SetEndOfRound(...) called directly at the top level of a passage (no CheckProgress, no
+        // enclosing enchantHook link at all — the whole passage body is just this one call). The
+        // extractor used to flatten this to a plain section+checkpoint+link (ModalNode/
+        // TransformModal, predating the layout: end_of_round popup mechanism), so nothing ever set
+        // `_ProgressRound` — hub_early/hub_middle/hub_late layouts, which read that variable, never
+        // advanced round tracking for this occurrence. Fixed to synthesize the same auto-display
+        // popup shape as the indirect CheckProgress-driven path (EndOfRoundMarkerNode), just built
+        // directly since there's no enclosing link here to scan for a marker node.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["MartialPre3"] = new StoryPassage("MartialPre3", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                ViewEndOfRound.instance.SetEndOfRound("The Middle Years of the Second Generation has ended.", 5,
+                    "Martial3", "Complete all End of Round Actions at this time.");
+                yield return lineBreak();
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("end_of_round", node["layout"]);
+        // No label field at all — the end_of_round layout drives auto-display, matching
+        // TransformEndOfGeneration's own established convention for the same "no trigger link in
+        // source" shape.
+        Assert.False(node.ContainsKey("label"));
+        Assert.Equal("Martial3", node["target"]);
+        Assert.Equal("End of Round", node["okay"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        Assert.Equal("The Middle Years of the Second Generation has ended.", content[0]["value"]);
+        Assert.Equal("break", content[1]["type"]);
+        Assert.Equal("paragraph", content[1]["style"]);
+        Assert.Equal("Complete all End of Round Actions at this time.", content[2]["value"]);
+
+        var onclose = (List<Dictionary<string, object?>>)node["onclose"]!;
+        var assign = Assert.Single(onclose);
+        Assert.Equal("assign", assign["type"]);
+        Assert.Equal("_ProgressRound", assign["var"]);
+        Assert.Equal("5", assign["expr"]);
+    }
+
+    [Fact]
     public void CheckProgress_ConditionalWithSameCurrentPassage_CollapsesToSingleCheckpointWithTernaryTarget()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00037-NoUni3.mws.yaml. The

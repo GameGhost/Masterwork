@@ -335,6 +335,14 @@ public class EndOfGenerationNode : MwsNode
     };
 }
 
+// ViewEndOfRound.instance.SetEndOfRound(body, round, next, body2) called directly, not via
+// PassageTracker.CheckProgress (see EndOfRoundMarkerNode for that indirect, progress-map-driven
+// path) — always a bare top-level statement with no enclosing clickable link in source (e.g. A
+// Time of War's MartialPre3), so V2Serializer.TransformModal synthesizes the whole auto-display
+// popup directly from these fields, the same way TransformEndOfGeneration does for
+// EndOfGenerationNode's own "top-level marker call, no trigger link" shape. ToDict() below is
+// never actually reached — TransformNode's switch always intercepts ModalNode first — but is kept
+// consistent with the fields regardless, matching every other extractor-internal node's own shape.
 public class ModalNode : MwsNode
 {
     public override string Type => "modal";
@@ -342,7 +350,7 @@ public class ModalNode : MwsNode
     public string? Body { get; set; }
     public int? Round { get; set; }
     public string? Next { get; set; }
-    public string? Instruction { get; set; }
+    public string? Body2 { get; set; }
 
     public override Dictionary<string, object?> ToDict()
     {
@@ -367,9 +375,9 @@ public class ModalNode : MwsNode
             d["next"] = Next;
         }
 
-        if (Instruction is not null)
+        if (Body2 is not null)
         {
-            d["instruction"] = Instruction;
+            d["body2"] = Body2;
         }
 
         return d;

@@ -1520,49 +1520,57 @@ public static partial class V2Serializer
 
     // ── Modal ─────────────────────────────────────────────────────────────
 
+    // ViewEndOfRound.instance.SetEndOfRound(...) called directly, with no enclosing clickable
+    // link in source — matches the reference app's real behavior (an automatic acknowledgement
+    // popup at the moment a round ends, not a narration passage the player has to click through).
+    // A prior version of this transform flattened it to a plain section+checkpoint+link instead —
+    // real, visible bug: no `_ProgressRound` assign anywhere, so the round-tracking variable
+    // (read by the hub_early/hub_middle/hub_late layouts, same as the CheckProgress-driven
+    // EndOfRoundMarkerNode path below) never advanced for this occurrence. See EndOfRoundMarkerNode
+    // for the indirect (CheckProgress-driven, --progress-map-backed) path this mirrors — same
+    // layout/okay/onclose shape, just built directly instead of scanning an ExpandLinkNode's
+    // children, since there's no enclosing link here to scan.
     private static IEnumerable<Dictionary<string, object?>> TransformModal(ModalNode modal, SerializationContext? ctx = null)
     {
-        // Transform end-of-round modal to section+checkpoint+navigation pattern
         var nodes = new List<Dictionary<string, object?>>();
-
         if (modal.Body is not null)
         {
             nodes.Add(new() { ["type"] = "text", ["value"] = modal.Body });
         }
 
-        if (modal.Round.HasValue)
+        if (modal.Body2 is not null)
         {
-            yield return new()
+            if (modal.Body is not null)
             {
-                ["type"] = "section",
-                ["style"] = "panel",
-                ["content"] = nodes,
-            };
-            yield return new()
-            {
-                ["type"] = "checkpoint",
-                ["id"] = $"round_{modal.Round}_complete",
-                ["display"] = $"Round {modal.Round}",
-            };
-        }
-        else if (nodes.Count > 0)
-        {
-            yield return new() { ["type"] = "section", ["style"] = "panel", ["content"] = nodes };
+                nodes.Add(new() { ["type"] = "break", ["style"] = "paragraph" });
+            }
+
+            nodes.Add(new() { ["type"] = "text", ["value"] = modal.Body2 });
         }
 
+        var d = new Dictionary<string, object?>
+        {
+            ["type"] = "popup",
+            ["layout"] = "end_of_round",
+        };
         if (modal.Next is not null)
         {
-            var label = modal.Instruction ?? "Continue";
-            var navD = new Dictionary<string, object?>
-            {
-                ["type"] = "link",
-                ["label"] = label,
-                ["target"] = modal.Next,
-            };
-            AddLinkHint(navD, modal.Next, ctx);
-            navD["snapshot"] = true;
-            yield return navD;
+            d["target"] = modal.Next;
+            AddLinkHint(d, modal.Next, ctx);
         }
+
+        d["okay"] = "End of Round";
+        d["onclose"] = new List<Dictionary<string, object?>>
+        {
+            new() { ["type"] = "assign", ["var"] = "_ProgressRound", ["expr"] = (modal.Round ?? 0).ToString() },
+        };
+        d["snapshot"] = true;
+        if (nodes.Count > 0)
+        {
+            d["content"] = nodes;
+        }
+
+        yield return d;
     }
 
     // ── SetupNotification ─────────────────────────────────────────────────
