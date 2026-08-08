@@ -61,6 +61,40 @@ public class BreakFilterTests
     }
 
     [Fact]
+    public void SingleBreakTouchingLetThatFeedsNextText_IsPreserved()
+    {
+        // Regression: A Time of War's ResistSides — "Choose Sides" (bold heading) + lineBreak() +
+        // "In turn order, each player who built at least {either-choice} may choose...". The
+        // either() call inside the second sentence gets hoisted by ConsolidateTextNodes into a
+        // LetNode sitting right after the break, before the sentence's own merged TextNode — a pure
+        // extraction artifact (the source has no separate statement there at all, just one
+        // continuous text() argument). Unlike SingleBreakTouchingAssign_IsDropped's real, unrelated
+        // side-effect statement, this LetNode's value is consumed by the very next TextNode
+        // (TextNode.Lets) — so the break is genuinely between two rendered sentences, not
+        // decoration next to bookkeeping, and must survive.
+        // Matches BreakFilter's own established interstitial-then-break ordering (e.g.
+        // TwoBreaksStraddlingAnAssign_CollapseToOneParagraphBreak below) — harmless either way,
+        // since a LetNode's execution never depends on its position relative to a purely visual
+        // break, only on coming before the text that reads it.
+        var fed = new TextNode { Template = "b {_rnd_0}", Lets = ["_rnd_0"] };
+        var nodes = new List<MwsNode> { Text("a"), new BreakNode(), Let("_rnd_0"), fed };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["text", "let", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SingleBreakTouchingLetThatDoesNotFeedNextText_IsDropped()
+    {
+        // Contrast with the previous test: a LetNode whose value the following text does NOT
+        // reference is exactly the same "decorative bookkeeping" shape as an Assign — must still be
+        // dropped, same as SingleBreakTouchingAssign_IsDropped.
+        var unrelated = new TextNode { Template = "b", Lets = ["other_var"] };
+        var nodes = new List<MwsNode> { Text("a"), new BreakNode(), Let("_rnd_0"), unrelated };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["text", "let", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
     public void TwoBreaksStraddlingAnAssign_CollapseToOneParagraphBreak()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00131-HospitalVisitCheck2.mws.yaml
@@ -209,6 +243,143 @@ public class BreakFilterTests
         var nodes = new List<MwsNode> { new EndOfGenerationNode(), new BreakNode(), Text("a") };
         var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
         Assert.Equal(["end_of_generation", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void LeadingAutoDisplayInputPrompt_DoesNotCountAsRenderedForFollowingBreak()
+    {
+        // Same "separate overlay, no label" shape as EndOfGenerationNode above, for
+        // InputPromptNode's own auto-display popup (see V2Serializer's
+        // InputPrompt_EmitsGuardedAutoPopupConditional). Regression: Cost of Disease's NewMaster3A —
+        // "switch(costA) { assigns } input-prompt(creationA) let(either hoist) lineBreak() text(...)"
+        // — and Fear of the Unknown's Player1Stats..Player5Stats series (no switch, prompt is the
+        // very first thing in the passage) — the prompt renders nothing, so the break right before
+        // the actual first line of narration is leading and must be dropped.
+        var nodes = new List<MwsNode> { new InputPromptNode(), new BreakNode(), Text("a") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["input_prompt", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void LeadingBreakInsidePopup_AfterBareSetupNotificationMarker_IsDropped()
+    {
+        // Regression: A Time of War's SeedGUNS — a popup (ExpandLinkNode) whose ExpandNodes are
+        // [bare SetupNotificationNode (Title/Text both null — a ViewItemObtain.SetupPassagename
+        // marker consumed into the popup's own target, never content), SetupBlockNode [setup-image
+        // ImageNode (always hoisted to the popup's own header), lineBreak(), let (hoisted either()
+        // choice), text]]. Two things had to be fixed together for this: (1) the marker/setup-image
+        // must be recognized as non-rendered so the switch/image don't fool BreakFilter into
+        // thinking the popup's own content already rendered something before this break, and (2) the
+        // popup's content must be isolated from the OUTER passage's own rendered state (here,
+        // deliberately preceded by real "intro" text, mirroring the real passage's shape) — without
+        // isolation, that outer text alone would already make the break look non-leading regardless
+        // of the marker/image fix.
+        var expand = new ExpandLinkNode
+        {
+            Label = "Click to continue...",
+            StateAffecting = true,
+            ExpandNodes =
+            [
+                new SetupNotificationNode(),
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new ImageNode { AssetRef = "image://setup/ScoreTrackMarker", Style = "setup-image" },
+                        new BreakNode(),
+                        new LetNode { Var = "_rnd_0", Random = new VarRandom { RandomType = "rand-between" } },
+                        new TextNode { Template = "Any player with a token gains {_rnd_0}VP.", Lets = ["_rnd_0"] },
+                    ],
+                },
+            ],
+        };
+        var result = BreakFilter.Apply([Text("intro"), expand], BreaksMode.Omit);
+
+        var resultExpand = Assert.IsType<ExpandLinkNode>(result[1]);
+        var setupBlock = Assert.IsType<SetupBlockNode>(resultExpand.ExpandNodes[1]);
+        Assert.Equal(["image", "let", "text"], setupBlock.Nodes.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void LeadingBreakInsidePopup_AfterSwitchWithSetupNotificationBranches_IsDropped()
+    {
+        // Regression: A Time of War's PackingHeat1a — same shape as the bare-marker case above, but
+        // the SetupNotificationNode marker sits as the trailing node of each of a SwitchNode's own
+        // cases (alongside real per-round assigns) instead of directly in ExpandNodes — the switch
+        // itself must also be recognized as fully non-rendered once its only non-assign content is a
+        // bare marker.
+        var sw = new SwitchNode
+        {
+            On = "round",
+            Cases =
+            [
+                new SwitchCase { Match = 7, Nodes = [Assign("martweapons"), Assign("martial"), new SetupNotificationNode { NextPassage = "Martial1" }] },
+                new SwitchCase { Default = true, Nodes = [Assign("martweapons"), Assign("martial"), new SetupNotificationNode { NextPassage = "Martial3" }] },
+            ],
+        };
+        var expand = new ExpandLinkNode
+        {
+            Label = "Click to continue...",
+            StateAffecting = true,
+            ExpandNodes =
+            [
+                sw,
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new ImageNode { AssetRef = "image://setup/Creepy_Icon", Style = "setup-image" },
+                        new BreakNode(),
+                        new LetNode { Var = "_rnd_0", Random = new VarRandom { RandomType = "choose-one" } },
+                        new TextNode { Template = "{heat} gains {_rnd_0}", Lets = ["_rnd_0"] },
+                    ],
+                },
+            ],
+        };
+        var result = BreakFilter.Apply([Text("intro"), expand], BreaksMode.Omit);
+
+        var resultExpand = Assert.IsType<ExpandLinkNode>(result[1]);
+        var setupBlock = Assert.IsType<SetupBlockNode>(resultExpand.ExpandNodes[1]);
+        Assert.Equal(["image", "let", "text"], setupBlock.Nodes.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void SetupNotificationNodeWithRealText_CountsAsRenderedForSurroundingBreaks()
+    {
+        // Contrast: a SetupNotificationNode carrying its own Title/Text (the standalone shape
+        // TransformSetupNotification renders inline, e.g. Payment1ThanksB-style) is genuine visible
+        // content, unlike the bare branch-marker shape above — must not be swept up into the same
+        // "transparent for break purposes" treatment.
+        var sn = new SetupNotificationNode { Title = "Setup Title" };
+        var result = BreakFilter.Apply([sn, new BreakNode(), Text("a")], BreaksMode.Omit);
+        Assert.Equal(["setup_notification", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void OrdinaryImage_CountsAsRenderedForSurroundingBreaks()
+    {
+        // Contrast: only the setup-image style is a header-only hoist target — an ordinary inline
+        // image is real content and must not be treated as transparent for break purposes.
+        var image = new ImageNode { AssetRef = "image://something" };
+        var result = BreakFilter.Apply([image, new BreakNode(), Text("a")], BreaksMode.Omit);
+        Assert.Equal(["image", "break", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
+    public void PopupContent_GenuineInteriorBreak_IsPreservedRegardlessOfOuterContext()
+    {
+        // Confirms the ExpandLinkNode isolation fix only resets what the popup's own content
+        // *borrows* from outside — it must not disturb an ordinary interior break that's genuinely
+        // between two real, rendered nodes entirely within the popup's own content.
+        var expand = new ExpandLinkNode
+        {
+            Label = "Click to continue...",
+            ExpandNodes = [Text("popup line one"), new BreakNode(), Text("popup line two")],
+        };
+        var result = BreakFilter.Apply([Text("intro"), expand], BreaksMode.Omit);
+
+        var resultExpand = Assert.IsType<ExpandLinkNode>(result[1]);
+        Assert.Equal(["text", "break", "text"], resultExpand.ExpandNodes.Select(n => n.Type));
     }
 
     [Fact]

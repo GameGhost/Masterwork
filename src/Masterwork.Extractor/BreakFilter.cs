@@ -24,9 +24,16 @@ public static class BreakFilter
     //   - EndOfGenerationNode always becomes an auto-display popup with no label (TransformEndOfGeneration
     //     never sets one) — a separate overlay, not a position in the passage's own inline flow, so a
     //     break next to it is exactly as decorative as one next to an assign.
+    // InputPromptNode is the same "auto-display popup, no label" shape as EndOfGenerationNode (see
+    // V2Serializer's InputPrompt_EmitsGuardedAutoPopupConditional) — real occurrence: Cost of
+    // Disease's NewMaster3A, `switch(...) { assigns } if (!X_submitted) { input prompt } let
+    // (either hoist) lineBreak() text(...)`, and Fear of the Unknown's whole Player1Stats..
+    // Player5Stats input-collection flow (each is `if (!X_submitted) { input prompt } lineBreak()
+    // text(...)`, no switch at all) — without this, the prompt counted as rendered content, so the
+    // break right before the actual first line of narration wasn't recognized as leading.
     private static bool IsNonRendered(MwsNode node) => node switch
     {
-        EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode or EndOfGenerationNode => true,
+        EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode or EndOfGenerationNode or InputPromptNode => true,
         ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsNonRendered)),
         SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsNonRendered)),
         _ => false,
@@ -147,7 +154,23 @@ public static class BreakFilter
                 section.Nodes = Apply(section.Nodes, mode, hasPrecedingRendered, hasFollowingRendered);
                 break;
             case SetupBlockNode setup:
-                setup.Nodes = Apply(setup.Nodes, mode, hasPrecedingRendered, hasFollowingRendered);
+                // A leading setup-image ImageNode (TryProcessSetupImageAssignment's own emission
+                // order always puts it first when present) is excluded from the recursive Apply call
+                // entirely, not merely reclassified as non-rendered — SplitPopupHeaderNodes
+                // (V2Serializer, runs after BreakFilter) always hoists it out to the popup's own
+                // `header:` section, so it never contributes to `content:`'s own leading/trailing
+                // break decisions. A blanket "setup-image is non-rendered" rule in IsNonRendered
+                // would be wrong here: that style also appears as an ordinary, genuinely-rendered
+                // inline image directly in a passage's own top-level flow (outside any popup, where
+                // no header-hoisting ever applies — real occurrence: Cost of Disease's 5Note), so the
+                // distinction has to be made structurally (only within a SetupBlockNode, which is
+                // exclusively popup body content) rather than by the image node's own properties
+                // alone. Real occurrence needing this: A Time of War's PackingHeat1a/SeedGUNS — the
+                // lineBreak() right after this image must see sawRenderedLocally still false (see
+                // Apply's own remarks), which requires the image to never enter this Apply call.
+                setup.Nodes = setup.Nodes is [ImageNode { Style: "setup-image" } leadingImage, .. var rest]
+                    ? [leadingImage, .. Apply(rest, mode, hasPrecedingRendered, hasFollowingRendered)]
+                    : Apply(setup.Nodes, mode, hasPrecedingRendered, hasFollowingRendered);
                 break;
             case LinkNode link when link.Nodes.Count > 0:
                 // onclick runs on click, not inline with surrounding body content — isolated.
@@ -175,6 +198,19 @@ public static class BreakFilter
 
         var result = new List<MwsNode>(nodes.Count);
         var sawRendered = hasPrecedingRendered;
+        // Unlike sawRendered, this ALWAYS starts false, ignoring hasPrecedingRendered — a purely
+        // local "has anything genuinely rendered within THIS list so far" signal, used only to gate
+        // the two "keep a break despite a non-trivial/feeds-next interstitial" rules below. Needed
+        // because a popup's own content inherits hasPrecedingRendered=true from whatever narrative
+        // text rendered before the "click to continue" link that triggers it (extremely common) —
+        // real, but from OUTSIDE the popup's own content, so it must not be mistaken for something
+        // having rendered INSIDE the popup already. Real occurrence: A Time of War's PackingHeat1a/
+        // SeedGUNS — a popup whose own content is [switch/marker (all non-rendered), setup-image
+        // (hoisted to header), lineBreak(), hoisted-either()-let, text] — inherited
+        // hasPrecedingRendered made the lineBreak() look like an ordinary interior break next to the
+        // let (correctly preserved elsewhere per SingleBreakTouchingLetThatFeedsNextText_IsPreserved),
+        // when nothing had actually rendered yet within the popup's own content at that point.
+        var sawRenderedLocally = false;
         var i = 0;
         while (i < nodes.Count)
         {
@@ -205,6 +241,7 @@ public static class BreakFilter
                 if (!IsNonRendered(node))
                 {
                     sawRendered = true;
+                    sawRenderedLocally = true;
                 }
 
                 i++;
@@ -269,11 +306,39 @@ public static class BreakFilter
                 // to sit next to non-rendered logic.
                 result.Add(new ParagraphBreakNode { SourceLine = firstBreakLine, WithinStyleScope = withinStyleScope });
                 sawRendered = true;
+                sawRenderedLocally = true;
                 continue;
             }
 
+            // A trivial LetNode interstitial (see IsTrivialNonRendered) is only "decorative
+            // bookkeeping the break happens to sit next to" when it's a genuinely separate
+            // statement — not when it's PassageBodyVisitor's own hoist of an inline either()/
+            // random() call out of the very next TextNode's own template (TextNode.Lets records
+            // exactly this: which hoisted lets a template consumes). That hoist is a pure
+            // extraction artifact with no source-level existence of its own — from the author's
+            // perspective the "sentence" is one continuous unit, so a break landing next to the
+            // hoisted let is really a break between the PRECEDING content and that whole sentence,
+            // not decorative filler next to a side-effect statement. Real-world regression: A Time
+            // of War's ResistSides — "Choose Sides" (bold heading) + lineBreak() + "In turn order,
+            // each player who built at least {either-choice} may choose..." — the lineBreak() was
+            // being silently dropped because the hoisted random-choice let for the either() landed
+            // directly after it, with no break-preserving distinction from an unrelated `Vars.x =
+            // 1;` assign (which correctly stays dropped — see SingleBreakTouchingAssign_IsDropped).
+            // Unlike the interstitials.Any(!IsTrivialNonRendered) rule below (a non-rendering
+            // switch/conditional is a whole separate statement — always grounds to keep the break,
+            // regardless of what's rendered earlier — see Fever1/Hospital1), this rule is ALSO
+            // gated on sawRenderedLocally: a hoisted let by itself carries no such "separate
+            // statement" weight (it's a pure extraction artifact — see the remarks above), so it's
+            // only grounds to KEEP the break if something has ALSO actually rendered earlier in THIS
+            // SAME list already; otherwise it's still a leading break, just one whose
+            // hasPrecedingRendered happens to be inherited=true from outside a popup rather than
+            // false (see sawRenderedLocally's own remarks — A Time of War's PackingHeat1a/SeedGUNS).
+            var nextFeedsFromInterstitialLet = sawRenderedLocally &&
+                i < nodes.Count && nodes[i] is TextNode { Lets: { } feedsLets } &&
+                interstitials.OfType<LetNode>().Any(l => feedsLets.Contains(l.Var));
+
             if (!isLeading && !isTrailing && breakCount == 1 &&
-                (interstitials.Count == 0 || interstitials.Any(n => !IsTrivialNonRendered(n))))
+                (interstitials.Count == 0 || interstitials.Any(n => !IsTrivialNonRendered(n)) || nextFeedsFromInterstitialLet))
             {
                 // An ordinary single break directly between two rendered nodes — never was "extra" —
                 // OR one touching a non-rendering conditional/switch/EndOfGenerationNode, which is a
@@ -282,6 +347,7 @@ public static class BreakFilter
                 // the author placed right next to one of these that must survive.
                 result.Add(new BreakNode { SourceLine = firstBreakLine, WithinStyleScope = withinStyleScope });
                 sawRendered = true;
+                sawRenderedLocally = true;
                 continue;
             }
 
