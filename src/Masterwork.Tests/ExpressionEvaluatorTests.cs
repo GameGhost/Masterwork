@@ -359,6 +359,53 @@ public class ExpressionEvaluatorTests
             "The Riverside Gazette",
             Eval("\"The {townname} \" + name", Vars(("townname", StoryValue.Of("Riverside")), ("name", StoryValue.Of("Gazette")))).AsString());
 
+    // ── ExpandTemplate: nested braces ───────────────────────────────────────
+    // ExpandTemplate (called directly on a passage's raw `title`/`subtitle`/display-text field, not
+    // via Eval on an already-quoted expression string) used to use a non-nesting regex
+    // (`\{([^{}]*)\}`) to find placeholder spans. That regex can never match an OUTER `{...}` pair
+    // whose own content contains MORE braces — e.g. a ternary title whose arms are themselves
+    // quoted string literals embedding their own `{varname}` placeholders. Real occurrence: Cost of
+    // Disease's HuntSuccessCheck, `title: '{huntresult == "success" ? "A {_rnd_0} Fate" : "Overrun
+    // By {_rnd_1}"}'` — the regex skipped straight past the outer pair to the two INNER ones,
+    // evaluating {_rnd_0} and {_rnd_1} as two independent bare variable references instead of
+    // routing the whole thing through the ternary (which only evaluates its SELECTED branch). Since
+    // only one branch's `let` actually ran during body rendering, the other variable was never
+    // bound — a StoryEvalException at render time even though the title's own condition correctly
+    // evaluated to false and never should have needed it.
+
+    [Fact]
+    public void ExpandTemplate_TernaryWithNestedPlaceholdersInBothArms_EvaluatesOnlySelectedBranch()
+    {
+        // Mirrors HuntSuccessCheck exactly: the condition is false, only the false-branch's own
+        // variable is bound (the true-branch's variable is deliberately ABSENT from the context —
+        // if ExpandTemplate incorrectly evaluated both arms' placeholders independently, this would
+        // throw instead of returning the correct, selected-branch text).
+        var evaluator = new ExpressionEvaluator();
+        var ctx = new FakeExprContext(Vars(("huntresult", StoryValue.Of("failure")), ("rnd1", StoryValue.Of("Monsters"))));
+        Assert.Equal(
+            "Overrun By Monsters",
+            evaluator.ExpandTemplate("{huntresult == \"success\" ? \"A {rnd0} Fate\" : \"Overrun By {rnd1}\"}", ctx));
+    }
+
+    [Fact]
+    public void ExpandTemplate_TernaryWithNestedPlaceholders_TrueBranchAlsoWorks()
+    {
+        var evaluator = new ExpressionEvaluator();
+        var ctx = new FakeExprContext(Vars(("huntresult", StoryValue.Of("success")), ("rnd0", StoryValue.Of("Righteous"))));
+        Assert.Equal(
+            "A Righteous Fate",
+            evaluator.ExpandTemplate("{huntresult == \"success\" ? \"A {rnd0} Fate\" : \"Overrun By {rnd1}\"}", ctx));
+    }
+
+    [Fact]
+    public void ExpandTemplate_UnmatchedOpenBrace_TreatedAsLiteralAndScanningContinues() =>
+        // An unmatched '{' (no closing brace anywhere ahead) must not swallow the rest of the
+        // template or throw — it's kept as a literal character, same as the old regex's behavior of
+        // simply not matching it, and scanning continues normally afterward.
+        Assert.Equal(
+            "before { after Riverside",
+            new ExpressionEvaluator().ExpandTemplate("before { after {townname}", new FakeExprContext(Vars(("townname", StoryValue.Of("Riverside"))))));
+
     private static List<StoryValue> Arr(params string[] values) => values.Select(StoryValue.Of).ToList();
     private static List<StoryValue> IntArr(params long[] values) => values.Select(StoryValue.Of).ToList();
 }

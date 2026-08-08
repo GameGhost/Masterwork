@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -8,7 +8,7 @@ namespace Masterwork.Engine.Expressions;
 /// <inheritdoc cref="IExpressionEvaluator"/> Expressions are parsed once (see <see cref="GetOrParse"/>)
 /// and cached by source text, so repeated evaluation is a pure AST walk with no re-parsing cost.
 /// </summary>
-public sealed partial class ExpressionEvaluator : IExpressionEvaluator
+public sealed class ExpressionEvaluator : IExpressionEvaluator
 {
     private readonly IExpressionParser _parser;
     private readonly ILogger<ExpressionEvaluator> _logger;
@@ -72,20 +72,69 @@ public sealed partial class ExpressionEvaluator : IExpressionEvaluator
     // full sentence in one place instead of needing a bare '+' concatenation built by hand — each
     // {expr} is evaluated fresh against the CURRENT ctx, so re-evaluating the same literal (e.g. on
     // a re-render) always reflects live variable values, not a value baked in at parse time.
-    public string ExpandTemplate(string template, IStoryEvalContext ctx) =>
-        TemplatePlaceholderRegex().Replace(template, m =>
+    //
+    // Hand-written brace-depth scan, not a regex — a placeholder's own content can itself contain
+    // MORE braces (a ternary title whose arms are string literals embedding their own {varname}
+    // placeholders, e.g. '{huntresult == "success" ? "A {_rnd_0} Fate" : "Overrun By {_rnd_1}"}').
+    // A non-nesting regex (the previous `\{([^{}]*)\}`) can never match that OUTER pair at all — it
+    // skips straight past it to the two INNER pairs instead, evaluating {_rnd_0} and {_rnd_1} as two
+    // independent bare variable references rather than the ternary's own selected-branch content.
+    // Since only ONE branch's `let` actually ran during body rendering, the OTHER placeholder's
+    // variable was never set — a StoryEvalException at render time, not a silently wrong title.
+    // Scanning for the OUTERMOST balanced pair and handing its full content to Evaluate (which
+    // parses it as one expression) fixes this: Expr.Ternary only evaluates its SELECTED branch, and
+    // Expr.StringLiteral's own recursive ExpandTemplate call resolves that branch's OWN nested
+    // placeholders correctly, against whichever variable that branch's own body content actually set.
+    public string ExpandTemplate(string template, IStoryEvalContext ctx)
+    {
+        var result = new StringBuilder();
+        var i = 0;
+        while (i < template.Length)
         {
-            var content = m.Groups[1].Value;
-            if (content.StartsWith("icon:", StringComparison.Ordinal))
+            if (template[i] != '{')
             {
-                return m.Value;
+                result.Append(template[i]);
+                i++;
+                continue;
             }
 
-            return Evaluate(content, ctx).AsString();
-        });
+            var depth = 1;
+            var j = i + 1;
+            while (j < template.Length && depth > 0)
+            {
+                if (template[j] == '{')
+                {
+                    depth++;
+                }
+                else if (template[j] == '}')
+                {
+                    depth--;
+                }
 
-    [GeneratedRegex(@"\{([^{}]*)\}")]
-    private static partial Regex TemplatePlaceholderRegex();
+                if (depth > 0)
+                {
+                    j++;
+                }
+            }
+
+            if (depth != 0)
+            {
+                // No matching close brace anywhere ahead — treat this '{' as a literal character
+                // and keep scanning, same as the old regex leaving an unmatched brace alone.
+                result.Append(template[i]);
+                i++;
+                continue;
+            }
+
+            var content = template[(i + 1)..j];
+            result.Append(content.StartsWith("icon:", StringComparison.Ordinal)
+                ? template[i..(j + 1)]
+                : Evaluate(content, ctx).AsString());
+            i = j + 1;
+        }
+
+        return result.ToString();
+    }
 
     private StoryValue EvalProperty(Expr.PropertyAccess p, IStoryEvalContext ctx)
     {
