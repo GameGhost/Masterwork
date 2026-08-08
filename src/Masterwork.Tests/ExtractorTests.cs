@@ -179,13 +179,14 @@ public class ExtractorTests
     [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
-        // A leading Vars assignment (produces an AssignNode, not a TextNode) so this bold text
-        // isn't at nodes[0] and isn't intercepted by the hub/narration heading-hoist
-        // (TryHoistHeadingTitleSubtitle only matches a *leading* bold TextNode) — this test is
-        // about bold style application, not the heading feature; see HeadingHoist tests for that.
-        // "ck2" used to be usable for this (a layout the hoist didn't apply to at all), but "ck2"
-        // now prepends a synthesized special-event node instead of picking a distinct layout — see
-        // Ck2Tag_PrependsSpecialEventOverlay_AndStillHoistsHeadingNormally.
+        // A leading plain (non-bold) sentence — not a bare Vars assignment — keeps this bold text
+        // out of the hub/narration heading-hoist: TryHoistHeadingTitleSubtitle now also skips a
+        // leading run of heading-*inert* nodes (assigns, breaks, auto-display popups) to find a
+        // leading bold heading behind them (see the Player1Stats-style HeadingHoist tests), so a
+        // bare assign no longer works as an escape hatch here — but real, non-inert body text
+        // does, since the flat shape-1/shape-2 check only ever looks at what's genuinely first.
+        // This test is about bold style application, not the heading feature; see HeadingHoist
+        // tests for that.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -193,7 +194,8 @@ public class ExtractorTests
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
-                this.Vars.dummy = 1;
+                yield return base.text("Plain lead-in.");
+                yield return base.lineBreak();
                 using (base.styleScope("bold", true))
                 {
                     yield return base.text("Bold text");
@@ -203,7 +205,7 @@ public class ExtractorTests
             }
             """);
 
-        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        var textNode = passages[0].Nodes.OfType<TextNode>().First(t => t.Style == "bold");
         Assert.Equal("bold", textNode.Style);
     }
 
@@ -756,8 +758,9 @@ public class ExtractorTests
     [Fact]
     public void UniformBoldScope_HoistsStyleToNode()
     {
-        // See BoldStyleScope_AppliesBoldStyle's comment — a leading no-op assignment dodges the
-        // heading-hoist instead of relying on a non-hoisting tag/layout, which no longer exists.
+        // See BoldStyleScope_AppliesBoldStyle's comment — a leading, non-inert plain sentence (not
+        // a bare assign, which the heading-hoist now skips right past to find a bold heading behind
+        // it) keeps this bold text out of the hub/narration heading-hoist.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -765,7 +768,8 @@ public class ExtractorTests
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
-                this.Vars.dummy = 1;
+                yield return base.text("Plain lead-in.");
+                yield return base.lineBreak();
                 using (base.styleScope("bold", true))
                 {
                     yield return base.text("All ");
@@ -777,7 +781,7 @@ public class ExtractorTests
             }
             """);
 
-        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        var textNode = passages[0].Nodes.OfType<TextNode>().First(t => t.Style == "bold");
         Assert.Equal("bold", textNode.Style);
         Assert.Equal("All {name} bold", textNode.Template);
     }
@@ -1132,6 +1136,884 @@ public class ExtractorTests
             """);
 
         Assert.Equal("{gunsbonus == 1 ? \"Knowledge Bonus\" : \"Ingredient Bonus\"}", passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingInputPromptThenHeading_StillHoistsTitle()
+    {
+        // Regression: Fear of the Unknown's Player1Stats..Player5Stats, each starting with a
+        // conditional-gated input-prompt popup (collapsed to a bare InputPromptNode, not literally a
+        // ConditionalNode — see IsInputPromptIf) before its own "**Agility Confirmed**"-style bold
+        // heading. The flat shape-1/shape-2 heading check only ever looked at nodes[0] itself, so an
+        // InputPromptNode sitting in front of the real heading defeated the hoist entirely — unlike
+        // the ConditionalNode/SwitchNode-sole-candidate path (see the previous test), which already
+        // tolerates inert siblings. IsHeadingInert now also recognizes InputPromptNode/
+        // EndOfGenerationNode (same "separate overlay, not passage body text" reasoning as
+        // BreakFilter's own IsNonRendered), and the flat check now skips any leading inert run too.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.PassageValueNumber() >= 0)
+                {
+                    this.Vars.agiA = this.PassageValueNumber();
+                }
+                else
+                {
+                    this.OnGenerationBtn("agiA", "Enter your VP", "number");
+                }
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Agility Confirmed");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Agility Confirmed", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Single(passages[0].Nodes.OfType<InputPromptNode>());
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode t && t.Template == "Agility Confirmed");
+    }
+
+    [Fact]
+    public void NarrationLayout_HeadingBoldTextDependsOnPrecedingLet_StillHoistsAsTernary()
+    {
+        // Regression/correction: Cost of Disease's HuntSuccessCheck (source lines 32632-32639) —
+        // each branch of `if (huntresult == "success") { ... } else { ... }` opens with `let _rnd_X
+        // = macros1.either(...)` immediately followed by a bold text() call whose template embeds
+        // `{_rnd_X}` (ConsolidateTextNodes merges the inline either() + surrounding text() calls
+        // into one TextNode carrying `Lets: ["_rnd_X"]`). This used to be rejected by a Lets-
+        // emptiness guard on the theory that hoisting would strand the `let` — but the `let` node
+        // itself is never removed (only the TextNode that consumed it is; the `let` stays in
+        // headingPrefix, still executing normally as part of the body). Confirmed against the
+        // engine: title evaluates strictly AFTER the full body renders (PassageRenderer.Render), a
+        // `let`'s value persists in the same VariableStore instance title expansion reads from
+        // (ClearLetScope has no call sites in engine code), and a `{letname}` placeholder embedded
+        // in one ternary arm's own string literal gets its own recursive ExpandTemplate pass once
+        // that arm is selected — so this hoists correctly and safely.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.huntresult == "success")
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A ");
+                        yield return base.text(this.macros1.either(new StoryVar[] { "Righteous", "Wondrous" }));
+                        yield return base.text(" Fate");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text A.");
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Overrun By ");
+                        yield return base.text(this.macros1.either(new StoryVar[] { "Demons", "Monsters" }));
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text B.");
+                }
+                yield break;
+            }
+            """);
+
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        // The let nodes must survive in the body (never removed) — only the bold TextNode that
+        // consumed each one is gone, hoisted into the title.
+        Assert.All(cond.Branches, b => Assert.Contains(b.Nodes, n => n is LetNode));
+        Assert.All(cond.Branches, b => Assert.DoesNotContain(b.Nodes, n => n is TextNode { Style: "bold" }));
+
+        var letVarA = ((LetNode)cond.Branches[0].Nodes.OfType<LetNode>().First()).Var;
+        var letVarB = ((LetNode)cond.Branches[1].Nodes.OfType<LetNode>().First()).Var;
+        Assert.Equal(
+            $"{{huntresult == \"success\" ? \"A {{{letVarA}}} Fate\" : \"Overrun By {{{letVarB}}}\"}}",
+            passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void NarrationLayout_TopLevelHeadingDependsOnTwoPrecedingLets_StillHoists()
+    {
+        // Regression: Fear of the Unknown's AsylumTreatment — TWO top-level `let`s (no conditional
+        // branching at all, unlike the previous test) immediately precede a bold heading whose
+        // template embeds both: `let _rnd_0 = rand_between(...); let _rnd_1 = [...].shuffled(...)[0];
+        // **Asylum Admittance Log {_rnd_0}{_rnd_1}**`. Both lets sit in headingPrefix (skipped by the
+        // prefix-skip, not consumed) and remain in the body exactly where they were, executing
+        // normally before title evaluation — same reasoning as the previous test, just with two
+        // lets instead of one and no surrounding conditional.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Asylum Admittance Log ");
+                    yield return base.text(this.macros1.either(new StoryVar[] { 151, 152, 153 }));
+                    yield return base.text(this.macros1.either(new StoryVar[] { "A", "B", "C" }));
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        var letNodes = passages[0].Nodes.OfType<LetNode>().ToList();
+        Assert.Equal(2, letNodes.Count);
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+        Assert.Equal(
+            $"Asylum Admittance Log {{{letNodes[0].Var}}}{{{letNodes[1].Var}}}",
+            passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_LongLetNamesInflateRawTemplateOverCutoff_StillHoistsViaEstimatedLength()
+    {
+        // Regression: the previous test's auto-generated let names (_rnd_P1_0/_rnd_P1_1) are short
+        // enough that "Asylum Admittance Log {_rnd_P1_0}{_rnd_P1_1}" stays under 50 characters even
+        // counting the placeholders literally — it never actually exercised the length ESTIMATION
+        // logic. The real AsylumTreatment passage's auto-generated names embed the full passage
+        // name (_rnd_AsylumTreatment_0/_rnd_AsylumTreatment_1, 24 chars each), pushing the RAW
+        // template to 73 characters — over the 50-char cutoff — even though the actual rendered
+        // text at play time (a short number + a single letter) is nowhere near that long.
+        // EstimateRenderedLength treats each placeholder as a small fixed-length stand-in rather
+        // than its own literal character count, so this must still hoist. Using a long passage name
+        // here specifically to reproduce that same long-auto-generated-name effect.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["AVeryLongPassageNameForTesting"] = new StoryPassage("AVeryLongPassageNameForTesting", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Asylum Admittance Log ");
+                    yield return base.text(this.macros1.either(new StoryVar[] { 151, 152, 153 }));
+                    yield return base.text(this.macros1.either(new StoryVar[] { "A", "B", "C" }));
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        var letNodes = passages[0].Nodes.OfType<LetNode>().ToList();
+        Assert.Equal(2, letNodes.Count);
+        var rawTemplate = $"Asylum Admittance Log {{{letNodes[0].Var}}}{{{letNodes[1].Var}}}";
+        Assert.True(rawTemplate.Length > 50, $"test fixture should reproduce the raw-length-over-cutoff scenario (was {rawTemplate.Length} chars)");
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+        Assert.Equal(rawTemplate, passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_SwitchWithTrailingClickThroughLink_StillCollapsesToTernaryTitle()
+    {
+        // Regression: A Time of War's SeedResolution and Fear of the Unknown's PEWitch2 — a
+        // heading-bearing switch/conditional followed by a REAL, visible "Click to continue..."
+        // link (ExpandLinkNode, the hook+enchantHook idiom, not an auto-show SetupBlockNode — those
+        // are a DIFFERENT source pattern, `styleScope("setupStyle")`, already covered by an earlier
+        // test). A click-through link's own label is never itself a plausible heading — same
+        // reasoning already applied to breaks/assigns — so it shouldn't block
+        // TryFindSoleHeadingCandidate<SwitchNode> from finding the switch as the sole candidate.
+        // Before ExpandLinkNode joined IsHeadingInert, this link was treated as a second,
+        // non-matching "candidate" and the whole hoist was rejected.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.gunsbonus == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Place of Knowledge");
+                    }
+                }
+                else if (this.Vars.gunsbonus == 2)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Wealth of Goods");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("An Investor's Paradise");
+                    }
+                }
+                yield return base.lineBreak();
+                using (base.styleScope("hook", "h0000024"))
+                    yield return base.link("Click to continue...", null, () => base.enchantHook("h0000024", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                yield return base.text("The player with the Storybook must choose one option.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{gunsbonus == 1 ? \"A Place of Knowledge\" : gunsbonus == 2 ? \"A Wealth of Goods\" : \"An Investor's Paradise\"}",
+            passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingBoldSpanMergedWithShortPlainRemainder_HoistsJustTheSpan()
+    {
+        // Regression: Fear of the Unknown's FPYesHub — `styleScope("bold"){ text("Destiny Awaits") }
+        // text("Your choice has been made.")`, no lineBreak between the closing style scope and the
+        // next text() call. CanJoinGroup merges adjacent TextNodes regardless of style match
+        // whenever nothing separates them, producing ONE TextNode with Style: null (mixed) and
+        // Template: "**Destiny Awaits**Your choice has been made." — the flat shape-1 check
+        // (requiring Style == "bold" on the WHOLE node) never matched this at all. The combined
+        // length here (14 + 27 = 41 chars) is short, so this hoists — contrast with the sibling test
+        // for OptiontoKillYesPattern's shape, where the remainder is long enough to correctly block
+        // the hoist instead.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Destiny Awaits");
+                }
+                yield return base.text("Your choice has been made.");
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Immediately Gain 1VP.");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Destiny Awaits", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        var body = Assert.Single(passages[0].Nodes.OfType<TextNode>(), t => t.Template == "Your choice has been made.");
+        Assert.Null(body.Style);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingConditionalFragmentThenBoldContinuation_CombinesIntoOneTitle()
+    {
+        // Regression: Fear of the Unknown's Player1Statsfin — `if (warriorA) { let _rpl =
+        // warriorA.replace("_1", ""); **{_rpl}** }` (single branch, no else) immediately followed
+        // (no break) by a second, unconditional bold TextNode (`** Complete**`). Neither the flat
+        // shape-1/2 checks (headingSuffix[0] here is a ConditionalNode, not a TextNode) nor
+        // TryFindSoleHeadingCandidate (the trailing bold TextNode is a second, non-matching
+        // "candidate") could reach this on their own — the conditional's own recursive hoist
+        // ("{_rpl}", a let-derived fragment) has to be combined with the immediately-following
+        // static bold text to form the complete heading.
+        //
+        // The combined text is wrapped in a ternary matching the SAME guard condition
+        // (`warriorA`) the body itself uses, not flatly concatenated — the fragment's own `let`
+        // only actually runs when that condition is true (e.g. before the player's first name
+        // submission, `warriorA` is unset and this branch never executes at all), so an
+        // unconditional title would reference a `let` that was never bound on that first visit.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.warriorA)
+                {
+                    this.Vars.dummy = 1;
+                }
+                if (this.Vars.warriorA)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text(this.Vars.warriorA.Replace("_1", ""));
+                    }
+                }
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text(" Complete");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        var letNode = passages[0].Nodes.OfType<ConditionalNode>().ElementAt(1).Branches[0].Nodes.OfType<LetNode>().Single();
+        Assert.Equal($"{{warriorA ? \"{{{letNode.Var}}} Complete\" : \"Complete\"}}", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+    }
+
+    [Fact]
+    public void NarrationLayout_BoldHeadingOverMaxLength_IsNotHoisted()
+    {
+        // Regression: A Time of War's Amessyes/AMessenger2/Militarytoken/DuelResolution1, and Fear
+        // of the Unknown's AsylumQuestion5/7/9 — a physical-component handling instruction to the
+        // player ("Carefully hand this Storybook device to the player with the {crest} token and do
+        // not allow any other players to see the screen.") or a narrative question prompt is ALSO
+        // authored as a leading `styleScope("bold", true)` block, structurally identical to a real
+        // title/heading — Cradle has no separate macro/tag distinguishing "this bold text is a
+        // title" from "this bold text is emphasized body content"; both use the exact same API.
+        // Confirmed against the decompiled original Unity app
+        // (Assets/Cradle/Players/TwineTMProPlayer/Script/TwineTMProPlayer.cs, RefreshText()): a
+        // leading bold run IS provisionally treated as a title candidate purely by position, but
+        // then demoted back into ordinary body text (title UI cleared) if the accumulated text
+        // exceeds exactly 50 characters. MaxHeadingLength reproduces that same cutoff — not a
+        // guessed threshold, the actual one the reference app uses.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Carefully hand this Storybook device to the player with the ");
+                    yield return base.text(this.Vars.crest);
+                    yield return base.text(" token and do not allow any other players to see the screen.");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Contains(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+    }
+
+    [Fact]
+    public void IntroductionLayout_TwoBoldLinesCombinedOverMaxLength_FallsBackToShape1TitleOnly()
+    {
+        // The MaxHeadingLength cutoff applies to shape 2's COMBINED title+subtitle length (mirroring
+        // the single accumulated titleString the original app builds from both lines together), not
+        // each line independently — here the first line alone is short enough to pass on its own,
+        // but adding the second pushes the combined text over the limit, so shape 2 is rejected and
+        // this falls back to shape 1 (first line only, second line left as ordinary body text) rather
+        // than being rejected outright.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Long-Awaited Announcement");
+                    yield return base.lineBreak();
+                    yield return base.text("Of the Grand Ducal Council to All Assembled Citizens");
+                }
+                StyleScope styleScope = null;
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Long-Awaited Announcement", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Contains(passages[0].Nodes, n => n is TextNode { Style: "bold", Template: "Of the Grand Ducal Council to All Assembled Citizens" });
+    }
+
+    [Fact]
+    public void NarrationLayout_BoldLeadingTextFollowedByBoldSwitchNoBreak_IsNotHoisted()
+    {
+        // Regression: A Time of War's TownHallS1 — `text("Carefully hand this Storybook device to
+        // Player "); Vars.th++; if (th==1) text(nameA); else if (th==2) text(nameB); ...`, all
+        // still inside ONE open styleScope("bold", true) with no lineBreak between the leading text
+        // and the if/elseif chain (consolidated to a SwitchNode). Confirmed against the decompiled
+        // original Unity app: title-text accumulation continues across EVERY StoryText output while
+        // the bold style-group stays open, regardless of source-level branching — so the real title
+        // is "Carefully hand this Storybook device to Player " + whichever name wins, which is
+        // ALWAYS well over 50 chars even though the static leading fragment alone (49 chars) looks
+        // short enough on its own. Checking first.Template's length in isolation was wrong; this
+        // must bail out entirely rather than hoist a truncated title.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Carefully hand this Storybook device to Player ");
+                    this.Vars.th = this.Vars.th + 1;
+                    if (this.Vars.th == 1)
+                    {
+                        yield return base.text(this.Vars.nameA);
+                    }
+                    else if (this.Vars.th == 2)
+                    {
+                        yield return base.text(this.Vars.nameB);
+                    }
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title); // unhoisted: MwsPassage.Title falls back to the passage name
+        Assert.Null(passages[0].Subtitle);
+        Assert.Contains(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+    }
+
+    [Fact]
+    public void NarrationLayout_BoldLeadingTextFollowedByShortStaticBoldSuffix_StillHoistsLeadingTextOnly()
+    {
+        // Regression: Cost of Disease's DetEffectRandom — "The Effects of Immortality " is followed
+        // (no break, still inside the same open styleScope) by an if-chain choosing between two
+        // SHORT, STATIC bold suffixes ("- Early Years"/"- Middle Years") or neither, depending on
+        // `round`. Unlike TownHallS1 (previous test), the continuation here is bounded: every
+        // reachable branch is a literal string, not a `{var}` placeholder, so the worst-case combined
+        // length ("The Effects of Immortality - Middle Years", well under 50) can be computed
+        // statically and is safely short — MaxPossibleBoldContinuationLength must return a real
+        // bound here (not null/unbounded) so this doesn't get wrongly disqualified the same way
+        // TownHallS1 correctly is. The hoisted title is still just the leading text alone (shape 1
+        // never tries to splice the conditional suffix in) — that's pre-existing, accepted behavior,
+        // not something this test is about; the point is only that it doesn't get REMOVED.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Effects of Immortality ");
+                    if (this.Vars.round == 16)
+                    {
+                        yield return base.text("- Early Years");
+                    }
+                    if (this.Vars.round == 17)
+                    {
+                        yield return base.text("- Middle Years");
+                    }
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Effects of Immortality", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void NarrationLayout_SeparateGuardConditionalsEachWithOwnHeading_CollapsesToTernaryTitleWithBlankFallback()
+    {
+        // Regression: A Time of War's ParadoxEvent (source lines 10010-10052) — two SEPARATE
+        // top-level `if (cond) { ... }` conditionals, neither with an `else`, each guarding a
+        // distinct value of `timemistake` and each carrying its own bold heading. Not an
+        // if/elseif/else chain (BuildTernaryArmsFromConditional's own case, which requires a real
+        // `else` branch to anchor on) or a switch (BuildTernaryArmsFromSwitch's, which requires a
+        // `default` case) — two independent ConditionalNode siblings with no catch-all branch at
+        // all. TryFindSoleHeadingCandidate<ConditionalNode> also can't handle this: it bails as soon
+        // as it sees a SECOND non-inert ConditionalNode. Collapses to a ternary title with a
+        // synthetic "" fallback for the case neither guard matches — the conditions look complete/
+        // non-overlapping by construction (distinct values of the same variable) but that isn't
+        // something this can prove statically, so an empty fallback is the safe default.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.timemistake < 8)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Monument to Progress");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text A.");
+                }
+                if (this.Vars.timemistake == 8)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Rebuilding");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text B.");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{timemistake < 8 ? \"Monument to Progress\" : timemistake == 8 ? \"Rebuilding\" : \"\"}",
+            passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+
+        var conds = passages[0].Nodes.OfType<ConditionalNode>().ToList();
+        Assert.Equal(2, conds.Count);
+        Assert.All(conds, c => Assert.DoesNotContain(c.Branches[0].Nodes, n => n is TextNode { Style: "bold" }));
+    }
+
+    [Fact]
+    public void NarrationLayout_GuardChainWithNestedTernaryHeadingPerArm_SplicesRatherThanQuotesLiterally()
+    {
+        // Regression: Cost of Disease's AllMWRewards — the guard-chain case above (two/five separate
+        // top-level `if` guards, no else), but here EACH guard's own branch doesn't carry a flat bold
+        // heading directly; it carries its OWN if/elseif/else chain (consolidated to a SwitchNode)
+        // whose branches each have a heading, so each guard's own TryHoistHeadingTitleSubtitle call
+        // recurses into the EXISTING if/elseif/else ternary path and comes back with an ALREADY
+        // "{...}"-wrapped title, not a literal string. Before AsTernaryArm, TryBuildGuardChainHeading
+        // (and TryBuildTernaryHeading, which has the identical latent bug) fed that hoisted title
+        // straight to BuildTernaryChain, which quotes it as a literal string containing literal
+        // "{"/'"'/"}" characters — the outer title ends up holding the INNER ternary's un-evaluated
+        // source text instead of splicing it in. AsTernaryArm re-wraps an already-braced hoisted title
+        // as "${...}" so BuildTernaryChain's own pre-existing ${...}-unwrap rule (built for target/
+        // goto arms) splices it for free.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.tempcomp == this.Vars.nameA)
+                {
+                    if (this.Vars.typeA == 1)
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Alpha One");
+                        }
+                    }
+                    else
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Alpha Two");
+                        }
+                    }
+                }
+                if (this.Vars.tempcomp == this.Vars.nameB)
+                {
+                    if (this.Vars.typeB == 1)
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Beta One");
+                        }
+                    }
+                    else
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Beta Two");
+                        }
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        Assert.NotNull(passages[0].Title);
+        Assert.DoesNotContain('{', passages[0].Title![1..^1]); // no un-spliced nested "{...}" left inside the outer braces
+        Assert.Equal(
+            "{tempcomp == nameA ? typeA == 1 ? \"Alpha One\" : \"Alpha Two\" : tempcomp == nameB ? typeB == 1 ? \"Beta One\" : \"Beta Two\" : \"\"}",
+            passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_AmbiguousNestedHoistAcrossOuterBranches_LeavesHeadingTextIntact()
+    {
+        // Regression: A Time of War's BarracksSimple1 — two outer branches (bldg1=="X"/!bldg1) each
+        // wrap their OWN inner conditional whose `then` starts with bold "Service Required" and
+        // whose `else` is a bare goto. TryHoistFromOneBranch's per-branch probing calls
+        // TryHoistHeadingTitleSubtitle on EACH outer branch to see if it has its own title; each
+        // inner conditional independently succeeds (via the ConditionalNode sole-candidate path one
+        // level down), so BOTH outer branches report a title — making the outer "exactly one branch
+        // succeeded" check correctly refuse to use either (genuinely ambiguous: which branch's
+        // "Service Required" should win?). Before this fix, that per-branch PROBING mutated the
+        // inner conditionals in place (cond.Branches[i].Nodes = ...) as an unconditional side effect
+        // of merely being tried — so even though the outer hoist was (correctly) rejected, the real
+        // "Service Required" TextNode had ALREADY been deleted from both inner conditionals,
+        // silently losing content while hoisting nothing. The fix makes every recursive hoist
+        // non-mutating (clone-and-substitute) until a caller actually commits to using the result —
+        // this test pins that the bold heading text survives in the extracted output either way.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.bldg1 == "X")
+                {
+                    if (this.Vars.warwinner == "Y")
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Service Required");
+                        }
+                        yield return base.lineBreak();
+                        yield return base.text("Body A.");
+                    }
+                    else
+                    {
+                        yield return base.abort(goToPassage: "Elsewhere");
+                    }
+                }
+                else if (!this.Vars.bldg1)
+                {
+                    if (this.Vars.warwinner == "Y")
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Service Required");
+                        }
+                        yield return base.lineBreak();
+                        yield return base.text("Body B.");
+                    }
+                    else
+                    {
+                        yield return base.abort(goToPassage: "Elsewhere");
+                    }
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "Elsewhere");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title); // genuinely ambiguous: no hoist, but that's fine
+        var boldNodes = passages[0].Nodes.OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .Where(n => n is TextNode { Style: "bold" })
+            .ToList();
+        Assert.Equal(2, boldNodes.Count); // "Service Required" must survive in BOTH inner conditionals
+        Assert.All(boldNodes, n => Assert.Equal("Service Required", ((TextNode)n).Template));
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingSetupPopup_StillHoistsTitle()
+    {
+        // Regression: A Time of War's 2pFamineBidRes — an auto-show `setupStyle` popup
+        // (SetupBlockNode) sits before the passage's own real content, with no break in between at
+        // the top level. SetupBlockNode renders as a separate overlay, not a position in the
+        // passage's own document flow — same reasoning already applied to
+        // EndOfGenerationNode/InputPromptNode — so it must be skipped over by the prefix-skip to
+        // find "Bid Outcome" behind it, exactly as those two already are.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("setupStyle", true))
+                {
+                    yield return base.text("The player who bid the most coins pays them to supply and gains 4VP.");
+                }
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Bid Outcome");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Bid Outcome", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.DoesNotContain(passages[0].Nodes, n => n is TextNode { Style: "bold" });
+    }
+
+    [Fact]
+    public void NarrationLayout_SwitchWithTrailingSetupPopup_StillCollapsesToTernaryTitle()
+    {
+        // Regression: A Time of War's SeedResolution — `switch (gunsbonus) { case 1: **A Place of
+        // Knowledge** ...; case 2: **A Wealth of Goods** ...; default: **An Investor's Paradise**
+        // ...; }` followed by a break, then a trailing auto-show setupStyle popup
+        // (SetupBlockNode) — before SetupBlockNode joined IsHeadingInert,
+        // TryFindSoleHeadingCandidate<SwitchNode> saw the popup as a second, non-matching
+        // "candidate" and bailed entirely, even though the switch's own 3-way ternary title is
+        // otherwise straightforward (has a default, matching BuildTernaryArmsFromSwitch's own
+        // requirement).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.gunsbonus == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Place of Knowledge");
+                    }
+                }
+                else if (this.Vars.gunsbonus == 2)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Wealth of Goods");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("An Investor's Paradise");
+                    }
+                }
+                yield return base.lineBreak();
+                using (base.styleScope("setupStyle", true))
+                {
+                    yield return base.text("The player with the Storybook must choose one option.");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{gunsbonus == 1 ? \"A Place of Knowledge\" : gunsbonus == 2 ? \"A Wealth of Goods\" : \"An Investor's Paradise\"}",
+            passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_IfElseBothWithHeadingsThenTrailingSetupPopup_StillCollapsesToTernaryTitle()
+    {
+        // Regression: Fear of the Unknown's PEWitch2 — `if (path4 == "PECreature") { **Progression**
+        // ... } else { **Regression** ... }` followed by a trailing auto-show setupStyle popup — the
+        // condition is exhaustive and BOTH branches carry their own heading, so this should collapse
+        // to a straightforward two-way ternary title once the popup no longer blocks
+        // TryFindSoleHeadingCandidate<ConditionalNode> from finding the conditional as the sole
+        // candidate.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.path4 == "PECreature")
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Progression");
+                    }
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Regression");
+                    }
+                }
+                using (base.styleScope("setupStyle", true))
+                {
+                    yield return base.text("Retrieve the Obsession card.");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("{path4 == \"PECreature\" ? \"Progression\" : \"Regression\"}", passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_ChainOfGotoGuardsThenRealContent_StillHoistsTitle()
+    {
+        // Regression: Fear of the Unknown's AsylumMeet — five separate top-level `if (Xv > 1) { goto
+        // AsylumComplete; }` guards (no else), the last of which ALSO has an else branch containing
+        // the passage's real content and its own bold heading "Retrieval of Property". GotoNode
+        // never produces output — same reasoning as EffectNode/LetNode — and a render that fires one
+        // is never shown to the player (GameSession.RenderChainFrom discards the whole intermediate
+        // PassageRenderResult, title included), so a `then: [goto]`-only branch/conditional is safe
+        // to treat as heading-inert. Before GotoNode joined IsHeadingInert, the first four
+        // goto-only conditionals were NOT classified as entirely inert (their own then-branch content
+        // — a bare GotoNode — failed IsHeadingInert), so TryFindSoleHeadingCandidate saw multiple
+        // non-inert ConditionalNode "candidates" and bailed before ever reaching the fifth.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.Av > 1)
+                {
+                    yield return base.abort(goToPassage: "AsylumComplete");
+                }
+                if (this.Vars.Bv > 1)
+                {
+                    yield return base.abort(goToPassage: "AsylumComplete");
+                }
+                if (this.Vars.Cv > 1)
+                {
+                    yield return base.abort(goToPassage: "AsylumComplete");
+                }
+                if (this.Vars.Dv > 1)
+                {
+                    yield return base.abort(goToPassage: "AsylumComplete");
+                }
+                if (this.Vars.Ev > 1)
+                {
+                    yield return base.abort(goToPassage: "AsylumComplete");
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Retrieval of Property");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text.");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("Retrieval of Property", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
     }
 
     [Fact]

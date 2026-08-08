@@ -261,6 +261,20 @@ public class BreakFilterTests
     }
 
     [Fact]
+    public void LeadingAutoDisplaySetupPopup_DoesNotCountAsRenderedForFollowingBreak()
+    {
+        // Regression: A Time of War's 2pFamineBidRes — an auto-show `setupStyle` popup
+        // (SetupBlockNode, distinct from EndOfGenerationNode/InputPromptNode but the same "separate
+        // overlay, no position in the passage's own inline flow" shape) sits before the passage's
+        // own real content. Before SetupBlockNode joined IsNonRendered, the break right after it was
+        // kept — treated as non-leading just because the popup came first — even though nothing had
+        // actually rendered yet in the passage's own document flow.
+        var nodes = new List<MwsNode> { new SetupBlockNode { Nodes = [Text("popup content")] }, new BreakNode(), Text("a") };
+        var result = BreakFilter.Apply(nodes, BreaksMode.Omit);
+        Assert.Equal(["setup_block", "text"], result.Select(n => n.Type));
+    }
+
+    [Fact]
     public void LeadingBreakInsidePopup_AfterBareSetupNotificationMarker_IsDropped()
     {
         // Regression: A Time of War's SeedGUNS — a popup (ExpandLinkNode) whose ExpandNodes are

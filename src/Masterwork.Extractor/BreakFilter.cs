@@ -31,9 +31,16 @@ public static class BreakFilter
     // Player5Stats input-collection flow (each is `if (!X_submitted) { input prompt } lineBreak()
     // text(...)`, no switch at all) — without this, the prompt counted as rendered content, so the
     // break right before the actual first line of narration wasn't recognized as leading.
+    // SetupBlockNode (an auto-show `layout: setup` popup) joins EndOfGenerationNode/InputPromptNode
+    // here for the same reason: it renders as a separate overlay, not a position in the surrounding
+    // passage's own document flow, so a break immediately touching it is exactly as decorative as
+    // one next to an assign. Real occurrence: A Time of War's 2pFamineBidRes — a leading auto-show
+    // setup popup followed by a break, then the passage's own real content — the break was staying
+    // (never recognized as leading) because the popup ahead of it counted as "rendered".
     private static bool IsNonRendered(MwsNode node) => node switch
     {
-        EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode or EndOfGenerationNode or InputPromptNode => true,
+        EffectNode or LetNode or GotoNode or GotoMenuNode or CheckProgressNode
+            or EndOfGenerationNode or InputPromptNode or SetupBlockNode => true,
         ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsNonRendered)),
         SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsNonRendered)),
         _ => false,

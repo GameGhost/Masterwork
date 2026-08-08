@@ -1125,17 +1125,135 @@ public partial class CradleExtractor
             return (null, null, nodes);
         }
 
-        if (nodes is [TextNode { Style: "bold", Template.Length: > 0 } first, ..])
+        // Skip a leading run of heading-inert nodes (assigns, breaks, a nested all-inert
+        // conditional/switch, or — same "renders as a separate overlay, not passage body text"
+        // reasoning as EndOfGenerationNode's own IsHeadingInert case — an auto-display popup like
+        // InputPromptNode) before looking for the leading bold heading. Without this, the flat
+        // shape-1/shape-2 check below only ever looked at nodes[0] itself, so anything heading-inert
+        // sitting in front of the real heading defeated the hoist entirely — unlike the
+        // ConditionalNode/SwitchNode-sole-candidate path further down, which already tolerates
+        // inert siblings on either side. The skipped prefix is preserved exactly as-is (not
+        // trimmed/removed) in the returned Remaining list; only the identified heading node(s)
+        // themselves are consumed. Real occurrence: Fear of the Unknown's Player1Stats..
+        // Player5Stats, each starting with "if (!X_submitted) { input-prompt popup }" (collapsed to
+        // a bare InputPromptNode) before their own "**Agility Confirmed**"-style bold heading.
+        var prefixEnd = 0;
+        while (prefixEnd < nodes.Count && IsHeadingInert(nodes[prefixEnd]))
+        {
+            prefixEnd++;
+        }
+        var headingPrefix = nodes[..prefixEnd];
+        var headingSuffix = nodes[prefixEnd..];
+
+        // A candidate heading TextNode CAN depend on a preceding `let` (non-empty Lets) — hoisting
+        // it into `title` does NOT strand the `let`, because the `let` node itself is never removed
+        // from the body; only the TextNode that consumed it is (see headingSuffix.Skip(1) below —
+        // headingPrefix, which is where a preceding let sits, is preserved as-is). Confirmed against
+        // the engine: PassageRenderer.Render runs RenderNodes(passage.Nodes, ctx) — the ENTIRE body,
+        // let included — to completion BEFORE evaluating Title: ExpandOrNull(passage.Title,
+        // ctx.Store); VariableStore.SetLetVariable writes into the same ctx.Store that title
+        // expansion reads from, and ClearLetScope() has no call sites anywhere in engine code (only
+        // a unit test), so a let set anywhere during body rendering stays visible for the rest of
+        // that render. And ExpressionEvaluator's `Expr.StringLiteral s => StoryValue.Of(ExpandTemplate(s.Value,
+        // ctx))` means a `{letname}` placeholder embedded inside one ternary arm's own string
+        // literal gets its own recursive resolution once that arm is selected — so a ternary title
+        // built from per-branch let-dependent headings only ever evaluates the ONE arm whose
+        // condition matches, which is always the same condition that gated whether that branch's
+        // `let` executed in the body. A previous version of this comment argued the opposite and
+        // added a `Lets`-emptiness guard here to work around it — that was based on a wrong
+        // assumption about *when* title evaluates (assumed interleaved with body position; it's
+        // actually strictly after), and the real bug behind the original HuntSuccessCheck failure
+        // was AsTernaryArm's own (now-fixed) nested-ternary-as-literal-string bug, not this. Real
+        // occurrence this un-blocks: Fear of the Unknown's AsylumTreatment, `let _rnd_0 =
+        // rand_between(...); let _rnd_1 = [...].shuffled(...)[0]; **Asylum Admittance Log {_rnd_0}{_rnd_1}**`.
+        //
+        // MaxHeadingLength (50) mirrors the original Unity app's own title/body-text discriminator
+        // exactly, not a guessed threshold: TwineTMProPlayer.RefreshText() promotes a leading bold
+        // run to a separate title UI element, but only provisionally — if the accumulated title
+        // text exceeds 50 characters it's demoted back into ordinary body text (title UI cleared).
+        // Position alone (bold run starting right after the leading content) isn't a safe title
+        // signal by itself: Cradle authors reuse the same `styleScope("bold", true)` for player-
+        // facing physical-component instructions ("Carefully hand this Storybook device to the
+        // player with the {crest} token...") and question prompts, which are visually bolded for
+        // emphasis but were never meant as a page heading — the original app's own 50-char cutoff
+        // is what actually tells these apart from real short titles ("Monument to Progress",
+        // "Rebuilding"). Length is measured via EstimateRenderedLength (see its own remarks) rather
+        // than the raw template's own character count — a `{varname}` placeholder's LITERAL length
+        // is a poor proxy for a story variable's short runtime value, and this is NOT always
+        // over-length-by-a-wide-margin-regardless the way the original version of this comment
+        // assumed: an auto-generated let name like `{_rnd_AsylumTreatment_0}` (24 chars, embedding
+        // the full passage name) is far longer than the 1-4 digit number it actually holds at play
+        // time. Real occurrence: A Time of War's Amessyes/DuelResolution1 and Fear of the Unknown's
+        // AsylumQuestion5/7/9 (genuinely over-length, correctly rejected) vs. AsylumTreatment
+        // (falsely over-length by raw count alone, correctly accepted once estimated instead).
+        const int MaxHeadingLength = 50;
+
+        if (headingSuffix is [TextNode { Style: "bold", Template.Length: > 0 } first, ..]
+            && EstimateRenderedLength(first.Template) <= MaxHeadingLength)
         {
             // Shape 2: title + subtitle as two bold lines joined by a break that stayed inside the
             // same styleScope. A third bold line right after (even scope-internal) disqualifies the
             // hoist — that's more than a simple two-line heading and is left for the body to render.
-            if (nodes is [_, BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true },
+            // The combined length of both lines is what's checked against MaxHeadingLength,
+            // mirroring the single accumulated titleString the original app builds from both —
+            // first.Template alone already passed the pattern's own <= MaxHeadingLength check above,
+            // but that's not sufficient once a second line is added on top.
+            if (headingSuffix is [_, BreakNode { WithinStyleScope: true } or ParagraphBreakNode { WithinStyleScope: true },
                     TextNode { Style: "bold", Template.Length: > 0 } second, .. var rest]
-                && rest is not [BreakNode, TextNode { Style: "bold" }, ..])
+                && rest is not [BreakNode, TextNode { Style: "bold" }, ..]
+                && EstimateRenderedLength(first.Template) + EstimateRenderedLength(second.Template) <= MaxHeadingLength)
             {
                 var (shape2Title, shape2Subtitle) = SwapIfGenerationLabel(TrimHeadingText(first.Template), TrimHeadingText(second.Template));
-                return (shape2Title, shape2Subtitle, rest);
+                return (shape2Title, shape2Subtitle, [.. headingPrefix, .. rest]);
+            }
+
+            // A bold run doesn't necessarily end where ConsolidateTextNodes happens to stop merging
+            // consecutive TextNodes — Cradle can follow a leading text() call with an if/elseif
+            // chain (consolidated to a ConditionalNode/SwitchNode) selecting between several bold
+            // text() calls, ALL still inside the SAME open styleScope, with no lineBreak in between
+            // (real occurrence: A Time of War's TownHallS1 — `text("Carefully hand this Storybook
+            // device to Player "); Vars.th++; if (th==1) text(nameA); else if (th==2) text(nameB);
+            // ...`). Confirmed against the decompiled original Unity app
+            // (TwineTMProPlayer.RefreshText): title-text accumulation continues for every StoryText
+            // output while the bold style-group stays open, regardless of source-level branching —
+            // it only stops when that style-group actually closes (a break, or non-bold output). A
+            // length check on first.Template ALONE is meaningless here since the real accumulated
+            // text is longer by however many characters the winning branch adds — rather than guess
+            // at that length (or which branch fires), bail out of hoisting entirely at this position
+            // whenever more bold content could still directly follow without an intervening break.
+            // Skip past any leading run of heading-inert, non-break nodes first (TownHallS1's own
+            // `Vars.th++;` assign sits BETWEEN the leading text and the switch, producing no output
+            // at all in the real app, so it doesn't end the open style scope either) — the check is
+            // against the first node that would ACTUALLY still be visible, not literally
+            // headingSuffix[1].
+            var afterFirstIdx = 1;
+            while (afterFirstIdx < headingSuffix.Count
+                && headingSuffix[afterFirstIdx] is not (BreakNode or ParagraphBreakNode)
+                && IsHeadingInert(headingSuffix[afterFirstIdx]))
+            {
+                afterFirstIdx++;
+            }
+
+            // Not every bold continuation is unbounded, though — Cost of Disease's DetEffectRandom
+            // follows "The Effects of Immortality " with an OPTIONAL short static suffix
+            // ("- Early Years"/"- Middle Years"/nothing, chosen by `round`), and even the longest of
+            // those combined with the leading text stays well under MaxHeadingLength. Disqualifying
+            // whenever ANY bold continuation exists at all (regardless of whether it's bounded)
+            // would wrongly strip that title too — treating it exactly like TownHallS1's `{nameA}`-
+            // style continuation, whose length genuinely can't be known until a name is chosen at
+            // play time. MaxPossibleBoldContinuationLength distinguishes the two: it returns a real
+            // upper bound when every reachable branch is static literal text, or null when any
+            // reachable branch embeds a `{var}` placeholder (an unknowable runtime length) — only
+            // the null/over-length case disqualifies; a provably-short continuation is left for the
+            // body to render (shape 1 below still only consumes `first` itself either way, so this
+            // doesn't need to actually splice the continuation into the title).
+            if (afterFirstIdx < headingSuffix.Count && headingSuffix[afterFirstIdx] is not (BreakNode or ParagraphBreakNode))
+            {
+                var continuationLength = MaxPossibleBoldContinuationLength(headingSuffix[afterFirstIdx]);
+                if (continuationLength is null || EstimateRenderedLength(first.Template) + continuationLength.Value > MaxHeadingLength)
+                {
+                    return (null, null, nodes);
+                }
             }
 
             // Shape 1: "Title - Subtitle" or "GENERATION {roman}: Subtitle" splits on the first
@@ -1143,7 +1261,120 @@ public partial class CradleExtractor
             // (including a break directly after this node) is left exactly as-is in the remaining
             // body — not trimmed or merged further.
             var (title, subtitle) = SplitHeadingLine(first.Template);
-            return (title, subtitle, nodes.Skip(1).ToList());
+            return (title, subtitle, [.. headingPrefix, .. headingSuffix.Skip(1)]);
+        }
+
+        // A leading bold span can also arrive already inline-merged into a NON-uniformly-styled
+        // TextNode, when ConsolidateTextNodes merges a closing bold styleScope directly into
+        // whatever plain text immediately follows with no separating break — CanJoinGroup merges
+        // regardless of style match (see its own remarks); changing that merge behavior itself would
+        // have far broader blast radius than title-hoisting alone (it's what makes "Turn to **the
+        // Cost of Disease** section" a single sensible node elsewhere in the corpus), so this is
+        // handled narrowly here instead. Real occurrence: Fear of the Unknown's FPYesHub —
+        // `styleScope("bold"){ text("Destiny Awaits") } text("Your choice has been made.")`, no
+        // break in between, produces ONE TextNode with Style: null (mixed) and Template:
+        // "**Destiny Awaits**Your choice has been made.". Only a LEADING span counts (`^\*\*...\*\*`,
+        // non-greedy) — a bold span elsewhere mid-sentence isn't a heading candidate; this only
+        // matches when the bold span starts at position 0 of the merged template.
+        //
+        // The REMAINDER within this same merged template — the plain text immediately after the
+        // bold span, still part of the identical TextNode — must also be short (combined with the
+        // bold span, against MaxHeadingLength), not just the bold span alone: A Time of War's
+        // OptiontoKillYesPattern merges a short bold callout ("**Gain 1 Body,**") directly into a
+        // long, multi-sentence paragraph ("Lose 1 and Gain 1VP. Then they must return a piece to
+        // Lost.") with no break — an inline emphasis at the START of ordinary prose, not a heading,
+        // even though it syntactically matches "leading bold span". Unlike
+        // MaxPossibleBoldContinuationLength's job (bounding more BOLD content that might extend the
+        // title), an unbounded-length PLAIN remainder within the same node is a much stronger signal
+        // this was never a heading to begin with, so it's checked directly here rather than reused.
+        if (headingSuffix is [TextNode { Style: not "bold", Template: { } mixedTemplate } mixedFirst, .. var mixedRest]
+            && System.Text.RegularExpressions.Regex.Match(mixedTemplate, @"^\*\*(.+?)\*\*") is { Success: true } leadingBoldMatch
+            && leadingBoldMatch.Groups[1].Value.Length > 0
+            && EstimateRenderedLength(leadingBoldMatch.Groups[1].Value) <= MaxHeadingLength)
+        {
+            var leadingText = leadingBoldMatch.Groups[1].Value;
+            var remainderTemplate = mixedTemplate[leadingBoldMatch.Length..];
+
+            var mixedAfterIdx = 0;
+            while (mixedAfterIdx < mixedRest.Count
+                && mixedRest[mixedAfterIdx] is not (BreakNode or ParagraphBreakNode)
+                && IsHeadingInert(mixedRest[mixedAfterIdx]))
+            {
+                mixedAfterIdx++;
+            }
+
+            var mixedCombinedLength = EstimateRenderedLength(leadingText) + EstimateRenderedLength(remainderTemplate);
+            var continuationOk = mixedCombinedLength <= MaxHeadingLength;
+            if (continuationOk && mixedAfterIdx < mixedRest.Count && mixedRest[mixedAfterIdx] is not (BreakNode or ParagraphBreakNode))
+            {
+                var continuationLength = MaxPossibleBoldContinuationLength(mixedRest[mixedAfterIdx]);
+                continuationOk = continuationLength is not null
+                    && mixedCombinedLength + continuationLength.Value <= MaxHeadingLength;
+            }
+
+            if (continuationOk)
+            {
+                List<MwsNode> remainderNodes = remainderTemplate.Length > 0
+                    ? [new TextNode { Template = remainderTemplate, Style = mixedFirst.Style, Lets = mixedFirst.Lets, SourceLine = mixedFirst.SourceLine }]
+                    : [];
+                var (mixedTitle, mixedSubtitle) = SplitHeadingLine(leadingText);
+                return (mixedTitle, mixedSubtitle, [.. headingPrefix, .. remainderNodes, .. mixedRest]);
+            }
+        }
+
+        // A heading's LEADING fragment can also come from a single-branch (no else) conditional
+        // whose own content independently hoists a short title (typically a computed/let-derived
+        // value), immediately followed — no break — by more static bold text continuing the SAME
+        // visual heading. Real occurrence: Fear of the Unknown's Player1Statsfin — `if (warriorA) {
+        // let _rpl = warriorA.replace("_1", ""); **{_rpl}** }` (no else) followed directly by
+        // `** Complete**` with no break. The recursive probe into the conditional's own branch is
+        // safe even though it may end up unused (see WithBranchNodes/ReplaceNode's own remarks on
+        // why every recursive hoist attempt is non-mutating until a caller commits to the result).
+        // Deliberately narrow: only a bare (no dash/colon subtitle split) fragment title, only a
+        // single following bold TextNode (not a further nested conditional/switch) — this is the
+        // one reported shape, not a general "arbitrary leading + arbitrary trailing" combinator.
+        if (headingSuffix is [ConditionalNode { Branches: [{ Else: not true } leadingBranch] } leadingCond, .. var afterCondRest])
+        {
+            var (fragmentTitle, fragmentSubtitle, leadingCondRemaining) = TryHoistHeadingTitleSubtitle(leadingBranch.Nodes, layout);
+            if (fragmentTitle is not null && fragmentSubtitle is null && EstimateRenderedLength(fragmentTitle) <= MaxHeadingLength)
+            {
+                var afterCondIdx = 0;
+                while (afterCondIdx < afterCondRest.Count
+                    && afterCondRest[afterCondIdx] is not (BreakNode or ParagraphBreakNode)
+                    && IsHeadingInert(afterCondRest[afterCondIdx]))
+                {
+                    afterCondIdx++;
+                }
+
+                if (afterCondIdx < afterCondRest.Count
+                    && afterCondRest[afterCondIdx] is TextNode { Style: "bold", Template: { } continuationTemplate }
+                    && EstimateRenderedLength(fragmentTitle) + EstimateRenderedLength(continuationTemplate) <= MaxHeadingLength)
+                {
+                    var newLeadingCond = WithBranchNodes(leadingCond, 0, leadingCondRemaining);
+                    var combinedTitle = fragmentTitle + continuationTemplate;
+
+                    // The fragment only actually renders when the guard condition is true — e.g.
+                    // Fear of the Unknown's Player1Statsfin: `if (warriorA) { let _rpl = ...; **{_rpl}**
+                    // }`, guarded on the SAME `warriorA` that the leading InputPromptNode (skipped as
+                    // a heading-inert prefix above) is still WAITING on before the player's first
+                    // visit. On that first visit `warriorA` is unset, this branch never executes, and
+                    // a flat concatenation would produce a title referencing a `let` that was never
+                    // bound — a StoryEvalException, not just a wrong title. Wrapping as a ternary
+                    // (matching the SAME guard condition the body itself uses) makes the title track
+                    // whichever the body actually decided: the combined text when the fragment
+                    // rendered, or the trailing continuation alone when it didn't. AsTernaryArm/
+                    // BuildTernaryChain already handle splicing a nested-expression arm correctly
+                    // (see their own remarks) — reused here rather than duplicated.
+                    var guardCondition = leadingBranch.Condition;
+                    var finalTitle = guardCondition is null
+                        ? combinedTitle
+                        : "{" + BuildTernaryChain(
+                            [(guardCondition, AsTernaryArm(combinedTitle)), (null, AsTernaryArm(continuationTemplate.TrimStart()))]) + "}";
+
+                    return (finalTitle, null,
+                        [.. headingPrefix, newLeadingCond, .. afterCondRest[..afterCondIdx], .. afterCondRest[(afterCondIdx + 1)..]]);
+                }
+            }
         }
 
         // Cradle idiom for a whole optional passage: "if (someFlag) { <real content> } else {
@@ -1174,20 +1405,14 @@ public partial class CradleExtractor
             if (TryHoistFromOneBranch([.. cond.Branches.Select(b => b.Nodes)], layout,
                     out var condTitle, out var condSubtitle, out var condIdx, out var condRemaining))
             {
-                cond.Branches[condIdx].Nodes = condRemaining;
-                return (condTitle, condSubtitle, nodes);
+                return (condTitle, condSubtitle, ReplaceNode(nodes, cond, WithBranchNodes(cond, condIdx, condRemaining)));
             }
 
             var condArms = BuildTernaryArmsFromConditional(cond);
             if (condArms is not null && TryBuildTernaryHeading(condArms, layout,
                     out var chainTitle, out var chainSubtitle, out var chainRemaining))
             {
-                for (int i = 0; i < cond.Branches.Count; i++)
-                {
-                    cond.Branches[i].Nodes = chainRemaining[i];
-                }
-
-                return (chainTitle, chainSubtitle, nodes);
+                return (chainTitle, chainSubtitle, ReplaceNode(nodes, cond, WithAllBranchNodes(cond, chainRemaining)));
             }
         }
 
@@ -1196,25 +1421,135 @@ public partial class CradleExtractor
             if (TryHoistFromOneBranch([.. sw.Cases.Select(c => c.Nodes)], layout,
                     out var swTitle, out var swSubtitle, out var swIdx, out var swRemaining))
             {
-                sw.Cases[swIdx].Nodes = swRemaining;
-                return (swTitle, swSubtitle, nodes);
+                return (swTitle, swSubtitle, ReplaceNode(nodes, sw, WithCaseNodes(sw, swIdx, swRemaining)));
             }
 
             var swArms = BuildTernaryArmsFromSwitch(sw);
             if (swArms is not null && TryBuildTernaryHeading(swArms, layout,
                     out var swChainTitle, out var swChainSubtitle, out var swChainRemaining))
             {
-                for (int i = 0; i < sw.Cases.Count; i++)
-                {
-                    sw.Cases[i].Nodes = swChainRemaining[i];
-                }
-
-                return (swChainTitle, swChainSubtitle, nodes);
+                return (swChainTitle, swChainSubtitle, ReplaceNode(nodes, sw, WithAllCaseNodes(sw, swChainRemaining)));
             }
+        }
+
+        // Guard chain: multiple SEPARATE top-level `if (cond) { ... }` conditionals (no `else` on
+        // any of them — not one if/elseif/else chain, which is BuildTernaryArmsFromConditional's own
+        // case above), each independently carrying its own heading, sitting side by side with only
+        // heading-inert siblings (if any) around them. Unlike the if/elseif/else and switch/default
+        // cases, there's no explicit catch-all branch to anchor the ternary's unconditional trailing
+        // arm on — an empty-string fallback covers whatever isn't matched by any guard, since the
+        // conditions collectively look complete/non-overlapping by construction (each guards a
+        // distinct value of the same variable) but that isn't something this can prove statically.
+        // Real occurrence: A Time of War's ParadoxEvent — `if (timemistake < 8) { **Monument to
+        // Progress** ... }` immediately followed by a separate `if (timemistake == 8) { **Rebuilding**
+        // ... }`.
+        if (TryFindAllHeadingCandidateConditionals(nodes, out var guardCandidates) &&
+            TryBuildGuardChainHeading(guardCandidates, layout,
+                out var guardTitle, out var guardSubtitle, out var guardRemaining))
+        {
+            var guardNodes = nodes;
+            for (int i = 0; i < guardCandidates.Count; i++)
+            {
+                guardNodes = ReplaceNode(guardNodes, guardCandidates[i], WithBranchNodes(guardCandidates[i], 0, guardRemaining[i]));
+            }
+
+            return (guardTitle, guardSubtitle, guardNodes);
         }
 
         return (null, null, nodes);
     }
+
+    // Collects every top-level ConditionalNode in `nodes` that is a plain, else-less guard (exactly
+    // one branch, Else != true) and not heading-inert — i.e. every candidate for the guard-chain
+    // heading case above. Any other non-inert top-level node (a bare heading TextNode, a conditional
+    // WITH an else, a switch, etc.) makes the whole shape ambiguous and bails with an empty list,
+    // same conservative philosophy as TryFindSoleHeadingCandidate. Requires at least two candidates —
+    // exactly one would already have been handled by TryFindSoleHeadingCandidate<ConditionalNode>
+    // above (which runs first and returns before this is ever reached in that case).
+    private static bool TryFindAllHeadingCandidateConditionals(List<MwsNode> nodes, out List<ConditionalNode> candidates)
+    {
+        candidates = [];
+        foreach (var node in nodes)
+        {
+            if (IsHeadingInert(node))
+            {
+                continue;
+            }
+
+            if (node is not ConditionalNode { Branches: [{ Else: not true }] } cond)
+            {
+                candidates = [];
+                return false;
+            }
+
+            candidates.Add(cond);
+        }
+
+        return candidates.Count >= 2;
+    }
+
+    // Same shape as TryBuildTernaryHeading (requires every candidate to independently hoist its own
+    // heading, and a uniform title-only/title+subtitle shape across all of them), but appends a
+    // synthetic, unconditional "" (empty string) fallback arm instead of requiring — and consuming —
+    // a real else/default branch, since guard-chain candidates never have one. See the call site's
+    // own remarks for why an empty fallback is an acceptable trade here.
+    private static bool TryBuildGuardChainHeading(
+        List<ConditionalNode> candidates, string layout,
+        out string? title, out string? subtitle, out List<List<MwsNode>> remainingPerCandidate)
+    {
+        title = null;
+        subtitle = null;
+        remainingPerCandidate = [];
+
+        var hoisted = new List<(string? Condition, string Title, string? Subtitle, List<MwsNode> Remaining)>();
+        foreach (var candidate in candidates)
+        {
+            var branch = candidate.Branches[0];
+            var (t, s, r) = TryHoistHeadingTitleSubtitle(branch.Nodes, layout);
+            if (t is null)
+            {
+                return false;
+            }
+
+            hoisted.Add((branch.Condition, t, s, r));
+        }
+
+        var withSubtitle = hoisted.Count(h => h.Subtitle is not null);
+        if (withSubtitle != 0 && withSubtitle != hoisted.Count)
+        {
+            return false;
+        }
+
+        var titleArms = hoisted.Select(h => (h.Condition, Title: AsTernaryArm(h.Title))).ToList();
+        titleArms.Add((null, ""));
+        title = "{" + BuildTernaryChain(titleArms) + "}";
+
+        if (withSubtitle > 0)
+        {
+            var subtitleArms = hoisted.Select(h => (h.Condition, Title: AsTernaryArm(h.Subtitle!))).ToList();
+            subtitleArms.Add((null, ""));
+            subtitle = "{" + BuildTernaryChain(subtitleArms) + "}";
+        }
+
+        remainingPerCandidate = [.. hoisted.Select(h => h.Remaining)];
+        return true;
+    }
+
+    // A hoisted title/subtitle can itself already be a `{...}`-wrapped expression rather than plain
+    // text — when a candidate's own heading resolved through a NESTED ternary/guard-chain hoist
+    // (e.g. Cost of Disease's AllMWRewards: 5 top-level `if (tempcomp == nameX)` guards, each
+    // wrapping its own `switch (typeX)` whose cases all independently hoist the same "**Reward**"
+    // heading via the existing switch/default ternary path — so each guard's own hoisted title is
+    // already a full `{typeX == ... ? ... : ...}` string, not a literal). BuildTernaryChain's own
+    // `${...}`-unwrap rule (built for target/goto arms) already does exactly the splice this needs;
+    // re-wrapping a `{...}` string as `${...}` reuses it for free instead of letting BuildTernaryChain
+    // quote the nested expression as literal text containing literal brace/quote characters — a real
+    // bug caught by AllMWRewards ending up with a restext value of the un-evaluated literal string
+    // `{typeA == "creature" ? "Reward" : ...}` instead of the intended splice.
+    private static string AsTernaryArm(string hoistedText) =>
+        hoistedText.Length >= 2 && hoistedText[0] == '{' && hoistedText[^1] == '}'
+            ? "$" + hoistedText
+            : hoistedText;
 
     // True when `nodes` contains EXACTLY ONE node that is NOT "heading inert" (IsHeadingInert) —
     // i.e. could compete for the passage's own heading — and that one node is of type T. Checking
@@ -1247,17 +1582,109 @@ public partial class CradleExtractor
     }
 
     // True when `node` can never itself carry a heading — its only possible effect is a state
-    // change (assign, random draw, let), a break (no text of its own), or a nested conditional/
-    // switch whose every branch/case consists ENTIRELY of such nodes. See the call sites' remarks
-    // (SeedGUNS) for why this needs to look past nodes like this instead of requiring the
-    // heading-bearing conditional/switch to be the ONLY top-level node.
+    // change (assign, random draw, let), a break (no text of its own), an auto-display popup with
+    // no label (EndOfGenerationNode/InputPromptNode/SetupBlockNode — a separate overlay, not
+    // passage body text, same reasoning BreakFilter's own IsNonRendered already applies), a pure
+    // redirect (GotoNode/GotoMenuNode — never produces output; a render that fires one is never
+    // shown to the player at all, since GameSession.RenderChainFrom discards every intermediate
+    // PassageRenderResult, title included, and only returns the goto chain's final landing passage
+    // — so treating it as heading-inert can never surface a wrong title, only skip past dead-end
+    // branches to find the real one, e.g. Fear of the Unknown's AsylumMeet: `if (Av > 1) { goto
+    // AsylumComplete; } if (Bv > 1) { goto ... } ... if (Ev > 1) { goto ... } else { **Retrieval of
+    // Property** ... }`), a progress-tracking checkpoint (CheckProgressNode), a click-through link
+    // (LinkNode/ExpandLinkNode — a link's own label is UI/navigation text, never itself a plausible
+    // heading candidate the way BreakFilter's own comment already assumes: "a branch whose only
+    // content is a popup-triggering link... naturally fails [to hoist a title]... no leading bold
+    // text"; this just extends the same reasoning to a link sitting as a top-level SIBLING next to
+    // the real heading-bearing conditional/switch, not just as a branch's own sole content — real
+    // occurrence: A Time of War's SeedResolution and Fear of the Unknown's PEWitch2, both `switch/
+    // conditional (real headings) ... ExpandLinkNode ("Click to continue...") ...`, deliberately NOT
+    // mirrored in BreakFilter.IsNonRendered, which correctly keeps treating a link as real rendered
+    // content for break-trimming purposes — a link is never a plausible title, but it is a real,
+    // visible break-relevant element, so the two mechanisms answer different questions here), or a
+    // nested conditional/switch whose every branch/case consists ENTIRELY of such nodes. See the
+    // call sites' remarks (SeedGUNS) for why this needs to look past nodes like this instead of
+    // requiring the heading-bearing conditional/switch to be the ONLY top-level node.
     private static bool IsHeadingInert(MwsNode node) => node switch
     {
-        EffectNode or LetNode or CheckpointNode or BreakNode or ParagraphBreakNode => true,
+        EffectNode or LetNode or CheckpointNode or BreakNode or ParagraphBreakNode
+            or EndOfGenerationNode or InputPromptNode or SetupBlockNode
+            or GotoNode or GotoMenuNode or CheckProgressNode
+            or LinkNode or ExpandLinkNode => true,
         ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsHeadingInert)),
         SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsHeadingInert)),
         _ => false,
     };
+
+    // Estimates the RENDERED length of `template` for the MaxHeadingLength check — a `{varname}`
+    // placeholder's own literal character count is a poor proxy for what actually displays at play
+    // time, especially for auto-generated let-bound names ({_rnd_PassageName_N}/
+    // {_rpl_PassageName_N}), which embed the full passage name and can run 20+ characters even
+    // though the substituted value is typically short (a 1-4 digit number, a single letter, a short
+    // computed string). Each placeholder is counted as a small fixed estimate instead of its own
+    // literal length. Real occurrence: Fear of the Unknown's AsylumTreatment — the raw template
+    // "Asylum Admittance Log {_rnd_AsylumTreatment_0}{_rnd_AsylumTreatment_1}" is 73 characters
+    // (over the 50 cutoff), but the actual rendered text ("Asylum Admittance Log 2453D" or similar)
+    // is well under it. Deliberately NOT applied inside MaxPossibleBoldContinuationLength's own "any
+    // placeholder = unbounded" rule for TRAILING bold continuations (see its own remarks) — that's a
+    // separate, intentionally conservative judgment call about content that hasn't been confirmed
+    // short, not about measuring a candidate that's already been identified as the heading itself.
+    private const int EstimatedPlaceholderLength = 4;
+
+    private static int EstimateRenderedLength(string template) =>
+        System.Text.RegularExpressions.Regex.Replace(template, @"\{[^{}]+\}", new string('#', EstimatedPlaceholderLength)).Length;
+
+    // Upper bound on how much MORE bold-styled text `node` could put on screen at runtime — used to
+    // detect (and, when safe, tolerate) a bold heading run that continues past the first TextNode
+    // without an intervening break (see the shape-1 call site's own remarks). Returns:
+    //   - 0 for anything that can't produce bold text at all (heading-inert nodes, non-bold text).
+    //   - The literal length for static bold text with no `{var}` placeholder (TownHallS1's
+    //     Vars.nameA/B/etc.: unknowable until a name is actually chosen at play time, so bold text
+    //     containing a placeholder is treated as unbounded, not measured).
+    //   - null ("unbounded") if either the text itself is placeholder-bearing, or a
+    //     ConditionalNode/SwitchNode has any branch/case that is (checking every branch, not just
+    //     one, since only one will actually fire but which one isn't known statically — the max
+    //     across branches is what could actually happen).
+    private static int? MaxPossibleBoldContinuationLength(MwsNode node) => node switch
+    {
+        TextNode { Style: "bold", Template: { } t } => t.Contains('{') ? null : t.Length,
+        ConditionalNode cond => MaxOrUnbounded(cond.Branches.Select(b => SumBoldContinuationLength(b.Nodes))),
+        SwitchNode sw => MaxOrUnbounded(sw.Cases.Select(c => SumBoldContinuationLength(c.Nodes))),
+        _ => 0,
+    };
+
+    private static int? SumBoldContinuationLength(List<MwsNode> nodes)
+    {
+        var total = 0;
+        foreach (var node in nodes)
+        {
+            var length = MaxPossibleBoldContinuationLength(node);
+            if (length is null)
+            {
+                return null;
+            }
+
+            total += length.Value;
+        }
+
+        return total;
+    }
+
+    private static int? MaxOrUnbounded(IEnumerable<int?> lengths)
+    {
+        var max = 0;
+        foreach (var length in lengths)
+        {
+            if (length is null)
+            {
+                return null;
+            }
+
+            max = Math.Max(max, length.Value);
+        }
+
+        return max;
+    }
 
     // Tries each branch/case's own node list against TryHoistHeadingTitleSubtitle; succeeds only
     // when EXACTLY ONE of them yields a title (see the call site's remarks for why more than one
@@ -1288,6 +1715,64 @@ public partial class CradleExtractor
 
         return matchedIndex >= 0;
     }
+
+    // Builds a shallow clone of `cond` with ONLY branch `branchIdx`'s Nodes replaced — never
+    // mutates `cond` itself. See ReplaceNode's own remarks for why this matters: a recursive hoist
+    // call used to PROBE whether a branch has its own title (TryHoistFromOneBranch's per-branch
+    // loop, or a nested call one level further down) must not corrupt the shared tree just because
+    // it succeeded — the ENCLOSING caller might still reject the result (e.g. because a SECOND
+    // branch also independently succeeded, making the overall hoist ambiguous), and by then the
+    // damage would already be done. Real occurrence: A Time of War's BarracksSimple1 — two outer
+    // branches each wrap their own inner conditional whose `then` starts with bold "Service
+    // Required"; both inner hoists succeed during probing, so the outer "exactly one" check
+    // correctly refuses to use either — but the in-place-mutation version had already deleted the
+    // "Service Required" TextNode from both, silently losing real content despite hoisting nothing.
+    private static ConditionalNode WithBranchNodes(ConditionalNode cond, int branchIdx, List<MwsNode> newNodes) =>
+        new()
+        {
+            SourceLine = cond.SourceLine,
+            Branches = [.. cond.Branches.Select((b, i) => i == branchIdx
+                ? new ConditionalBranch { Condition = b.Condition, Else = b.Else, Nodes = newNodes }
+                : b)],
+        };
+
+    // Same as WithBranchNodes but replaces every branch's Nodes at once — used by the ternary-chain
+    // path, which (unlike the sole-candidate path) commits every branch's own remaining nodes in one
+    // shot rather than just the single matched branch.
+    private static ConditionalNode WithAllBranchNodes(ConditionalNode cond, List<List<MwsNode>> newNodesPerBranch) =>
+        new()
+        {
+            SourceLine = cond.SourceLine,
+            Branches = [.. cond.Branches.Select((b, i) =>
+                new ConditionalBranch { Condition = b.Condition, Else = b.Else, Nodes = newNodesPerBranch[i] })],
+        };
+
+    // SwitchNode counterparts of WithBranchNodes/WithAllBranchNodes — see their own remarks.
+    private static SwitchNode WithCaseNodes(SwitchNode sw, int caseIdx, List<MwsNode> newNodes) =>
+        new()
+        {
+            SourceLine = sw.SourceLine,
+            On = sw.On,
+            Cases = [.. sw.Cases.Select((c, i) => i == caseIdx
+                ? new SwitchCase { Match = c.Match, Default = c.Default, Nodes = newNodes }
+                : c)],
+        };
+
+    private static SwitchNode WithAllCaseNodes(SwitchNode sw, List<List<MwsNode>> newNodesPerCase) =>
+        new()
+        {
+            SourceLine = sw.SourceLine,
+            On = sw.On,
+            Cases = [.. sw.Cases.Select((c, i) =>
+                new SwitchCase { Match = c.Match, Default = c.Default, Nodes = newNodesPerCase[i] })],
+        };
+
+    // Replaces the occurrence of `oldNode` in `nodes` (found by reference, not value equality — two
+    // structurally-identical-but-distinct node objects must not be confused) with `newNode`. Used
+    // together with WithBranchNodes/WithCaseNodes to substitute a cloned, hoist-modified
+    // ConditionalNode/SwitchNode into the returned node list without ever mutating the original tree.
+    private static List<MwsNode> ReplaceNode(List<MwsNode> nodes, MwsNode oldNode, MwsNode newNode) =>
+        [.. nodes.Select(n => ReferenceEquals(n, oldNode) ? newNode : n)];
 
     // Tries to collapse EVERY branch/case's own heading into ONE ternary-chained title/subtitle —
     // e.g. Cradle's "switch (gunsbonus) { case 1: **Knowledge Bonus** ...; case 2: **Ingredient
@@ -1336,10 +1821,13 @@ public partial class CradleExtractor
             return false;
         }
 
-        title = "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, h.Title))]) + "}";
+        // See AsTernaryArm's own remarks — a hoisted arm's title/subtitle can itself already be a
+        // `{...}`-wrapped expression from a nested ternary/guard-chain hoist, which must be spliced
+        // in rather than quoted as literal text.
+        title = "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, AsTernaryArm(h.Title)))]) + "}";
         subtitle = withSubtitle == 0
             ? null
-            : "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, h.Subtitle!))]) + "}";
+            : "{" + BuildTernaryChain([.. hoisted.Select(h => (h.Condition, AsTernaryArm(h.Subtitle!)))]) + "}";
         remainingPerArm = [.. hoisted.Select(h => h.Remaining)];
         return true;
     }
