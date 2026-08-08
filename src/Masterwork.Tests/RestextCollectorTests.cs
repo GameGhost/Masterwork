@@ -83,6 +83,87 @@ public class RestextCollectorTests
         Assert.Contains(entries, e => e.Key == "Fever1_002" && e.Value == "Early Years");
     }
 
+    [Fact]
+    public void CollectPassage_TernaryTitle_ExtractsEachBranchAsOwnRestextRef()
+    {
+        // CradleExtractor.TryBuildTernaryHeading collapses several branches' own headings into one
+        // computed title — each branch's own text needs its own restext key, since it's player-
+        // facing text, embedded inside the ternary's "?"/":" syntax rather than as the whole field.
+        var collector = new RestextCollector();
+        var dict = new Dictionary<string, object?>
+        {
+            ["title"] = "{gunsbonus == 1 ? \"Knowledge Bonus\" : gunsbonus == 2 ? \"Ingredient Bonus\" : \"Wealth Bonus\"}",
+            ["nodes"] = new List<Dictionary<string, object?>>(),
+        };
+
+        collector.CollectPassage("SeedGUNS", "000-SeedGUNS.mws.yaml", dict);
+
+        Assert.Equal(
+            "{gunsbonus == 1 ? \"restext://SeedGUNS_001\" : gunsbonus == 2 ? \"restext://SeedGUNS_002\" : \"restext://SeedGUNS_003\"}",
+            dict["title"]);
+        var entries = Assert.Single(collector.Passages).Entries;
+        Assert.Equal(3, entries.Count);
+        Assert.Contains(entries, e => e.Key == "SeedGUNS_001" && e.Value == "Knowledge Bonus");
+        Assert.Contains(entries, e => e.Key == "SeedGUNS_002" && e.Value == "Ingredient Bonus");
+        Assert.Contains(entries, e => e.Key == "SeedGUNS_003" && e.Value == "Wealth Bonus");
+    }
+
+    [Fact]
+    public void CollectPassage_TernaryTitle_DoesNotExtractConditionComparandLiterals()
+    {
+        // Regression: Cost of Disease's Gen1CreepyYes — "{hunters == "evil" ? "Agreed" : "Agreed"}"
+        // — an earlier version of the extraction regex matched EVERY quoted literal in the ternary
+        // regardless of position, wrongly extracting the CONDITION's own comparand ("evil", an
+        // internal state token being compared against `hunters`, not player-facing text) into its
+        // own restext key too — silently corrupting the condition itself (comparing against a
+        // possibly-translated string instead of the untranslated state value it was written
+        // against), not just adding an unwanted extra entry.
+        var collector = new RestextCollector();
+        var dict = new Dictionary<string, object?>
+        {
+            ["title"] = "{hunters == \"evil\" ? \"Agreed\" : \"Agreed\"}",
+            ["nodes"] = new List<Dictionary<string, object?>>(),
+        };
+
+        collector.CollectPassage("Gen1CreepyYes", "000-Gen1CreepyYes.mws.yaml", dict);
+
+        Assert.Equal(
+            "{hunters == \"evil\" ? \"restext://Gen1CreepyYes_001\" : \"restext://Gen1CreepyYes_001\"}",
+            dict["title"]);
+        var entries = Assert.Single(collector.Passages).Entries;
+        var entry = Assert.Single(entries);
+        Assert.Equal("Gen1CreepyYes_001", entry.Key);
+        Assert.Equal("Agreed", entry.Value);
+    }
+
+    [Fact]
+    public void CollectPassage_TernaryTitle_ExtractsValueEvenWhenItCoincidesWithARealPassageId()
+    {
+        // Regression: Fear of the Unknown's PEWitch3 — one branch's own heading text is "Isolation",
+        // which ALSO happens to be the passage_id of a completely unrelated passage elsewhere in the
+        // module. The shuffled-array extraction path defensively skips a literal matching a known
+        // passage id (ambiguous there — an array element genuinely could be a navigation string),
+        // but a title ternary's VALUE always comes from TryHoistHeadingTitleSubtitle's bold-heading
+        // extraction — real narrative text, never a passage id by construction — so that exclusion
+        // must NOT apply here, or a coincidental word match silently leaves real player-facing text
+        // un-restexted.
+        var collector = new RestextCollector(passageIds: ["Isolation", "PEWitch3"]);
+        var dict = new Dictionary<string, object?>
+        {
+            ["title"] = "{path4 == \"PEIsolation\" ? \"Isolation\" : \"Something Else\"}",
+            ["nodes"] = new List<Dictionary<string, object?>>(),
+        };
+
+        collector.CollectPassage("PEWitch3", "000-PEWitch3.mws.yaml", dict);
+
+        Assert.Equal(
+            "{path4 == \"PEIsolation\" ? \"restext://PEWitch3_001\" : \"restext://PEWitch3_002\"}",
+            dict["title"]);
+        var entries = Assert.Single(collector.Passages).Entries;
+        Assert.Contains(entries, e => e.Key == "PEWitch3_001" && e.Value == "Isolation");
+        Assert.Contains(entries, e => e.Key == "PEWitch3_002" && e.Value == "Something Else");
+    }
+
     private static Dictionary<string, object?> TextPassageDict(string value) => new()
     {
         ["nodes"] = new List<Dictionary<string, object?>>

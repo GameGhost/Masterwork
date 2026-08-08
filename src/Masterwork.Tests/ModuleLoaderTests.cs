@@ -481,6 +481,83 @@ public class ModuleLoaderTests
     }
 
     [Fact]
+    public void LoadFromSources_TernaryTitleContainsRestextRefs_ResolvesEachBranchWithEscaping()
+    {
+        // CradleExtractor.TryBuildTernaryHeading collapses several branches' own headings into one
+        // computed title — each branch's text now gets its own restext key (RestextCollector.
+        // ExtractLiteralsFromBracedTitleExpr), embedded inside the ternary's own quoted-literal
+        // syntax. A restext:// reference there must be resolved via RestextResolver.
+        // ResolveTitleOrSubtitle's ResolveExpr path (escaping embedded '"'/'\' in the looked-up
+        // text) — not ResolveDisplay's unescaped splice, which would let a locale value containing
+        // '"' (like the second branch here) break the ternary's own string-literal syntax.
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.4'
+                passage_id: 'P1'
+                title: '{gunsbonus == 1 ? "restext://Heading_A" : "restext://Heading_B"}'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes: []
+                """,
+            ],
+            restextText: "Heading_A=Knowledge Bonus\nHeading_B=She said \"hi\" today\n");
+
+        var passage = module.Passages["P1"];
+        Assert.Equal(
+            "{gunsbonus == 1 ? \"Knowledge Bonus\" : \"She said \\\"hi\\\" today\"}",
+            passage.Title);
+    }
+
+    [Fact]
+    public async Task FollowLink_TernaryTitleWithEmbeddedQuoteInLocaleText_RendersCorrectTitle()
+    {
+        // Strongest proof escaping actually matters: renders the destination passage end-to-end
+        // (parses AND evaluates the resolved ternary expression) with a locale value that contains
+        // a literal '"' — if RestextResolver's escaping were missing or wrong, this would either
+        // throw a parse error (an unescaped '"' terminates the string literal early — see
+        // ExpressionParser's string-literal handling) or silently produce a garbled title.
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.4'
+                passage_id: 'P1'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes:
+                - type: 'assign'
+                  var: 'gunsbonus'
+                  expr: '2'
+                - type: 'link'
+                  label: 'Go'
+                  target: 'P2'
+                  snapshot: true
+                """,
+                """
+                format: 'mws/0.4'
+                passage_id: 'P2'
+                title: '{gunsbonus == 1 ? "restext://Heading_A" : "restext://Heading_B"}'
+                layout: 'narration'
+                nodes: []
+                """,
+            ],
+            restextText: "Heading_A=Knowledge Bonus\nHeading_B=She said \"hi\" today\n");
+
+        var session = new GameSession(module, masterSeed: 1);
+        var navId = session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id;
+
+        await session.FollowLinkAsync(navId);
+
+        Assert.Equal("She said \"hi\" today", session.CurrentRender.Title);
+    }
+
+    [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {
         var dir = Path.Combine(Path.GetTempPath(), "mw-loader-test-" + Guid.NewGuid().ToString("n"));

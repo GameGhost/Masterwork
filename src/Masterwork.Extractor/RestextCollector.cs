@@ -666,7 +666,20 @@ public sealed partial class RestextCollector
     {
         if (d.TryGetValue(field, out var val) && val is string s && !string.IsNullOrEmpty(s))
         {
-            if (IsSingleVarRef(s))
+            // CradleExtractor.TryBuildTernaryHeading collapses several branches' own headings into
+            // one computed title/subtitle, e.g. '{gunsbonus == 1 ? "Knowledge Bonus" : gunsbonus ==
+            // 2 ? "Ingredient Bonus" : "Wealth Bonus"}' — checked BEFORE IsSingleVarRef below, since
+            // that check's own "{...} with no nested braces" pattern also matches this shape (it was
+            // written for a bare "{varname}" placeholder, which never contains a quoted literal) and
+            // would otherwise wrongly treat the whole ternary as an unextracted var reference,
+            // leaving every branch's player-facing text as raw, non-localizable literals embedded
+            // in the expression instead of restext:// references (each escaped for its own
+            // quoted-literal context by RestextResolver.ResolveTitleOrSubtitle at load time).
+            if (s.StartsWith('{') && s.EndsWith('}') && QuotedStringInExprRegex().IsMatch(s))
+            {
+                d[field] = ExtractLiteralsFromBracedTitleExpr(s);
+            }
+            else if (IsSingleVarRef(s))
             {
                 // See WalkTextNode's identical branch: no restext entry will exist for this field,
                 // but the var it references is still being displayed here.
@@ -677,6 +690,82 @@ public sealed partial class RestextCollector
                 d[field] = AllocKey(s);
             }
         }
+    }
+
+    // Extracts each quoted string literal inside a "{...}"-wrapped title/subtitle ternary into its
+    // own restext key, leaving everything else (conditions, the ?/: ternary syntax) untouched.
+    // Structurally the same reach-in WalkExprNode already does for a shuffled array's own quoted
+    // elements — just applied to a different surrounding expression shape (ternary vs. array), and
+    // without that path's AssignedKeyRecord bookkeeping: a title is passage-level display text,
+    // always shown, never pruned back to a raw literal the way an unused local var's assign can be.
+    //
+    // Skips a literal immediately preceded by a comparison operator (IsPrecededByComparisonOperator)
+    // — a title ternary's own CONDITIONS can themselves contain quoted literals (e.g.
+    // BuildSwitchCaseCondition's "hunters == \"evil\""), which are internal state comparanda, not
+    // player-facing text, and must never be extracted. That check runs on the match's own start
+    // index from the ORDINARY QuotedStringInExprRegex — not folded into the regex itself as a
+    // lookbehind. Regression, caught during verification: a first attempt did exactly that
+    // (`(?<!(?:==|!=|...)\s)"..."`), and it corrupted quote PAIRING, not just which matches counted:
+    // when the lookbehind blocks a match attempt starting right before "evil"'s opening quote, the
+    // engine doesn't skip the whole "evil" token — it retries from the very next character, finds
+    // "evil"'s own CLOSING quote, and happily pairs THAT with the FOLLOWING literal's opening quote
+    // instead, matching the nonsense span `" ? "` in `"evil" ? "Agreed"` rather than "Agreed" itself
+    // (confirmed directly: `[regex]'...'.Matches('{hunters == "evil" ? "Agreed" : "Agreed"}')`
+    // returned `" ? "` and `" : "`, not either "Agreed"). Finding real quote-paired tokens first via
+    // the plain regex, then separately checking what precedes each match's own start, doesn't have
+    // that failure mode — the token boundaries are already correct before the exclusion check runs.
+    private string ExtractLiteralsFromBracedTitleExpr(string expr) => QuotedStringInExprRegex().Replace(expr, m =>
+    {
+        if (IsPrecededByComparisonOperator(expr, m.Index))
+        {
+            return m.Value;
+        }
+
+        var raw = m.Groups[1].Value;
+        var unescaped = raw.Replace("\\\"", "\"").Replace("\\\\", "\\");
+        // NOT _passageIds.Contains(unescaped) — unlike the shuffled-array case above (a literal
+        // array element genuinely could be either a passage-navigation string or display text,
+        // hence that defensive exclusion there), a title/subtitle ternary's VALUE literal always
+        // comes from TryHoistHeadingTitleSubtitle's bold-heading extraction — real narrative prose
+        // a passage's text() calls wrote for the player, never a passage id by construction. Real
+        // occurrence this exclusion would otherwise wrongly skip: Fear of the Unknown's PEWitch3,
+        // whose "Isolation" branch value happens to ALSO be the passage_id of an unrelated passage
+        // — a coincidental word collision, not evidence "Isolation" here means "navigate there".
+        if (unescaped.StartsWith("restext://", StringComparison.Ordinal) || IsNumericString(unescaped))
+        {
+            return m.Value;
+        }
+
+        var keyRef = AllocKey(unescaped);
+        return keyRef.StartsWith("restext://", StringComparison.Ordinal) ? $"\"{keyRef}\"" : m.Value;
+    });
+
+    // True when the text immediately before `quoteIndex` (skipping spaces) ends in a comparison
+    // operator (==, !=, <=, >=, <, >) — i.e. the quoted literal starting there is a condition's own
+    // comparand, not a ternary's "?"/":" value.
+    private static bool IsPrecededByComparisonOperator(string expr, int quoteIndex)
+    {
+        var i = quoteIndex - 1;
+        while (i >= 0 && expr[i] == ' ')
+        {
+            i--;
+        }
+
+        if (i < 0)
+        {
+            return false;
+        }
+
+        // A bare '<'/'>' is itself a complete operator; '=' only counts when it completes a
+        // two-char operator ('==', '!=', '<=', '>=') — SwitchCondRegex confirms these six are the
+        // only comparison operators this codebase's conditions ever use, so a lone '=' (not
+        // preceded by one of those four characters) isn't a recognized comparison at all.
+        return expr[i] switch
+        {
+            '<' or '>' => true,
+            '=' when i > 0 && expr[i - 1] is '=' or '!' or '<' or '>' => true,
+            _ => false,
+        };
     }
 
     // Extracts string literals from assign/let expr fields.

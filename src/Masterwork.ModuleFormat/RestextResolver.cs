@@ -42,8 +42,8 @@ public sealed partial class RestextResolver : IRestextResolver
         _logger.LogDebug("Resolving restext references for passage '{PassageId}'", passage.PassageId);
         return passage with
         {
-            Title = ResolveDisplay(passage.Title, locale, warnings),
-            Subtitle = ResolveDisplay(passage.Subtitle, locale, warnings),
+            Title = ResolveTitleOrSubtitle(passage.Title, locale, warnings),
+            Subtitle = ResolveTitleOrSubtitle(passage.Subtitle, locale, warnings),
             Location = passage.Location is null ? null : passage.Location with
             {
                 Name = ResolveDisplay(passage.Location.Name, locale, warnings),
@@ -144,6 +144,23 @@ public sealed partial class RestextResolver : IRestextResolver
     [return: NotNullIfNotNull(nameof(value))]
     private string? ResolveDisplay(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
         value is null ? null : RestextRefRegex().Replace(value, m => Lookup(m.Groups[1].Value, locale, warnings));
+
+    // Title/subtitle are ordinarily plain display text or a single bare "restext://Key" (the whole
+    // field) — never inside any quote context, so ResolveDisplay's unescaped splice is correct.
+    // But CradleExtractor.TryBuildTernaryHeading can collapse several branches' own headings into
+    // one computed title, e.g. '{gunsbonus == 1 ? "restext://Heading_A" : "restext://Heading_B"}' —
+    // there, each restext:// reference sits inside a double-quoted string literal that's itself
+    // part of a larger expression, so the looked-up text must be escaped (ResolveExpr) or a locale
+    // value containing '"' would break the ternary's own string-literal syntax. A field wrapped
+    // entirely in "{...}" is exactly (and only) this expression shape — RestextCollector.ExtractField
+    // never produces a plain display title starting with "{" for any other reason (a bare "{var}"
+    // placeholder never contains a restext:// reference in the first place, so which mode resolves
+    // it is moot — see that method's own remarks).
+    [return: NotNullIfNotNull(nameof(value))]
+    private string? ResolveTitleOrSubtitle(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
+        value is not null && value.StartsWith('{') && value.EndsWith('}')
+            ? ResolveExpr(value, locale, warnings)
+            : ResolveDisplay(value, locale, warnings);
 
     [return: NotNullIfNotNull(nameof(value))]
     private string? ResolveExpr(string? value, IReadOnlyDictionary<string, string> locale, ModuleWarnings? warnings) =>
