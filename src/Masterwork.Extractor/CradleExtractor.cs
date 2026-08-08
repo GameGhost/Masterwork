@@ -1398,8 +1398,9 @@ public partial class CradleExtractor
     // inverse of BuildMatchValue (which strips an "==" op down to a bare literal, but keeps any
     // other comparison operator as a raw "<=5"-style pattern string glued onto the value; see its
     // own remarks). A compound (List<object>) match — from an OR'd chain like "on == "A" || on ==
-    // "B"" — becomes an equivalent "||"-joined condition.
-    private static string BuildSwitchCaseCondition(string on, object? match) => match switch
+    // "B"" — becomes an equivalent "||"-joined condition. Internal (not private): also called from
+    // V2Serializer's SwitchNode overload of TryGetSetupTargetArms.
+    internal static string BuildSwitchCaseCondition(string on, object? match) => match switch
     {
         List<object> list => string.Join(" || ", list.Select(v => BuildSwitchCaseCondition(on, v))),
         int n => $"{on} == {n}",

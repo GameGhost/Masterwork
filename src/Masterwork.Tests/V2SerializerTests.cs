@@ -1045,4 +1045,200 @@ public class V2SerializerTests
         var content = node.GetValueOrDefault("content") as List<Dictionary<string, object?>>;
         Assert.True(content is null or []);
     }
+
+    [Fact]
+    public void ExpandLink_SwitchWithPerCasePreambleBeforeSetupPassagename_PromotesTargetAndKeepsAssignsGated()
+    {
+        // Regression: A Time of War's PackingHeat1a (source lines 14579-14600) — "switch (round) {
+        // case 7: martweapons = 1; martial = 1; ViewItemObtain.SetupPassagename = "Martial1"; break;
+        // case 8: martweapons = 1; martial = 2; SetupPassagename = "Martial2"; break; default:
+        // martweapons = 1; martial = 3; SetupPassagename = "Martial3"; break; }" — each case has
+        // per-branch assigns BEFORE the SetupPassagename, unlike Payment1ThanksB/EssentialSaltsRes
+        // above (bare single-node branches only). TryGetSetupTargetArms used to require an exact
+        // one-node-per-branch match, so this whole switch fell through as ordinary content: no
+        // layout: setup, no target, and the popup could be opened but never correctly navigated away
+        // from. The fix strips only the trailing SetupNotificationNode from each case — the assigns
+        // must stay exactly where they were, still gated by their own case, never hoisted out
+        // unconditionally (see git history: an earlier attempt at hoisting corrupted A Time of War's
+        // BlameResolve/ParadoxFirst by running a branch's preamble regardless of which branch matched).
+        var passage = new MwsPassage
+        {
+            PassageId = "PackingHeat1a",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click to continue...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.SwitchNode
+                        {
+                            On = "round",
+                            Cases =
+                            [
+                                new Masterwork.Extractor.SwitchCase
+                                {
+                                    Match = 7,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martweapons"] = "1" } },
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martial"] = "1" } },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial1" },
+                                    ],
+                                },
+                                new Masterwork.Extractor.SwitchCase
+                                {
+                                    Match = 8,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martweapons"] = "1" } },
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martial"] = "2" } },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial2" },
+                                    ],
+                                },
+                                new Masterwork.Extractor.SwitchCase
+                                {
+                                    Default = true,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martweapons"] = "1" } },
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martial"] = "3" } },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial3" },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("setup", node["layout"]);
+        Assert.Equal(
+            "${round == 7 ? \"Martial1\" : round == 8 ? \"Martial2\" : \"Martial3\"}",
+            node["target"]);
+        Assert.Equal("Close", node["okay"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        var sw = Assert.Single(content, c => c["type"] as string == "switch");
+        Assert.DoesNotContain(content, c => c["type"] as string == "setup_notification");
+
+        var cases = (List<Dictionary<string, object?>>)sw["cases"]!;
+        var case7 = Assert.Single(cases, c => Equals(c["match"], 7));
+        var case7Nodes = (List<Dictionary<string, object?>>)case7["nodes"]!;
+        Assert.Equal(2, case7Nodes.Count); // both assigns, SetupNotificationNode stripped
+        Assert.All(case7Nodes, n => Assert.Equal("assign", n["type"]));
+
+        var defaultNodes = (List<Dictionary<string, object?>>)sw["default"]!;
+        Assert.Equal(2, defaultNodes.Count);
+    }
+
+    [Fact]
+    public void ExpandLink_ConditionalWithPreambleBeforeSetupPassagename_KeepsAssignGatedByItsOwnBranch()
+    {
+        // Same preamble-tolerance fix as the SwitchNode test above, but for the ConditionalNode
+        // overload of TryGetSetupTargetArms (an if/else chain rather than a switch).
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click to continue...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.ConditionalNode
+                        {
+                            Branches =
+                            [
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Condition = "round == 7",
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martial"] = "1" } },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial1" },
+                                    ],
+                                },
+                                new Masterwork.Extractor.ConditionalBranch
+                                {
+                                    Else = true,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.EffectNode { VarSets = new() { ["martial"] = "3" } },
+                                        new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial3" },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("popup", node["type"]);
+        Assert.Equal("setup", node["layout"]);
+        Assert.Equal("${round == 7 ? \"Martial1\" : \"Martial3\"}", node["target"]);
+
+        var content = (List<Dictionary<string, object?>>)node["content"]!;
+        var cond = Assert.Single(content, c => c["type"] as string == "conditional");
+        // The assign stays inside the (still-gated) branch — never hoisted to a top-level sibling —
+        // and the SetupNotificationNode is gone (its info now lives in the popup's own target).
+        var thenNodes = (List<Dictionary<string, object?>>)cond["then"]!;
+        var assign = Assert.Single(thenNodes);
+        Assert.Equal("assign", assign["type"]);
+        Assert.Equal("martial", assign["var"]);
+    }
+
+    [Fact]
+    public void ExpandLink_SwitchWithNoLeftoverContent_OmitsSwitchEntirely()
+    {
+        // Contrast with the preamble tests above: when every case is STILL just a bare
+        // SetupNotificationNode (the original Payment1ThanksB/SeedGUNS shape, just expressed as a
+        // SwitchNode instead of chained ifs), there's nothing left to keep — the switch itself must
+        // be omitted, matching the existing ConditionalNode-chain behavior tested above.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new Masterwork.Extractor.ExpandLinkNode
+                {
+                    Label = "Click to continue...",
+                    StateAffecting = true,
+                    ExpandNodes =
+                    [
+                        new Masterwork.Extractor.SwitchNode
+                        {
+                            On = "round",
+                            Cases =
+                            [
+                                new Masterwork.Extractor.SwitchCase { Match = 7, Nodes = [new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial1" }] },
+                                new Masterwork.Extractor.SwitchCase { Default = true, Nodes = [new Masterwork.Extractor.SetupNotificationNode { NextPassage = "Martial3" }] },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var node = Nodes0(d);
+
+        Assert.Equal("setup", node["layout"]);
+        Assert.Equal("${round == 7 ? \"Martial1\" : \"Martial3\"}", node["target"]);
+
+        var content = node.GetValueOrDefault("content") as List<Dictionary<string, object?>>;
+        Assert.True(content is null or []);
+    }
 }

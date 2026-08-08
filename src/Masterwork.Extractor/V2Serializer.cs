@@ -683,27 +683,87 @@ public static partial class V2Serializer
     private static string? ResolveSetupTarget(SetupNotificationNode sn) =>
         sn.Random is not null ? $"${{{MwsExprHelper.VarRandomToExpr(sn.Random)}}}" : sn.NextPassage;
 
-    // True when every branch of `cond` is a body consisting of exactly one SetupNotificationNode
-    // whose resolved target (ResolveSetupTarget) is non-null. Mirrors
+    // True when every branch of `cond` ENDS in a SetupNotificationNode with a resolvable target
+    // (ResolveSetupTarget) — tolerating arbitrary preamble before it in each branch. Mirrors
     // CradleExtractor.TryCollapseCheckProgressConditional's arm-extraction, but for
     // ViewItemObtain.SetupPassagename assigns instead of CheckProgress calls, and without that
     // method's "must already have an else" requirement — see CollapseSetupNotificationConditionals
     // for why this one has to tolerate an absent else.
+    //
+    // A branch's preamble (real per-branch side effects — assign, etc.) is NEVER hoisted or moved:
+    // only the trailing SetupNotificationNode is stripped from each branch's own Nodes list (its
+    // info now lives in the merged popup-level target/layout instead) — everything else stays
+    // exactly where it was, still gated by that branch's own condition, still part of the popup's
+    // own content. This sidesteps the earlier BlameResolve/ParadoxFirst regression (a prior attempt
+    // unconditionally HOISTED a branch's preamble out of its own gate, corrupting content when that
+    // preamble was a real per-branch side effect, not just a random draw — see git history) by
+    // never moving anything at all. Mutation only happens once every branch has matched — a partial
+    // match must never strip anything, so a failed later branch can't leave earlier ones corrupted.
+    // Real-world occurrence: A Time of War's PackingHeat1a (source line 14579) — "if (round == 7) {
+    // martweapons = 1; martial = 1; SetupPassagename = "Martial1"; } else if (round == 8) { ... }
+    // else { ... }", consolidated into a SwitchNode — see the SwitchNode overload below; this
+    // ConditionalNode overload still matters for a chain SwitchNode-consolidation doesn't recognize
+    // (e.g. compound OR conditions, or fewer than 3 branches — see TryConvertCompoundConditionalToSwitch).
     private static bool TryGetSetupTargetArms(ConditionalNode cond, out List<(string? Condition, string Target)> arms)
     {
         arms = [];
+        var strippedPerBranch = new List<List<MwsNode>>();
         foreach (var branch in cond.Branches)
         {
-            if (branch.Nodes is not [SetupNotificationNode sn] || ResolveSetupTarget(sn) is not { } target)
+            if (branch.Nodes is not [.. var pre, SetupNotificationNode sn] || ResolveSetupTarget(sn) is not { } target)
             {
                 arms = [];
                 return false;
             }
 
+            strippedPerBranch.Add(pre);
             arms.Add((branch.Else == true ? null : branch.Condition, target));
         }
 
-        return arms.Count > 0;
+        if (arms.Count == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < cond.Branches.Count; i++)
+        {
+            cond.Branches[i].Nodes = strippedPerBranch[i];
+        }
+
+        return true;
+    }
+
+    // SwitchNode counterpart of the ConditionalNode overload above — same preamble-preserving
+    // semantics, but for a switch's cases/default instead of a conditional's branches.
+    // BuildSwitchCaseCondition rebuilds an equivalent boolean condition per case (the inverse of
+    // BuildMatchValue, used identically for the ternary-chain title-hoisting feature).
+    private static bool TryGetSetupTargetArms(SwitchNode sw, out List<(string? Condition, string Target)> arms)
+    {
+        arms = [];
+        var strippedPerCase = new List<List<MwsNode>>();
+        foreach (var c in sw.Cases)
+        {
+            if (c.Nodes is not [.. var pre, SetupNotificationNode sn] || ResolveSetupTarget(sn) is not { } target)
+            {
+                arms = [];
+                return false;
+            }
+
+            strippedPerCase.Add(pre);
+            arms.Add((c.Default == true ? null : CradleExtractor.BuildSwitchCaseCondition(sw.On, c.Match), target));
+        }
+
+        if (arms.Count == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < sw.Cases.Count; i++)
+        {
+            sw.Cases[i].Nodes = strippedPerCase[i];
+        }
+
+        return true;
     }
 
     // Cradle sometimes writes a ViewItemObtain popup's destination as two or more independent
@@ -719,6 +779,25 @@ public static partial class V2Serializer
     // NextPassage is a computed ${...} ternary, with an empty-string terminal fallback when no arm
     // is unconditional — since the "later branches never actually get reached with an unmatched
     // value" guarantee is exactly the domain knowledge just mentioned, not something provable here.
+    // Reorders `arms` so an unconditional (Condition == null) arm is last — BuildTernaryChain
+    // requires its terminal arm to be the unconditional fallback — adding an empty-string fallback
+    // when there isn't one (see this method's own remarks above for why that's the only safe
+    // default: exhaustiveness beyond the arms we can see is domain knowledge, not provable here).
+    private static void NormalizeTernaryArms(List<(string? Condition, string Target)> arms)
+    {
+        var elseIdx = arms.FindIndex(a => a.Condition is null);
+        if (elseIdx >= 0 && elseIdx != arms.Count - 1)
+        {
+            var elseArm = arms[elseIdx];
+            arms.RemoveAt(elseIdx);
+            arms.Add(elseArm);
+        }
+        else if (elseIdx < 0)
+        {
+            arms.Add((null, ""));
+        }
+    }
+
     private static List<MwsNode> CollapseSetupNotificationConditionals(List<MwsNode> nodes)
     {
         var result = new List<MwsNode>(nodes.Count);
@@ -728,25 +807,31 @@ public static partial class V2Serializer
             if (nodes[i] is ConditionalNode firstCond && TryGetSetupTargetArms(firstCond, out var arms))
             {
                 var sourceLine = firstCond.SourceLine;
+                var participants = new List<ConditionalNode> { firstCond };
                 int j = i + 1;
                 while (!arms.Any(a => a.Condition is null) &&
                        j < nodes.Count && nodes[j] is ConditionalNode nextCond &&
                        TryGetSetupTargetArms(nextCond, out var moreArms))
                 {
                     arms.AddRange(moreArms);
+                    participants.Add(nextCond);
                     j++;
                 }
 
-                var elseIdx = arms.FindIndex(a => a.Condition is null);
-                if (elseIdx >= 0 && elseIdx != arms.Count - 1)
+                NormalizeTernaryArms(arms);
+
+                // Each participant already had its own trailing SetupNotificationNode stripped in
+                // place by TryGetSetupTargetArms above — a branch that still has content left over
+                // (the PackingHeat1a case: per-branch `assign`s preceding the SetupPassagename) stays
+                // right where it was, still gated by its own condition; only a participant left with
+                // nothing in every branch (the original Payment1ThanksB/SeedGUNS shape) is dropped
+                // entirely, since an empty if/else has nothing left to contribute.
+                foreach (var p in participants)
                 {
-                    var elseArm = arms[elseIdx];
-                    arms.RemoveAt(elseIdx);
-                    arms.Add(elseArm);
-                }
-                else if (elseIdx < 0)
-                {
-                    arms.Add((null, ""));
+                    if (p.Branches.Any(b => b.Nodes.Count > 0))
+                    {
+                        result.Add(p);
+                    }
                 }
 
                 result.Add(new SetupNotificationNode
@@ -755,6 +840,24 @@ public static partial class V2Serializer
                     SourceLine = sourceLine,
                 });
                 i = j;
+                continue;
+            }
+
+            if (nodes[i] is SwitchNode sw && TryGetSetupTargetArms(sw, out var swArms))
+            {
+                NormalizeTernaryArms(swArms);
+
+                if (sw.Cases.Any(c => c.Nodes.Count > 0))
+                {
+                    result.Add(sw);
+                }
+
+                result.Add(new SetupNotificationNode
+                {
+                    NextPassage = "${" + CradleExtractor.BuildTernaryChain(swArms) + "}",
+                    SourceLine = sw.SourceLine,
+                });
+                i++;
                 continue;
             }
 
