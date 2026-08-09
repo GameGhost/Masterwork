@@ -47,10 +47,29 @@ public sealed partial class FormattedTextExpander(IAssetResolver assetResolver) 
         });
 
         var sb = new StringBuilder();
+        await AppendEmphasisAsync(sb, masked, icons);
+        return new MarkupString(sb.ToString());
+    }
+
+    // Matches EmphasisPattern's top-level (non-overlapping) spans within `segment` and appends
+    // each as <strong>/<em>, recursing into a matched span's own inner content afterward to catch
+    // the OTHER emphasis type nested inside it. Regex.Matches finds every non-overlapping
+    // top-level span in `segment` in one pass, so the plain text BETWEEN matches never has
+    // further emphasis of its own left to find — but a matched span's own captured inner text can
+    // still contain more, since it was consumed whole by the outer match's non-greedy `[\s\S]*?`
+    // and never independently revisited. Real occurrence: A Time of War's Reign3_005,
+    // "_...Choose one **animal token** and return it...player._" — the only other underscore in
+    // the whole string is the italic span's own closing one, so the non-greedy italic match spans
+    // the entire sentence, and "**animal token**" sits entirely inside that one match's own
+    // group — never revisited as its own top-level match without this recursive pass. Always
+    // terminates: each recursive call's `segment` is the trimmed interior of a match strictly
+    // shorter than its own enclosing `segment`.
+    private async Task AppendEmphasisAsync(StringBuilder sb, string segment, List<string> icons)
+    {
         var lastIndex = 0;
-        foreach (Match match in EmphasisPattern().Matches(masked))
+        foreach (Match match in EmphasisPattern().Matches(segment))
         {
-            await AppendSegmentAsync(sb, masked[lastIndex..match.Index], icons);
+            await AppendSegmentAsync(sb, segment[lastIndex..match.Index], icons);
 
             var isBold = match.Groups["bold"].Success;
             var inner = isBold ? match.Groups["bold"].Value : match.Groups["italic"].Value;
@@ -73,7 +92,7 @@ public sealed partial class FormattedTextExpander(IAssetResolver assetResolver) 
                 var tag = isBold ? "strong" : "em";
                 await AppendSegmentAsync(sb, lead, icons);
                 sb.Append('<').Append(tag).Append('>');
-                await AppendSegmentAsync(sb, trimmed, icons);
+                await AppendEmphasisAsync(sb, trimmed, icons);
                 sb.Append("</").Append(tag).Append('>');
                 await AppendSegmentAsync(sb, trail, icons);
             }
@@ -81,8 +100,7 @@ public sealed partial class FormattedTextExpander(IAssetResolver assetResolver) 
             lastIndex = match.Index + match.Length;
         }
 
-        await AppendSegmentAsync(sb, masked[lastIndex..], icons);
-        return new MarkupString(sb.ToString());
+        await AppendSegmentAsync(sb, segment[lastIndex..], icons);
     }
 
     // Expands icon placeholders within `segment` back to <img> tags, HTML-encoding everything else.

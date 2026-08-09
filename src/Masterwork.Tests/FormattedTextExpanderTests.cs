@@ -131,4 +131,38 @@ public class FormattedTextExpanderTests
             "<strong>Gain 1 <img src=\"assets/icons/creepy_icon.png\" alt=\"creepy_icon\" class=\"mws-inline-icon\" /> token</strong>",
             result.Value);
     }
+
+    [Fact]
+    public async Task ExpandAsync_BoldNestedInsideItalic_ReportedCase()
+    {
+        // Reported case (A Time of War's Reign3_005): "_...Choose one **animal token** and return
+        // it...player._". The only other underscore in the whole string is the italic span's own
+        // closing one, so the non-greedy italic match's [\s\S]*? has no choice but to span the
+        // entire sentence — "**animal token**" ends up entirely inside that one match's own
+        // captured group, never independently visited as its own top-level Regex.Matches result.
+        // Before the recursive fix, the inner content was appended via plain icon-expansion only,
+        // so "**animal token**" rendered as literal, un-bolded text inside the <em>.
+        var result = await Expander.ExpandAsync("_Choose one **animal token** and return it._");
+        Assert.Equal("<em>Choose one <strong>animal token</strong> and return it.</em>", result.Value);
+    }
+
+    [Fact]
+    public async Task ExpandAsync_ItalicNestedInsideBold_AlsoWorks()
+    {
+        // Contrast direction: the outer span is bold this time, with an italic span entirely
+        // inside its own captured group — same recursive fix, opposite nesting order.
+        var result = await Expander.ExpandAsync("**Gain 1 _rare_ token**");
+        Assert.Equal("<strong>Gain 1 <em>rare</em> token</strong>", result.Value);
+    }
+
+    [Fact]
+    public async Task ExpandAsync_NestedEmphasisWithIconRefInsideInnerSpan_AllThreeCombine()
+    {
+        // The recursive pass and the icon-masking pass must compose correctly: an icon ref sits
+        // inside the INNER (bold) span, which itself sits inside the outer (italic) span.
+        var result = await Expander.ExpandAsync("_gain **1 {icon:creepy_icon} token** total_");
+        Assert.Equal(
+            "<em>gain <strong>1 <img src=\"assets/icons/creepy_icon.png\" alt=\"creepy_icon\" class=\"mws-inline-icon\" /> token</strong> total</em>",
+            result.Value);
+    }
 }
