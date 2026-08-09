@@ -163,21 +163,28 @@ public static partial class V2Serializer
             // already merges them correctly; this handles the top-level case that bypasses that path.)
             //
             // Real Cradle source doesn't always put the SetupBlockNode immediately after the
-            // SetupPassagename assignment with nothing but breaks in between — two more interstitial
-            // shapes showed up here, and skipping past ONLY breaks silently broke the pairing,
-            // falling back to TransformSetupNotification's standalone (title/text-less, since this
-            // idiom never sets sn.Title/sn.Text) rendering: an empty `section: panel` plus a bare
-            // "Continue" link, with the popup's own header/content scattered or lost outright. Real
-            // occurrences: Cost of Disease's HelpingEvil2 (`Vars._SetupImage = "..."` sits BEFORE
-            // entering the styleScope, not inside it — the usual case SplitPopupHeaderNodes already
-            // handles is an image INSIDE setupBlock.Nodes, not one preceding the block entirely) and
-            // WolvesSetupGen3 (`Vars.gen3pg = 0`, an ordinary session-var assign with no visual
-            // output of its own, sitting between the two). Both are tolerated now: an interstitial
-            // ImageNode is folded into the popup's own header (prepended, so it still displays before
-            // whatever image the block's own content contributes); an interstitial EffectNode/LetNode
-            // (a plain assign) is preserved as a normal node emitted just before the popup, not
-            // dropped. Anything else still isn't tolerated — bails out to the same conservative
-            // standalone fallback as before rather than guessing.
+            // SetupPassagename assignment with nothing but breaks in between — several more
+            // interstitial shapes showed up here, and skipping past ONLY breaks silently broke the
+            // pairing, falling back to TransformSetupNotification's standalone (title/text-less,
+            // since this idiom never sets sn.Title/sn.Text) rendering: an empty `section: panel`
+            // plus a bare "Continue" link, with the popup's own header/content scattered or lost
+            // outright. Real occurrences: Cost of Disease's HelpingEvil2 (`Vars._SetupImage = "..."`
+            // sits BEFORE entering the styleScope, not inside it — the usual case
+            // SplitPopupHeaderNodes already handles is an image INSIDE setupBlock.Nodes, not one
+            // preceding the block entirely), WolvesSetupGen3 (`Vars.gen3pg = 0`, an ordinary
+            // session-var assign with no visual output of its own, sitting between the two), and
+            // Fear of the Unknown's Witchwolf1Hex/Witchwolf2Hex (a whole if/elseif chain — 6
+            // branches, each just a plain assign choosing which of witA-E/witAI feeds `witch1` —
+            // sitting between the two). All tolerated now: an interstitial ImageNode is folded into
+            // the popup's own header (prepended, so it still displays before whatever image the
+            // block's own content contributes); an interstitial EffectNode/LetNode (a plain assign)
+            // is preserved as a normal node emitted just before the popup; a ConditionalNode/
+            // SwitchNode is ALSO preserved whole, but only when its ENTIRE branch/case tree produces
+            // no visible output of its own (IsPreservableSetupPreamble, recursive) — a conditional
+            // that itself contains real text/image content is a genuinely different, more ambiguous
+            // shape than "some bookkeeping happens first," so that's still left unrecognized rather
+            // than guessed at. Anything else still isn't tolerated either — bails out to the same
+            // conservative standalone fallback as before.
             if (node is SetupNotificationNode standaloneSn)
             {
                 var j = i + 1;
@@ -194,6 +201,9 @@ public static partial class V2Serializer
                             headerImages.Add(img);
                             break;
                         case EffectNode or LetNode:
+                            preNodes.Add(nodes[j]);
+                            break;
+                        case ConditionalNode or SwitchNode when IsPreservableSetupPreamble(nodes[j]):
                             preNodes.Add(nodes[j]);
                             break;
                         default:
@@ -253,6 +263,21 @@ public static partial class V2Serializer
         }
         return result;
     }
+
+    // True when `node` can never produce visible output of its own — used by TransformNodeList's
+    // SetupNotificationNode-to-SetupBlockNode pairing to decide whether a ConditionalNode/SwitchNode
+    // sitting between the two is safe to preserve whole as ordinary bookkeeping (see its own
+    // remarks). Deliberately narrow, mirroring CradleExtractor's own IsHeadingInert: a branch/case
+    // containing real text/image content makes the whole node NOT preservable this way, since
+    // splitting visible content out from a conditional the caller only meant to pass through whole
+    // would need real header/content routing decisions this pairing isn't set up to make.
+    private static bool IsPreservableSetupPreamble(MwsNode node) => node switch
+    {
+        EffectNode or LetNode or BreakNode or ParagraphBreakNode => true,
+        ConditionalNode cond => cond.Branches.All(b => b.Nodes.All(IsPreservableSetupPreamble)),
+        SwitchNode sw => sw.Cases.All(c => c.Nodes.All(IsPreservableSetupPreamble)),
+        _ => false,
+    };
 
     // Inserts a _src sentinel dict before a node when source location is available.
     // InjectSentinelComments in Program.cs converts these to "# path:line" YAML comments.

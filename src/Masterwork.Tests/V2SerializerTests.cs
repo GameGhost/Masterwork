@@ -859,6 +859,105 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void SetupNotificationBlock_InterstitialAssignOnlyConditionalBeforeBlock_PreservedAsSeparateNode()
+    {
+        // Regression: Fear of the Unknown's Witchwolf1Hex/Witchwolf2Hex — an if/elseif chain (one
+        // branch per witch suspect) between `ViewItemObtain.SetupPassagename = "..."` and
+        // `styleScope("setupStyleEvnt", ...)`, each branch just a plain assign choosing which name
+        // feeds `witch1`. No branch produces any visible output, so — like the plain EffectNode/LetNode
+        // case above — the whole conditional is ordinary bookkeeping that must run before the popup,
+        // not a competing header/content candidate.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new Masterwork.Extractor.ConditionalNode
+                {
+                    Branches =
+                    [
+                        new Masterwork.Extractor.ConditionalBranch
+                        {
+                            Condition = "witch == nameA",
+                            Nodes = [new Masterwork.Extractor.EffectNode { VarSets = new() { ["witch1"] = "witA" } }],
+                        },
+                        new Masterwork.Extractor.ConditionalBranch
+                        {
+                            Condition = "witch == nameB",
+                            Nodes = [new Masterwork.Extractor.EffectNode { VarSets = new() { ["witch1"] = "witB" } }],
+                        },
+                    ],
+                },
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/S2_WitchHexToken", Style = "setup-image" },
+                        new Masterwork.Extractor.TextNode { Template = "Retrieve the token." },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var nodes = (List<Dictionary<string, object?>>)d["nodes"]!;
+        Assert.DoesNotContain(nodes, n => (string)n["type"]! == "section"); // no orphaned empty section
+
+        var cond = Assert.Single(nodes, n => (string)n["type"]! == "conditional");
+        var popup = Assert.Single(nodes, n => (string)n["type"]! == "popup");
+        Assert.True(nodes.IndexOf(cond) < nodes.IndexOf(popup));
+
+        var header = (List<Dictionary<string, object?>>)popup["header"]!;
+        var headerImage = Assert.Single(header);
+        Assert.Equal("image://setup/S2_WitchHexToken", headerImage["asset"]);
+    }
+
+    [Fact]
+    public void SetupNotificationBlock_InterstitialConditionalWithRealContent_NotRecognized_FallsBackToStandalone()
+    {
+        // Contrast: a conditional sitting between the two that DOES produce real visible output in
+        // one of its branches is a genuinely different, more ambiguous shape than "some bookkeeping
+        // happens first" — IsPreservableSetupPreamble must reject it, same conservative "don't guess"
+        // fallback as an entirely unrecognized interstitial node.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new Masterwork.Extractor.ConditionalNode
+                {
+                    Branches =
+                    [
+                        new Masterwork.Extractor.ConditionalBranch
+                        {
+                            Condition = "witch == nameA",
+                            Nodes = [new Masterwork.Extractor.TextNode { Template = "Real visible text." }],
+                        },
+                    ],
+                },
+                new SetupBlockNode
+                {
+                    Nodes = [new Masterwork.Extractor.TextNode { Template = "Retrieve the token." }],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var nodes = (List<Dictionary<string, object?>>)d["nodes"]!;
+        // Falls back to the standalone shape: an empty `section: panel` (sn.Title/sn.Text are both
+        // null for this idiom) instead of merging into one coherent popup with the notification's
+        // own target info — the tell-tale symptom of an unrecognized interstitial.
+        var section = Assert.Single(nodes, n => (string)n["type"]! == "section");
+        Assert.Empty((List<Dictionary<string, object?>>)section["content"]!);
+        // The conditional's own real content must still survive, not be silently dropped.
+        var cond = Assert.Single(nodes, n => (string)n["type"]! == "conditional");
+        var condThen = (List<Dictionary<string, object?>>)cond["then"]!;
+        Assert.Contains(condThen, n => (string)n["type"]! == "text");
+    }
+
+    [Fact]
     public void SetupNotificationBlock_ConditionalWithOnlySomeBranchesStartingWithImage_SplitsPartially()
     {
         // Real shape from Gen1Creepy-ConcealExpose: one branch starts with a setup-image + more
