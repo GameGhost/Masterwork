@@ -1289,6 +1289,130 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task FollowLink_LinkInsidePopupContent_CommitsEnclosingPopupsSandboxFirst()
+    {
+        // Regression: A Time of War's ATOWSabotageIntro1 — `assign sabotagee1 = "none"` sits in a
+        // `layout: reveal` popup's own content, ahead of three ordinary exit links (no nested popup
+        // this time, unlike RumorD2's shape above) — the player leaves via whichever link they
+        // click, per the reveal layout's own documented pattern (no okay/target of its own).
+        // FollowLinkAsync's onclick has always run directly against the live store (never a
+        // sandbox), but nothing EVER committed the ENCLOSING popup's own sandbox when a link, not a
+        // nested popup, was what carried the player away — so `sabotagee1` stayed trapped in the
+        // abandoned popup sandbox forever. The next passage (Sabotage1Now) checks `sabotagee1 ==
+        // "none"` and, finding it still empty, took the wrong branch and tried to render
+        // `{sabotagee1}` as a chosen victim's name — confirmed against a real save file.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Click to reveal...'
+              layout: 'reveal'
+              cancel: 'Close'
+              content:
+              - type: 'text'
+                value: 'A time for sabotage.'
+              - type: 'assign'
+                var: 'sabotagee1'
+                expr: '"none"'
+              - type: 'link'
+                label: 'I chose to sabotage the village.'
+                target: 'P2'
+                snapshot: true
+              - type: 'link'
+                label: 'Instead, I chose to abstain.'
+                target: 'P3'
+                snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P3'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var abstainLink = Assert.Single(popup.Actions.OfType<RenderedLink>(), l => l.Label == "Instead, I chose to abstain.");
+
+        var result = await session.FollowLinkAsync(abstainLink.Id);
+
+        Assert.Equal("P3", result.PassageId);
+        Assert.Equal("none", session.Current.Variables["sabotagee1"].AsString());
+    }
+
+    [Fact]
+    public async Task FollowLink_LinkTwoPopupsDeep_CommitsBothAncestorsWorthOfChanges()
+    {
+        // Generalizes the RumorD2/ATOWSabotageIntro1 fixes to a third permutation neither real
+        // occurrence actually needed: a link nested TWO levels deep (inside a popup that's itself
+        // inside another popup), with a state-changing assign at EACH level. FindAction's own
+        // recursive search must locate the link regardless of depth, and the immediately-enclosing
+        // popup's own CommitChangesTo call must still surface the OUTER popup's change too — this is
+        // exactly what VariableStore.Clone()'s baseline propagation already guarantees (a single
+        // commit reflects every ancestor sandbox's own accumulated changes, not just the immediate
+        // parent's), so no additional walk-up-the-chain logic is needed here.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Open outer...'
+              layout: 'reveal'
+              cancel: 'Close'
+              content:
+              - type: 'assign'
+                var: 'outerFlag'
+                expr: '"outer-set"'
+              - type: 'popup'
+                label: 'Open inner...'
+                layout: 'reveal'
+                cancel: 'Close'
+                content:
+                - type: 'assign'
+                  var: 'innerFlag'
+                  expr: '"inner-set"'
+                - type: 'link'
+                  label: 'Leave via link'
+                  target: 'P2'
+                  snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var outerPopup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var innerPopup = Assert.Single(outerPopup.Actions.OfType<RenderedPopup>());
+        var link = Assert.Single(innerPopup.Actions.OfType<RenderedLink>());
+
+        var result = await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal("P2", result.PassageId);
+        Assert.Equal("outer-set", session.Current.Variables["outerFlag"].AsString());
+        Assert.Equal("inner-set", session.Current.Variables["innerFlag"].AsString());
+    }
+
+    [Fact]
     public async Task PopupAccept_TimelineLabel_OverridesDestinationPassageTitle()
     {
         var module = new ModuleLoader().LoadFromSources(

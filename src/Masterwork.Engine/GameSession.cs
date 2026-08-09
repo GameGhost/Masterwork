@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Masterwork.ModuleFormat;
 using Masterwork.Engine.Expressions;
 using Masterwork.Engine.Rendering;
@@ -223,7 +224,27 @@ public sealed class GameSession
     public Task<PassageRenderResult> FollowLinkAsync(string actionId)
     {
         _logger.LogDebug("Following link '{ActionId}'", actionId);
-        var link = FindAction<RenderedLink>(actionId);
+        var (link, enclosingPopup) = FindActionWithEnclosingPopup<RenderedLink>(actionId);
+
+        // A link living inside a popup's own content (docs/mws-format-latest.md §6's nested-popup
+        // pattern is commonly built from a "reveal"-layout popup with no okay/target of its own,
+        // left via a real link inside its content rather than a nested popup's own Accept) has no
+        // other path back to the live store — ClosePopupAsync is never called on this popup at all,
+        // since the player exits via the link instead. Without this, any assign the popup's content
+        // made before reaching this link (e.g. A Time of War's ATOWSabotageIntro1: `assign
+        // sabotagee1 = "none"` ahead of three exit links, none of them a nested popup) stays trapped
+        // in the abandoned sandbox forever — the same class of bug as the nested-popup case fixed in
+        // VariableStore.Clone()'s baseline propagation, just reached through a link instead of a
+        // ClosePopupAsync call. Committing the enclosing popup's OWN sandbox is sufficient regardless
+        // of nesting depth: that baseline fix already makes a single CommitChangesTo call reflect
+        // every ancestor's own accumulated changes, not just this popup's direct ones. Any pending
+        // input within that same popup is committed to ITS sandbox first, same ordering as
+        // ClosePopupAsync's own CommitInputs-then-CommitChangesTo sequence.
+        if (enclosingPopup is not null)
+        {
+            CommitInputs(enclosingPopup.Actions, enclosingPopup.Sandbox);
+            enclosingPopup.Sandbox.CommitChangesTo(_store);
+        }
 
         CommitInputs(CurrentRender.Actions, _store);
 
@@ -760,16 +781,52 @@ public sealed class GameSession
     private void RecomputeVisitedFromTimeline() =>
         _visitedPassageIds = [.. _timeline.Take(HistoryIndex + 1).Select(s => s.PassageId)];
 
-    // Searches CurrentRender's own actions, plus one level of nesting into every popup's own
-    // Actions (its content is rendered eagerly alongside the passage, so this is available
-    // regardless of whether that popup is actually open in the UI right now — see RenderedPopup's
-    // remarks).
-    private T FindAction<T>(string actionId) where T : RenderedAction
+    // Searches CurrentRender's own actions, recursing into every popup's own Actions to any depth
+    // (its content is rendered eagerly alongside the passage, so this is available regardless of
+    // whether that popup is actually open in the UI right now — see RenderedPopup's remarks). Also
+    // returns the action's immediately-enclosing popup, if any — FollowLinkAsync needs this to know
+    // which sandbox (if any) has to be committed before a link's own effect runs; see its own
+    // remarks for why a link nested inside a popup's content needs this just as much as
+    // ClosePopupAsync already needs it for a nested popup (fixed separately, in
+    // VariableStore.Clone()'s baseline propagation — this is the other half of the same class of
+    // bug: an ancestor's uncommitted sandbox state, abandoned because nothing ever calls
+    // CommitChangesTo for it).
+    private T FindAction<T>(string actionId) where T : RenderedAction =>
+        FindActionWithEnclosingPopup<T>(actionId).Action;
+
+    private (T Action, RenderedPopup? EnclosingPopup) FindActionWithEnclosingPopup<T>(string actionId) where T : RenderedAction
     {
-        var action = CurrentRender.Actions.FirstOrDefault(a => a.Id == actionId)
-            ?? CurrentRender.Actions.OfType<RenderedPopup>().SelectMany(p => p.Actions).FirstOrDefault(a => a.Id == actionId)
-            ?? throw new InvalidOperationException($"No action '{actionId}' in the current passage render.");
-        return action as T ?? throw new InvalidOperationException($"Action '{actionId}' is not a {typeof(T).Name}.");
+        if (!TryFindActionRecursive(CurrentRender.Actions, actionId, enclosingPopup: null, out var action, out var enclosingPopup))
+        {
+            throw new InvalidOperationException($"No action '{actionId}' in the current passage render.");
+        }
+
+        return (action as T ?? throw new InvalidOperationException($"Action '{actionId}' is not a {typeof(T).Name}."), enclosingPopup);
+    }
+
+    private static bool TryFindActionRecursive(
+        IReadOnlyList<RenderedAction> actions, string actionId, RenderedPopup? enclosingPopup,
+        [NotNullWhen(true)] out RenderedAction? found, out RenderedPopup? foundEnclosingPopup)
+    {
+        foreach (var action in actions)
+        {
+            if (action.Id == actionId)
+            {
+                found = action;
+                foundEnclosingPopup = enclosingPopup;
+                return true;
+            }
+
+            if (action is RenderedPopup popup &&
+                TryFindActionRecursive(popup.Actions, actionId, popup, out found, out foundEnclosingPopup))
+            {
+                return true;
+            }
+        }
+
+        found = null;
+        foundEnclosingPopup = null;
+        return false;
     }
 
     // "${module::entrypoint}" is a special sentinel, not an ordinary expression — it's how a shared
