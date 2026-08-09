@@ -612,6 +612,78 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void SetupNotificationBlock_SwitchWithLeadingImageAndMoreContent_SplitsIntoParallelSwitches()
+    {
+        // Regression: Fear of the Unknown's Liberal — the same "each branch sets its own setup
+        // image, then diverges further" shape as the ConditionalNode case above, but keyed by a
+        // `switch` (on `creature`) instead of an if/else chain. Before this fix, SplitPopupHeaderNodes
+        // only recognized ConditionalNode for this promotion, so a switch-shaped setup popup kept its
+        // per-case image inline in `content` instead of hoisting it to `header` — the popup rendered
+        // with no header image at all, even though the content itself displayed correctly.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode { Title = "Setup Title" },
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.SwitchNode
+                        {
+                            On = "creature",
+                            Cases =
+                            [
+                                new Masterwork.Extractor.SwitchCase
+                                {
+                                    Match = 2,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/VillageChronicleCover", Style = "setup-image" },
+                                        new Masterwork.Extractor.TextNode { Template = "Turn to page 10." },
+                                    ],
+                                },
+                                new Masterwork.Extractor.SwitchCase
+                                {
+                                    Match = 1,
+                                    Nodes =
+                                    [
+                                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/S2_HuntTokenFRONT", Style = "setup-image" },
+                                        new Masterwork.Extractor.TextNode { Template = "Turn to page 11." },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var popup = Nodes0(d);
+
+        var header = (List<Dictionary<string, object?>>)popup["header"]!;
+        var headerSwitch = Assert.Single(header);
+        Assert.Equal("switch", headerSwitch["type"]);
+        var headerCases = (List<Dictionary<string, object?>>)headerSwitch["cases"]!;
+        Assert.Equal(2, headerCases.Count);
+        var headerImage2 = Assert.Single((List<Dictionary<string, object?>>)headerCases[0]["nodes"]!);
+        Assert.Equal("image", headerImage2["type"]);
+        Assert.Equal("image://setup/VillageChronicleCover", headerImage2["asset"]);
+        var headerImage1 = Assert.Single((List<Dictionary<string, object?>>)headerCases[1]["nodes"]!);
+        Assert.Equal("image://setup/S2_HuntTokenFRONT", headerImage1["asset"]);
+
+        var content = (List<Dictionary<string, object?>>)popup["content"]!;
+        var contentSwitch = Assert.Single(content, n => (string)n["type"]! == "switch");
+        var contentCases = (List<Dictionary<string, object?>>)contentSwitch["cases"]!;
+        var contentCaseNodes = (List<Dictionary<string, object?>>)contentCases[0]["nodes"]!;
+        var contentText = Assert.Single(contentCaseNodes);
+        Assert.Equal("text", contentText["type"]);
+        Assert.DoesNotContain(contentCaseNodes, n => (string)n["type"]! == "image");
+    }
+
+    [Fact]
     public void SetupNotificationBlock_ConditionalWithOnlyImageAndBreak_CollapsesAndTrimsLeadingBreak()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00003-Hospital1.mws.yaml and

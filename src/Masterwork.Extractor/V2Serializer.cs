@@ -956,6 +956,9 @@ public static partial class V2Serializer
     private static bool StartsWithSetupImage(ConditionalBranch b) =>
         b.Nodes is [var first, ..] && IsSetupImageNode(first);
 
+    private static bool StartsWithSetupImage(SwitchCase c) =>
+        c.Nodes is [var first, ..] && IsSetupImageNode(first);
+
     // Appends `node` to `content`, merging it into an immediately-preceding break instead of adding
     // a duplicate when both are break-type. BreakFilter already merges consecutive breaks, but only
     // over the tree as it existed during its own pass — a break-only conditional collapsing to a
@@ -996,7 +999,7 @@ public static partial class V2Serializer
         return start == 0 && end == nodes.Count ? nodes : nodes[start..end];
     }
 
-    // Splits a popup's raw child-node list into (header, content). Three shapes route (part of)
+    // Splits a popup's raw child-node list into (header, content). Shapes route (part of)
     // themselves to header, each preserving relative order:
     //   - A bare setup-image ImageNode (TryProcessSetupImageAssignment's literal case) — moves
     //     entirely to header.
@@ -1009,6 +1012,12 @@ public static partial class V2Serializer
     //     different nested popup with its own header) — split into two parallel conditionals
     //     sharing the same conditions: a header conditional (empty branch where the source branch
     //     didn't qualify) and a content conditional holding whatever's left of each branch.
+    //   - A SwitchNode where some cases start with a setup-image ImageNode — same shape as the
+    //     ConditionalNode case above, just keyed by `match:` instead of a condition (real
+    //     occurrence: Fear of the Unknown's Liberal, `switch on: creature`, where each of the
+    //     `creature`-specific cases sets its own distinct setup image before diverging body text).
+    //     Split into a parallel header switch (each case holding just its own leading image, or
+    //     nothing if that case didn't start with one) and a content switch holding the remainder.
     // Anything else stays in content as-is.
     private static (List<MwsNode> Header, List<MwsNode> Content) SplitPopupHeaderNodes(List<MwsNode> nodes)
     {
@@ -1059,6 +1068,43 @@ public static partial class V2Serializer
                 else if (remainingBranches.Any(b => b.Nodes.Count > 0))
                 {
                     content.Add(new ConditionalNode { Branches = remainingBranches });
+                }
+
+                continue;
+            }
+
+            if (n is SwitchNode sw && sw.Cases.Count > 0 && sw.Cases.Any(StartsWithSetupImage))
+            {
+                (header ??= []).Add(new SwitchNode
+                {
+                    On = sw.On,
+                    Cases = sw.Cases.Select(c => new SwitchCase
+                    {
+                        Match = c.Match,
+                        Default = c.Default,
+                        Nodes = StartsWithSetupImage(c) ? [c.Nodes[0]] : [],
+                    }).ToList(),
+                });
+
+                var remainingCases = sw.Cases.Select(c => new SwitchCase
+                {
+                    Match = c.Match,
+                    Default = c.Default,
+                    Nodes = StartsWithSetupImage(c) ? c.Nodes.Skip(1).ToList() : c.Nodes,
+                }).ToList();
+
+                // Same collapse-if-vacuous reasoning as the ConditionalNode case above.
+                var (switchCollapsible, switchReplacement) = BreakFilter.CollapseIfBreakOnly(new SwitchNode { On = sw.On, Cases = remainingCases });
+                if (switchCollapsible)
+                {
+                    if (switchReplacement is not null)
+                    {
+                        AddContentNode(content, switchReplacement);
+                    }
+                }
+                else if (remainingCases.Any(c => c.Nodes.Count > 0))
+                {
+                    content.Add(new SwitchNode { On = sw.On, Cases = remainingCases });
                 }
 
                 continue;
