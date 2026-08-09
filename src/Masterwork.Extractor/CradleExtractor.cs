@@ -136,6 +136,17 @@ public partial class CradleExtractor
 
     // ── Pass 1: Variable discovery ─────────────────────────────────────────
 
+    // Vars.X names that are real `Vars.X` accesses in the Cradle source but never surface as an
+    // actual variable reference anywhere in the EXTRACTED output — PassageBodyVisitor.ProcessAssignment
+    // fully absorbs each one into a different node type at extraction time (see its own remarks), so
+    // an engine-tracked session variable for it would never be read OR written by anything the player
+    // actually plays through. `_SetupImage` is the one occurrence: always converted to a popup
+    // header ImageNode, never appears in a `{_SetupImage}` template or an `if:` condition.
+    private static readonly HashSet<string> ExtractorOnlySignalVars = new(StringComparer.Ordinal)
+    {
+        "_SetupImage",
+    };
+
     private void Pass1_DiscoverVariables(List<SyntaxTree> trees)
     {
         // Phase A: VarDefs inner class field declarations in complete files. This is the only
@@ -172,7 +183,7 @@ public partial class CradleExtractor
                     foreach (var declarator in field.Declaration.Variables)
                     {
                         var varName = declarator.Identifier.Text.TrimStart('@');
-                        if (string.IsNullOrEmpty(varName))
+                        if (string.IsNullOrEmpty(varName) || ExtractorOnlySignalVars.Contains(varName))
                         {
                             continue;
                         }
@@ -217,7 +228,7 @@ public partial class CradleExtractor
                 }
 
                 var varName = access.Name.Identifier.Text;
-                if (string.IsNullOrEmpty(varName) || varName == "Vars")
+                if (string.IsNullOrEmpty(varName) || varName == "Vars" || ExtractorOnlySignalVars.Contains(varName))
                 {
                     continue;
                 }

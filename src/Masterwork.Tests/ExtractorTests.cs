@@ -435,6 +435,42 @@ public class ExtractorTests
         Assert.Equal("The least player loses.", text.Template);
     }
 
+    [Fact]
+    public void SetupImageAssignment_NeverRegisteredAsDiscoveredVariable()
+    {
+        // Regression: survey2 review found `_SetupImage` sitting in every module's _variables.yaml
+        // with no apparent way to be assigned in the extracted output — because there isn't one.
+        // `Vars._SetupImage` is a real Vars.X access syntactically, so variable discovery
+        // (Pass1_DiscoverVariables, which scans raw Vars.X syntax independently of how
+        // ProcessAssignment ultimately handles the node) registered it anyway, even though
+        // ProcessAssignment always converts it into a popup header ImageNode instead of a real
+        // assign — it never surfaces as `{_SetupImage}` in any template or `if:` condition anywhere
+        // downstream, so an engine-tracked session variable for it is pure dead weight.
+        var tempFile = System.IO.Path.GetTempFileName() + ".cs";
+        System.IO.File.WriteAllText(tempFile, """
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars._SetupImage = "StorybookToken";
+                yield break;
+            }
+            """);
+        try
+        {
+            var opts = new ExtractionOptions { InputDir = tempFile, PassagesOutDir = "", IncludeDebug = true };
+            var report = new ExtractionReport();
+            var extractor = new CradleExtractor(opts, SpriteMapper.Empty(), report, ProgressMapper.Empty());
+            extractor.Extract([tempFile]);
+
+            var vars = extractor.GetDiscoveredVariables();
+            Assert.False(vars.ContainsKey("_SetupImage"));
+        }
+        finally { System.IO.File.Delete(tempFile); }
+    }
+
     // ── Sentence fragmented by complementary-range conditionals ─────────────
 
     [Fact]
