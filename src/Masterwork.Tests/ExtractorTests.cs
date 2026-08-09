@@ -2782,6 +2782,69 @@ public class ExtractorTests
         Assert.Equal("${direction}", inc.Target);
     }
 
+    [Fact]
+    public void Passage_TargetedByIncludePassage_DoesNotHoistTitle()
+    {
+        // Regression: Fear of the Unknown's letter1a/journal1a/date1a — each starts with a bold
+        // heading-shaped leading TextNode, so title-hoisting normally moves that node into `title:`
+        // and removes it from `nodes:`. But these three passages are never displayed on their own —
+        // every reference to them is a static base.passage("letter1a", ...) inclusion from another
+        // passage, which splices their Nodes verbatim into the includer's own body at render time
+        // (see IncludePassageNode handling in V2Serializer/PassageRenderer). An included passage's
+        // own `title` is never independently rendered, so hoisting one out would silently delete a
+        // content node the includer still needs. BuildPassages now runs a first pass collecting every
+        // static IncludePassageNode.Target across the whole file before deciding whether to
+        // title-hoist ANY passage, and skips hoisting for passages in that set. The contrast passage
+        // below has the identical shape but is never included, and should still hoist normally.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Includer"] = new StoryPassage("Includer", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.passage("letter1a", System.Array.Empty<StoryVar>());
+                yield break;
+            }
+            private void passage2_Init()
+            {
+                base.Passages["letter1a"] = new StoryPassage("letter1a", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage2_Main));
+            }
+            private IEnumerable<StoryOutput> passage2_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Letter Heading");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text follows.");
+                yield break;
+            }
+            private void passage3_Init()
+            {
+                base.Passages["Standalone"] = new StoryPassage("Standalone", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage3_Main));
+            }
+            private IEnumerable<StoryOutput> passage3_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Letter Heading");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text follows.");
+                yield break;
+            }
+            """);
+
+        var included = passages.Single(p => p.PassageId == "letter1a");
+        Assert.Equal("letter1a", included.Title);
+        Assert.Contains(included.Nodes, n => n is TextNode t && t.Template == "Letter Heading");
+
+        var standalone = passages.Single(p => p.PassageId == "Standalone");
+        Assert.Equal("Letter Heading", standalone.Title);
+        Assert.DoesNotContain(standalone.Nodes, n => n is TextNode t && t.Template == "Letter Heading");
+    }
+
     // ── End of generation node ─────────────────────────────────────────────
 
     [Fact]

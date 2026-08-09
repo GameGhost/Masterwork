@@ -276,4 +276,54 @@ public class RestextCollectorTests
         Assert.DoesNotContain("First choice text here", expr);
         Assert.DoesNotContain("Second choice text here", expr);
     }
+
+    [Fact]
+    public void ApplyConditionLiteralReplacements_TitleConditionMatchesBodyConditionLiteral_ResolvesToSameRestextKey()
+    {
+        // Regression: Cost of Disease's LosingOrderAid/Evilsforgive — the body's own
+        // `if: 'society == "Order of St. Hubertus"'` correctly resolved to
+        // `restext://Faction_OrderOfStHubertus_Plain` via ApplyConditionReplacementsInNodeList, but
+        // the title-hoisted ternary's own COPY of the identical condition literal was left untouched,
+        // since ApplyConditionLiteralReplacements only ever recursed into "nodes", never the
+        // passage-level "title"/"subtitle" fields. That left the title comparing `society` against
+        // raw source text it could never actually equal at render time (society only ever holds
+        // resolved restext:// values, per the body's own comparison).
+        var curated = new Dictionary<string, string>
+        {
+            ["Faction_OrderOfStHubertus_Plain"] = "Order of St. Hubertus",
+        };
+        var collector = new RestextCollector(curatedRestext: curated);
+
+        var factionDict = TextPassageDict("Order of St. Hubertus");
+        var losingOrderAidDict = new Dictionary<string, object?>
+        {
+            ["title"] = "{society == \"Order of St. Hubertus\" ? \"restext://LosingOrderAid_001\" : \"restext://LosingOrderAid_002\"}",
+            ["nodes"] = new List<Dictionary<string, object?>>
+            {
+                new()
+                {
+                    ["type"] = "conditional",
+                    ["if"] = "society == \"Order of St. Hubertus\"",
+                    ["then"] = new List<Dictionary<string, object?>>(),
+                },
+            },
+        };
+
+        collector.CollectPassage("Faction", "000-Faction.mws.yaml", factionDict);
+        collector.CollectPassage("LosingOrderAid", "001-LosingOrderAid.mws.yaml", losingOrderAidDict);
+        collector.ScanConditionLiterals(
+        [
+            ("Faction", factionDict),
+            ("LosingOrderAid", losingOrderAidDict),
+        ]);
+        var renames = collector.BuildRenameMap();
+        collector.ApplyRenames(renames);
+        collector.ApplyConditionLiteralReplacements([factionDict, losingOrderAidDict]);
+
+        Assert.Equal(
+            "{society == \"restext://Faction_OrderOfStHubertus_Plain\" ? \"restext://LosingOrderAid_001\" : \"restext://LosingOrderAid_002\"}",
+            losingOrderAidDict["title"]);
+        var nodes = (List<Dictionary<string, object?>>)losingOrderAidDict["nodes"]!;
+        Assert.Equal("society == \"restext://Faction_OrderOfStHubertus_Plain\"", nodes[0]["if"]);
+    }
 }

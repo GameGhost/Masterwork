@@ -261,10 +261,38 @@ public sealed partial class RestextCollector
     // Replaces string literals in condition/match fields with restext://Key URIs when the literal
     // exactly matches a known restext value.
     // Call AFTER ApplyRenames so final Common_NNN keys are used.
+    //
+    // Also covers the passage-level title/subtitle fields themselves, not just nodes-list
+    // conditionals — CradleExtractor's title-hoisting (BuildTernaryArmsFromConditional et al.)
+    // copies a ConditionalBranch's own Condition string verbatim into the generated title
+    // expression, and that copy is exactly as unresolved as a nodes-list `if:` field is before this
+    // pass runs. Phase 1 (ExtractField/ExtractLiteralsFromBracedTitleExpr) deliberately leaves a
+    // title ternary's own condition literals untouched (IsPrecededByComparisonOperator) specifically
+    // so this later pass replaces them with an EXISTING curated key instead of minting a redundant
+    // new one — but until title/subtitle were added here, nothing ever actually ran that
+    // replacement for them, so the condition stayed raw literal text forever. Real occurrence: Cost
+    // of Disease's LosingOrderAid/Evilsforgive — the body's own `if: 'society ==
+    // "restext://Faction_OrderOfStHubertus_Plain"'` was correctly resolved, but the title's copy of
+    // the identical condition stayed `'{society == "Order of St. Hubertus" ? ...}'`, comparing a
+    // session variable (which only ever holds resolved restext:// values, per the body's own
+    // comparison) against raw source text that could never actually match at render time.
+    // ReplaceStringLiteralsInCondExpr already no-ops on anything already restext://-prefixed (see
+    // its own remarks), so applying it to the WHOLE title/subtitle string — condition and
+    // already-extracted result arms alike — is safe; only the untouched condition literal matches.
     public void ApplyConditionLiteralReplacements(IEnumerable<Dictionary<string, object?>> dicts)
     {
         foreach (var dict in dicts)
         {
+            if (dict.TryGetValue("title", out var titleObj) && titleObj is string title)
+            {
+                dict["title"] = ReplaceStringLiteralsInCondExpr(title);
+            }
+
+            if (dict.TryGetValue("subtitle", out var subtitleObj) && subtitleObj is string subtitle)
+            {
+                dict["subtitle"] = ReplaceStringLiteralsInCondExpr(subtitle);
+            }
+
             ApplyConditionReplacementsInNodeList(dict.GetValueOrDefault("nodes"));
         }
     }

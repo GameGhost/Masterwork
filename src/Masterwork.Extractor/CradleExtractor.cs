@@ -565,7 +565,13 @@ public partial class CradleExtractor
 
     private List<MwsPassage> BuildPassages()
     {
-        var passages = new List<MwsPassage>();
+        // Two passes: the first builds every passage's own node tree (visit, stitch, consolidate)
+        // and, along the way, collects every OTHER passage name ever referenced as an
+        // include_passage target anywhere in the file — needed BEFORE the second pass decides
+        // whether a GIVEN passage is safe to title-hoist, since a passage can be include_passage'd
+        // from one processed either earlier or later in _registry's own iteration order.
+        var built = new List<(int Idx, string Name, string[] Tags, string SourceFile, int? MainMethodLine, List<MwsNode> Nodes)>();
+        var includePassageTargets = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var (idx, (name, tags, sourceFile)) in _registry.OrderBy(kv => kv.Key))
         {
@@ -595,13 +601,33 @@ public partial class CradleExtractor
 
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
+
+            CollectIncludePassageTargets(nodes, includePassageTargets);
+
+            built.Add((idx, name, tags, sourceFile, mainMethodLine >= 1 ? mainMethodLine : null, nodes));
+        }
+
+        var passages = new List<MwsPassage>();
+        foreach (var (idx, name, tags, sourceFile, mainMethodLine, builtNodes) in built)
+        {
+            var nodes = builtNodes;
+
             // Heading eligibility is decided from the tag-based category (hub/narration/introduction)
             // even when --progress-map overrides the final layout value to something more specific
             // (e.g. "hub_early") — the override changes which chrome/CSS applies, not whether this is
             // fundamentally a hub-family passage with a leading title block to hoist.
             var inferredLayout = InferLayout(tags);
             var layout = _progressMapper.TryGetLayoutOverride(name) ?? inferredLayout;
-            var (headingTitle, headingSubtitle, nodesAfterHeading) = TryHoistHeadingTitleSubtitle(nodes, inferredLayout);
+
+            // A passage that's ever the target of an include_passage node has its OWN nodes spliced
+            // verbatim into the including passage's body at render time — it never renders its own
+            // title, and title-hoisting here would silently delete content the includER still
+            // needs (a node consumed into THIS passage's title is a node the includER never sees).
+            // Real occurrence: Fear of the Unknown's letter1a/journal1a/date1a, each reused via
+            // include_passage across several "randomized in-world document" passages.
+            var (headingTitle, headingSubtitle, nodesAfterHeading) = includePassageTargets.Contains(name)
+                ? (null, null, nodes)
+                : TryHoistHeadingTitleSubtitle(nodes, inferredLayout);
             if (headingTitle is not null)
             {
                 nodes = nodesAfterHeading;
@@ -636,11 +662,61 @@ public partial class CradleExtractor
                 Nodes = nodes,
                 Debug = isDebug,
                 SourceFile = sourceFile,
-                MainMethodSourceLine = mainMethodLine >= 1 ? mainMethodLine : null,
+                MainMethodSourceLine = mainMethodLine,
             });
         }
 
         return passages;
+    }
+
+    // Recursively collects every IncludePassageNode.Target found anywhere in `nodes` into `targets`
+    // — used by BuildPassages' first pass to know, before its second pass decides whether ANY given
+    // passage is safe to title-hoist, which passage names are ever spliced verbatim into another
+    // passage's own body via include_passage. Mirrors the same container-node case list used
+    // elsewhere for this kind of whole-tree walk (e.g. Program.cs's own CollectFromNodes, BreakFilter's
+    // RecurseContainers) — every node type that can hold child nodes at this stage of the pipeline.
+    // A dynamic (`${...}`-prefixed) target isn't a literal passage name and is skipped, same as
+    // Program.cs's own CollectFromNodes does for goto/include_passage targets.
+    private static void CollectIncludePassageTargets(List<MwsNode> nodes, HashSet<string> targets)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case IncludePassageNode inc when !inc.Target.StartsWith("${", StringComparison.Ordinal):
+                    targets.Add(inc.Target);
+                    break;
+                case ConditionalNode cond:
+                    foreach (var b in cond.Branches)
+                    {
+                        CollectIncludePassageTargets(b.Nodes, targets);
+                    }
+
+                    break;
+                case SwitchNode sw:
+                    foreach (var c in sw.Cases)
+                    {
+                        CollectIncludePassageTargets(c.Nodes, targets);
+                    }
+
+                    break;
+                case SectionBodyNode sec:
+                    CollectIncludePassageTargets(sec.Nodes, targets);
+                    break;
+                case SetupBlockNode setup:
+                    CollectIncludePassageTargets(setup.Nodes, targets);
+                    break;
+                case LinkNode link:
+                    CollectIncludePassageTargets(link.Nodes, targets);
+                    break;
+                case ExpandLinkNode expand:
+                    CollectIncludePassageTargets(expand.ExpandNodes, targets);
+                    break;
+                case ForeachNode fe:
+                    CollectIncludePassageTargets(fe.Nodes, targets);
+                    break;
+            }
+        }
     }
 
     private static void StitchFragments(
