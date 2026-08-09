@@ -414,24 +414,34 @@ partial class Program
         return opts;
     }
 
-    // Injects a "# relpath:line" comment before the YAML document marker (--- line).
-    // All node-level comments are handled by InjectSentinelComments via V2Serializer sentinels.
+    // Injects a "# relpath:line" comment (and, when applicable, an include_passage-target marker)
+    // before the YAML document marker (--- line). All node-level comments are handled by
+    // InjectSentinelComments via V2Serializer sentinels.
     private static string InjectSourceComments(string yaml, MwsPassage passage, string? relSourcePath)
     {
-        if (!passage.MainMethodSourceLine.HasValue || relSourcePath is null)
+        var hasSourceLine = passage.MainMethodSourceLine.HasValue && relSourcePath is not null;
+        if (!hasSourceLine && !passage.IsIncludeTarget)
         {
             return yaml;
         }
 
         var lines = yaml.Split('\n');
-        var result = new List<string>(lines.Length + 1);
+        var result = new List<string>(lines.Length + 2);
         bool firstLine = true;
 
         foreach (var line in lines)
         {
             if (firstLine && line == "---")
             {
-                result.Add($"# {relSourcePath}:{passage.MainMethodSourceLine}");
+                if (hasSourceLine)
+                {
+                    result.Add($"# {relSourcePath}:{passage.MainMethodSourceLine}");
+                }
+
+                if (passage.IsIncludeTarget)
+                {
+                    result.Add("# include_passage target — spliced into other passages' bodies at render time; never displays its own title");
+                }
             }
 
             firstLine = false;

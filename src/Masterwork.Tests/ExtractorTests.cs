@@ -1753,22 +1753,21 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void NarrationLayout_AmbiguousNestedHoistAcrossOuterBranches_LeavesHeadingTextIntact()
+    public void NarrationLayout_MultipleOuterBranchesAgreeOnSameHeading_HoistsSharedTitle()
     {
-        // Regression: A Time of War's BarracksSimple1 — two outer branches (bldg1=="X"/!bldg1) each
-        // wrap their OWN inner conditional whose `then` starts with bold "Service Required" and
-        // whose `else` is a bare goto. TryHoistFromOneBranch's per-branch probing calls
-        // TryHoistHeadingTitleSubtitle on EACH outer branch to see if it has its own title; each
-        // inner conditional independently succeeds (via the ConditionalNode sole-candidate path one
-        // level down), so BOTH outer branches report a title — making the outer "exactly one branch
-        // succeeded" check correctly refuse to use either (genuinely ambiguous: which branch's
-        // "Service Required" should win?). Before this fix, that per-branch PROBING mutated the
-        // inner conditionals in place (cond.Branches[i].Nodes = ...) as an unconditional side effect
-        // of merely being tried — so even though the outer hoist was (correctly) rejected, the real
-        // "Service Required" TextNode had ALREADY been deleted from both inner conditionals,
-        // silently losing content while hoisting nothing. The fix makes every recursive hoist
-        // non-mutating (clone-and-substitute) until a caller actually commits to using the result —
-        // this test pins that the bold heading text survives in the extracted output either way.
+        // Regression: A Time of War's BarracksSimple1/2/3 — two outer branches (bldg1=="X"/!bldg1)
+        // each wrap their OWN inner conditional whose `then` starts with the IDENTICAL bold "Service
+        // Required" heading and whose `else` is a bare goto; a third outer branch (the catch-all
+        // else) is also just a goto. TryHoistFromOneBranch's per-branch probing finds BOTH real outer
+        // branches independently hoist "Service Required" (via the inner conditional's own
+        // sole-candidate hoist one level down) — since they agree on the exact same title, that's not
+        // ambiguous (the player sees the same heading no matter which branch fires), so the shared
+        // title is hoisted from BOTH branches at once rather than left untouched. Before this fix
+        // (which also predates the multi-agreement extension), a per-branch probing call mutated the
+        // inner conditionals in place as a side effect of merely being tried, so even a REJECTED
+        // ambiguous hoist had already silently deleted the heading text; WithBranchesNodes' own
+        // clone-and-substitute non-mutation is what makes it safe to commit BOTH branches' removals
+        // here without corrupting anything else in the tree.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -1816,7 +1815,7 @@ public class ExtractorTests
             }
             """);
 
-        Assert.Equal("P1", passages[0].Title); // genuinely ambiguous: no hoist, but that's fine
+        Assert.Equal("Service Required", passages[0].Title);
         var boldNodes = passages[0].Nodes.OfType<ConditionalNode>()
             .SelectMany(c => c.Branches)
             .SelectMany(b => b.Nodes)
@@ -1825,8 +1824,87 @@ public class ExtractorTests
             .SelectMany(b => b.Nodes)
             .Where(n => n is TextNode { Style: "bold" })
             .ToList();
-        Assert.Equal(2, boldNodes.Count); // "Service Required" must survive in BOTH inner conditionals
-        Assert.All(boldNodes, n => Assert.Equal("Service Required", ((TextNode)n).Template));
+        Assert.Empty(boldNodes); // hoisted out of both inner conditionals, not duplicated or left behind
+        var bodyTexts = passages[0].Nodes.OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .OfType<TextNode>()
+            .Select(t => t.Template)
+            .ToList();
+        Assert.Contains("Body A.", bodyTexts);
+        Assert.Contains("Body B.", bodyTexts);
+    }
+
+    [Fact]
+    public void NarrationLayout_MultipleOuterBranchesDisagreeOnHeading_LeavesHeadingTextIntact()
+    {
+        // Contrast with the "agree" case above: when the outer branches' own headings DIFFER
+        // ("Service Required" vs. "Optional Duty"), there's no single unambiguous title to hoist —
+        // this is the genuinely-ambiguous case TryHoistFromOneBranch still correctly refuses (only
+        // exact (title, subtitle) agreement across every succeeding branch counts). Pins the original
+        // mutation-safety regression this shape was written for: a rejected hoist must never have
+        // already deleted the heading text from the branches it recursively probed.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.bldg1 == "X")
+                {
+                    if (this.Vars.warwinner == "Y")
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Service Required");
+                        }
+                        yield return base.lineBreak();
+                        yield return base.text("Body A.");
+                    }
+                    else
+                    {
+                        yield return base.abort(goToPassage: "Elsewhere");
+                    }
+                }
+                else if (!this.Vars.bldg1)
+                {
+                    if (this.Vars.warwinner == "Y")
+                    {
+                        using (base.styleScope("bold", true))
+                        {
+                            yield return base.text("Optional Duty");
+                        }
+                        yield return base.lineBreak();
+                        yield return base.text("Body B.");
+                    }
+                    else
+                    {
+                        yield return base.abort(goToPassage: "Elsewhere");
+                    }
+                }
+                else
+                {
+                    yield return base.abort(goToPassage: "Elsewhere");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("P1", passages[0].Title); // genuinely ambiguous: no hoist, but that's fine
+        var boldNodes = passages[0].Nodes.OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .OfType<ConditionalNode>()
+            .SelectMany(c => c.Branches)
+            .SelectMany(b => b.Nodes)
+            .Where(n => n is TextNode { Style: "bold" })
+            .Select(n => ((TextNode)n).Template)
+            .ToList();
+        Assert.Equal(["Service Required", "Optional Duty"], boldNodes); // both must survive, neither hoisted
     }
 
     [Fact]
@@ -2013,6 +2091,211 @@ public class ExtractorTests
             """);
 
         Assert.Equal("Retrieval of Property", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingIfElseTernaryThenSharedTrailingContent_StillHoistsTitle()
+    {
+        // Regression: A Time of War's MonuRes/BenevolenceBonus — `if (cond) { **Heading A** ... }
+        // else { **Heading B** ... }` immediately followed (same top level, no wrapping conditional)
+        // by more UNCONDITIONAL body text shared by both outcomes. The old ConditionalNode
+        // "sole candidate" check required the WHOLE top-level node list to be nothing but the
+        // conditional plus heading-inert siblings — any real trailing content (here, a plain
+        // `text()` after the conditional) disqualified the hoist entirely, even though the trailing
+        // text has nothing to do with which heading fired. The conditional HAS an else
+        // (self-contained, both outcomes already covered), so it's safe to hoist regardless of what
+        // real content follows.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.release >= 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Bend Towards Chaos");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Chaos body.");
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Secure Future");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Secure body.");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Because of our decision, shared trailing text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{release >= 1 ? \"A Bend Towards Chaos\" : \"A Secure Future\"}",
+            passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        Assert.Contains(passages[0].Nodes, n => n is TextNode t && t.Template == "Because of our decision, shared trailing text.");
+        var cond = Assert.Single(passages[0].Nodes.OfType<ConditionalNode>());
+        Assert.All(cond.Branches, b => Assert.DoesNotContain(b.Nodes, n => n is TextNode { Style: "bold" }));
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingSwitchWithoutDefaultThenSharedTrailingContent_StillHoistsTernaryTitle()
+    {
+        // Regression: A Time of War's ParadoxTimeRandom — `switch (timemistake) { case 1: **A Surge
+        // of Productivity** ...; case 2: **A Clarity of Purpose** ...; ... }` (8 cases in the real
+        // passage, no `default:` — `timemistake` is always 1-8 by construction) immediately followed
+        // by more unconditional trailing content (a setup popup in the real passage; a plain
+        // paragraph + text is enough to exercise the same shape). BuildTernaryArmsFromSwitch now
+        // builds arms straight from the declared cases regardless of whether a default exists, and
+        // TryBuildTernaryHeading appends a synthetic "" fallback arm when there wasn't one —
+        // mirroring the guard chain's own "declared cases exhaust the value space, but that isn't
+        // provable statically" trade.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.timemistake == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Surge of Productivity");
+                    }
+                }
+                if (this.Vars.timemistake == 2)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Clarity of Purpose");
+                    }
+                }
+                yield return base.lineBreak();
+                yield return base.text("Shared trailing text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{timemistake == 1 ? \"A Surge of Productivity\" : timemistake == 2 ? \"A Clarity of Purpose\" : \"\"}",
+            passages[0].Title);
+        Assert.Contains(passages[0].Nodes, n => n is TextNode t && t.Template == "Shared trailing text.");
+    }
+
+    [Fact]
+    public void NarrationLayout_SoleSwitchWithoutDefault_StillHoistsTernaryTitle()
+    {
+        // Regression: Cost of Disease's Diseases1 — `switch (disease1) { case 1: **A Year of
+        // Sickness** ...; case 2: **Rest and Time** ...; }`, no default (disease1 is always 1 or 2
+        // via rand_between(1, 2, ...)). Even with NOTHING else at the top level competing for the
+        // heading position, the missing default previously blocked BuildTernaryArmsFromSwitch
+        // outright, so TryBuildTernaryHeading was never even attempted.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.disease1 == 1)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("A Year of Sickness");
+                    }
+                }
+                if (this.Vars.disease1 == 2)
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("Rest and Time");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal(
+            "{disease1 == 1 ? \"A Year of Sickness\" : disease1 == 2 ? \"Rest and Time\" : \"\"}",
+            passages[0].Title);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingDynamicIncludePassageThenHeading_StillHoistsTitle()
+    {
+        // Regression: Cost of Disease's HuntNight1/HuntNight2 — `base.passage(this.Vars.direction,
+        // ...)` (a dynamic ${direction} include) immediately followed by a bold heading built from a
+        // session variable (`**{huntreward1}.**`). IncludePassageNode wasn't heading-inert, so it was
+        // treated as a competing, non-candidate top-level node and the hoist bailed before ever
+        // looking past it.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.passage(this.Vars.direction, System.Array.Empty<StoryVar>());
+                yield return base.lineBreak();
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text(this.Vars.huntreward1);
+                    yield return base.text(".");
+                }
+                yield break;
+            }
+            """);
+
+        Assert.Equal("{huntreward1}.", passages[0].Title);
+        Assert.Contains(passages[0].Nodes, n => n is IncludePassageNode);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingConditionalThenTrailingWhitespaceOnlyText_StillHoistsTitle()
+    {
+        // Regression: A Time of War's Stickfun — `if (crazy == 0) { abort(goToPassage: "CoWEvent");
+        // } else { **The Formation** ... }` followed, at the very end of the passage, by a trailing
+        // `lineBreak(); text(" ");` (a deliberate blank-line spacer, a real Cradle authoring idiom,
+        // not an extraction artifact). A whitespace-only TextNode isn't heading-inert, so it used to
+        // compete as a second non-inert top-level node and block the hoist entirely — now it's
+        // simply passed through as ordinary trailing content, same as any other real content after a
+        // self-contained if/else.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                if (this.Vars.crazy == 0)
+                {
+                    yield return base.abort(goToPassage: "CoWEvent");
+                }
+                else
+                {
+                    using (base.styleScope("bold", true))
+                    {
+                        yield return base.text("The Formation");
+                    }
+                    yield return base.lineBreak();
+                    yield return base.text("Body text.");
+                }
+                yield return base.lineBreak();
+                yield return base.text(" ");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Formation", passages[0].Title);
         Assert.Null(passages[0].Subtitle);
     }
 

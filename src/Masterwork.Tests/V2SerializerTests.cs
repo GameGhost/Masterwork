@@ -770,6 +770,95 @@ public class V2SerializerTests
     }
 
     [Fact]
+    public void SetupNotificationBlock_InterstitialImageBeforeBlock_FoldsIntoHeader()
+    {
+        // Regression: Cost of Disease's HelpingEvil2 — `Vars._SetupImage = "S1_EstateUpgradeBACK"`
+        // sits BEFORE entering `styleScope("setupStyleEvnt", ...)`, not inside it, so it becomes a
+        // top-level ImageNode sitting between the SetupNotificationNode and the SetupBlockNode. The
+        // pairing loop in TransformNodeList used to only tolerate BreakNode/ParagraphBreakNode there
+        // — anything else broke the pairing entirely, falling back to TransformSetupNotification's
+        // standalone rendering: an empty `section: panel` (sn.Title/sn.Text are always null for this
+        // idiom) plus a bare "Continue" link, with the image and the block's own content scattered as
+        // unrelated top-level siblings instead of one coherent popup. The image must now end up in
+        // the popup's own header instead.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/S1_EstateUpgradeBACK", Style = "setup-image" },
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.TextNode { Template = "Then, starting with the player..." },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var nodes = (List<Dictionary<string, object?>>)d["nodes"]!;
+        var popup = Assert.Single(nodes, n => (string)n["type"]! == "popup");
+        Assert.DoesNotContain(nodes, n => (string)n["type"]! == "section"); // no orphaned empty section
+        Assert.DoesNotContain(nodes, n => (string)n["type"]! == "image"); // not left as a stray top-level sibling
+
+        var header = (List<Dictionary<string, object?>>)popup["header"]!;
+        var headerImage = Assert.Single(header);
+        Assert.Equal("image", headerImage["type"]);
+        Assert.Equal("image://setup/S1_EstateUpgradeBACK", headerImage["asset"]);
+
+        var content = (List<Dictionary<string, object?>>)popup["content"]!;
+        Assert.Single(content);
+        Assert.Equal("text", content[0]["type"]);
+    }
+
+    [Fact]
+    public void SetupNotificationBlock_InterstitialPlainAssignBeforeBlock_PreservedAsSeparateNode()
+    {
+        // Regression: Cost of Disease's WolvesSetupGen3 — `Vars.gen3pg = 0;` (an ordinary session-var
+        // assign, no visual output of its own) sits between `ViewItemObtain.SetupPassagename = "..."`
+        // and `styleScope("setupStyleEvnt", ...)`. Same broken-pairing failure mode as the interstitial
+        // image case above, but the fix is different: this node isn't part of the popup's header OR
+        // content — it's ordinary body content that happens to sit between the two and must be
+        // preserved as its own `assign` node emitted just before the popup, not silently dropped.
+        var passage = new MwsPassage
+        {
+            PassageId = "P1",
+            Nodes =
+            [
+                new SetupNotificationNode(),
+                new Masterwork.Extractor.EffectNode { VarSets = new() { ["gen3pg"] = 0 } },
+                new SetupBlockNode
+                {
+                    Nodes =
+                    [
+                        new Masterwork.Extractor.ImageNode { AssetRef = "image://setup/StorybookToken", Style = "setup-image" },
+                        new Masterwork.Extractor.TextNode { Template = "Each player retrieves a token." },
+                    ],
+                },
+            ],
+        };
+
+        var d = V2Serializer.ToDict(passage);
+        var nodes = (List<Dictionary<string, object?>>)d["nodes"]!;
+        Assert.DoesNotContain(nodes, n => (string)n["type"]! == "section"); // no orphaned empty section
+
+        var assign = Assert.Single(nodes, n => (string)n["type"]! == "assign");
+        Assert.Equal("gen3pg", assign["var"]);
+        Assert.Equal("0", assign["expr"]);
+
+        var popup = Assert.Single(nodes, n => (string)n["type"]! == "popup");
+        var header = (List<Dictionary<string, object?>>)popup["header"]!;
+        var headerImage = Assert.Single(header);
+        Assert.Equal("image://setup/StorybookToken", headerImage["asset"]);
+
+        // The assign must come BEFORE the popup, matching its original position in the source.
+        Assert.True(nodes.IndexOf(assign) < nodes.IndexOf(popup));
+    }
+
+    [Fact]
     public void SetupNotificationBlock_ConditionalWithOnlySomeBranchesStartingWithImage_SplitsPartially()
     {
         // Real shape from Gen1Creepy-ConcealExpose: one branch starts with a setup-image + more

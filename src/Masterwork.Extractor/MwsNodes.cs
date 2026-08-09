@@ -20,6 +20,12 @@ public class MwsPassage
     public int? PassageIndex { get; set; }
     public int? MainMethodSourceLine { get; set; }
     public string? SourceFile { get; set; }
+    // True when this passage is ever referenced as a static include_passage target elsewhere in the
+    // same source file — its Nodes are spliced verbatim into the includer's own body at render time,
+    // so it deliberately never gets a title hoisted (see CradleExtractor.BuildPassages' own remarks).
+    // Surfaced as a YAML comment (Program.cs's InjectSourceComments) so a reader isn't left wondering
+    // why an otherwise heading-shaped passage has none.
+    public bool IsIncludeTarget { get; set; }
 
     public Dictionary<string, object?> ToDict()
     {

@@ -161,18 +161,69 @@ public static partial class V2Serializer
             // notification. (When the same pair instead appears inside a link(...)'s callback
             // fragment, FragmentStitchPass folds them into an ExpandLinkNode and TransformPopup
             // already merges them correctly; this handles the top-level case that bypasses that path.)
+            //
+            // Real Cradle source doesn't always put the SetupBlockNode immediately after the
+            // SetupPassagename assignment with nothing but breaks in between — two more interstitial
+            // shapes showed up here, and skipping past ONLY breaks silently broke the pairing,
+            // falling back to TransformSetupNotification's standalone (title/text-less, since this
+            // idiom never sets sn.Title/sn.Text) rendering: an empty `section: panel` plus a bare
+            // "Continue" link, with the popup's own header/content scattered or lost outright. Real
+            // occurrences: Cost of Disease's HelpingEvil2 (`Vars._SetupImage = "..."` sits BEFORE
+            // entering the styleScope, not inside it — the usual case SplitPopupHeaderNodes already
+            // handles is an image INSIDE setupBlock.Nodes, not one preceding the block entirely) and
+            // WolvesSetupGen3 (`Vars.gen3pg = 0`, an ordinary session-var assign with no visual
+            // output of its own, sitting between the two). Both are tolerated now: an interstitial
+            // ImageNode is folded into the popup's own header (prepended, so it still displays before
+            // whatever image the block's own content contributes); an interstitial EffectNode/LetNode
+            // (a plain assign) is preserved as a normal node emitted just before the popup, not
+            // dropped. Anything else still isn't tolerated — bails out to the same conservative
+            // standalone fallback as before rather than guessing.
             if (node is SetupNotificationNode standaloneSn)
             {
                 var j = i + 1;
-                while (j < nodes.Count && nodes[j] is BreakNode or ParagraphBreakNode)
+                List<MwsNode> preNodes = [];
+                List<MwsNode> headerImages = [];
+                var recognized = true;
+                while (j < nodes.Count && nodes[j] is not SetupBlockNode)
                 {
+                    switch (nodes[j])
+                    {
+                        case BreakNode or ParagraphBreakNode:
+                            break;
+                        case ImageNode img:
+                            headerImages.Add(img);
+                            break;
+                        case EffectNode or LetNode:
+                            preNodes.Add(nodes[j]);
+                            break;
+                        default:
+                            recognized = false;
+                            break;
+                    }
+
+                    if (!recognized)
+                    {
+                        break;
+                    }
+
                     j++;
                 }
 
-                if (j < nodes.Count && nodes[j] is SetupBlockNode pairedBlock)
+                if (recognized && j < nodes.Count && nodes[j] is SetupBlockNode pairedBlock)
                 {
                     AddSrcSentinel(result, standaloneSn.SourceLine, ctx);
-                    result.Add(TransformSetupNotificationBlock(standaloneSn, pairedBlock, ctx));
+                    foreach (var pre in preNodes)
+                    {
+                        var preDicts = TransformNode(pre, ctx).ToList();
+                        if (preDicts.Count > 0)
+                        {
+                            AddSrcSentinel(result, pre.SourceLine, ctx);
+                        }
+
+                        result.AddRange(preDicts);
+                    }
+
+                    result.Add(TransformSetupNotificationBlock(standaloneSn, pairedBlock, headerImages, ctx));
                     i = j;
                     continue;
                 }
@@ -1610,7 +1661,8 @@ public static partial class V2Serializer
     // app — distinct from the ViewItemObtain-pickup-notification's own "Close" label, which is
     // handled separately by TransformPopup for the inside-a-link-fragment case.
     private static Dictionary<string, object?> TransformSetupNotificationBlock(
-        SetupNotificationNode sn, SetupBlockNode setupBlock, SerializationContext? ctx = null)
+        SetupNotificationNode sn, SetupBlockNode setupBlock, List<MwsNode>? extraHeaderImages = null,
+        SerializationContext? ctx = null)
     {
         var content = new List<Dictionary<string, object?>>();
         if (sn.Title is not null)
@@ -1624,6 +1676,11 @@ public static partial class V2Serializer
         }
 
         var (headerNodes, contentNodes) = SplitPopupHeaderNodes(setupBlock.Nodes);
+        if (extraHeaderImages is { Count: > 0 })
+        {
+            headerNodes = [.. extraHeaderImages, .. headerNodes];
+        }
+
         content.AddRange(TransformNodeList(contentNodes, ctx));
 
         var d = new Dictionary<string, object?> { ["type"] = "popup", ["layout"] = "setup" };
