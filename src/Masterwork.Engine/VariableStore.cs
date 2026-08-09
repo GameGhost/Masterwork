@@ -84,12 +84,32 @@ public sealed class VariableStore : IStoryEvalContext
     /// advancing) but with independent session/let state — used for the popup transaction model,
     /// where content evaluation must stay pending until the popup is closed.
     /// </summary>
+    /// <remarks>
+    /// A nested popup (a <c>popup</c> node inside another popup's own <c>content:</c> — see
+    /// <c>docs/mws-format-latest.md</c> §6's nested-popup example) clones from its PARENT sandbox,
+    /// not the live store directly, so <c>this</c> may itself already be a clone. The tracking
+    /// baseline propagates from the OUTERMOST ancestor (<c>_cloneBaseline ?? currentState</c>) —
+    /// NOT reset to `this` sandbox's own current state — so <see cref="CommitChangesTo"/> on the
+    /// innermost sandbox still detects a change an ANCESTOR sandbox made before the nested clone
+    /// point as a real change relative to the true live store, not something already "baked in"
+    /// and therefore invisible to a same-level diff. Real occurrence: A Time of War's RumorD2 —
+    /// `assign rumor2 = "visited"` sits in the OUTER (`layout: reveal`) popup's own content, ahead
+    /// of a nested `layout: setup` popup that is the player's only way to actually leave (the
+    /// outer has no `okay` of its own, per the nested-popup pattern). Accepting only the INNER
+    /// popup used to never write `rumor2` back to the live store at all — its own baseline, cloned
+    /// from the outer sandbox's state AFTER that assign already ran, had "visited" baked in from
+    /// the start, so the inner sandbox's own before/after diff saw no change to commit. `rumor2`
+    /// never left the abandoned outer sandbox, so the once-per-game rumor kept reappearing forever.
+    /// RestoreSession still seeds the clone's WORKING data from `this` (the immediate parent), so
+    /// an in-progress ancestor mutation stays visible to the nested popup's own rendering — only
+    /// the baseline used for the eventual commit diff changes.
+    /// </remarks>
     public VariableStore Clone()
     {
         var clone = new VariableStore(new Dictionary<string, VarDef>(), _prng, _evaluator);
-        var baseline = SessionSnapshot();
-        clone.RestoreSession(baseline);
-        clone._cloneBaseline = baseline;
+        var currentState = SessionSnapshot();
+        clone.RestoreSession(currentState);
+        clone._cloneBaseline = _cloneBaseline ?? currentState;
         return clone;
     }
 

@@ -183,4 +183,64 @@ public class VariableStoreTests
         var store = MakeStore();
         Assert.Throws<InvalidOperationException>(() => store.CommitChangesTo(MakeStore()));
     }
+
+    [Fact]
+    public void CommitChangesTo_NestedClone_CommitsChangeMadeByAncestorSandbox()
+    {
+        // Regression: A Time of War's RumorD2 — `assign rumor2 = "visited"` sits in the OUTER
+        // (`layout: reveal`) popup's own content, ahead of a nested `layout: setup` popup that's
+        // the player's only way to actually leave (the outer has no `okay` of its own — see
+        // docs/mws-format-latest.md §6's nested-popup pattern). Only the INNER popup ever gets
+        // ClosePopupAsync'd. Before this fix, the inner sandbox's OWN Clone()-time baseline was
+        // taken from the OUTER sandbox's state AFTER `rumor2 = "visited"` already ran — so the
+        // change was already "baked in" as the inner sandbox's own starting point, invisible to a
+        // same-level before/after diff. rumor2 never reached the live store; RumorD2 kept
+        // reappearing every time RumorD was revisited instead of exactly once per game.
+        var live = MakeStore();
+        live.SetSessionVariable("rumor2", StoryValue.Of(""));
+
+        var outerSandbox = live.Clone(); // outer "reveal" popup rendered here
+        outerSandbox.SetSessionVariable("rumor2", StoryValue.Of("visited")); // its own content assign
+        var innerSandbox = outerSandbox.Clone(); // nested "setup" popup, cloned from the outer's sandbox
+
+        innerSandbox.CommitChangesTo(live); // player accepts only the INNER popup
+
+        Assert.Equal("visited", live.GetVariable("rumor2").AsString());
+    }
+
+    [Fact]
+    public void CommitChangesTo_NestedClone_StillIgnoresAValueTheNestedSandboxNeverChanged()
+    {
+        // Contrast: a variable the OUTER sandbox never touched shouldn't suddenly count as
+        // "changed" just because the baseline now propagates from further up the chain.
+        var live = MakeStore();
+        live.SetSessionVariable("round", StoryValue.Of(1L));
+        live.SetSessionVariable("rumor2", StoryValue.Of(""));
+
+        var outerSandbox = live.Clone();
+        outerSandbox.SetSessionVariable("rumor2", StoryValue.Of("visited"));
+        var innerSandbox = outerSandbox.Clone();
+
+        innerSandbox.CommitChangesTo(live);
+
+        Assert.Equal(1L, live.GetVariable("round").AsInt());
+    }
+
+    [Fact]
+    public void CommitChangesTo_NestedClone_StillIgnoresALiveChangeMadeAfterTheOuterCloneWasTaken()
+    {
+        // The AdvancedWeaponryIntro protection (a live-store change made independently, after the
+        // outermost clone point, must survive a later nested commit untouched) still holds once the
+        // baseline propagates through more than one level of nesting.
+        var live = MakeStore();
+        live.SetSessionVariable("sepinc1", StoryValue.Of(""));
+
+        var outerSandbox = live.Clone();
+        var innerSandbox = outerSandbox.Clone();
+        live.SetSessionVariable("sepinc1", StoryValue.Of("Gained a Servant")); // trailing sibling assign
+
+        innerSandbox.CommitChangesTo(live);
+
+        Assert.Equal("Gained a Servant", live.GetVariable("sepinc1").AsString());
+    }
 }

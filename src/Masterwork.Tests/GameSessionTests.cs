@@ -1234,6 +1234,61 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task PopupAccept_NestedPopup_CommitsAssignFromOuterPopupsOwnContent()
+    {
+        // Regression: A Time of War's RumorD2 — `assign rumor2 = "visited"` sits in the OUTER
+        // (`layout: reveal`) popup's own content, ahead of a nested `layout: setup` popup that's
+        // the player's only way to actually leave (the outer has no `okay` of its own — see
+        // docs/mws-format-latest.md §6's nested-popup pattern). Only the INNER popup ever gets
+        // ClosePopupAsync'd (found one level into the outer's own Actions, per FindAction's own
+        // remarks). Before the VariableStore.Clone() fix, the inner popup's sandbox baseline was
+        // taken from the OUTER sandbox's state AFTER rumor2 already flipped to "visited" — so that
+        // change was already "baked in" as the inner sandbox's own starting point, invisible to a
+        // same-level before/after diff. rumor2 never reached the live store; the once-per-game
+        // RumorD2 rumor kept reappearing every time RumorD was revisited instead.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Click to reveal...'
+              layout: 'reveal'
+              cancel: 'Close'
+              content:
+              - type: 'text'
+                value: 'A secret is revealed.'
+              - type: 'assign'
+                var: 'rumor2'
+                expr: '"visited"'
+              - type: 'popup'
+                layout: 'setup'
+                label: 'Click when finished reading...'
+                target: 'P2'
+                okay: 'Close'
+                snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes: []
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var outerPopup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        var innerPopup = Assert.Single(outerPopup.Actions.OfType<RenderedPopup>());
+
+        await session.ClosePopupAsync(innerPopup.Id, accept: true);
+
+        Assert.Equal("visited", session.Current.Variables["rumor2"].AsString());
+    }
+
+    [Fact]
     public async Task PopupAccept_TimelineLabel_OverridesDestinationPassageTitle()
     {
         var module = new ModuleLoader().LoadFromSources(
