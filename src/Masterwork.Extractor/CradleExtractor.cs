@@ -583,6 +583,8 @@ public partial class CradleExtractor
         // from one processed either earlier or later in _registry's own iteration order.
         var built = new List<(int Idx, string Name, string[] Tags, string SourceFile, int? MainMethodLine, List<MwsNode> Nodes)>();
         var includePassageTargets = new HashSet<string>(StringComparer.Ordinal);
+        var dynamicTargetVars = new HashSet<string>(StringComparer.Ordinal);
+        var literalVarAssigns = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var (idx, (name, tags, sourceFile)) in _registry.OrderBy(kv => kv.Key))
         {
@@ -613,9 +615,30 @@ public partial class CradleExtractor
             // Consolidate text, breaks, switches; then normalize VarRandom types
             nodes = ConsolidateTextNodes(nodes);
 
-            CollectIncludePassageTargets(nodes, includePassageTargets);
+            CollectIncludePassageTargets(nodes, includePassageTargets, dynamicTargetVars, literalVarAssigns);
 
             built.Add((idx, name, tags, sourceFile, mainMethodLine >= 1 ? mainMethodLine : null, nodes));
+        }
+
+        // Resolve dynamic (`${varname}`) include_passage targets transitively: a variable that's
+        // ever used as such a target AND is ever assigned a literal string matching a real passage
+        // name means that passage is an include target too (see CollectIncludePassageTargets' own
+        // remarks for the real occurrence this covers).
+        var allPassageNames = new HashSet<string>(built.Select(b => b.Name), StringComparer.Ordinal);
+        foreach (var varName in dynamicTargetVars)
+        {
+            if (!literalVarAssigns.TryGetValue(varName, out var literals))
+            {
+                continue;
+            }
+
+            foreach (var literal in literals)
+            {
+                if (allPassageNames.Contains(literal))
+                {
+                    includePassageTargets.Add(literal);
+                }
+            }
         }
 
         var passages = new List<MwsPassage>();
@@ -687,9 +710,33 @@ public partial class CradleExtractor
     // passage's own body via include_passage. Mirrors the same container-node case list used
     // elsewhere for this kind of whole-tree walk (e.g. Program.cs's own CollectFromNodes, BreakFilter's
     // RecurseContainers) — every node type that can hold child nodes at this stage of the pipeline.
-    // A dynamic (`${...}`-prefixed) target isn't a literal passage name and is skipped, same as
-    // Program.cs's own CollectFromNodes does for goto/include_passage targets.
-    private static void CollectIncludePassageTargets(List<MwsNode> nodes, HashSet<string> targets)
+    //
+    // A dynamic (`${varname}`-shaped, bare-identifier) target isn't a literal passage name, so it
+    // can't be added to `targets` directly — instead its variable name is recorded into
+    // `dynamicTargetVars`. BuildPassages resolves those afterward by cross-referencing
+    // `literalVarAssigns` (also collected here, from every plain `Vars.X = "SomeLiteral";` assign
+    // anywhere in the file — EffectNode.VarSets at this pre-serialization stage still holds the raw
+    // .NET string, not yet MWS-expr-formatted) against every actual passage name: a variable that's
+    // EVER used as a dynamic include_passage target AND is EVER assigned a literal string matching a
+    // real passage name means that passage is, transitively, an include target too, even though no
+    // single include_passage node names it directly. Real occurrence: Fear of the Unknown's
+    // AsylumHub sets `quest1 = "CountQuestion4"` (a plain string literal assign); AsylumTest1
+    // later does `include_passage: target: '${quest1}'` — two different passages, connected only
+    // through the shared global `quest1` variable, so neither passage's own node tree alone reveals
+    // that CountQuestion4 is an include target. Without this, CountQuestion4's leading bold text
+    // ("Are you mentally ill?") was free to be hoisted into its own `title:` field — never spliced by
+    // include_passage (which only ever copies `Nodes`, see PassageRenderer's IncludePassageNode case)
+    // — silently deleting the question's own text from every render that included it.
+    //
+    // A more complex dynamic target (a ternary, a property access, etc.) isn't a bare identifier and
+    // is simply skipped here — same as a fully-unresolvable target always was; this only ever ADDS
+    // protection against title-hoisting, so an unrecognized shape just falls back to the prior,
+    // narrower behavior rather than risking a false positive.
+    private static void CollectIncludePassageTargets(
+        List<MwsNode> nodes,
+        HashSet<string> targets,
+        HashSet<string> dynamicTargetVars,
+        Dictionary<string, HashSet<string>> literalVarAssigns)
     {
         foreach (var node in nodes)
         {
@@ -698,38 +745,54 @@ public partial class CradleExtractor
                 case IncludePassageNode inc when !inc.Target.StartsWith("${", StringComparison.Ordinal):
                     targets.Add(inc.Target);
                     break;
+                case IncludePassageNode { Target: var t } when DynamicTargetVarPattern().Match(t) is { Success: true } m:
+                    dynamicTargetVars.Add(m.Groups[1].Value);
+                    break;
+                case EffectNode { VarSets: not null } effect:
+                    foreach (var (varName, val) in effect.VarSets)
+                    {
+                        if (val is string literal)
+                        {
+                            (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
+                        }
+                    }
+
+                    break;
                 case ConditionalNode cond:
                     foreach (var b in cond.Branches)
                     {
-                        CollectIncludePassageTargets(b.Nodes, targets);
+                        CollectIncludePassageTargets(b.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     }
 
                     break;
                 case SwitchNode sw:
                     foreach (var c in sw.Cases)
                     {
-                        CollectIncludePassageTargets(c.Nodes, targets);
+                        CollectIncludePassageTargets(c.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     }
 
                     break;
                 case SectionBodyNode sec:
-                    CollectIncludePassageTargets(sec.Nodes, targets);
+                    CollectIncludePassageTargets(sec.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     break;
                 case SetupBlockNode setup:
-                    CollectIncludePassageTargets(setup.Nodes, targets);
+                    CollectIncludePassageTargets(setup.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     break;
                 case LinkNode link:
-                    CollectIncludePassageTargets(link.Nodes, targets);
+                    CollectIncludePassageTargets(link.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     break;
                 case ExpandLinkNode expand:
-                    CollectIncludePassageTargets(expand.ExpandNodes, targets);
+                    CollectIncludePassageTargets(expand.ExpandNodes, targets, dynamicTargetVars, literalVarAssigns);
                     break;
                 case ForeachNode fe:
-                    CollectIncludePassageTargets(fe.Nodes, targets);
+                    CollectIncludePassageTargets(fe.Nodes, targets, dynamicTargetVars, literalVarAssigns);
                     break;
             }
         }
     }
+
+    [GeneratedRegex(@"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")]
+    private static partial Regex DynamicTargetVarPattern();
 
     private static void StitchFragments(
         string passageName,

@@ -3164,6 +3164,60 @@ public class ExtractorTests
         Assert.DoesNotContain(standalone.Nodes, n => n is TextNode t && t.Template == "Letter Heading");
     }
 
+    [Fact]
+    public void Passage_TransitivelyTargetedByDynamicIncludePassage_DoesNotHoistTitle()
+    {
+        // Regression: Fear of the Unknown's AsylumHub/AsylumTest1/CountQuestion4. AsylumHub sets
+        // `quest1 = "Question4"` (a plain string-literal assign); AsylumTest1 later does a DYNAMIC
+        // include (base.passage(this.Vars.quest1, ...)) rather than naming the passage literally. No
+        // single IncludePassageNode names "Question4" directly, so the static-target collector above
+        // never protects it - without resolving the indirection through the shared `quest1`
+        // variable, Question4's own leading bold heading was free to be hoisted into `title:`, which
+        // include_passage never renders (it only ever splices Nodes, see PassageRenderer's
+        // IncludePassageNode case) - silently deleting the question's own text from every render that
+        // included it. BuildPassages now also collects every bare-identifier dynamic include target
+        // var and every literal string ever assigned to it, and treats a match against a real
+        // passage name the same as a static target.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Hub"] = new StoryPassage("Hub", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.quest1 = "Question4";
+                yield break;
+            }
+            private void passage2_Init()
+            {
+                base.Passages["AsylumTest1"] = new StoryPassage("AsylumTest1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage2_Main));
+            }
+            private IEnumerable<StoryOutput> passage2_Main()
+            {
+                yield return base.passage(this.Vars.quest1, System.Array.Empty<StoryVar>());
+                yield break;
+            }
+            private void passage3_Init()
+            {
+                base.Passages["Question4"] = new StoryPassage("Question4", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage3_Main));
+            }
+            private IEnumerable<StoryOutput> passage3_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Are you mentally ill?");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text follows.");
+                yield break;
+            }
+            """);
+
+        var included = passages.Single(p => p.PassageId == "Question4");
+        Assert.Equal("Question4", included.Title);
+        Assert.Contains(included.Nodes, n => n is TextNode t && t.Template == "Are you mentally ill?");
+    }
+
     // ── End of generation node ─────────────────────────────────────────────
 
     [Fact]
