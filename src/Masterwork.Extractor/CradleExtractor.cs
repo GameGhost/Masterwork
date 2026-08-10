@@ -767,27 +767,21 @@ public partial class CradleExtractor
                     // nextPsg var to `["Wight", "Moon Presence"].shuffled(key)[0]`, then include_passage
                     // it dynamically - every one of "Wight"/"Moon Presence"/etc. needs the same
                     // protection a single-literal assign would get.
-                    // A "choose-one" VarRandom (arr.shuffled(key)[0]) resolves to exactly one of its
-                    // own literal Values at runtime — same protection need as a plain literal assign,
-                    // just picked randomly among several candidates instead of fixed. Real occurrence:
-                    // Cost of Disease's HuntNorth/HuntWest/HuntEast/HuntSouth each set their own
-                    // nextPsg var to `["Wight", "Moon Presence"].shuffled(key)[0]`, then include_passage
-                    // it dynamically - every one of "Wight"/"Moon Presence"/etc. needs the same
-                    // protection a single-literal assign would get.
                     if (effect.VarRandom is not null)
                     {
                         foreach (var (varName, vr) in effect.VarRandom)
                         {
-                            foreach (var val in vr.Values)
-                            {
-                                if (val is string literal)
-                                {
-                                    (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
-                                }
-                            }
+                            CollectLiteralValues(varName, vr, literalVarAssigns);
                         }
                     }
 
+                    break;
+                // A passage-scoped `let` can carry the identical "choose-one" VarRandom shape as an
+                // EffectNode (LetNode.Random, same VarRandom type) — e.g. Cost of Disease's
+                // Barventures: `let _rnd_Barventures_1 = ["bar1", ..., "bar7"].shuffled(key)[0]`, then
+                // `include_passage: target: '${_rnd_Barventures_1}'`. Same protection need as above.
+                case LetNode { Random: not null } let:
+                    CollectLiteralValues(let.Var, let.Random, literalVarAssigns);
                     break;
                 case ConditionalNode cond:
                     foreach (var b in cond.Branches)
@@ -824,6 +818,21 @@ public partial class CradleExtractor
 
     [GeneratedRegex(@"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")]
     private static partial Regex DynamicTargetVarPattern();
+
+    // Records every string literal in a VarRandom's own Values into literalVarAssigns[varName] —
+    // shared by EffectNode.VarRandom (a top-level `Vars.x = arr.shuffled(key)[0]` assign) and
+    // LetNode.Random (the passage-scoped `let x = arr.shuffled(key)[0]` equivalent), which use the
+    // identical VarRandom shape for the identical "one of several literal candidates" pattern.
+    private static void CollectLiteralValues(string varName, VarRandom vr, Dictionary<string, HashSet<string>> literalVarAssigns)
+    {
+        foreach (var val in vr.Values)
+        {
+            if (val is string literal)
+            {
+                (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
+            }
+        }
+    }
 
     private static void StitchFragments(
         string passageName,

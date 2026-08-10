@@ -3269,6 +3269,47 @@ public class ExtractorTests
         Assert.Contains(wight.Nodes, n => n is TextNode t && t.Template == "A wight emerges from the forest.");
     }
 
+    [Fact]
+    public void Passage_TransitivelyTargetedByLetShuffledDynamicIncludePassage_DoesNotHoistTitle()
+    {
+        // Same bug class again, but the indirection var is a passage-scoped `let` (LetNode.Random)
+        // rather than a session-global `Vars.x` assign (EffectNode.VarRandom) - Cost of Disease's
+        // Barventures: `let _rnd_Barventures_1 = ["bar1", ..., "bar7"].shuffled(key)[0]`, immediately
+        // followed by `include_passage: target: '${_rnd_Barventures_1}'` in the same switch case. An
+        // inline either() passed directly as the include target produces exactly this LetNode.Random
+        // shape (same as InlineEither_EmitsLetThenTemplate above, but feeding base.passage(...)
+        // instead of base.text(...)).
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Barventures"] = new StoryPassage("Barventures", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.passage(this.macros1.either(new StoryVar[] { "bar1", "bar2" }), System.Array.Empty<StoryVar>());
+                yield break;
+            }
+            private void passage2_Init()
+            {
+                base.Passages["bar1"] = new StoryPassage("bar1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage2_Main));
+            }
+            private IEnumerable<StoryOutput> passage2_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("Sworn Statement");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text follows.");
+                yield break;
+            }
+            """);
+
+        var bar1 = passages.Single(p => p.PassageId == "bar1");
+        Assert.Equal("bar1", bar1.Title);
+        Assert.Contains(bar1.Nodes, n => n is TextNode t && t.Template == "Sworn Statement");
+    }
+
     // ── End of generation node ─────────────────────────────────────────────
 
     [Fact]
