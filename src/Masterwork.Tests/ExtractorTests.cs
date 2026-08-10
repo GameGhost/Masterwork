@@ -3218,6 +3218,57 @@ public class ExtractorTests
         Assert.Contains(included.Nodes, n => n is TextNode t && t.Template == "Are you mentally ill?");
     }
 
+    [Fact]
+    public void Passage_TransitivelyTargetedByShuffledDynamicIncludePassage_DoesNotHoistTitle()
+    {
+        // Same bug class as the plain-literal-assign case above, but the indirection is a random
+        // pick among several literal candidates instead of one fixed literal. Regression: Cost of
+        // Disease's HuntNorth sets `HuntNorthnextPsg = ["Wight", "Moon Presence"].shuffled(key)[0]`
+        // (a "choose-one" VarRandom, not a plain string VarSets assign - either() below is the
+        // simplest Cradle source shape that produces the same extractor-internal VarRandom), then
+        // includes it dynamically. Both "Wight" and "Moon Presence" need the same title-hoist
+        // protection a single literal assign would get, since either one could be the actual target
+        // at runtime.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["Hub"] = new StoryPassage("Hub", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                this.Vars.nextMonster = this.macros1.either(new StoryVar[] { "Wight", "MoonPresence" });
+                yield break;
+            }
+            private void passage2_Init()
+            {
+                base.Passages["HuntNorth"] = new StoryPassage("HuntNorth", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage2_Main));
+            }
+            private IEnumerable<StoryOutput> passage2_Main()
+            {
+                yield return base.passage(this.Vars.nextMonster, System.Array.Empty<StoryVar>());
+                yield break;
+            }
+            private void passage3_Init()
+            {
+                base.Passages["Wight"] = new StoryPassage("Wight", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage3_Main));
+            }
+            private IEnumerable<StoryOutput> passage3_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("A wight emerges from the forest.");
+                }
+                yield return base.lineBreak();
+                yield return base.text("Body text follows.");
+                yield break;
+            }
+            """);
+
+        var wight = passages.Single(p => p.PassageId == "Wight");
+        Assert.Equal("Wight", wight.Title);
+        Assert.Contains(wight.Nodes, n => n is TextNode t && t.Template == "A wight emerges from the forest.");
+    }
+
     // ── End of generation node ─────────────────────────────────────────────
 
     [Fact]

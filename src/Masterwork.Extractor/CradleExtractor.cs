@@ -748,12 +748,43 @@ public partial class CradleExtractor
                 case IncludePassageNode { Target: var t } when DynamicTargetVarPattern().Match(t) is { Success: true } m:
                     dynamicTargetVars.Add(m.Groups[1].Value);
                     break;
-                case EffectNode { VarSets: not null } effect:
-                    foreach (var (varName, val) in effect.VarSets)
+                case EffectNode effect:
+                    if (effect.VarSets is not null)
                     {
-                        if (val is string literal)
+                        foreach (var (varName, val) in effect.VarSets)
                         {
-                            (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
+                            if (val is string literal)
+                            {
+                                (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
+                            }
+                        }
+                    }
+
+                    // A "choose-one" VarRandom (arr.shuffled(key)[0]) resolves to exactly one of its
+                    // own literal Values at runtime — same protection need as a plain literal assign,
+                    // just picked randomly among several candidates instead of fixed. Real occurrence:
+                    // Cost of Disease's HuntNorth/HuntWest/HuntEast/HuntSouth each set their own
+                    // nextPsg var to `["Wight", "Moon Presence"].shuffled(key)[0]`, then include_passage
+                    // it dynamically - every one of "Wight"/"Moon Presence"/etc. needs the same
+                    // protection a single-literal assign would get.
+                    // A "choose-one" VarRandom (arr.shuffled(key)[0]) resolves to exactly one of its
+                    // own literal Values at runtime — same protection need as a plain literal assign,
+                    // just picked randomly among several candidates instead of fixed. Real occurrence:
+                    // Cost of Disease's HuntNorth/HuntWest/HuntEast/HuntSouth each set their own
+                    // nextPsg var to `["Wight", "Moon Presence"].shuffled(key)[0]`, then include_passage
+                    // it dynamically - every one of "Wight"/"Moon Presence"/etc. needs the same
+                    // protection a single-literal assign would get.
+                    if (effect.VarRandom is not null)
+                    {
+                        foreach (var (varName, vr) in effect.VarRandom)
+                        {
+                            foreach (var val in vr.Values)
+                            {
+                                if (val is string literal)
+                                {
+                                    (literalVarAssigns.TryGetValue(varName, out var set) ? set : literalVarAssigns[varName] = []).Add(literal);
+                                }
+                            }
                         }
                     }
 
