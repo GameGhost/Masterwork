@@ -5037,6 +5037,41 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void ExpandLink_EmptyFragment_OmitsTargetInsteadOfUnreachableSentinel()
+    {
+        // Contrast case for the UnreachableTarget sentinel: IsLogicOnly is vacuously true for an
+        // EMPTY fragment too, but that's a different, genuinely-intentional shape, not "should
+        // always navigate but isn't provably exhaustive." Real occurrence: A Time of War's
+        // ATOW-CommonCode - `link(...) -> fragment: { yield break; }`, a vestigial/abandoned link
+        // (dead code from a removed feature, per the commented-out lines directly above its call
+        // site in the source) meant to do nothing when clicked, forever. Applying the sentinel here
+        // would be actively wrong: clicking it would try to navigate to a passage_id that doesn't
+        // exist and throw - strictly worse than the reveal-popup fallback it replaces. Must omit
+        // `target` entirely instead, matching the spec-documented "does nothing" behavior.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Once you are ready, click here to reveal your secret conversation.", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("link", node["type"]);
+        Assert.False(node.ContainsKey("target"));
+    }
+
+    [Fact]
     public void InlineEitherInConditional_HoistsToLetBeforeConditional()
     {
         // Regression: Masterwork-Modules/cost-of-disease/passages/00131-HospitalVisitCheck2.mws.yaml.

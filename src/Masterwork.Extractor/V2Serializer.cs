@@ -397,7 +397,7 @@ public static partial class V2Serializer
                         : AlwaysNavigatesToGoto(expand.ExpandNodes)
                             ? BuildLinkWithOnClickFromExpand(expand, ctx)
                             : IsLogicOnly(expand.ExpandNodes)
-                                ? BuildLinkWithOnClickFromExpand(expand, ctx, UnreachableTarget)
+                                ? BuildLinkWithOnClickFromExpand(expand, ctx, ContainsGoto(expand.ExpandNodes) ? UnreachableTarget : null)
                                 : TransformPopup(expand, ctx);
                 break;
             case InputPromptNode input:
@@ -792,6 +792,26 @@ public static partial class V2Serializer
             EffectNode or LetNode or GotoNode or BreakNode or ParagraphBreakNode => true,
             ConditionalNode cond => cond.Branches.All(b => IsLogicOnly(b.Nodes)),
             SwitchNode sw => sw.Cases.All(c => IsLogicOnly(c.Nodes)),
+            _ => false,
+        });
+
+    // True when `nodes` contains a GotoNode anywhere (including nested inside a conditional/switch
+    // branch). Distinguishes IsLogicOnly's two real shapes: content that CAN navigate but isn't
+    // provably exhaustive (gets the UnreachableTarget sentinel — see its own remarks) from content
+    // that never navigates AT ALL, which is a different, genuinely-intentional idiom — e.g. A Time
+    // of War's ATOW-CommonCode: `link(...) -> fragment: { yield break; }`, a vestigial/abandoned
+    // link (dead code left over from a removed feature, per the commented-out lines right above its
+    // call site in the source) that's meant to do nothing when clicked, forever. Applying the
+    // sentinel there would be actively wrong — clicking it would then try to navigate to a
+    // passage_id that doesn't exist and throw, which is strictly worse than the reveal-popup
+    // fallback it replaced. Omitting `target` entirely (this method returning false) is the correct,
+    // spec-documented "clicking this link does nothing" behavior for that case instead.
+    private static bool ContainsGoto(List<MwsNode> nodes) =>
+        nodes.Any(n => n switch
+        {
+            GotoNode => true,
+            ConditionalNode cond => cond.Branches.Any(b => ContainsGoto(b.Nodes)),
+            SwitchNode sw => sw.Cases.Any(c => ContainsGoto(c.Nodes)),
             _ => false,
         });
 
