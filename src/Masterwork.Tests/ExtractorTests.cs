@@ -4828,12 +4828,21 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_StaysPopup()
+    public void ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_BecomesLinkWithUnreachableFallback()
     {
-        // Guardrail: without a final `else`, the conditional isn't provably exhaustive, so a link
-        // relying solely on a goto inside onclick could do nothing on a click that matches no
-        // branch. Must still become a popup in that case (a separate, pre-existing concern that
-        // this popup has no `okay` is out of scope for this fix).
+        // Superseded design decision — this used to assert "stays popup" (without a final `else`,
+        // the conditional isn't provably exhaustive, so a goto-inside-onclick link could do nothing
+        // on a click that matches no branch). But a fallback `layout: 'reveal'` popup exists to show
+        // content before an exit link — this fragment has NONE (pure assign+conditional-of-goto, no
+        // text/image/etc anywhere), so a reveal popup here is an empty box with nothing to reveal
+        // and only a generic Close, strictly worse than a link. Real occurrence: Fear of the
+        // Unknown's LiberalEvent2ab's first fragment (00353-LiberalEvent2ab.mws.yaml) — reported as
+        // rendering an empty reveal popup instead of navigating. Fixed via IsLogicOnly: when content
+        // has no renderable output at all, fall back to a link+onclick with an explicit
+        // UnreachableTarget ("__UNREACHABLE__") rather than omitting target the way the exhaustive
+        // case does — exhaustiveness isn't proven here, so target can't be safely omitted, but the
+        // sentinel makes it obvious in logs/state if the theoretical gap is ever actually hit,
+        // instead of a blank target that looks like an extraction bug.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -4858,7 +4867,12 @@ public class ExtractorTests
 
         var dict = V2Serializer.ToDict(passages[0]);
         var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
-        Assert.Equal("popup", node["type"]);
+        Assert.Equal("link", node["type"]);
+        Assert.Equal("__UNREACHABLE__", node["target"]);
+
+        var onclick = (List<Dictionary<string, object?>>)node["onclick"]!;
+        Assert.Equal("assign", onclick[0]["type"]);
+        Assert.Equal("conditional", onclick[1]["type"]);
     }
 
     [Fact]
@@ -4923,11 +4937,13 @@ public class ExtractorTests
     }
 
     [Fact]
-    public void ExpandLink_AssignThenNonExhaustiveSwitchOfGotos_StaysPopup()
+    public void ExpandLink_AssignThenNonExhaustiveSwitchOfGotos_BecomesLinkWithUnreachableFallback()
     {
-        // Guardrail mirroring ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_StaysPopup: a
-        // switch with no default case isn't provably exhaustive (an unmatched `round` value would
-        // fall through with no goto), so this must still become a popup.
+        // Superseded design decision, mirroring ExpandLink_AssignThenNonExhaustiveConditionalOfGotos_
+        // BecomesLinkWithUnreachableFallback's own remarks: a switch with no default case isn't
+        // provably exhaustive, but this fragment has no renderable content either (IsLogicOnly), so
+        // it becomes a link+onclick with the UnreachableTarget sentinel instead of an empty reveal
+        // popup.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -4956,7 +4972,68 @@ public class ExtractorTests
 
         var dict = V2Serializer.ToDict(passages[0]);
         var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
-        Assert.Equal("popup", node["type"]);
+        Assert.Equal("link", node["type"]);
+        Assert.Equal("__UNREACHABLE__", node["target"]);
+
+        var onclick = (List<Dictionary<string, object?>>)node["onclick"]!;
+        Assert.Equal("assign", onclick[0]["type"]);
+        Assert.Equal("conditional", onclick[1]["type"]);
+    }
+
+    [Fact]
+    public void ExpandLink_NestedNonExhaustiveOfGotos_BecomesLinkWithUnreachableFallback()
+    {
+        // Regression, the exact real-world shape: Fear of the Unknown's LiberalEvent2ab's first
+        // fragment (00353-LiberalEvent2ab.mws.yaml) - `assign; if (creature==2) goto A; else { if
+        // (lib=="taxes") goto B; if (lib=="nationalist") goto C; }`. The OUTER conditional has an
+        // else (exhaustive at that level), but the else branch's own last node is a second, non-else
+        // `if` - AlwaysNavigatesToGoto correctly reports false for the whole thing, since Cradle's
+        // own `lib` values aren't statically known to be only "taxes"/"nationalist". But there's
+        // nothing to reveal in a popup here either (IsLogicOnly), so this becomes a link+onclick with
+        // the UnreachableTarget sentinel rather than an empty reveal popup - matches the sibling
+        // (dynamic-target, exhaustive) fragment right next to it in the same passage, which already
+        // correctly became a plain link with a real target.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h0002"))
+                    yield return base.link("Click here if the bribe succeeded.", null, () => base.enchantHook("h0002", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                this.Vars.bribe = "yes";
+                if (this.Vars.creature == 2)
+                {
+                    yield return base.abort(goToPassage: "LiberalEventGood");
+                }
+                else
+                {
+                    if (this.Vars.lib == "taxes")
+                    {
+                        yield return base.abort(goToPassage: "LiberalEventA");
+                    }
+                    if (this.Vars.lib == "nationalist")
+                    {
+                        yield return base.abort(goToPassage: "LiberalEventB");
+                    }
+                }
+                yield break;
+            }
+            """);
+
+        var dict = V2Serializer.ToDict(passages[0]);
+        var node = (Dictionary<string, object?>)((List<Dictionary<string, object?>>)dict["nodes"]!)[0];
+        Assert.Equal("link", node["type"]);
+        Assert.Equal("__UNREACHABLE__", node["target"]);
+
+        var onclick = (List<Dictionary<string, object?>>)node["onclick"]!;
+        Assert.Equal("assign", onclick[0]["type"]);
+        Assert.Equal("conditional", onclick[1]["type"]);
     }
 
     [Fact]

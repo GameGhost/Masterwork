@@ -32,6 +32,13 @@ public record SerializationContext(
 /// </summary>
 public static partial class V2Serializer
 {
+    // Sentinel target for a link whose onclick is guaranteed to navigate in every REAL play-through
+    // but isn't statically provable exhaustive (see IsLogicOnly's own remarks) — deliberately
+    // distinctive so it's obvious in logs/state if it's ever actually reached, unlike a blank/empty
+    // target which looks like a bug in the extractor rather than a (theoretical, never-in-practice)
+    // gap in the source's own conditional logic.
+    private const string UnreachableTarget = "__UNREACHABLE__";
+
     public static Dictionary<string, object?> ToDict(MwsPassage passage, SerializationContext? ctx = null)
     {
         // Scan top-level nodes for header fields to hoist
@@ -385,9 +392,13 @@ public static partial class V2Serializer
             case ExpandLinkNode expand:
                 yield return IsNavigationOnly(expand.ExpandNodes)
                     ? BuildNavigationFromExpand(expand, ctx)
-                    : AlwaysNavigatesToGoto(expand.ExpandNodes) && !ContainsPopupOnlyMarker(expand.ExpandNodes)
-                        ? BuildLinkWithOnClickFromExpand(expand, ctx)
-                        : TransformPopup(expand, ctx);
+                    : ContainsPopupOnlyMarker(expand.ExpandNodes)
+                        ? TransformPopup(expand, ctx)
+                        : AlwaysNavigatesToGoto(expand.ExpandNodes)
+                            ? BuildLinkWithOnClickFromExpand(expand, ctx)
+                            : IsLogicOnly(expand.ExpandNodes)
+                                ? BuildLinkWithOnClickFromExpand(expand, ctx, UnreachableTarget)
+                                : TransformPopup(expand, ctx);
                 break;
             case InputPromptNode input:
                 yield return TransformInputAction(input, ctx);
@@ -691,8 +702,10 @@ public static partial class V2Serializer
 
             return cd;
         }
-        // Fallback: shouldn't be reached given IsNavigationOnly precondition
-        return new Dictionary<string, object?> { ["type"] = "link", ["label"] = label, ["target"] = "", ["snapshot"] = stateAffecting };
+        // Fallback: shouldn't be reached given IsNavigationOnly precondition. UnreachableTarget
+        // rather than an empty string so this is obviously a defensive placeholder, not silent data
+        // loss, if some future IsNavigationOnly-accepted shape ever reaches here unhandled.
+        return new Dictionary<string, object?> { ["type"] = "link", ["label"] = label, ["target"] = UnreachableTarget, ["snapshot"] = stateAffecting };
     }
 
     // True when the LAST node in `nodes` is guaranteed to fire a goto by the time it finishes —
@@ -736,14 +749,51 @@ public static partial class V2Serializer
     // okay/close button — clicking it just displayed an empty, permanently-stuck popup instead of
     // navigating, since the goto lived inside content, not onclose. A goto inside onclick correctly
     // preempts target at render time (see GameSession.FollowLinkAsync), so target can be omitted.
-    private static Dictionary<string, object?> BuildLinkWithOnClickFromExpand(ExpandLinkNode expand, SerializationContext? ctx) =>
-        new()
+    //
+    // `fallbackTarget` (see UnreachableTarget) is for the sibling IsLogicOnly-but-not-provably-
+    // AlwaysNavigatesToGoto case: content with no renderable output at all still shouldn't become a
+    // reveal popup (there's nothing to reveal), but since exhaustiveness isn't proven here, target
+    // can't be safely omitted the way the exhaustive case above can — a real (if never-in-practice)
+    // code path could fall through onclick without ever setting a goto.
+    private static Dictionary<string, object?> BuildLinkWithOnClickFromExpand(
+        ExpandLinkNode expand, SerializationContext? ctx, string? fallbackTarget = null)
+    {
+        var d = new Dictionary<string, object?>
         {
             ["type"] = "link",
             ["label"] = expand.Label,
-            ["snapshot"] = expand.StateAffecting,
-            ["onclick"] = TransformNodeList(expand.ExpandNodes, ctx),
         };
+        if (fallbackTarget is not null)
+        {
+            d["target"] = fallbackTarget;
+        }
+
+        d["snapshot"] = expand.StateAffecting;
+        d["onclick"] = TransformNodeList(expand.ExpandNodes, ctx);
+        return d;
+    }
+
+    // True when every node in `nodes` is pure logic — EffectNode/LetNode/GotoNode/breaks, or a
+    // ConditionalNode/SwitchNode whose every branch/case is ALSO pure logic, recursively — meaning
+    // nothing here could ever produce visible content (text, image, section, input, nested
+    // link/popup). Used alongside AlwaysNavigatesToGoto to decide whether a non-exhaustive
+    // expand-link should still become a link+onclick instead of falling back to a `layout: 'reveal'`
+    // popup: a reveal popup exists specifically to show content before the player picks an exit
+    // link, so one with nothing to show is nonsensical regardless of whether every code path can be
+    // statically proven to navigate. Real occurrence: Fear of the Unknown's LiberalEvent2ab's first
+    // fragment — `assign; if (creature==2) goto A; else { if (lib=="taxes") goto B; if (lib==
+    // "nationalist") goto C; }` — the else branch's two plain (non-else) ifs make this genuinely
+    // non-exhaustive by CanNavigatesToGoto's own (correct) reasoning, but every one of Cradle's own
+    // `lib` values is handled, so the "gap" only exists because the extractor can't prove it, not
+    // because the story ever actually falls through it.
+    private static bool IsLogicOnly(List<MwsNode> nodes) =>
+        nodes.All(n => n switch
+        {
+            EffectNode or LetNode or GotoNode or BreakNode or ParagraphBreakNode => true,
+            ConditionalNode cond => cond.Branches.All(b => IsLogicOnly(b.Nodes)),
+            SwitchNode sw => sw.Cases.All(c => IsLogicOnly(c.Nodes)),
+            _ => false,
+        });
 
     // ── Setup-notification-in-conditional collapse ─────────────────────────
 
