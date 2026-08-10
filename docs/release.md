@@ -152,13 +152,21 @@ gh release create v<VERSION> `
   "cost-of-disease.mwm" `
   "fear-of-the-unknown.mwm" `
   "a-time-of-war.mwm" `
+  "my-fathers-work-template.mwm" `
   --repo GameGhost/Masterwork-Modules `
   --title "v<VERSION>" `
   --notes "<what changed in the module content>"
 ```
 
+All four bundles ship together even though `my-fathers-work-template` isn't a playable scenario
+(it's a design/reference module) — since v0.2.0, every Modules release includes it alongside the
+three scenarios rather than treating it as a separate, unbundled artifact.
+
 The Modules repo's own release version doesn't need to track the app's version lockstep — only cut
-one when module content actually changed.
+one when module content actually changed. Each module bundle has its own `version` in its own
+`manifest.yaml` (bumped via `scripts/repack.ps1 -Module <name> -IncrementVersion patch|minor|major`)
+independent of the shared Modules-repo release tag — mention each bundle's own version in the
+release notes (see the v0.2.0 release for the format) since they don't move in lockstep either.
 
 ## 6. Post-release checklist
 
