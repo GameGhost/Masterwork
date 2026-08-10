@@ -142,7 +142,13 @@ public class SpriteMapper
         {
             if (m.Index > pos)
             {
-                var textSegment = HtmlTag.Replace(raw[pos..m.Index], ConvertOrStripTag).Trim();
+                // Only the edge actually touching a sprite tag gets trimmed (avoiding a double
+                // space from the run-joiner adding its own separator next to the icon) — the far
+                // edge, when pos == 0, is the true leading boundary of the whole `raw` argument and
+                // must survive untouched: it can be meaningful whitespace the caller is relying on
+                // (e.g. a leading space carried over from a preceding text() call/leaf).
+                var segment = HtmlTag.Replace(raw[pos..m.Index], ConvertOrStripTag);
+                var textSegment = (pos > 0 ? segment.TrimStart() : segment).TrimEnd();
                 if (!string.IsNullOrEmpty(textSegment))
                 {
                     runs.Add((textSegment, null));
@@ -155,7 +161,15 @@ public class SpriteMapper
         }
         if (pos < raw.Length)
         {
-            var remaining = HtmlTag.Replace(raw[pos..], ConvertOrStripTag).Trim();
+            // Mirror image of the leading-segment case above: only trim the edge touching a
+            // preceding sprite tag (pos > 0). The trailing edge is always the true end of `raw` —
+            // trimming it unconditionally was the actual bug: a trailing space here is often about
+            // to feed straight into a following {variable} interpolation run from a separate
+            // text()/+-concat leaf, e.g. Fear of the Unknown's LiberalEvent2a_003, "...exceeded " +
+            // Vars.bribed — losing that space glued "exceeded" directly onto "{bribed}" with
+            // nothing between them.
+            var segment = HtmlTag.Replace(raw[pos..], ConvertOrStripTag);
+            var remaining = pos > 0 ? segment.TrimStart() : segment;
             if (!string.IsNullOrEmpty(remaining))
             {
                 runs.Add((remaining, null));

@@ -177,6 +177,36 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void ConcatenatedBoldTagFollowedByVariable_PreservesTrailingSpace()
+    {
+        // Regression: Fear of the Unknown's LiberalEvent2a_003 - "...offered. " +
+        // "<b>If you have collectively met or exceeded " is one text() call ("+"-concatenated),
+        // immediately followed by a separate text(Vars.bribed) call. The second literal leaf has no
+        // <sprite=...> tag, so TryParseRichText's "no sprite tag matched" path (pos stays 0 the
+        // whole way through) used to run an unconditional .Trim() on the WHOLE segment regardless
+        // of what followed it — eating the trailing space that was meant to separate "exceeded"
+        // from the {bribed} variable run right after it, producing "...exceeded{bribed}," instead
+        // of "...exceeded {bribed},".
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                yield return base.text("Count up all coins offered. " +
+                    "<b>If you have collectively met or exceeded ");
+                yield return base.text(this.Vars.bribed);
+                yield return base.text(", the bribe succeeds</b> and all players pay.");
+                yield break;
+            }
+            """);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().First();
+        Assert.Contains("exceeded {bribed}", textNode.Template);
+    }
+
+    [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
         // A leading plain (non-bold) sentence — not a bare Vars assignment — keeps this bold text
