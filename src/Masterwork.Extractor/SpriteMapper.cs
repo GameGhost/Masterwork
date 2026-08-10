@@ -136,19 +136,32 @@ public class SpriteMapper
             return null;
         }
 
+        // Every segment's LEADING edge is always trimmed — a leading space this early can only ever
+        // be the tail of unrelated formatting noise from an even earlier statement (a preceding
+        // link()/text() call's own trailing content isn't part of `raw` at all, and the one real
+        // case checked — a leading space before an <i> tag right after a link() label, Fear of the
+        // Unknown's BusMeetA-E "I'm not convinced. <i>This option...") is expected to keep being
+        // trimmed, matching this repo's existing curated Common_NNN restext naming, which is an
+        // exact-text match against `.source/en-US.common.restext` and would silently stop matching
+        // (falling back to an auto-numbered id) if a stray leading space were introduced.
+        //
+        // Only the FINAL segment's TRAILING edge is left untouched, since trimming it
+        // unconditionally was the actual reported bug: a trailing space at the very end of `raw` is
+        // often about to feed straight into a following {variable} interpolation run from a
+        // separate text()/+-concat leaf appended right after — e.g. Fear of the Unknown's
+        // LiberalEvent2a_003, "...exceeded " + Vars.bribed, or AsylumTreatmentBPay_004, "...to the
+        // left of the Rehabilitation token " immediately followed by its own
+        // <sprite="S2_RehabilitationToken"> call. A segment ending right before a SPRITE tag inside
+        // this SAME raw string is a different case, still trimmed on both edges below — that
+        // boundary is genuinely internal to `raw`, not the true end of the whole argument, and
+        // needs the double-space-avoidance the original .Trim() was written for.
         var runs = new List<(string? Text, string? AssetRef)>();
         int pos = 0;
         foreach (Match m in SpriteTag.Matches(raw))
         {
             if (m.Index > pos)
             {
-                // Only the edge actually touching a sprite tag gets trimmed (avoiding a double
-                // space from the run-joiner adding its own separator next to the icon) — the far
-                // edge, when pos == 0, is the true leading boundary of the whole `raw` argument and
-                // must survive untouched: it can be meaningful whitespace the caller is relying on
-                // (e.g. a leading space carried over from a preceding text() call/leaf).
-                var segment = HtmlTag.Replace(raw[pos..m.Index], ConvertOrStripTag);
-                var textSegment = (pos > 0 ? segment.TrimStart() : segment).TrimEnd();
+                var textSegment = HtmlTag.Replace(raw[pos..m.Index], ConvertOrStripTag).Trim();
                 if (!string.IsNullOrEmpty(textSegment))
                 {
                     runs.Add((textSegment, null));
@@ -161,15 +174,7 @@ public class SpriteMapper
         }
         if (pos < raw.Length)
         {
-            // Mirror image of the leading-segment case above: only trim the edge touching a
-            // preceding sprite tag (pos > 0). The trailing edge is always the true end of `raw` —
-            // trimming it unconditionally was the actual bug: a trailing space here is often about
-            // to feed straight into a following {variable} interpolation run from a separate
-            // text()/+-concat leaf, e.g. Fear of the Unknown's LiberalEvent2a_003, "...exceeded " +
-            // Vars.bribed — losing that space glued "exceeded" directly onto "{bribed}" with
-            // nothing between them.
-            var segment = HtmlTag.Replace(raw[pos..], ConvertOrStripTag);
-            var remaining = pos > 0 ? segment.TrimStart() : segment;
+            var remaining = HtmlTag.Replace(raw[pos..], ConvertOrStripTag).TrimStart();
             if (!string.IsNullOrEmpty(remaining))
             {
                 runs.Add((remaining, null));

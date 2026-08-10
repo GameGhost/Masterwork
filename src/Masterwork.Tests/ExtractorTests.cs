@@ -207,6 +207,40 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void LeadingSpaceBeforeHtmlTag_StillTrimmed()
+    {
+        // Contrast case for the fix above: the LEADING edge of a rich-text segment must still be
+        // trimmed even when there's no sprite tag anywhere in it. Regression: Fear of the Unknown's
+        // BusMeetA-E each have `link("I'm not convinced.", ...); text(" <i>This option will provide
+        // a fifty percent chance...</i>")` - the leading space before <i> is leftover Cradle
+        // formatting noise with nothing in the SAME text() call to attach to. An early version of
+        // the trailing-space fix above went too far and stopped trimming ANY edge whenever no sprite
+        // tag was present, which introduced a stray leading space here — breaking the curated
+        // Common_NNN restext match against .source/en-US.common.restext (an exact-text lookup) and
+        // knocking this string back to an auto-numbered id.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("hook", "h1"))
+                    yield return base.link("I'm not convinced.", null, () => base.enchantHook("h1", HarloweEnchantCommand.Replace, passage1_Fragment_0));
+                yield return base.text(" <i>This option will provide a fifty percent chance of improving the deal.</i>");
+                yield break;
+            }
+            private IEnumerable<StoryOutput> passage1_Fragment_0()
+            {
+                yield break;
+            }
+            """);
+
+        var textNode = passages[0].Nodes.OfType<TextNode>().Last();
+        Assert.Equal("_This option will provide a fifty percent chance of improving the deal._", textNode.Template);
+    }
+
+    [Fact]
     public void BoldStyleScope_AppliesBoldStyle()
     {
         // A leading plain (non-bold) sentence — not a bare Vars assignment — keeps this bold text
