@@ -14,13 +14,10 @@
  */
 
 /* -- Fonts -------------------------------------------------------------------------------------
- * Same two families my-fathers-work-template uses (Germania One display face, Averia Libre body
- * copy) for a consistent look between in-game chrome and the app's own shell -- but plain static
- * files here, not that module's font://slug indirection (AssetResolver's URI scheme only exists
- * while a module is loaded and injecting its own CSS; this file is active in every context,
- * including the main menu itself, before any module is loaded). Only the weights this app shell
- * actually needs (regular of each) are bundled, not the module's full weight/italic set. Google
- * Fonts, SIL Open Font License -- unrelated to NOTICE.md's RGS art-asset provenance. */
+ * Same two families my-fathers-work-template uses (Germania One display, Averia Libre body), but
+ * as plain static files -- that module's font://slug indirection only works once a module is
+ * loaded, and this file is active before that (main menu, etc). Only the regular weight of each
+ * is bundled. Google Fonts, SIL Open Font License -- unrelated to NOTICE.md's RGS provenance. */
 @font-face {
     font-family: 'Germania One';
     font-style: normal;
@@ -41,23 +38,14 @@ body {
 }
 
 /* -- Main menu -----------------------------------------------------------------------------------
- * A full-bleed hero screen that must never scroll, regardless of viewport -- position: fixed (not
- * just height: 100vh) takes it out of document flow entirely, so nothing about its own box model
- * can ever contribute to a body-level scrollbar; overflow: hidden below then clips the
- * intentionally-oversized scene layers instead of exposing them via scroll. app.css's generic
- * @media (min-width: 48rem) max-width/margin:auto rule (a plain reading-column treatment every
- * other page container wants) deliberately excludes .mws-main-menu from its selector list --
- * wrong for a full-bleed hero, same reasoning my-fathers-work-template already applies to its own
- * full-bleed .mws-passage layouts.
+ * Full-bleed hero screen that must never scroll -- position: fixed (not height: 100vh) takes it out
+ * of document flow so its own box model can't contribute to a body scrollbar; overflow: hidden clips
+ * the intentionally-oversized scene layers. Excluded from app.css's generic reading-column rule
+ * (@media min-width: 48rem), same as every other full-bleed layout in this theme.
  *
- * Layout is expressed almost entirely in vh (not vw/%) per your steer: every scene element's own
- * size is driven by viewport *height*, so on a narrower-but-not-shorter viewport (a phone in
- * portrait) the scene naturally grows wider than the viewport instead of shrinking -- cropped by
- * overflow: hidden, exactly the "extends left/right, moves off-screen" behavior asked for, with no
- * separate per-breakpoint size rules needed for the scene layers themselves (only the interactive
- * content -- logo/buttons -- needs its own narrow-viewport layout, further down).
- *
- */
+ * Scene layers are sized in vh, not vw/%: on a narrower-but-not-shorter viewport (phone portrait)
+ * they grow wider than the screen instead of shrinking, and get cropped by overflow: hidden -- no
+ * per-breakpoint sizing needed for the scene itself, only the interactive content below. */
 .mws-main-menu {
     position: fixed;
     inset: 0;
@@ -73,10 +61,8 @@ body {
     z-index: 0;
 }
 
-/* Sky -- the far background, deliberately compressed horizontally from its native ~4:1 panorama
-   (a straight background-size: cover stretch read as an oddly-wide smear) rather than a plain
-   cover/contain fit; tall enough (height) to still reach down behind the mountain layer.
-   First-pass numbers, tune live. */
+/* Sky -- background-size: 100% 100% deliberately compresses the native ~4:1 panorama horizontally
+   rather than a cover/contain fit, which read as an oddly-wide smear. */
 .mws-main-menu-sky {
     position: absolute;
     top: 22px;
@@ -90,15 +76,11 @@ body {
     background-position: top center;
 }
 
-/* Mountain/village -- both centered, bottom-anchored, sized in vh so they scale with viewport
-   height and naturally overflow left/right on a narrow-but-tall viewport instead of shrinking.
-   Both are square (2048x2048) source canvases, so height drives the "natural" width directly --
-   but width is `max(<vh>, 100%)`, not the vh value alone: on a viewport that's narrow *without*
-   being especially tall (a resized desktop window, not a true phone-portrait aspect), the vh value
-   alone can come out smaller than the viewport itself, leaving the scene stranded as a small
-   floating square with visible background on both sides instead of the intended "extends past the
-   edges" look. The max() guarantees it never shrinks narrower than the viewport; it can still grow
-   past 100% on genuinely tall viewports same as before. First-pass numbers, tune live. */
+/* Mountain/village -- centered, bottom-anchored, sized in vh so they scale with height and overflow
+   left/right on a narrow-but-tall viewport instead of shrinking. Both are square source canvases, so
+   width is max(<vh>, 100%) rather than the vh value alone: on a viewport that's narrow without being
+   tall (a resized desktop window), the vh value alone could come out smaller than the viewport,
+   stranding the scene as a small floating square. max() guarantees it never shrinks below 100%. */
 .mws-main-menu-mountain,
 .mws-main-menu-village {
     position: absolute;
@@ -124,9 +106,8 @@ body {
     background-image: url('images/backgrounds/village.png');
 }
 
-/* Manor -- positioned via --mws-mm-cluster-x (a fixed vh-based distance left of center, not a
-   vw/% one) so as the viewport narrows it drifts further off the left edge, same principle as
-   mountain/village above. First-pass numbers, tune live. */
+/* Manor -- positioned with a fixed px offset from the left edge (not vw/%), so as the viewport
+   narrows it drifts further off-screen, same principle as mountain/village above. */
 .mws-main-menu-manor {
     position: absolute;
     bottom: 0;
@@ -154,12 +135,10 @@ body {
     background-position: center bottom;
 }
 
-/* The ornate frame -- same border-image technique/asset/numbers as the in-game "setup" passage
-   layout (my-fathers-work-template), reused here rather than re-derived: border thickness stays a
-   fixed on-screen px (border-image-width) regardless of viewport size, unlike a plain
-   background-size: cover image whose edge thickness would scale with the viewport.
-   Non-interactive (pointer-events: none) so it never blocks the help button or nav buttons near
-   its edges. */
+/* The ornate frame -- same border-image technique/asset as the in-game "setup" passage layout
+   (my-fathers-work-template); border thickness stays a fixed px regardless of viewport, unlike a
+   background-size: cover image whose edges would scale. pointer-events: none so it never blocks the
+   help/nav buttons near its edges. */
 .mws-main-menu-border {
     position: absolute;
     inset: 0;
@@ -192,10 +171,8 @@ body {
     background-image: url('images/ui/button_question.png');
 }
 
-/* Fixed rem width, not vw-derived -- this block should stay put at a constant on-screen size and
-   position as the window is resized (large-layout domain only; the narrow breakpoint below switches
-   it to a completely different static/stacked layout), not visibly grow or shrink with viewport
-   width. */
+/* Fixed rem width, not vw-derived -- stays a constant on-screen size as the window resizes (large-
+   layout domain only; the narrow breakpoint below switches to a different stacked layout). */
 .mws-main-menu-content {
     position: absolute;
     top: 40px;
@@ -266,6 +243,10 @@ body {
     text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.6);
     cursor: pointer;
     transition: transform 0.12s ease, opacity 0.12s ease;
+    /* "New Game" is the only label with a space, so the only one that could wrap; at some sizes it
+       wrapped to 2 lines while the single-word labels just overflowed instead -- inconsistent.
+       Applies everywhere, not just the breakpoints below. */
+    white-space: nowrap;
 }
 
 .mws-main-menu-buttons button:hover:not(:disabled) {
@@ -282,20 +263,21 @@ body {
 }
 
 /* -- Narrow (phone portrait) -----------------------------------------------------------------
- * The side-anchored content/two-column grid don't have room to breathe; overlay a compact,
- * centered column on top of the scene instead (position: absolute + inset: 0, NOT position:
- * static -- static pulls it into normal document flow, which was pushing the button rows below
- * the visible/bordered area entirely on tall content), and crop the border to just its top/bottom
- * edges -- the exact transform: scaleX trick my-fathers-work-template already uses for the same
- * "side posts too chunky at this width" problem on its own bordered layouts (border-image-width is
- * a fixed px regardless of viewport, so at a narrow width the vertical posts dominate unless
- * pushed off-screen this way).
+ * The side-anchored content doesn't have room to breathe -- overlay a compact, centered column on
+ * top of the scene instead (position: absolute + inset: 0, not static, which pushed button rows
+ * below the visible/bordered area on tall content), and crop the border to just its top/bottom edges
+ * via transform: scaleX, same trick my-fathers-work-template uses for chunky side posts at narrow
+ * widths (border-image-width is a fixed px, so it dominates unless pushed off-screen).
  *
- * Portrait needs its own background positioning independent of the large/landscape layouts (e.g.
- * shifting the manor mostly off the left edge) -- add .mws-main-menu-sky / -mountain / -village /
- * -effect override rules in this block as needed; only .mws-main-menu-manor needs one so far.
- * First-pass breakpoint/values, tune live. */
-@media (max-width: 45.99rem) {
+ * min-height: 30.01rem qualifier: every "portrait" (max-width: 45.99rem) rule in this file carries
+ * it, pairing with "landscape" (max-height: 30rem, no width limit) to keep the two breakpoints
+ * mutually exclusive. Width alone can't distinguish them -- a phone in landscape (iPhone SE:
+ * 667x375px = 41.7rem x 23.4rem) is narrower than the portrait ceiling but needs landscape's
+ * treatment (full border, one button row), not portrait's stacked column. The height floor excludes
+ * exactly that overlap. (An earlier version required landscape to also be wide instead -- broke
+ * iPhone SE landscape, whose real width never reaches a floor high enough to also clear the portrait
+ * ceiling.) */
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-main-menu-border {
         transform: scaleX(1.6667);
     }
@@ -311,12 +293,9 @@ body {
 
     /* Logo occupies whatever vertical room is left above the tagline/buttons (flex: 1 1 auto +
        min-height: 0, no aspect-ratio -- background-size: contain on the logo itself already
-       preserves the art's own aspect ratio inside whatever box results, so the box doesn't need
-       to), full width; tagline and buttons then land directly after it, which -- since this
-       container spans the full inset: 0 height -- naturally pins them near the bottom edge without
-       any explicit bottom-anchoring. padding-bottom is the "stay inside the border" margin -- px,
-       not rem, since border-image-width (the thing it's clearing) is itself a fixed px thickness,
-       not something that scales with root font-size. */
+       preserves the art's own aspect ratio inside whatever box results), full width; tagline and
+       buttons then land directly after it, naturally pinned near the bottom edge. padding-bottom is
+       the "stay inside the border" margin -- px, since border-image-width is itself a fixed px. */
     .mws-main-menu-content {
         position: absolute;
         inset: 0;
@@ -337,9 +316,7 @@ body {
     }
 
     /* justify-items: center -- buttons are capped to max-width: 35vw below (narrower than the
-       single 1fr grid column), so without this they'd sit flush against the column's left edge
-       (grid's default justify-self: stretch only fills the cell when nothing else constrains the
-       item's own width) instead of centered in the space they don't fill. */
+       single 1fr grid column), so without this they'd sit flush against the column's left edge. */
     .mws-main-menu-buttons {
         grid-template-columns: 1fr;
         justify-items: center;
@@ -354,22 +331,13 @@ body {
 }
 
 /* -- Wide (phone landscape) --------------------------------------------------------------------
- * Width is ample here (keeps the full 4-sided border), but height is tight -- the vh-driven scene
- * sizes above would otherwise push content off the bottom edge or crowd the frame. The content
- * block switches from the large layout's right-anchored column to a single row spanning the full
- * width between the border's own left/right inset (40px, matching border-image-width), with the
- * button grid going to one row of four instead of stacking. Matches my-fathers-work-template's own
- * short-viewport breakpoint.
+ * Width is ample here (full border stays), but height is tight -- content switches from the large
+ * layout's right-anchored column to a single row spanning the border's own left/right inset (40px,
+ * matching border-image-width), with buttons going to one row of four instead of stacking. Matches
+ * my-fathers-work-template's own short-viewport breakpoint.
  *
- * When a viewport is narrow enough to also match the portrait breakpoint above (a small square-ish
- * window, not a real phone aspect), this block must win -- it comes later in the file (cascade
- * order decides ties between equal-specificity rules on the same selector), but only for
- * properties it actually restates. Every property the portrait block sets on a shared selector is
- * restated here explicitly (even where the value doesn't otherwise need to change for landscape
- * itself) so nothing from the portrait block leaks through in that overlap case.
- *
- * Add .mws-main-menu-mountain / -village / -effect override rules here as needed; only
- * sky/manor/help need one so far. First-pass values, tune live. */
+ * No width qualifier -- landscape means "short," full stop; see the portrait rule just above for why
+ * the two breakpoints stay mutually exclusive without one. */
 @media (max-height: 30rem) {
     .mws-main-menu-border {
         transform: none;
@@ -388,13 +356,11 @@ body {
         left: 75px;
     }
 
-    /* Full-height row spanning between the border's own left/right inset (40px, matching
-       border-image-width) and a matching top/bottom inset -- logo fills the leftover vertical
-       space above the buttons (flex: 1 1 auto + min-height: 0, same technique as portrait) but
-       right-aligned (align-self) instead of full-width; tagline and buttons stretch to the row's
-       full width by the container's own align-items: stretch. Buttons land at the very bottom
-       because they're the last flex child in a container spanning the full available height, same
-       "let flex-grow above them do the bottom-anchoring" approach as the portrait block. */
+    /* Full-height row spanning the border's own left/right inset (40px) and a matching top/bottom
+       inset -- logo fills the leftover vertical space above the buttons (flex: 1 1 auto +
+       min-height: 0, same technique as portrait) but right-aligned instead of full-width; tagline
+       and buttons stretch to the row's full width via align-items: stretch. Buttons land at the
+       bottom because they're the last flex child in a container spanning the full height. */
     .mws-main-menu-content {
         position: absolute;
         top: 20px;
@@ -436,14 +402,16 @@ body {
     .mws-main-menu-buttons button {
         aspect-ratio: 17 / 6;
         font-size: 1.5rem;
+        /* Resets the portrait rule's own min-width: 200px -- a viewport that's both narrow and
+           short matches both breakpoints, so this needed restating here too. */
+        min-width: auto;
     }
 }
 
 /* -- Web splash --------------------------------------------------------------------------------
- * Shown by Masterwork.App.Web/Components/App.razor while the WASM bundle downloads and boots --
- * see that file and app.css's own .mws-splash rule for why it exists and what stays structural
- * there vs. themed here. Same background/text colors as the main menu (the actual "blue-grey used
- * elsewhere") so there's no color jump between this and the main menu it hands off to. */
+ * Shown by Masterwork.App.Web/App.razor while the WASM bundle downloads -- see app.css's own
+ * .mws-splash rule for the structural/themed split. Same colors as the main menu it hands off to,
+ * so there's no color jump. */
 .mws-splash {
     background: #0d1420;
     color: #e5e0d8;
@@ -476,26 +444,18 @@ body {
 }
 
 /* -- Settings dialog (OptionsDialog.razor) ------------------------------------------------------
- * The app's own chrome only ever emits structural class hooks (.mws-dialog-overlay/-dialog,
- * .mws-options-dialog vs. .mws-dialog--sm, .mws-options-row/-controls/-input/-value,
- * .mws-mute-checkbox, .mws-save-name-input, .style-btn-brown/-green/-red) -- app.css gives them a
- * plain generic fallback look (white box, browser-default controls), same as every other screen
- * this theme hasn't reached yet. This section is deliberately a close port of
- * my-fathers-work-template's own OptionsDialog skin (same asset choices, same border-image/slider/
- * checkbox numbers) rather than a fresh design -- the app's default "no module loaded" dialog and
- * a loaded module's in-game dialog should look like the same UI, not two different ones. The only
- * real difference from the module version is the asset URIs themselves: plain relative url(...)
- * paths here instead of that module's image://slug indirection (AssetResolver's URI scheme only
- * exists while a module is loaded and injecting its own CSS -- this file is active before any
- * module loads too). button_brown/green/red.png are the same files already bundled for the main
- * menu's own buttons (images/ui/), reused as-is rather than duplicated. */
+ * app.css's chrome only emits structural class hooks; this is a close port of
+ * my-fathers-work-template's own OptionsDialog skin (same assets/numbers) rather than a fresh
+ * design, so the app's "no module loaded" dialog and a loaded module's in-game dialog read as the
+ * same UI. Only real difference: plain relative url(...) paths instead of that module's
+ * image://slug indirection, which only exists once a module is loaded. button_brown/green/red.png
+ * are the same files already bundled for the main menu's own buttons. */
 
 /* Standard brown/green/red buttons -- Apply/Cancel/Quit/Resume/Save/Abandon all go through these
    three classes (see OptionsDialog.razor and PauseBar.razor), so this skins both at once. */
 .style-btn-brown,
 .style-btn-green,
 .style-btn-red {
-    display: inline-flex;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -832,17 +792,12 @@ body {
 }
 
 /* -- Module select (StartNewGame.razor) -------------------------------------------------------
- * Full-bleed chrome wrapper around the page's actual content, same technique as the main menu:
- * a fixed leather-texture backdrop (below content), a fixed decorative frame on top (above
- * content, pointer-events: none). Unlike the main menu, this screen's content genuinely doesn't
- * fit one viewport in general (a carousel plus a description), so the *screen* still never
- * scrolls (position: fixed/overflow: hidden, same as the main menu) but it's a flex column whose
- * two content regions -- the carousel and the detail "well" -- each get their own independent
- * scroll region instead of the whole page scrolling as one block. */
-/* Top/right match .mws-scenario-back-button's own top/left exactly (both breakpoints, below) --
-   the toolbar sits in this padding's top-right corner, so keeping these two in lockstep is what
-   makes the back button and the toolbar read as symmetrically inset from the frame at every
-   viewport size, rather than two independently-tuned numbers drifting apart. */
+ * Full-bleed chrome wrapper, same technique as the main menu: fixed backdrop below content, fixed
+ * decorative frame on top (pointer-events: none). This screen's content doesn't fit one viewport in
+ * general (carousel + description), so the screen itself still never scrolls, but the carousel and
+ * detail "well" each get their own independent scroll region instead of the whole page scrolling. */
+/* Top/right match .mws-scenario-back-button's own top/left exactly (both breakpoints below) -- keeps
+   the back button and the toolbar symmetrically inset from the frame at every viewport size. */
 .mws-scenario-screen {
     position: fixed;
     inset: 0;
@@ -855,7 +810,7 @@ body {
     font-family: 'Averia Libre', serif;
 }
 
-@media (max-width: 45.99rem) {
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-scenario-screen {
         padding-top: 44px;
         padding-left: 16px;
@@ -863,10 +818,16 @@ body {
     }
 }
 
+/* Pulled in to 10px INSIDE the border's own inner edge, not 10px from the raw viewport edge --
+   border-image-width is 42px 40px and this breakpoint (unlike portrait) doesn't crop the side posts
+   away, so the border is genuinely visible here. A flat 10px sat behind the frame art instead of
+   inside it. Kept in lockstep with .mws-scenario-back-button's own landscape rule below. top is
+   untouched -- only left/right were reported as too far in. */
 @media (max-height: 30rem) {
     .mws-scenario-screen {
         padding-top: 36px;
-        padding-right: 75px;
+        padding-right: 50px;
+        padding-left: 50px;
     }
 }
 
@@ -901,7 +862,7 @@ body {
 /* Same narrow-viewport crop as .mws-main-menu-border -- was missing here, which is why the side
    posts weren't dropping away on a narrow/portrait viewport the way every other bordered screen's
    already does. */
-@media (max-width: 45.99rem) {
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-scenario-border {
         transform: scaleX(1.6667);
     }
@@ -931,17 +892,20 @@ body {
     filter: brightness(1.15);
 }
 
-@media (max-width: 45.99rem) {
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-scenario-back-button {
         top: 44px;
         left: 16px;
+        width: 2.7rem;
     }
 }
 
+/* Same 40px-border clearance as .mws-scenario-screen's own landscape rule above (kept in lockstep).
+   top is untouched -- only left/right were reported as too far in. */
 @media (max-height: 30rem) {
     .mws-scenario-back-button {
         top: 36px;
-        left: 75px;
+        left: 50px;
     }
 }
 
@@ -996,18 +960,23 @@ body {
     gap: 1rem;
 }
 
-/* Carousel row -- back/forward buttons flanking the carousel itself, same icon-button treatment
-   (arrow_left/arrow_right.png) and "hide the native scrollbar, scroll the active element into view
-   via JS instead" technique as PauseBar.razor's own timeline scrubber (.mws-pause-back/-forward +
-   .mws-timeline-list) -- ported rather than reinvented, so both scrubbers behave identically.
-   flex: 0 1 <basis> + min-height on the row is the "the well gets its space first, the carousel
-   gives up room second" half of the split with .mws-module-detail below (that rule has the other
-   half) -- height, not just width, since .mws-module-tile-image sizes itself from this row's own
-   height (see that rule), which is what actually makes the thumbnails "shrink if the well needs
-   more room" rather than just clipping. */
+/* Carousel row -- back/forward buttons flanking the carousel, same icon-button + "hide the native
+   scrollbar, scroll the active element into view via JS" technique as PauseBar's own timeline
+   scrubber, ported rather than reinvented.
+   flex-basis: 50% is half of a fixed top/bottom split with .mws-module-detail below -- deliberately
+   not content-driven/auto, since an auto-height carousel let a low-aspect-ratio thumbnail consume
+   nearly the whole screen at some sizes, crowding the well's own Play/language controls off-screen.
+   .mws-module-tile-image sizes itself from this row's height, so fixing the row's height is what
+   makes the thumbnail shrink to fit (gaining empty space on either side) instead of the row growing
+   to match the image.
+   max-height caps how far 50% can grow on a tall/tablet-portrait viewport; .mws-module-detail's own
+   uncapped flex-grow absorbs whatever the carousel doesn't use once it hits the ceiling, so the well
+   gets more room rather than the carousel getting wastefully large. Only matters above 28rem/50%, so
+   it doesn't touch the phone breakpoints below. */
 .mws-module-carousel-row {
-    flex: 0 1 19rem;
+    flex: 1 1 50%;
     min-height: 6rem;
+    max-height: 28rem;
     display: flex;
     align-items: stretch;
     gap: 0.5rem;
@@ -1044,10 +1013,9 @@ body {
     cursor: default;
 }
 
-/* justify-content: safe center keeps tiles centered when there are too few to need scrolling,
-   without the unsafe centering that can clip the start of an overflowing row in some browsers.
-   No visible scrollbar (scrollbar-width: none / ::-webkit-scrollbar below) -- see the row comment
-   above for why; StepCarousel/click-to-select drive centerElement instead of a drag affordance. */
+/* justify-content: safe center keeps tiles centered when there are too few to scroll, without the
+   unsafe centering that can clip an overflowing row in some browsers. No visible scrollbar --
+   StepCarousel drives centerElement() instead of a drag affordance. */
 .mws-module-carousel {
     flex: 1 1 auto;
     min-width: 0;
@@ -1060,16 +1028,11 @@ body {
     display: none;
 }
 
-/* Tile -- a card (image + border) with its title below it, not overlaid on top of the artwork (the
-   overlaid version read as too hard to read against busy thumbnail art). Sized from the carousel
-   row's own height (.mws-module-tile-image below), not a fixed width -- cost-of-disease's
-   scenario_tile_tcod.png (437x617) is the reference aspect-ratio the image box is drawn from, but
-   what actually varies at runtime is how tall .mws-module-carousel-row ends up (per its own flex
-   comment above), and every tile's width follows from that via aspect-ratio, which is what lets
-   the thumbnails shrink together when the well needs more room instead of just overflowing. The
-   thumb layer scales to fit via background-size: contain rather than stretching, so a
-   differently-proportioned module thumbnail doesn't distort, it just letterboxes within the same
-   card shape every tile shares. */
+/* Tile -- a card (image + border) with its title below, not overlaid on the artwork (read as too
+   hard to read against busy thumbnail art). Sized from the carousel row's own height
+   (.mws-module-tile-image below), not a fixed width, so every tile's width follows via aspect-ratio
+   and shrinks together when the well needs more room. background-size: contain lets a differently-
+   proportioned thumbnail letterbox instead of distorting. */
 .mws-module-tile {
     display: flex;
     flex-direction: column;
@@ -1101,12 +1064,10 @@ body {
     background-size: contain;
 }
 
-/* Unhighlighted/highlighted frame -- theme-owned (not sourced from the module, see
-   ModuleThumbnail.BorderInactive/BorderActive's own remarks), swapped by the .selected modifier
-   class SelectModule already toggles. Sized to the image box's own dimensions, not the border
-   image's native 455x633 -- a plain full-cover background-image, not border-image, since (unlike
-   the outer frame assets) this one has no repeating straight-edge segment to preserve; it's drawn
-   to exactly match the tile's own aspect-ratio already. */
+/* Unhighlighted/highlighted frame -- theme-owned, swapped by the .selected class SelectModule
+   already toggles. A plain full-cover background-image, not border-image, since (unlike the outer
+   frame) this asset has no repeating edge to preserve -- it's already drawn to the tile's own
+   aspect-ratio. */
 .mws-module-tile-border {
     position: absolute;
     inset: 0;
@@ -1120,9 +1081,8 @@ body {
     background-image: url('images/module-select/tile-border-active.png');
 }
 
-/* Below the image, centered -- neutral grey normally, gold when selected, matching the border
-   swap above so both cues agree about which tile is active. flex: none keeps this from being
-   squeezed by .mws-module-tile-image's own flex: 1 1 auto as the tile's overall height shrinks. */
+/* Below the image, centered -- neutral grey normally, gold when selected, matching the border swap
+   above. flex: none keeps it from being squeezed by the image's own flex: 1 1 auto. */
 .mws-module-tile-title {
     flex: none;
     text-align: center;
@@ -1146,20 +1106,22 @@ body {
 }
 
 /* Detail panel ("information well") -- hub_section.png border-image, same numbers as
-   my-fathers-work-template's own .mws-section.style-hub-card (its border is a thin 14px-on-source
-   frame around a fully transparent interior, not a filled panel graphic, so border-image is the
-   right tool -- see that rule's own comment in the template for the full reasoning).
-   flex: 1 0 auto (grow but never shrink) is the "the well always gets whatever's left, and never
-   loses out to the carousel" half of the split with .mws-module-carousel-row above -- that row's
-   own flex: 0 1 <basis> is the other half (it grows to its 19rem basis at most, but happily
-   shrinks first). Occupies all the remaining space between the carousel and the padded edge of the
-   screen, in whichever direction .mws-scenario-content is currently stacking (column here, row in
-   the landscape breakpoint below). */
+   my-fathers-work-template's own .mws-section.style-hub-card (a thin frame around a transparent
+   interior, not a filled panel graphic).
+   flex-basis: 50% is the other half of the fixed split with .mws-module-carousel-row above (see that
+   rule's comment for why it's a fixed proportion rather than a max-height cap). Long descriptions
+   scroll within their own share via .mws-module-detail-text's overflow-y: auto instead of growing
+   the well past its allotted height. */
 .mws-module-detail,
 .mws-empty-state {
-    flex: 1 0 auto;
+    flex: 1 1 50%;
     min-height: 0;
-    max-height: 24vh;
+}
+
+/* Applies at every screen size, not just the narrow breakpoints below -- the prompt reads oddly
+   left-aligned against the centered carousel above it regardless of viewport. */
+.mws-empty-state {
+    text-align: center;
 }
 
 .mws-module-detail {
@@ -1177,9 +1139,8 @@ body {
     padding: 1em 1.2em;
 }
 
-/* First row -- title, language/version, Play -- deliberately outside the Ascrollable body below
-   (flex: none), so it's always visible regardless of how long the description is or how little
-   room the well ends up with. */
+/* First row -- title, language/version, Play -- deliberately outside the scrollable body below
+   (flex: none), so it's always visible regardless of description length. */
 .mws-module-detail-header {
     flex: none;
     display: flex;
@@ -1201,10 +1162,9 @@ body {
     text-shadow: 0.1em 0.1em 1px black;
 }
 
-/* The only part of the well allowed to scroll -- min-height: 0 lets it actually shrink inside the
-   column instead of forcing .mws-module-detail taller than the space actually available. Extra
-   bottom padding clears .mws-module-detail-version (below), which is positioned absolutely over
-   this area rather than taking its own row, so it doesn't collide with wrapped description text. */
+/* The only part of the well allowed to scroll -- min-height: 0 lets it shrink inside the column
+   instead of forcing .mws-module-detail taller than available space. Extra bottom padding clears
+   .mws-module-detail-version, which is absolutely positioned over this area. */
 .mws-module-detail-text {
     flex: 1 1 auto;
     min-height: 0;
@@ -1231,11 +1191,9 @@ body {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-/* Same closed-control treatment as the settings dialog's own language dropdowns -- see that rule's
-   own comment (further up this file) for why only the closed box/option colors are reachable.
-   Sized down (2rem vs. that rule's 2.5rem) to fit inline in the header row next to the title/Play
-   rather than a full-width dialog row. Greyscale when disabled (a module with only one language)
-   -- same convention as every other disabled control in this file (sliders, standard buttons). */
+/* Same closed-control treatment as the settings dialog's own dropdowns (see that rule's comment for
+   why only the closed box is reachable). Sized down to fit inline in the header row. Greyscale when
+   disabled (a module with only one language), same convention as every other disabled control. */
 .mws-module-language {
     position: static;
     height: 2rem;
@@ -1247,11 +1205,8 @@ body {
     cursor: default;
 }
 
-/* Play -- icon-only (button_forward_orange.png), same "graphical trigger, no visible label, aria
-   via visually-hidden text" pattern as the template's own ending-narration continue button and
-   .mws-pause-jump-to-present. Sized to match the header row's other controls (2.5rem, was 3.25rem)
-   -- previously the largest thing in the well by far when it was the only control in its own
-   bottom-right column; now it's one of three items in a compact title row. */
+/* Play -- icon-only, same "graphical trigger, aria via visually-hidden text" pattern as the
+   template's own ending-narration continue button. Sized to match the header row's other controls. */
 .mws-scenario-play-button {
     flex: none;
     width: 2.5rem;
@@ -1270,17 +1225,64 @@ body {
     filter: brightness(1.15);
 }
 
+/* -- Narrow (phone portrait) --------------------------------------------------------------------
+ * Toolbar buttons dialed down further. Carousel keeps the base rule's height-driven tile sizing --
+ * only the SLOT each tile occupies while scrolling changes: flex: 0 0 100% makes each slot the full
+ * carousel width (with the narrower image centered via .mws-module-tile's own align-items: center),
+ * so exactly one tile is visible between the arrows. scroll-snap-type/-align keep StepCarousel's own
+ * centerElement() landing cleanly on a slot boundary. */
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
+    .mws-module-toolbar .style-btn-brown,
+    .mws-upload-button.style-btn-brown {
+        font-size: 1em;
+    }
+
+    .mws-module-carousel {
+        scroll-snap-type: x mandatory;
+    }
+
+    .mws-module-tile {
+        flex: 0 0 100%;
+        width: 100%;
+        scroll-snap-align: center;
+    }
+
+    .mws-module-tile-title {
+        font-size: 1.4rem;
+        white-space: normal;
+    }
+}
+
+/* Title/version in the detail well are redundant here (title repeats the just-tapped tile's own
+   name; version is shown on the tile too) and eat space better spent on the description -- hidden at
+   both narrow breakpoints. Language + Play move below the description via flex order rather than a
+   markup change (.mws-module-detail-header still renders first in the DOM). */
+@media (max-width: 45.99rem) and (min-height: 30.01rem), (max-height: 30rem) {
+    .mws-carousel-nav-button {
+        width: 3rem;
+    }
+
+    .mws-module-detail-title,
+    .mws-module-detail-version {
+        display: none;
+    }
+
+    .mws-module-detail-text {
+        order: 1;
+    }
+
+    .mws-module-detail-header {
+        order: 2;
+        justify-content: flex-end;
+    }
+}
+
 /* -- Landscape (short viewport) -----------------------------------------------------------------
- * Same breakpoint the main menu and settings dialog already use for "short on vertical room."
- * Carousel and well switch from stacked (top/bottom) to side by side (left/right). align-items:
- * stretch (inherited from .mws-scenario-content's own base rule) makes .mws-module-carousel-row
- * and .mws-module-detail/-empty-state match heights automatically, top and bottom, since they're
- * plain flex siblings in a row -- that alone doesn't need repeating here; what does is giving the
- * row enough *width* for the tile that results (still sized from the row's own height, same
- * .mws-module-tile-image rule as the portrait layout -- not overridden here) to actually fit
- * without clipping, alongside the now-larger 4.6rem nav buttons: 2 buttons + 2 gaps + one tile
- * derived from a roughly 300px available height comes to about 24rem. First-pass number, tune
- * live like everything else at this breakpoint. */
+ * Same breakpoint the main menu and settings dialog use. Carousel and well switch from stacked to
+ * side by side; align-items: stretch (inherited) matches their heights automatically. Row width
+ * needs to fit the tile at the shared-breakpoint 3rem nav button size: 2 buttons + 2 gaps + one tile
+ * from a ~300px available height comes to about 24rem, so 40vw leaves some breathing room on most
+ * phone widths. */
 @media (max-height: 30rem) {
     .mws-scenario-content {
         flex-direction: row;
@@ -1292,33 +1294,37 @@ body {
         width: 40vw;
     }
 
+    /* Unlike portrait, more than one tile can show here, but the row is usually narrow enough that
+       only one fits -- without room to scroll past the list's own start/end, the first/last tile
+       could never reach visual center the way a middle tile can. auto margins on just the
+       first/last tile open up the scroll range enough for centerElement() to actually center them,
+       adapting to the tile's real rendered width instead of a fixed padding guess. */
+    .mws-module-tile:first-child {
+        margin-inline-start: auto;
+    }
+
+    .mws-module-tile:last-child {
+        margin-inline-end: auto;
+    }
+
     .mws-module-detail,
     .mws-empty-state {
         min-width: 0;
         width: 0;
-        max-height: 0;
         margin-right: 1rem;
     }
 }
 
 /* -- Manage Modules / Continue (ManageModules.razor, ContinueList.razor) -----------------------
- * Both reuse .mws-scenario-screen/-border/-back-button verbatim (same leather background + main
- * frame + back button as Start New Game -- no reason to fork identical chrome into differently
- * named rules for what's visually the same wrapper). Unlike Start New Game, there's no carousel/
- * well split here -- just a fixed title above a plain scrollable list -- so the only additions
- * needed are the title's own flex: none (it's a sibling of the list, not inside it, so it stays
- * put while the list scrolls under it) and making the list itself the scrolling region
- * (flex: 1 1 auto + min-height: 0 + overflow-y: auto) inside the otherwise-non-scrolling screen,
- * same principle as every other split-region screen in this file. app.css's own reading-column
- * @media (min-width: 48rem) rule still applies to both (unlike Start New Game's carousel, a list
- * of rows reads fine at 40rem, no reason to go full-bleed).
+ * Both reuse .mws-scenario-screen/-border/-back-button verbatim -- no reason to fork identical
+ * chrome. Unlike Start New Game, there's no carousel/well split, just a fixed title above a plain
+ * scrollable list: the title gets flex: none (a sibling of the list, stays put while it scrolls),
+ * and the list itself is the scrolling region (flex: 1 1 auto + min-height: 0 + overflow-y: auto).
+ * app.css's reading-column rule still applies to both -- a list of rows reads fine at 40rem, unlike
+ * Start New Game's carousel.
  *
- * Breakpoint precedence note (differs from every other screen in this file!): Start New Game/the
- * main menu deliberately make the landscape (max-height: 30rem) breakpoint win over the narrow
- * (max-width: 45.99rem) one in the rare both-true case, by placing the landscape block later in
- * the file. These two screens want the opposite -- portrait wins -- so any future landscape
- * override added for .mws-manage-modules/.mws-continue-list must be placed BEFORE the narrow
- * block below, not after. */
+ * Landscape/portrait breakpoints here follow the same pairing as the main menu's (see that section,
+ * top of file). */
 .mws-manage-modules,
 .mws-continue-list {
     flex: 1 1 auto;
@@ -1347,14 +1353,13 @@ body {
 /* Above the scrollable list (a sibling, not a child -- see the flex comment above), same treatment
    as my-fathers-work-template's own .mws-section.style-hub-card > h3 (hub_section.png's own
    heading style), just sized up for a page-level title instead of a card-level one. */
-.mws-screen-title {    
+.mws-screen-title {
     flex: none;
     text-align: center;
     margin: 10px 57px 0.75rem;
     color: #f2b17b;
     text-shadow: 4px 6px 4px rgba(0, 0, 0, 0.8);
     font-size: 2.6em;
-    letter-spacing: 0.05em;
     font-weight: bolder;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -1362,8 +1367,7 @@ body {
 }
 
 /* Entries -- same hub_section.png border-image treatment as Start New Game's own detail well (see
-   that rule's comment for the full reasoning: a thin frame around a transparent interior, not a
-   filled panel graphic, hence border-image over a background-image panel). */
+   that rule's comment for the full reasoning). */
 .mws-module-row,
 .mws-save-row {
     background: rgba(18, 15, 13, 0.55);
@@ -1392,20 +1396,17 @@ body {
     align-items: flex-end;
 }
 
-/* Import Save button -- reuses .mws-upload-button's base look (Start New Game's own "Add" button)
-   but needs its own width/font-size: "Import Save" is a longer label than "Add", and 7em/1.2em
-   (that rule's own sizing) clips it. Three-class selector deliberately outweighs
-   .mws-upload-button.style-btn-brown's own specificity so this doesn't depend on source order. */
+/* Import Save button -- reuses .mws-upload-button's base look but needs its own width/font-size:
+   "Import Save" is longer than "Add" and clips at that rule's own sizing. Three-class selector
+   deliberately outweighs .mws-upload-button.style-btn-brown's specificity, independent of source
+   order. */
 .mws-import-save-button.mws-upload-button.style-btn-brown {
     width: 8.5em;
     font-size: 1em;
 }
 
 /* Empty state -- reachable now that the main menu's Continue button no longer hides behind a
-   "has any save" guard, so a genuinely-empty list needs to read clearly rather than as a blank
-   panel (a first-time player, or one who imports before their first save exists). Plain centered
-   text against the leather background, same muted-but-legible color as .mws-save-info span/etc.,
-   not a bordered panel -- there's nothing to frame. */
+   "has any save" guard. Plain centered text, not a bordered panel -- there's nothing to frame. */
 .mws-continue-empty {
     color: #c9b8a0;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -1413,19 +1414,79 @@ body {
     font-size: 1.1em;
 }
 
+/* Landscape (short viewport) -- plain (max-height: 30rem), no width qualifier, same pairing as the
+   main menu's own landscape rule.
+   .mws-save-row/.mws-module-row are already full-width by default; width: 100% here is
+   belt-and-suspenders in case anything upstream changes .mws-scenario-screen's own padding again.
+   Continue's own title needs different centering than Manage Modules'/Help's shared rule: it sits
+   between the back button (left) and a real toolbar (Import Save, right) that the others don't have,
+   so centering across the full viewport (correct for those two) reads visibly off-center here.
+   :has() scopes this to the one screen that combines a toolbar with this title, without a
+   Continue-only markup class.
+   Absolutely positioned with explicit left/right (rather than margins on a centered box) so each
+   side clears the back button / Import Save button by its own actual width. rem, not em, throughout
+   the calc()s -- em here would resolve against .mws-screen-title's OWN font-size (2.6em) rather than
+   the flanking buttons', wildly overshooting. 50px + 3.25rem is the back button's inset + width;
+   50px + 8.9rem is the screen's padding + the Import Save button's rendered width. +1rem on each side
+   is breathing room before the title text starts. First-pass numbers (a calculation, not a measured
+   value), tune live. */
+@media (max-height: 30rem) {
+    .mws-save-row,
+    .mws-module-row {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .mws-scenario-screen:has(.mws-module-toolbar) .mws-screen-title {
+        position: absolute;
+        top: 36px;
+        left: calc(50px + 3.25rem + 1rem);
+        right: calc(50px + 8.9rem + 1rem);
+        margin: 0;
+    }
+}
+
+/* Narrow (phone portrait) -- buttons move from flanking the info block to stacked underneath it,
+   centered; the info block's own text stays left-anchored (unchanged from the base rule), only the
+   button row is centered. Manage Modules' row has no actions wrapper (just one Delete button), so
+   it's centered via align-self on the button itself.
+   .mws-screen-title's own 57px margin (tuned for the wide layout) left disproportionate empty space
+   on a narrow phone -- cut to 16px here, same inset the back button's own portrait rule uses. */
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
+    .mws-save-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .mws-save-actions {
+        justify-content: center;
+    }
+
+    .mws-module-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .mws-screen-title {
+        margin-left: 16px;
+        margin-right: 16px;
+    }
+
+    .mws-module-row > button {
+        align-self: center;
+    }
+}
+
 /* -- Help (Help.razor) -------------------------------------------------------------------------
- * Same .mws-scenario-screen/-border/-back-button/-screen-title chrome as Continue/Manage Modules
- * (see that section's own comment for the reasoning). The original app's help screen used a
- * pre-baked 3-tab border image (MFW_InstructionsText_Panel.png-style asset) -- not usable here
- * since Help.razor already supports an arbitrary topic count (Topics is a plain array, not
- * hardcoded to 3), and a pre-sliced 3-slot border can't stretch to fit a 4th tab. The hub border
- * (same hub_section.png used for every other list/entry panel in this theme) covers the sidebar
- * instead, with plain CSS gradients distinguishing hover/selected tabs rather than baked-in art --
- * scales to any number of topics for free. The content pane reuses
- * my-fathers-work-template's popup_parchment_border.png (same border-image numbers as that
- * template's score_panel/score_help cards: 6% 4% fill slice, 20px width) for the "torn parchment
- * page" look, which is why its text color is dark brown (#2b2016) rather than this theme's usual
- * light-on-dark palette -- parchment is a light background, unlike everything else in this file. */
+ * Same .mws-scenario-screen/-border/-back-button/-screen-title chrome as Continue/Manage Modules.
+ * The original app's help screen used a pre-baked 3-tab border image -- not usable here since
+ * Help.razor supports an arbitrary topic count. The hub border (same asset used for every other
+ * list/entry panel in this theme) covers the sidebar instead, with plain CSS gradients for
+ * hover/selected state -- scales to any topic count for free. The content pane reuses
+ * my-fathers-work-template's popup_parchment_border.png for the "torn parchment page" look, hence
+ * its dark-brown text color rather than this theme's usual light-on-dark palette. */
 .mws-help {
     flex: 1 1 auto;
     min-height: 0;
@@ -1434,10 +1495,9 @@ body {
     gap: 1.5rem;
 }
 
-/* Sidebar -- hub border around the whole tab list, not each tab individually (matches the
-   reference screenshot's single bordered panel with internal dividers, not N separate bordered
-   buttons). Scrolls on its own if there are enough topics to need it -- thin scrollbar, same dark
-   panel treatment as the settings dialog / Manage Modules / Continue. */
+/* Sidebar -- hub border around the whole tab list, not each tab individually. Scrolls on its own if
+   there are enough topics, same thin-scrollbar treatment as the settings dialog / Manage Modules /
+   Continue. */
 .mws-help-topics {
     flex: 0 0 14rem;
     flex-direction: column;
@@ -1552,15 +1612,11 @@ body {
 }
 
 /* Narrow (portrait) -- side by side doesn't fit a phone width; stack topics above content instead.
-   .mws-help's own align-items: stretch (base rule, was sizing row-height before this switches it
-   to column) now stretches both to full width for free, so margin: 0 5px is the only sizing needed
-   for "full width minus 5px on the sides." Topics gets a fixed height (not flex: 1) sized for
-   about 3 visible rows -- enough to browse without a tab list that dominates the screen -- with
-   the content pane (already flex: 1 1 auto from the base rule) taking whatever's left. No
-   landscape override exists yet for this screen, so there's no tie-breaking precedence to note
-   here (unlike Manage Modules/Continue's own reversed-precedence comment) -- if one gets added
-   later, decide then which wins. */
-@media (max-width: 45.99rem) {
+   .mws-help's own align-items: stretch now stretches both to full width for free. Topics gets a
+   fixed height (not flex: 1), sized for about 3 visible rows, with the content pane taking whatever
+   is left. No landscape override exists yet for this screen; if one gets added it wants a plain
+   (max-height: 30rem), no width qualifier (same pairing as elsewhere in this file). */
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-help {
         flex-direction: column;
     }
