@@ -12,9 +12,9 @@ Per that release, individual files may be copied and modified as needed; the ref
 itself (the full asset/project archive it was drawn from) is not mirrored here — only the specific
 files this theme actually uses, cherry-picked per screen.
 
-This is a deliberate, documented exception to this repo's general rule against committing anything
-from `Masterwork-Design\Reference\` (see the code repo's own `CLAUDE.md`) — that rule covers the
-broader CC BY-NC-SA reference material used for content extraction, not this specific community
+This is a deliberate, documented exception to this repo's general rule against committing CC
+BY-NC-SA reference material derived from the official app (see this repo's own `CLAUDE.md`) — that
+rule covers the broader reference material used for content extraction, not this specific community
 release.
 
 Some files under `wwwroot/images/ui/` (`button_brown.png`, `button_green.png`, `button_red.png`,

@@ -1,6 +1,15 @@
 # MasterWork Extractor
 
-`MasterWork.Extractor` is the CLI tool that converts Cradle C# scenario files into MWS v0.3 YAML passages, ready for the game engine.
+`MasterWork.Extractor` is the CLI tool that converts Cradle C# scenario files into MWS v0.4 YAML passages, ready for the game engine.
+
+**Status: nearing the end of active development.** All three official scenarios (*The Cost of
+Disease*, *A Time of War*, *Fear of the Unknown*) have been extracted cleanly (0 unknown nodes in
+two of the three; see Current Extraction Results below) and shipped in public releases. Further
+extractor changes are expected only if real play of the shipped modules surfaces a genuine bug, not
+from new Cradle patterns still needing support. Once that risk is judged low, maintenance of the
+three modules' content shifts from "routinely re-extracted" to hand-editing the already-extracted
+YAML directly — the same way the fourth, fully hand-authored module (`my-fathers-work-template`)
+already works.
 
 ---
 
@@ -10,7 +19,7 @@ The three original *My Father's Work* scenarios were built with **Cradle 2.0**, 
 
 The extractor:
 1. Parses the C# source with Roslyn (no regex — full AST)
-2. Converts each passage into MWS v0.3 YAML nodes
+2. Converts each passage into MWS v0.4 YAML nodes
 3. Extracts all human-readable strings into an `en-US.restext` locale file (replacing them with `restext://Key` references in the YAML)
 4. Assigns deterministic PRNG seed keys to all random calls
 5. Writes one `.mws.yaml` file per passage, plus a variables manifest and extraction report
@@ -51,40 +60,23 @@ The extractor no longer accepts hand-authored overrides — see [Module Override
 
 ## Extraction Commands for the Three Scenarios
 
-Run from the `c:\Projects\Masterwork` directory. Extracted modules live in the standalone
-`Masterwork-Modules` repo (`c:\Projects\Masterwork-Modules`) — a sibling of this repo and of
-`Masterwork-Design`, not a subfolder of either. Each migrated module holds its own canonical Cradle
-source under `Masterwork-Modules/{module}/.source/` and extraction reads from there — `Cost of
-Disease` has been migrated; `Masterwork-Design/Reference/ScriptsComplete/` is historical for it now.
-Fear of the Unknown and A Time of War haven't been migrated yet, so they still read from
-`Masterwork-Design/Reference/ScriptsComplete/` and still output flat there (no `passages/` subfolder
-split). See `Masterwork-Modules/CLAUDE.md` for the authoritative, up-to-date version of the Cost of
-Disease command.
+Run from this repo's root directory. Extracted modules live in the standalone `Masterwork-Modules`
+repo — a sibling of this one, checked out alongside it. **All three scenarios are now fully
+migrated**: each holds its own canonical Cradle source under `Masterwork-Modules/{module}/.source/`,
+extraction reads from there, and each uses the same `passages/` + `passages-override/` split —
+there's no shared external staging area to read from anymore. See `Masterwork-Modules/CLAUDE.md` for
+the authoritative, up-to-date extraction commands (the shape below is the same for all three, just
+with different source filenames/module names).
 
 ```powershell
-$base = "c:\Projects\Masterwork-Design\Reference\ScriptsComplete"
+# Shared across all three scenarios. <Masterwork-Modules> is the path to your local clone of the
+# sibling Masterwork-Modules repo:
+$spritemap   = "<path to a local copy of the Unity project's Assets/Resources/TheCostOfDisease_ItemObtain.json>"  # Cost of Disease only; see NOTICE.md for asset provenance — not tracked in any of these repos
+$progressmap = "<Masterwork-Modules>/progress-map.json"   # shared by all three modules' hub passages
+$modules     = "<Masterwork-Modules>"
 
-# Fear of the Unknown (not yet migrated into Masterwork-Modules/ — still flat output here)
-dotnet run --project src/Masterwork.Extractor -- `
-  "$base\FearoftheUnknown_Eng_v15.cs" `
-  "$base\fear-of-the-unknown"
-
-# A Time of War (not yet migrated — still flat output here)
-dotnet run --project src/Masterwork.Extractor -- `
-  "$base\ATimeofWar_Eng_v8.cs" `
-  "$base\a-time-of-war" `
-  --module-title "A Time of War"
-
-# The Cost of Disease — migrated; reads from its own .source/ copy in Masterwork-Modules, not from
-# $base above. Passages go into the module's passages/ subfolder; _variables.yaml and en-US.restext
-# go into the module root, next to manifest.yaml and passages-override/. --common-restext gives
-# stable IDs to Common strings (see Masterwork-Modules/cost-of-disease/.source/en-US.common.restext);
-# --progress-map gives hub_early/hub_middle/hub_late layout overrides + end_of_round popups at the
-# reference app's real progress-bar checkpoints (see Masterwork-Modules/progress-map.json).
-$codbase     = "c:\Projects\Masterwork-Modules\cost-of-disease\.source"
-$spritemap   = "c:\Projects\Masterwork-Design\Reference\UnityOriginalApp\Assets\Resources\TheCostOfDisease_ItemObtain.json"
-$progressmap = "c:\Projects\Masterwork-Modules\progress-map.json"
-$modules     = "c:\Projects\Masterwork-Modules"
+# The Cost of Disease
+$codbase = "$modules\cost-of-disease\.source"
 dotnet run --project src/Masterwork.Extractor -- `
   "$codbase\TheCostofDisease_Eng_v10.cs" `
   "$modules\cost-of-disease\passages" `
@@ -94,9 +86,37 @@ dotnet run --project src/Masterwork.Extractor -- `
   --sprite-map $spritemap `
   --common-restext "$codbase\en-US.common.restext" `
   --progress-map $progressmap
+
+# A Time of War
+$atowbase = "$modules\a-time-of-war\.source"
+dotnet run --project src/Masterwork.Extractor -- `
+  "$atowbase\ATimeofWar_Eng_v8.cs" `
+  "$modules\a-time-of-war\passages" `
+  --variables-out "$modules\a-time-of-war" `
+  --restext-out "$modules\a-time-of-war" `
+  --module-title "A Time of War" `
+  --common-restext "$atowbase\en-US.common.restext" `
+  --progress-map $progressmap
+
+# Fear of the Unknown
+$fotubase = "$modules\fear-of-the-unknown\.source"
+dotnet run --project src/Masterwork.Extractor -- `
+  "$fotubase\FearoftheUnknown_Eng_v15.cs" `
+  "$modules\fear-of-the-unknown\passages" `
+  --variables-out "$modules\fear-of-the-unknown" `
+  --restext-out "$modules\fear-of-the-unknown" `
+  --common-restext "$fotubase\en-US.common.restext" `
+  --progress-map $progressmap
 ```
 
-> **Note:** `--module-title` is required for A Time of War (auto-generation capitalises "Of") and The Cost of Disease (auto-generation produces "The Costof Disease").
+`--variables-out`/`--restext-out` put `_variables.yaml`/`en-US.restext` at the module root, next to
+`manifest.yaml` and `passages-override/`. `--common-restext` gives stable IDs to Common strings (used
+in 2+ passages) from each module's own hand-curated `en-US.common.restext`. `--progress-map` gives
+`hub_early`/`hub_middle`/`hub_late`-style layout overrides plus `end_of_round` popups at the
+reference app's real progress-bar checkpoints — the same `progress-map.json` file now covers hub
+passages across all three modules, not just Cost of Disease.
+
+> **Note:** `--module-title` is required for A Time of War (auto-generation capitalises "Of") and The Cost of Disease (auto-generation produces "The Costof Disease"). Fear of the Unknown's auto-generated title is fine as-is.
 
 > **Note:** Re-running extraction only touches `passages/` — it never writes to `passages-override/`,
 > so hand-authored passages there always survive a re-extraction.
@@ -104,7 +124,8 @@ dotnet run --project src/Masterwork.Extractor -- `
 > **Note:** the source `.cs` file's directory determines what the "# {path}:{line}" comments in each
 > passage resolve to — that's why Cost of Disease reads from its own `.source/` copy (giving
 > `../.source/TheCostofDisease_Eng_v10.cs`, a path valid inside `Masterwork-Modules`) rather than
-> from `Masterwork-Design`, which wouldn't resolve to a valid relative path from inside that repo.
+> from an external reference location, which wouldn't resolve to a valid relative path from inside
+> that repo.
 
 ---
 
@@ -114,7 +135,7 @@ For each run, the output directory contains:
 
 | File | Description |
 |---|---|
-| `{NNN}-{PassageId}.mws.yaml` | One file per passage in MWS v0.3 format, numbered by source order |
+| `{NNN}-{PassageId}.mws.yaml` | One file per passage in the current MWS format (v0.4), numbered by source order |
 | `_variables.yaml` | All discovered session variables with inferred types |
 | `en-US.restext` | All extracted human-readable strings, one `Key=Value` per line |
 | `_extraction-report.md` | Summary table, warnings, unknown nodes, isolated passages, input prompts. Written next to the source `.cs` file(s), not `<passages-out-dir>` — it's read while working on the Cradle source, so it belongs next to it. |
@@ -181,17 +202,17 @@ CradleExtractor
   ├── HoistAssignAndSwitchPlayerNames  reorder player-name setup sequences into canonical form
   ├── ConsolidateText          merge text runs, apply inline style markup, promote let nodes
   ├── AssignSeedKeys           DFS passage graph, assign stable "PassageId_N" seed keys
-  └── V2Serializer             convert extractor-internal types → v0.3 YAML dicts
+  └── V2Serializer             convert extractor-internal types → current MWS YAML dicts
        └── RestextCollector    extract strings to restext URIs while serializing
 ```
 
-### Extractor-internal nodes → v0.3 output
+### Extractor-internal nodes → current MWS output
 
-The extractor internally uses a set of **extractor-internal node types** (`MwsNodes.cs`, in the `Masterwork.Extractor` project) produced by `PassageBodyVisitor`. These are converted to v0.3 YAML at serialization time by `V2Serializer.cs`, which runs after all passes complete. This design keeps the test suite (which checks intermediate node types) unaffected by format changes.
+The extractor internally uses a set of **extractor-internal node types** (`MwsNodes.cs`, in the `Masterwork.Extractor` project) produced by `PassageBodyVisitor`. These are converted to the current MWS YAML format (v0.4) at serialization time by `V2Serializer.cs`, which runs after all passes complete. This design keeps the test suite (which checks intermediate node types) unaffected by format changes. (`V2Serializer`'s name is historical — from the v0.1→v0.2 transition — not tied to any particular current format version; it's evolved to emit whatever `mws-format-latest.md` currently specifies, v0.4 as of this writing.)
 
 Key transformations performed by the serializer:
 
-| Extractor-internal | v0.3 YAML output |
+| Extractor-internal | Current MWS YAML output |
 |---|---|
 | `TextNode(template, style)` | `{type: text, value: **text**}` with inline markdown |
 | `LinkNode` | `{type: navigation, label, target, state_affecting, onclick}` |
@@ -205,7 +226,7 @@ Key transformations performed by the serializer:
 | `EffectNode` | one `{type: assign, var, expr}` per variable affected |
 | `ForeachNode` | `{type: foreach, var, in, do}` |
 
-See `docs/mws-format-latest.md` for the full v0.3 node type reference.
+See `docs/mws-format-latest.md` for the full current node type reference.
 
 ---
 
@@ -269,24 +290,30 @@ Unknown sprites fall back to a slugified form of the atlas name.
 
 The extractor itself no longer has any override mechanism — it only ever writes to `<passages-out-dir>`, never touches hand-authored content, and every re-extraction is a clean, repeatable regeneration of that one folder. Hand-authored passages instead live directly in a module and are applied at **module load time**, not extraction time.
 
-A module directory (e.g. `Masterwork-Modules/cost-of-disease/`) is laid out as:
+A module directory (all four current modules, e.g. `Masterwork-Modules/cost-of-disease/`) is laid out as:
 
 ```
 <module>/
 ├── manifest.yaml         — declares passages/passages_override folder names (defaults below)
-├── _variables.yaml
+├── _variables.yaml       — extractor-owned; regenerated wholesale on every re-extraction
+├── variables/            — optional, hand-authored; add-or-override-by-key on top of _variables.yaml
 ├── en-US.restext
 ├── passages/              — extractor-owned; overwritten wholesale by each re-extraction
-└── passages-override/     — hand-maintained; never touched by extraction
+├── passages-override/     — hand-maintained; never touched by extraction
+└── layouts/               — hand-maintained layout chrome (docs/mws-format-latest.md §8)
 ```
 
-`ModuleLoader.LoadFromDirectory` (in `Masterwork.ModuleFormat`) loads `passages/` first, then applies `passages-override/` on top: a `.mws.yaml` file there with a `passage_id` matching an extracted passage **replaces it entirely**; a `passage_id` not present in `passages/` is simply **added**. The folder names default to `passages`/`passages-override` but can be redirected per-module via optional `passages`/`passages_override` string fields in `manifest.yaml`. Older extractor output with no `passages/` subfolder at all (e.g. the still-flat `fear-of-the-unknown`/`a-time-of-war` directories) loads unchanged — `LoadFromDirectory` falls back to reading passages directly from the module root when no `passages/` subfolder exists.
+`ModuleLoader.LoadFromDirectory` (in `Masterwork.ModuleFormat`) loads `passages/` first, then applies `passages-override/` on top: a `.mws.yaml` file there with a `passage_id` matching an extracted passage **replaces it entirely**; a `passage_id` not present in `passages/` is simply **added**. The folder names default to `passages`/`passages-override` but can be redirected per-module via optional `passages`/`passages_override` string fields in `manifest.yaml`. A module with no extraction step at all (`my-fathers-work-template`, fully hand-authored) simply has a flat `passages/` and no `passages-override/`/`.source/` — `LoadFromDirectory` accommodates that too.
 
 Overrides must be in **current MWS format** (matching `docs/mws-format-latest.md`). When the format version advances, update all overrides before the next module load.
 
-The Cost of Disease's `passages-override/` currently contains:
-- `00327-WinnerHUB.mws.yaml` — hand-implements the player ranking algorithm (descending sort by points using the `NamePoints` custom type) that the extractor cannot derive automatically from the original LINQ code.
-- `_Setup_01_PlayerCountSelect.mws.yaml` through `_Setup_09_Preparations.mws.yaml` — a hand-authored player/town onboarding flow that replaces the original app's pre-module-select setup screens, entirely new content with no extracted equivalent.
+All three official scenarios now use the same `passages-override/` pattern (each has its own version of the same shape, not just Cost of Disease):
+- A hand-implemented player-ranking passage (`WinnerHUB` in Cost of Disease) — the descending-sort-by-points logic the extractor can't derive automatically from the original LINQ code.
+- `_Setup_01_PlayerCountSelect.mws.yaml` through `_Setup_09_Preparations.mws.yaml` — a hand-authored player/town onboarding flow that replaces the original app's pre-module-select setup screens, entirely new content with no extracted equivalent. Identical nine-file pattern across all three scenarios.
+- `_Scoring_01` through `_Scoring_04` — a hand-authored end-of-game scoring flow, same pattern across all three.
+- A handful of hand-authored `*-End{N}.mws.yaml` ending passages and a `Preparations`/`VarEndingsPassage` pair, specific to each scenario.
+
+This is the concrete, shipped result of the app/module responsibility inversion (player onboarding and scoring are module content now, not app-shell UI).
 
 ---
 
@@ -297,16 +324,20 @@ The extraction report lists passages with no inbound references from other passa
 - Unreachable dead code or authoring notes
 - Passages referenced from non-passage C# logic the extractor doesn't trace
 
-Isolated passages are flagged but not excluded. Human review is needed to determine which are true entry points vs. dead code. Counts per module: FotU 80, AToW 62, CoD 84.
+Isolated passages are flagged but not excluded. Human review is needed to determine which are true entry points vs. dead code. See each module's own `_extraction-report.md` (in its `.source/` folder) for current per-module counts — figures previously quoted here predate all three scenarios being migrated into `Masterwork-Modules` and are no longer reproduced here to avoid going stale again.
 
 ---
 
-## Current Extraction Results (as of 2026-07-02)
+## Current Extraction Results
 
-| Module | Source | Passages | Variables | Strings | Warnings | Unknowns |
-|---|---|---|---|---|---|---|
-| Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 254 | 2157 | 46 | 0 |
-| A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 188 | 1826 | 44 | 0 |
-| The Cost of Disease | `TheCostofDisease_Eng_v10.cs` | 361 | 261 | 2144 | 60 | 0 |
+All three official scenarios are extracted and shipped (Masterwork-Modules v0.2.1 and earlier releases):
 
-All 1036 passage files carry `format: mws/0.3`. Warnings are all conflicting-type assignments (genuine mixed-use patterns; resolved to `type: string`) — not extraction errors.
+| Module | Source | Passages | Variables | Warnings | Unknowns |
+|---|---|---|---|---|---|
+| The Cost of Disease | `TheCostofDisease_Eng_v10.cs` | 361 | 260 | 70 | 14 |
+| A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 187 | 365 | 0 |
+| Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 253 | 359 | 0 |
+
+All passage files across all four modules carry `format: 'mws/0.4'`. Warnings are predominantly conflicting-type assignments (a variable used as more than one type across the original ~30k-line source — genuine mixed-use patterns, resolved to `type: string`), not extraction errors; see each module's own `_extraction-report.md` for the exact breakdown, especially Cost of Disease's 14 unknown-node warnings, which are worth a closer look if revisiting that module's content.
+
+See each module's own `_extraction-report.md` (next to its `.source/*.cs` file) for exact, current per-module figures — this table is a snapshot and will drift if quoted without checking back against that file.

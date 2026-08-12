@@ -61,9 +61,6 @@ don't remove it.
 shouldn't be typed into an agent-visible shell. Claude Code can prep everything else and verify the
 result afterward, but not run this command.
 
-Keystore location: `C:\Projects\Masterwork\masterwork-release.keystore` (gitignored — back it up
-somewhere outside this repo; there's no recovery if it's lost, and a differently-signed APK can't
-update an install made from the original key).
 
 ```powershell
 $env:MwSigningPass = "<your password>"   # not committed anywhere, not shared with the agent
@@ -72,7 +69,7 @@ dotnet publish src/Masterwork.App/Masterwork.App.csproj `
   -f net10.0-android -c Release `
   -p:AndroidKeyStore=true `
   -p:AndroidPackageFormats=apk `
-  -p:AndroidSigningKeyStore=C:\Projects\Masterwork\masterwork-release.keystore `
+  -p:AndroidSigningKeyStore=masterwork-release.keystore `
   -p:AndroidSigningKeyAlias=masterwork `
   -p:AndroidSigningKeyPass=env:MwSigningPass `
   -p:AndroidSigningStorePass=env:MwSigningPass

@@ -4,7 +4,6 @@
 
 Community companion app for the boardgame *My Father's Work* (Renegade Game Studios). Converts official scenario scripts to an open format and plays them. C# .NET 10 solution.
 
-Design documents and design decisions live in the companion repo at `c:\Projects\Masterwork-Design\Design\`. Reference assets (CC BY-NC-SA) live there too.
 
 ---
 
@@ -14,18 +13,20 @@ Solution file: `src/Masterwork.slnx`
 
 ```
 src/Masterwork.slnx
-├── src/MasterWork.Engine/          pure C# — interpreter and game session (Phase 1, implemented)
-├── src/MasterWork.ModuleFormat/    VarDef, v0.3 reader types + YAML loader (shared library)
-├── src/MasterWork.App.Shared/      Razor Class Library — the actual player-app UI (Phase 2, in progress); shared by both heads below
-├── src/MasterWork.App/             MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
-├── src/MasterWork.App.Web/         ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
-├── src/MasterWork.App.Web.Client/  Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app"
-├── src/MasterWork.Editor/          WPF module designer (Phase 5 placeholder)
-├── src/MasterWork.Extractor/       CLI tool: Cradle C# → MWS v0.3 YAML (also owns extractor-internal node types, MwsNodes.cs)
-└── src/MasterWork.Tests/           xUnit test suite
+├── src/MasterWork.Engine/                     pure C# — interpreter and game session (Phase 1, complete)
+├── src/MasterWork.ModuleFormat/               VarDef, MWS reader types + YAML loader, .mwm pack/unpack (shared library)
+├── src/MasterWork.App.Theme.MyFathersWork/    Razor Class Library — the default app-shell visual skin (CSS, fonts, images, MainMenuScene)
+├── src/MasterWork.App.Shared/                 Razor Class Library — the actual player-app UI; shared by both heads below
+├── src/MasterWork.App/                        MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
+├── src/MasterWork.App.Web/                    ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
+├── src/MasterWork.App.Web.Client/             Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app"
+├── src/MasterWork.Editor/                     WPF module designer (Phase 7 placeholder — no real work started; see masterwork-plan-rev22.md §3)
+├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs)
+├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
+└── src/MasterWork.Tests/                      xUnit test suite
 ```
 
-All nine projects are registered in `Masterwork.slnx`.
+All eleven projects are registered in `Masterwork.slnx`.
 
 ## Build and Test
 
@@ -69,13 +70,13 @@ real filesystem:
 ## Key Architecture Decisions
 
 ### V2Serializer (do not bypass)
-`src/Masterwork.Extractor/V2Serializer.cs` converts the extractor-internal `MwsNode` types (in `MwsNodes.cs`, produced by `PassageBodyVisitor`) into v0.3 YAML dicts at serialization time. The intermediate types are **kept unchanged** — this lets existing tests stay green while the emitted YAML is v0.3. When the MWS format changes again, extend the serializer; do not mutate the node types. Both `MwsNodes.cs` and `V2Serializer.cs` live in the `Masterwork.Extractor` project — `ModuleFormat` holds only `VarDef` and the v0.3 reader types consumed by the engine.
+`src/Masterwork.Extractor/V2Serializer.cs` converts the extractor-internal `MwsNode` types (in `MwsNodes.cs`, produced by `PassageBodyVisitor`) into current-format (v0.4) YAML dicts at serialization time. The intermediate types are **kept unchanged** — this lets existing tests stay green while the emitted YAML format evolves. When the MWS format changes again, extend the serializer; do not mutate the node types. Both `MwsNodes.cs` and `V2Serializer.cs` live in the `Masterwork.Extractor` project — `ModuleFormat` holds only `VarDef` and the current reader types consumed by the engine. (The class name `V2Serializer` is historical, from the v0.1→v0.2 transition — it's evolved to emit whatever `docs/mws-format-latest.md` currently specifies, not literally tied to "v2" of anything.)
 
 ### RestextCollector
-Walks the v0.3 dict produced by `V2Serializer.ToDict()` and replaces human-readable strings with `restext://Key` URIs, accumulating entries for the `en-US.restext` file. It reads v0.3 field names (`value`, `navigation`, `popup`, `input`, `section`). Restext values are single-line only — no multi-line block syntax.
+Walks the dict produced by `V2Serializer.ToDict()` and replaces human-readable strings with `restext://Key` URIs, accumulating entries for the `en-US.restext` file. It reads the current format's field names (`value`, `navigation`, `popup`, `input`, `section`). Restext values are single-line only — no multi-line block syntax.
 
 ### Test strategy
-Tests in `ExtractorTests.cs` check the extractor-internal node types directly (e.g. `textNode.Template`, `linkNode.Target`). The v0.3 format is an output concern — do not add v0.3 assertions there unless specifically testing the serializer. Add a separate `V2SerializerTests.cs` if serializer tests are needed.
+Tests in `ExtractorTests.cs` check the extractor-internal node types directly (e.g. `textNode.Template`, `linkNode.Target`). The emitted YAML format is an output concern — do not add format-specific assertions there unless specifically testing the serializer. Add a separate `V2SerializerTests.cs` if serializer tests are needed.
 
 ### Engine (Phase 1)
 - `ModuleFormat/PassageYamlParser.cs` parses `.mws.yaml` by hand against YamlDotNet's low-level representation model (`YamlMappingNode` etc.), dispatching on `type:` — not a generic object-graph deserializer, since polymorphic node dispatch is exactly what that API is for.
@@ -117,19 +118,19 @@ bottom) is handled the same way `WindowInsetsCompat` handles it on Android.
 
 | File | Purpose |
 |---|---|
-| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.3; edit this for changes |
+| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.4; edit this for changes |
 
-Frozen prior-version references (`mws-format-v0.1.md`, `mws-format-v0.2.md`) were removed once the project committed to v0.3 as the baseline going forward. Future major revisions resume the freeze protocol below.
+No frozen prior-version files exist right now — the v0.1/v0.2 freeze files were removed once the project committed to v0.3 as the baseline, but the v0.3→v0.4 transition did **not** freeze a `mws-format-v0.3.md` before `latest` was revised (a process gap, not a deliberate decision — noted here so it isn't repeated silently). Resume the freeze protocol below for the next major revision.
 
 **Versioning protocol for format docs:**
 - **Minor / QoL changes** (clarifications, new examples, field descriptions) → edit `mws-format-latest.md` inline.
-- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`. Example: before introducing v0.4, copy `latest` as `mws-format-v0.3.md`, then revise `latest` for v0.4.
+- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`. Example: before introducing v0.5, copy `latest` as `mws-format-v0.4.md`, then revise `latest` for v0.5.
 
 ---
 
 ## Security / Licensing Constraints
 
-- **Never commit** content from `c:\Projects\Masterwork-Design\Reference\` to this repo. That directory contains CC BY-NC-SA 4.0 derived content from the official app.
+- **Never commit** CC BY-NC-SA 4.0 reference material derived from the official app (extracted Unity project assets, original Cradle scripts, screenshots, etc.) to this repo. That material lives in a private local reference workspace, not tracked here.
 - `_extracted/` output directories are also off-limits for commits here.
 - The Masterwork source code itself (this repo) is a separate work from the reference content.
 - **Exception**: `src/Masterwork.App.Theme.MyFathersWork/` is a documented, deliberate exception to
@@ -146,4 +147,5 @@ Frozen prior-version references (`mws-format-v0.1.md`, `mws-format-v0.2.md`) wer
 Keep these files updated as the project evolves:
 - `docs/mws-format-latest.md` — format spec (see versioning protocol above)
 - `docs/extractor.md` — extractor usage and pipeline description
+- `docs/engine.md` — session/timeline model, seeded randomness, and the popup sandbox-transaction mechanism (GameSession/VariableStore/SessionPrng)
 - `CLAUDE.md` — this file; update when architecture decisions change
