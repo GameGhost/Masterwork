@@ -30,6 +30,9 @@ public sealed record MwsPassageDoc
     /// <summary>The <c>passage_id</c> that must have been visited before this passage may be rendered.</summary>
     public string? CheckProgress { get; init; }
 
+    /// <summary>Background-music/on-display-sound overrides for this passage, if declared.</summary>
+    public PassageAudio? Audio { get; init; }
+
     /// <summary>The passage's node tree, in document order.</summary>
     public IReadOnlyList<Node> Nodes { get; init; } = [];
 }

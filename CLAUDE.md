@@ -118,13 +118,20 @@ bottom) is handled the same way `WindowInsetsCompat` handles it on Android.
 
 | File | Purpose |
 |---|---|
-| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.4; edit this for changes |
+| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.5; edit this for changes |
 
-No frozen prior-version files exist right now — the v0.1/v0.2 freeze files were removed once the project committed to v0.3 as the baseline, but the v0.3→v0.4 transition did **not** freeze a `mws-format-v0.3.md` before `latest` was revised (a process gap, not a deliberate decision — noted here so it isn't repeated silently). Resume the freeze protocol below for the next major revision.
+No frozen prior-version files exist right now. The v0.3→v0.4 transition didn't freeze a
+`mws-format-v0.3.md` before `latest` was revised (a process gap, not a deliberate decision). The
+v0.4→v0.5 transition *did* freeze `mws-format-v0.4.md` briefly, then deleted it on purpose: v0.5 was
+purely additive (new `audio:` fields/`audio_track` node, nothing renamed or removed), and the only
+consumers of the format are the template and canonical modules in `Masterwork-Modules`, which get
+updated in lockstep with engine changes anyway — so there was nothing a frozen v0.4 snapshot would
+protect. Freezing remains the default for major revisions (below); skip it only when the same
+reasoning applies (purely additive, no external/frozen consumers depending on the old spec text).
 
 **Versioning protocol for format docs:**
 - **Minor / QoL changes** (clarifications, new examples, field descriptions) → edit `mws-format-latest.md` inline.
-- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`. Example: before introducing v0.5, copy `latest` as `mws-format-v0.4.md`, then revise `latest` for v0.5.
+- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`, unless the additive/no-frozen-consumers exception above applies. Example: before introducing v0.6, copy `latest` as `mws-format-v0.5.md`, then revise `latest` for v0.6.
 
 ---
 

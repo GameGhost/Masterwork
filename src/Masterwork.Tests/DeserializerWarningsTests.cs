@@ -356,4 +356,107 @@ public class DeserializerWarningsTests
 
         Assert.Contains(module.Warnings.Items, w => w.Kind == "unmatched_field" && w.Message.Contains("extra_field"));
     }
+
+    // ── Audio ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void PopupAudio_WrongShape_WarnsAndFallsBackToNull()
+    {
+        var (passage, warnings) = LoadOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              content: []
+              audio: 'not a mapping'
+            """);
+
+        var popup = Assert.IsType<PopupNode>(Assert.Single(passage.Nodes));
+        Assert.Null(popup.Audio);
+        Assert.Contains(warnings.Items, w => w.Kind == "wrong_field_type" && w.Message.Contains("audio"));
+    }
+
+    [Fact]
+    public void UnmatchedPassageAudioField_LogsWarning()
+    {
+        var (_, warnings) = LoadOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            audio:
+              music: 'audio://bgm/theme'
+              extra_field: 'oops'
+            nodes: []
+            """);
+
+        Assert.Contains(warnings.Items, w => w.Kind == "unmatched_field" && w.Message.Contains("extra_field"));
+    }
+
+    [Fact]
+    public void AudioTrackNode_MissingAsset_Throws()
+    {
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+            """,
+        ]));
+        Assert.Contains("asset", ex.Message);
+    }
+
+    [Fact]
+    public void AudioTrackNode_UnmatchedField_Warns()
+    {
+        var (_, warnings) = LoadOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              extra_field: 'oops'
+            """);
+
+        Assert.Contains(warnings.Items, w => w.Kind == "unmatched_field" && w.Message.Contains("extra_field"));
+    }
+
+    [Fact]
+    public void AudioTrackNode_MalformedAutoplay_ThrowsFriendlyError()
+    {
+        var ex = Assert.Throws<MwsParseException>(() => new ModuleLoader().LoadFromSources([
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              autoplay: 'soonish'
+            """,
+        ]));
+        Assert.Contains("autoplay", ex.Message);
+        Assert.Contains("soonish", ex.Message);
+    }
+
+    [Fact]
+    public void AudioTrackNode_InvalidBgmBehavior_WarnsAndFallsBackToPause()
+    {
+        var (passage, warnings) = LoadOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              bgm_behavior: 'mute'
+            """);
+
+        var track = Assert.IsType<AudioTrackNode>(Assert.Single(passage.Nodes));
+        Assert.Equal("pause", track.BgmBehavior);
+        Assert.Contains(warnings.Items, w => w.Kind == "invalid_enum_value" && w.Message.Contains("mute"));
+    }
 }

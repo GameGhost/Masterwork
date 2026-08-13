@@ -35,4 +35,7 @@ public sealed record LinkNode : Node
     /// dynamic target depend on state assigned here. A <c>goto</c> among these preempts <see cref="Target"/>.
     /// </summary>
     public IReadOnlyList<Node> OnClick { get; init; } = [];
+
+    /// <summary>Click-sound override for this link, if declared.</summary>
+    public LinkAudio? Audio { get; init; }
 }

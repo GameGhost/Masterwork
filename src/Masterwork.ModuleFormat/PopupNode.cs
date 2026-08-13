@@ -71,4 +71,7 @@ public sealed record PopupNode : Node
     /// — if that <c>goto</c> sets its own <c>snapshot</c>; see <see cref="GotoNode.StateAffecting"/>.
     /// </summary>
     public string? SnapshotLabel { get; init; }
+
+    /// <summary>Background-music/open/okay/cancel sound overrides for this popup, if declared.</summary>
+    public PopupAudio? Audio { get; init; }
 }

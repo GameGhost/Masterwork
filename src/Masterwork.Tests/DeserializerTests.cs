@@ -102,13 +102,15 @@ public class DeserializerTests
               id: 'cp1'
             - type: 'record'
               id: 'ach1'
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
             """);
 
         var types = passage.Nodes.Select(n => n.Type).ToList();
         Assert.Equal([
             "text", "break", "image", "let", "assign", "link",
             "popup", "input", "goto", "include_passage", "section", "conditional",
-            "switch", "foreach", "checkpoint", "record",
+            "switch", "foreach", "checkpoint", "record", "audio_track",
         ], types);
     }
 
@@ -782,5 +784,189 @@ public class DeserializerTests
         Assert.Empty(chrome.Footer);
         Assert.Empty(chrome.BeforeContent);
         Assert.Empty(chrome.AfterContent);
+    }
+
+    // ── Audio ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void PassageAudio_MusicAndOnDisplay_Deserialize()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub'
+            audio:
+              music: 'audio://bgm/hospital_theme'
+              on_display: 'audio://sfx/page_turn'
+              on_display_delay_ms: 150
+            nodes: []
+            """);
+
+        Assert.NotNull(passage.Audio);
+        Assert.Equal("audio://bgm/hospital_theme", passage.Audio!.Music);
+        Assert.Equal("audio://sfx/page_turn", passage.Audio.OnDisplay);
+        Assert.Equal(150, passage.Audio.OnDisplayDelayMs);
+    }
+
+    [Fact]
+    public void PassageAudio_AbsentAudioSection_DefaultsToNull()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub'
+            nodes: []
+            """);
+
+        Assert.Null(passage.Audio);
+    }
+
+    [Fact]
+    public void PassageAudio_EmptyMusic_IsExplicitSilenceNotAbsent()
+    {
+        // The whole point of the tri-state: "" (present but empty) must round-trip as "", not
+        // collapse to null the way an absent field would.
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub'
+            audio:
+              music: ''
+            nodes: []
+            """);
+
+        Assert.NotNull(passage.Audio);
+        Assert.Equal("", passage.Audio!.Music);
+    }
+
+    [Fact]
+    public void PopupAudio_AllFields_Deserialize()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              content: []
+              audio:
+                music: 'audio://bgm/tension_sting'
+                open: 'audio://sfx/popup_open_dramatic'
+                open_delay_ms: 10
+                okay: 'audio://sfx/confirm'
+                okay_delay_ms: 20
+                cancel: ''
+                cancel_delay_ms: 30
+            """);
+
+        var popup = Assert.IsType<PopupNode>(passage.Nodes.Single());
+        Assert.NotNull(popup.Audio);
+        Assert.Equal("audio://bgm/tension_sting", popup.Audio!.Music);
+        Assert.Equal("audio://sfx/popup_open_dramatic", popup.Audio.Open);
+        Assert.Equal(10, popup.Audio.OpenDelayMs);
+        Assert.Equal("audio://sfx/confirm", popup.Audio.Okay);
+        Assert.Equal(20, popup.Audio.OkayDelayMs);
+        Assert.Equal("", popup.Audio.Cancel);
+        Assert.Equal(30, popup.Audio.CancelDelayMs);
+    }
+
+    [Fact]
+    public void LinkAudio_ClickAndDelay_Deserialize()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+              audio:
+                click: 'audio://sfx/ominous_click'
+                click_delay_ms: 5
+            """);
+
+        var link = Assert.IsType<LinkNode>(passage.Nodes.Single());
+        Assert.NotNull(link.Audio);
+        Assert.Equal("audio://sfx/ominous_click", link.Audio!.Click);
+        Assert.Equal(5, link.Audio.ClickDelayMs);
+    }
+
+    [Fact]
+    public void AudioTrackNode_RequiredAssetOnly_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+            """);
+
+        var track = Assert.IsType<AudioTrackNode>(passage.Nodes.Single());
+        Assert.Equal("audio://vo/greeting", track.Asset);
+        Assert.Null(track.Title);
+        Assert.Null(track.Style);
+        Assert.True(track.Autoplay);
+        Assert.Null(track.AutoplayDelayMs);
+        Assert.Equal("pause", track.BgmBehavior);
+    }
+
+    [Fact]
+    public void AudioTrackNode_AutoplayAsBool_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              autoplay: false
+            """);
+
+        var track = Assert.IsType<AudioTrackNode>(passage.Nodes.Single());
+        Assert.False(track.Autoplay);
+        Assert.Null(track.AutoplayDelayMs);
+    }
+
+    [Fact]
+    public void AudioTrackNode_AutoplayAsIntDelay_Deserializes()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              autoplay: 500
+            """);
+
+        var track = Assert.IsType<AudioTrackNode>(passage.Nodes.Single());
+        Assert.True(track.Autoplay);
+        Assert.Equal(500, track.AutoplayDelayMs);
+    }
+
+    [Fact]
+    public void AudioTrackNode_TitleStyleAndBgmBehavior_Deserialize()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              title: 'Narration'
+              style: 'narration-inline'
+              bgm_behavior: 'duck'
+            """);
+
+        var track = Assert.IsType<AudioTrackNode>(passage.Nodes.Single());
+        Assert.Equal("Narration", track.Title);
+        Assert.Equal("narration-inline", track.Style);
+        Assert.Equal("duck", track.BgmBehavior);
     }
 }

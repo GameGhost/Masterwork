@@ -1,4 +1,4 @@
-# Masterwork Script Format — v0.4 Reference
+# Masterwork Script Format — v0.5 Reference
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
 
@@ -9,7 +9,7 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: 'mws/0.4'
+format: 'mws/0.5'
 passage_id: 'Hospital1'
 title: 'The Hospital'
 tags:
@@ -19,6 +19,8 @@ location:
   name: 'The Hospital'
   icon: 'icon://hospital_icon'
 check_progress: 'Hospital0'
+audio:
+  music: 'audio://bgm/hospital_theme'
 nodes:
   - ...
 ```
@@ -27,7 +29,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/0.4`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
+| `format` | string | yes | Always `mws/0.5`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id`. For `hub`/`narration` passages, the extractor hoists this from the source's leading bold-styled text block (see below) instead of leaving it as an ordinary body node |
 | `subtitle` | string | no | Optional subtitle shown alongside `title` in the passage header. Populated the same way as `title` — either the second line of a two-line bold heading, or the part after " - " in a single-line "Title - Subtitle" heading |
@@ -36,6 +38,7 @@ nodes:
 | `debug` | bool | no | `true` for developer-only passages excluded from player builds |
 | `location` | object | no | Location shown in app header. Fields: `name` (string), `icon` (asset URI) |
 | `check_progress` | string | no | `passage_id` that must have been visited before this passage is valid to render |
+| `audio` | object | no | Background-music override and an on-display sound for this passage — see §6 "Audio" below |
 
 For `hub`/`narration`/`introduction` passages, the extractor recognizes a leading bold-styled text block as the
 passage's heading rather than emitting it as ordinary body text, per these rules: a single bold
@@ -265,7 +268,15 @@ onclose: '${nomore == 1 ? th < players ? "TownHallS1" : "TakeSides2" : round == 
 
 String literals *inside* an expression use C#-style double quotes (`"`), not single quotes. A single quote inside an expression string literal is `''` (doubled, because the whole field is YAML single-quoted). A double quote inside an expression string literal uses the standard `\"` escape.
 
-Fields that support expression values: `link.target`, `popup.target`, `goto.target`.
+Fields that support expression values: `link.target`, `popup.target`, `goto.target`, and every audio
+URI field — `audio.music`, `audio.on_display` (passage header), `audio.music`/`audio.open`/
+`audio.okay`/`audio.cancel` (`popup`), `audio.click` (`link`), and `audio_track.asset`. Unlike
+`target` fields (resolved at follow/close time, since `onclick`/`onclose` may run first), audio
+fields resolve eagerly at render time, the same way `goto`/`include_passage` targets do — there's no
+equivalent "run onclick first" step for an audio value. This is what lets e.g. voice-gender selection
+be expressed inline: `music: '${voiceGender == "female" ? "audio://vo/intro_f" : "audio://vo/intro_m"}'`.
+Module-manifest audio fields (§9) do **not** support expressions — a manifest is parsed once, before
+any session exists, so there's no variable scope to evaluate against.
 
 ### `let` / `assign` expr fields
 
@@ -685,6 +696,7 @@ A player-clickable link that navigates to another passage. Bundles preceding `as
 | `target` | string | no | Destination `passage_id`, or `'${expression}'` for a runtime-computed target (see §4). Optional when every reachable path through `onclick` is guaranteed to hit a `goto`, which preempts this — omitting both would leave the link with nothing to navigate to |
 | `snapshot` | bool or string | no | Whether following this link creates a timeline snapshot. Defaults to `false` if absent. A string value means `true` *and* sets the timeline scrubber's label to that string in one step — overriding the destination passage's own `title` (the default label when `snapshot` is a bare `true`). A preempting `goto` inside `onclick` takes priority over this label — see `goto` below |
 | `onclick` | list | no | `let`, `assign`, and `conditional` nodes executed on click before navigation. A `goto` among these preempts `target` |
+| `audio` | object | no | Click-sound override — see §6 "Audio" below |
 
 **Execution order when `onclick` is present:** on click, pending `input` values are committed first, then the engine executes all nodes in the `onclick` list, then evaluates `target` (unless a `goto` inside `onclick` fired, which preempts it). This matters when `target` is an expression referencing a variable and an `onclick` entry may assign that variable — the variable is resolved after the assignments run, not at render time.
 
@@ -749,6 +761,7 @@ Okay/Cancel dismissal mirrors `link`'s own `target`/`onclick` shape: `onclose` r
 | `onclose` | list | no | `let`, `assign`, and `conditional` nodes run when Okay is clicked, before `target` is resolved — same shape and timing as `link.onclick`. A `goto` among these preempts `target` |
 | `target` | string | no | Destination when Okay is clicked (unless preempted by a `goto` in `onclose`) — `passage_id` or `'${expression}'` (see §4) |
 | `snapshot` | bool or string | no | Whether closing this popup via Okay creates a timeline snapshot. Defaults to `false` if absent. A string value means `true` *and* sets the timeline scrubber's label to that string in one step — overriding the destination passage's own `title` (the default label when `snapshot` is a bare `true`). A preempting `goto` inside `onclose` takes priority over this label — see `goto` above |
+| `audio` | object | no | Background-music override while this popup is open, plus open/okay/cancel sound overrides — see §6 "Audio" below. A popup's `audio.music` only takes effect once it's actually open — an unopened popup never affects background music, matching how showing/hiding a popup is otherwise a pure display toggle |
 
 **Popup transaction model:** the popup's `content` is rendered against a sandboxed copy of the variable store as soon as the passage renders — nothing is committed to the live store yet, and showing/hiding the popup is a pure display toggle that needs no further evaluation. Clicking Okay commits the sandbox's pending `input` values, runs `onclose` against it, merges it onto the live store, and navigates to the resolved destination, all as one transaction. Clicking Cancel discards the sandbox untouched. One trade-off: a popup's content is evaluated even if the player never opens or accepts it, so a seeded random draw inside `content` is "spent" regardless — this is safe because nothing else can mutate the live store while a popup sits unopened on an already-rendered passage.
 
@@ -1203,6 +1216,63 @@ A generation-end sequence uses `section` for the summary and `checkpoint` for th
 
 ---
 
+### `audio_track`
+
+An in-passage audio playback element with a complete, module-styleable player UI (title, play/pause,
+scrubber, current/total time) — content, not an override on something that already exists (compare
+the `audio:` block described below). The first narration-capable node.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `asset` | string | yes | Asset URI, typically `audio://vo/...` (see §8), or `${expr}` (see §4) — the track this element plays and lets the player scrub |
+| `title` | string | no | Formatted display label shown alongside the playback controls (string formatting — see §3) |
+| `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
+| `autoplay` | bool or int | no | `true` (default) starts playback as soon as the element renders; `false` waits for the player to press play; an integer is a millisecond delay before autoplay begins |
+| `bgm_behavior` | string | no | How background music behaves while this track is actually playing: `pause` (default), `duck`, or `none`. Has no effect before playback actually starts |
+
+```yaml
+- type: 'audio_track'
+  asset: '${voiceGender == "female" ? "audio://vo/battletime_narration_f" : "audio://vo/battletime_narration_m"}'
+  title: 'restext://BattleTime_NarrationTitle'  # "Listen to the Call to Arms"
+  autoplay: false
+  bgm_behavior: 'duck'
+```
+
+---
+
+### Audio (`audio:` block on passage/popup/link)
+
+The passage header, `popup`, and `link` nodes each accept an optional nested `audio:` mapping —
+background-music and sound-effect overrides, kept nested rather than flat so a URI and its delay-ms
+sibling stay grouped, and so this block reads distinctly from the unrelated `audio_track` node type
+above.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `audio.music` | string or `${expr}` | no | Background-track override — passage header and `popup` only. Absent means inherit from the module default (see §9); present-but-empty (`''`) means explicit silence while this passage/popup is topmost |
+| `audio.on_display` | string or `${expr}` | no | Passage header only — SFX fired once when this passage becomes the active passage |
+| `audio.on_display_delay_ms` | int | no | Passage header only — delay before `on_display` plays. Default `0` |
+| `audio.open` / `audio.okay` / `audio.cancel` | string or `${expr}` | no | `popup` only — override the module's `popup_open`/`popup_close` SFX defaults (see §9); `okay` and `cancel` are independently overridable even though the module tier shares one `popup_close` bucket for both |
+| `audio.open_delay_ms` / `audio.okay_delay_ms` / `audio.cancel_delay_ms` | int | no | `popup` only — delay before the matching sound plays. Default `0` |
+| `audio.click` | string or `${expr}` | no | `link` only — overrides the module's `click` SFX default |
+| `audio.click_delay_ms` | int | no | `link` only — delay before `click` plays. Default `0` |
+
+**Resolution — "topmost active element wins":** at any instant, the effective background music is
+resolved by walking outward from the deepest currently-open popup, through any enclosing popups, to
+the current passage, to the module default (§9) — the first tier with a *present* `audio.music` key
+wins (empty = silence, stop; non-empty = that value, stop; absent = check the next tier out). An
+unopened popup never participates — its `audio.music` only counts once the popup is actually open.
+Music changes always crossfade; there's no delay field for `music`, since a crossfade already covers
+the transition. SFX fields (`on_display`, `open`, `okay`, `cancel`, `click`) are one-shot events, not
+part of this stack — each just checks the node override, else the module's matching default bucket,
+else silence.
+
+**Theme audio is a separate concept**, not part of this resolution stack at all — it applies only to
+the app's own pre-module screens (main menu, help, etc.) via a code-level theme contract, stopping the
+instant a module loads to play and resuming when the player returns to the main menu.
+
+---
+
 ## 7. Source Annotations
 
 Extracted passage files include YAML comments injected by the extractor. These are informational only; the engine ignores them.
@@ -1404,6 +1474,41 @@ A passage that ends the module places both a specific achievement record and inc
   id: 'endings_discovered'
 ```
 
+### Audio
+
+Module-level defaults for the topmost tier of the resolution stack described in §6's "Audio"
+subsection — the fallback used whenever no open passage, popup, or link supplies its own override.
+Unlike the node-level `audio:` fields, manifest audio fields are plain strings; they do not support
+`${expr}` expression evaluation.
+
+| Field | Type | Description |
+|---|---|---|
+| `audio.music.default_tracks` | array of string | Zero or more `audio://` URIs (see §6) forming the module's default background music. Zero entries means no default music; one entry plays as a single looping track; more than one plays as an auto-advancing playlist |
+| `audio.music.order` | string | `sequence` (default) plays `default_tracks` in listed order, looping back to the start; `shuffle` reshuffles the playlist order each time the module-tier track becomes the active winner |
+| `audio.sfx.transition` | array of string | Default sound(s) for a passage's `audio.on_display` when the passage itself doesn't override it. More than one entry means a random pick per firing |
+| `audio.sfx.popup_open` | array of string | Default sound(s) for a popup's `audio.open` when the popup itself doesn't override it |
+| `audio.sfx.popup_close` | array of string | Default sound(s) used for **both** a popup's `audio.okay` and `audio.cancel` when the popup itself doesn't override the respective field — there is no separate `popup_okay`/`popup_cancel` bucket at the module tier |
+| `audio.sfx.click` | array of string | Default sound(s) for a link's `audio.click` when the link itself doesn't override it |
+
+```yaml
+audio:
+  music:
+    default_tracks:
+      - 'audio://bgm/hospital_theme'
+      - 'audio://bgm/hospital_theme_variant'
+    order: 'sequence'
+  sfx:
+    transition:
+      - 'audio://sfx/page_turn_1'
+      - 'audio://sfx/page_turn_2'
+    popup_open:
+      - 'audio://sfx/popup_open'
+    popup_close:
+      - 'audio://sfx/popup_close'
+    click:
+      - 'audio://sfx/ui_click'
+```
+
 ### Town Records
 
 > **Design note (TBD):** Town Records are a persistent history of narrative events from a playthrough — "memories" the players discover that are stored per-session and persist in the module's town history across sessions. They are categorised and may be presented in a collection view. A `town_record` manifest entry defines each discoverable record (id, category, label, descriptive text); a node type (distinct from `record`) triggers writing a town record entry during play. The exact structure is deferred until the module packaging format is complete.
@@ -1482,4 +1587,4 @@ nodes:
 
 ---
 
-*MWS format v0.4 — Masterwork project.*
+*MWS format v0.5 — Masterwork project.*

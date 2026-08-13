@@ -133,6 +133,37 @@ internal static class YamlNodeExtensions
     }
 
     /// <summary>
+    /// Reads a field that's either a bare boolean or a millisecond delay, returning
+    /// <paramref name="defaultValue"/> (with no delay) if absent. An integer value means
+    /// <see langword="true"/> for behavior, with the integer itself as a delay in milliseconds
+    /// before that behavior takes effect — used by <c>audio_track</c>'s <c>autoplay</c> field
+    /// (<c>true</c>/<c>false</c>/an integer ms delay before autoplay begins). Unlike
+    /// <see cref="GetBoolOrLabel"/>, there's no free-text "label" fallback here — a value that's
+    /// neither a bool nor a valid integer is a genuine authoring error, not a valid alternate shape.
+    /// </summary>
+    /// <exception cref="MwsParseException">The field is present but neither a valid boolean nor a valid integer.</exception>
+    public static (bool Value, int? DelayMs) GetBoolOrDelay(this YamlMappingNode map, string key, YamlParseContext ctx, bool defaultValue = true)
+    {
+        var raw = map.GetString(key, ctx);
+        if (raw is null)
+        {
+            return (defaultValue, null);
+        }
+
+        if (bool.TryParse(raw, out var value))
+        {
+            return (value, null);
+        }
+
+        if (int.TryParse(raw, out var delayMs))
+        {
+            return (true, delayMs);
+        }
+
+        throw new MwsParseException($"{ctx.Source}: field '{key}' must be 'true', 'false', or an integer delay in milliseconds but found '{raw}'");
+    }
+
+    /// <summary>
     /// Reads an optional integer field, returning <see langword="null"/> if absent.
     /// </summary>
     /// <exception cref="MwsParseException">The field is present but not a valid integer.</exception>

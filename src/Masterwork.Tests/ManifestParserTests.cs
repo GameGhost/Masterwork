@@ -187,4 +187,113 @@ public class ManifestParserTests
         Assert.Equal("Plain Title", manifest.Title);
         Assert.Equal("Plain description", manifest.Description);
     }
+
+    // ── audio: section ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ParsesAudioSection_DefaultTracksAndOrder()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            audio:
+              music:
+                default_tracks:
+                - 'audio://bgm/theme_a'
+                - 'audio://bgm/theme_b'
+                order: 'shuffle'
+            """);
+
+        Assert.NotNull(manifest.Audio);
+        Assert.NotNull(manifest.Audio!.Music);
+        Assert.Equal(["audio://bgm/theme_a", "audio://bgm/theme_b"], manifest.Audio.Music!.DefaultTracks);
+        Assert.Equal("shuffle", manifest.Audio.Music.Order);
+    }
+
+    [Fact]
+    public void MusicOrder_DefaultsToSequence_WhenNotDeclared()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            audio:
+              music:
+                default_tracks: []
+            """);
+
+        Assert.Equal("sequence", manifest.Audio!.Music!.Order);
+    }
+
+    [Fact]
+    public void ParsesAudioSfxBuckets()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            audio:
+              sfx:
+                transition:
+                - 'audio://sfx/page_turn_1'
+                popup_open:
+                - 'audio://sfx/popup_open'
+                popup_close:
+                - 'audio://sfx/popup_close'
+                click:
+                - 'audio://sfx/ui_click'
+            """);
+
+        Assert.NotNull(manifest.Audio!.Sfx);
+        Assert.Equal(["audio://sfx/page_turn_1"], manifest.Audio.Sfx!.Transition);
+        Assert.Equal(["audio://sfx/popup_open"], manifest.Audio.Sfx.PopupOpen);
+        Assert.Equal(["audio://sfx/popup_close"], manifest.Audio.Sfx.PopupClose);
+        Assert.Equal(["audio://sfx/ui_click"], manifest.Audio.Sfx.Click);
+    }
+
+    [Fact]
+    public void AudioSection_AbsentByDefault()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            """);
+
+        Assert.Null(manifest.Audio);
+    }
+
+    [Fact]
+    public void AudioMusicOrder_InvalidValue_WarnsAndFallsBackToSequence()
+    {
+        var warnings = new ModuleWarnings();
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            audio:
+              music:
+                default_tracks: []
+                order: 'random'
+            """, warnings);
+
+        Assert.Equal("sequence", manifest.Audio!.Music!.Order);
+        Assert.Contains(warnings.Items, w => w.Kind == "invalid_enum_value" && w.Message.Contains("random"));
+    }
+
+    [Fact]
+    public void UnmatchedAudioField_Warns()
+    {
+        var warnings = new ModuleWarnings();
+        new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            audio:
+              extra_field: 'oops'
+            """, warnings);
+
+        Assert.Contains(warnings.Items, w => w.Kind == "unmatched_field" && w.Message.Contains("extra_field"));
+    }
 }

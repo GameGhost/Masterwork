@@ -81,6 +81,9 @@ public sealed record ModuleManifest
     /// <summary>Player count / playtime info, if declared.</summary>
     public ModuleInfo? Info { get; init; }
 
+    /// <summary>Module-level default background music and sound effects, if declared.</summary>
+    public ModuleAudioManifest? Audio { get; init; }
+
     /// <summary>
     /// Entry passage id (masterwork-plan §9), if declared. Authoritative over the <c>Begins-Here</c>
     /// tag scan <see cref="ModuleLoader"/> falls back to — <c>LoadedModuleContent.BuildAsync</c>

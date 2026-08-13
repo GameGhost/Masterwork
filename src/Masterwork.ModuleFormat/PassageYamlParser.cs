@@ -11,7 +11,7 @@ namespace Masterwork.ModuleFormat;
 /// </summary>
 public sealed class PassageYamlParser : IPassageYamlParser
 {
-    private const string ExpectedFormat = "mws/0.4";
+    private const string ExpectedFormat = "mws/0.5";
 
     private readonly ILogger<PassageYamlParser> _logger;
 
@@ -59,6 +59,19 @@ public sealed class PassageYamlParser : IPassageYamlParser
             locMap.WarnUnmatchedFields(ctx, "passage location header", "name", "icon");
         }
 
+        PassageAudio? audio = null;
+        var passageAudioMap = root.GetMapping("audio", ctx);
+        if (passageAudioMap is not null)
+        {
+            audio = new PassageAudio
+            {
+                Music = passageAudioMap.GetString("music", ctx),
+                OnDisplay = passageAudioMap.GetString("on_display", ctx),
+                OnDisplayDelayMs = passageAudioMap.GetInt("on_display_delay_ms", ctx),
+            };
+            passageAudioMap.WarnUnmatchedFields(ctx, "passage audio header", "music", "on_display", "on_display_delay_ms");
+        }
+
         var passage = new MwsPassageDoc
         {
             PassageId = root.GetRequiredString("passage_id", ctx),
@@ -69,11 +82,12 @@ public sealed class PassageYamlParser : IPassageYamlParser
             Debug = root.GetBool("debug", ctx),
             Location = location,
             CheckProgress = root.GetString("check_progress", ctx),
+            Audio = audio,
             Nodes = BuildNodeList(root.TryGet("nodes"), ctx, "passage nodes"),
         };
 
         root.WarnUnmatchedFields(ctx, "passage header",
-            "format", "passage_id", "title", "subtitle", "tags", "layout", "debug", "location", "check_progress", "nodes");
+            "format", "passage_id", "title", "subtitle", "tags", "layout", "debug", "location", "check_progress", "audio", "nodes");
 
         _logger.LogDebug("Parsed passage '{PassageId}' with {NodeCount} top-level nodes", passage.PassageId, passage.Nodes.Count);
         return passage;
@@ -213,6 +227,17 @@ public sealed class PassageYamlParser : IPassageYamlParser
             case "link":
             {
                 var (stateAffecting, snapshotLabel) = map.GetBoolOrLabel("snapshot", ctx);
+                LinkAudio? linkAudio = null;
+                var linkAudioMap = map.GetMapping("audio", ctx);
+                if (linkAudioMap is not null)
+                {
+                    linkAudio = new LinkAudio
+                    {
+                        Click = linkAudioMap.GetString("click", ctx),
+                        ClickDelayMs = linkAudioMap.GetInt("click_delay_ms", ctx),
+                    };
+                    linkAudioMap.WarnUnmatchedFields(ctx, "'link' node audio", "click", "click_delay_ms");
+                }
                 var result = new LinkNode
                 {
                     Label = map.GetRequiredString("label", ctx),
@@ -221,14 +246,32 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     StateAffecting = stateAffecting,
                     SnapshotLabel = snapshotLabel,
                     OnClick = BuildNodeList(map.TryGet("onclick"), ctx, "'link' node onclick"),
+                    Audio = linkAudio,
                 };
                 map.WarnUnmatchedFields(ctx, "'link' node",
-                    "type", "label", "style", "target", "snapshot", "onclick");
+                    "type", "label", "style", "target", "snapshot", "onclick", "audio");
                 return result;
             }
             case "popup":
             {
                 var (stateAffecting, snapshotLabel) = map.GetBoolOrLabel("snapshot", ctx);
+                PopupAudio? popupAudio = null;
+                var popupAudioMap = map.GetMapping("audio", ctx);
+                if (popupAudioMap is not null)
+                {
+                    popupAudio = new PopupAudio
+                    {
+                        Music = popupAudioMap.GetString("music", ctx),
+                        Open = popupAudioMap.GetString("open", ctx),
+                        OpenDelayMs = popupAudioMap.GetInt("open_delay_ms", ctx),
+                        Okay = popupAudioMap.GetString("okay", ctx),
+                        OkayDelayMs = popupAudioMap.GetInt("okay_delay_ms", ctx),
+                        Cancel = popupAudioMap.GetString("cancel", ctx),
+                        CancelDelayMs = popupAudioMap.GetInt("cancel_delay_ms", ctx),
+                    };
+                    popupAudioMap.WarnUnmatchedFields(ctx, "'popup' node audio",
+                        "music", "open", "open_delay_ms", "okay", "okay_delay_ms", "cancel", "cancel_delay_ms");
+                }
                 var result = new PopupNode
                 {
                     Label = map.GetString("label", ctx),
@@ -242,9 +285,10 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     Target = map.GetString("target", ctx),
                     StateAffecting = stateAffecting,
                     SnapshotLabel = snapshotLabel,
+                    Audio = popupAudio,
                 };
                 map.WarnUnmatchedFields(ctx, "'popup' node",
-                    "type", "label", "style", "layout", "header", "content", "okay", "cancel", "onclose", "target", "snapshot");
+                    "type", "label", "style", "layout", "header", "content", "okay", "cancel", "onclose", "target", "snapshot", "audio");
                 return result;
             }
             case "input":
@@ -308,6 +352,21 @@ public sealed class PassageYamlParser : IPassageYamlParser
             {
                 var result = new RecordNode { Id = map.GetRequiredString("id", ctx) };
                 map.WarnUnmatchedFields(ctx, "'record' node", "type", "id");
+                return result;
+            }
+            case "audio_track":
+            {
+                var (autoplay, autoplayDelayMs) = map.GetBoolOrDelay("autoplay", ctx);
+                var result = new AudioTrackNode
+                {
+                    Asset = map.GetRequiredString("asset", ctx),
+                    Title = map.GetString("title", ctx),
+                    Style = map.GetString("style", ctx),
+                    Autoplay = autoplay,
+                    AutoplayDelayMs = autoplayDelayMs,
+                    BgmBehavior = ParseBgmBehavior(map, ctx),
+                };
+                map.WarnUnmatchedFields(ctx, "'audio_track' node", "type", "asset", "title", "style", "autoplay", "bgm_behavior");
                 return result;
             }
             default:
@@ -412,5 +471,24 @@ public sealed class PassageYamlParser : IPassageYamlParser
         }
 
         return value;
+    }
+
+    // "pause" is the deliberate default per docs/mws-format-latest.md — matches audio_track's own
+    // BgmBehavior default, so an absent field and an unrecognized value fall back identically.
+    private static string ParseBgmBehavior(YamlMappingNode map, YamlParseContext ctx)
+    {
+        var raw = map.GetString("bgm_behavior", ctx);
+        if (raw is null)
+        {
+            return "pause";
+        }
+
+        if (raw is "pause" or "duck" or "none")
+        {
+            return raw;
+        }
+
+        ctx.Warn("invalid_enum_value", $"field 'bgm_behavior' has unrecognized value '{raw}'; falling back to 'pause'");
+        return "pause";
     }
 }

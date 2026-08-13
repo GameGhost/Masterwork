@@ -16,7 +16,7 @@ public class FixtureModuleTests
     private static readonly IReadOnlyList<string> PassageYamls =
     [
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'Start'
         tags:
         - 'Begins-Here'
@@ -79,7 +79,7 @@ public class FixtureModuleTests
             snapshot: true
         """,
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'Well'
         layout: 'event'
         nodes:
@@ -122,7 +122,7 @@ public class FixtureModuleTests
           snapshot: true
         """,
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'Survey'
         layout: 'narration'
         nodes:
@@ -137,7 +137,7 @@ public class FixtureModuleTests
           snapshot: true
         """,
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'SurveyResult'
         layout: 'narration'
         nodes:
@@ -164,7 +164,7 @@ public class FixtureModuleTests
           snapshot: true
         """,
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'Rumors'
         layout: 'narration'
         nodes:
@@ -184,7 +184,7 @@ public class FixtureModuleTests
           snapshot: true
         """,
         """
-        format: 'mws/0.4'
+        format: 'mws/0.5'
         passage_id: 'Ending'
         layout: 'narration'
         nodes:

@@ -73,6 +73,44 @@ public sealed class ManifestParser : IManifestParser
             infoMap.WarnUnmatchedFields(ctx, "info", "players-min", "players-max", "playtime");
         }
 
+        ModuleAudioManifest? audio = null;
+        if (root.GetMapping("audio", ctx) is { } audioMap)
+        {
+            ModuleMusicManifest? music = null;
+            if (audioMap.GetMapping("music", ctx) is { } musicMap)
+            {
+                var order = musicMap.GetString("order", ctx) ?? "sequence";
+                if (order is not ("sequence" or "shuffle"))
+                {
+                    ctx.Warn("invalid_enum_value", $"audio.music.order has unrecognized value '{order}'; falling back to 'sequence'");
+                    order = "sequence";
+                }
+
+                music = new ModuleMusicManifest
+                {
+                    DefaultTracks = musicMap.GetStringList("default_tracks", ctx),
+                    Order = order,
+                };
+                musicMap.WarnUnmatchedFields(ctx, "audio.music", "default_tracks", "order");
+            }
+
+            ModuleSfxManifest? sfx = null;
+            if (audioMap.GetMapping("sfx", ctx) is { } sfxMap)
+            {
+                sfx = new ModuleSfxManifest
+                {
+                    Transition = sfxMap.GetStringList("transition", ctx),
+                    PopupOpen = sfxMap.GetStringList("popup_open", ctx),
+                    PopupClose = sfxMap.GetStringList("popup_close", ctx),
+                    Click = sfxMap.GetStringList("click", ctx),
+                };
+                sfxMap.WarnUnmatchedFields(ctx, "audio.sfx", "transition", "popup_open", "popup_close", "click");
+            }
+
+            audio = new ModuleAudioManifest { Music = music, Sfx = sfx };
+            audioMap.WarnUnmatchedFields(ctx, "audio", "music", "sfx");
+        }
+
         var manifest = new ModuleManifest
         {
             Id = root.GetRequiredString("id", ctx),
@@ -84,6 +122,7 @@ public sealed class ManifestParser : IManifestParser
             Languages = root.GetStringList("languages", ctx),
             Thumbnail = thumbnail,
             Info = info,
+            Audio = audio,
             Entry = root.GetString("entry", ctx),
             PassagesPath = root.GetString("passages", ctx) ?? "passages",
             PassagesOverridePath = root.GetString("passages_override", ctx) ?? "passages-override",
@@ -92,7 +131,7 @@ public sealed class ManifestParser : IManifestParser
 
         root.WarnUnmatchedFields(ctx, "manifest.yaml",
             "id", "title", "version", "type", "description", "dependencies",
-            "languages", "thumbnail", "info", "entry", "passages", "passages_override", "style");
+            "languages", "thumbnail", "info", "audio", "entry", "passages", "passages_override", "style");
 
         _logger.LogDebug("Parsed manifest '{Id}' v{Version} ({DependencyCount} dependencies)", manifest.Id, manifest.Version, dependencies.Count);
         return manifest;
