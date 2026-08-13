@@ -81,4 +81,7 @@ public sealed record RenderedPopup : RenderedAction
     /// bespoke UI and never reference this. Its actions are already merged into <see cref="Actions"/>.
     /// </summary>
     public required RenderedLayoutChrome Chrome { get; init; }
+
+    /// <summary>Resolved <c>audio:</c> overrides for this popup, if it declared any — see <see cref="RenderedPopupAudio"/>.</summary>
+    public RenderedPopupAudio? Audio { get; init; }
 }

@@ -1210,6 +1210,240 @@ public class PassageRendererTests
         Assert.Empty(popup.Chrome.AfterContent);
     }
 
+    // ── Audio ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void PassageAudio_LiteralMusicAndOnDisplay_ResolveAsIs()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            audio:
+              music: 'audio://bgm/hospital_theme'
+              on_display: 'audio://sfx/page_turn'
+              on_display_delay_ms: 150
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("audio://bgm/hospital_theme", result.Music);
+        Assert.Equal("audio://sfx/page_turn", result.OnDisplaySound);
+        Assert.Equal(150, result.OnDisplaySoundDelayMs);
+    }
+
+    [Fact]
+    public void PassageAudio_Absent_ResolvesToNull()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Null(result.Music);
+        Assert.Null(result.OnDisplaySound);
+    }
+
+    [Fact]
+    public void PassageAudio_EmptyMusic_ResolvesToEmptyStringNotNull()
+    {
+        // The tri-state must survive resolution: "" (explicit silence) is not the same as
+        // absent (inherit) — collapsing them would silently break the "topmost wins" stack.
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            audio:
+              music: ''
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("", result.Music);
+    }
+
+    [Fact]
+    public void PassageAudio_ExpressionMusic_EvaluatedAtRenderTime()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            audio:
+              music: '${voiceGender == "female" ? "audio://bgm/theme_f" : "audio://bgm/theme_m"}'
+            nodes: []
+            """, variablesYaml: """
+            standard_variables: []
+            variables:
+              voiceGender:
+                type: 'string'
+                default: 'female'
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("audio://bgm/theme_f", result.Music);
+    }
+
+    [Fact]
+    public void LinkAudio_ClickAndDelay_ResolveOntoRenderedLink()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+              audio:
+                click: 'audio://sfx/ominous_click'
+                click_delay_ms: 5
+            """);
+
+        var result = Render(passage, module, store);
+        var link = Assert.IsType<RenderedLink>(result.Nodes.Single());
+        Assert.Equal("audio://sfx/ominous_click", link.ClickSfx);
+        Assert.Equal(5, link.ClickSfxDelayMs);
+    }
+
+    [Fact]
+    public void LinkAudio_Absent_ResolvesToNullClickSfx()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'go'
+              target: 'P2'
+            """);
+
+        var result = Render(passage, module, store);
+        var link = Assert.IsType<RenderedLink>(result.Nodes.Single());
+        Assert.Null(link.ClickSfx);
+    }
+
+    [Fact]
+    public void PopupAudio_AllFields_ResolveOntoRenderedPopup()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              content: []
+              audio:
+                music: 'audio://bgm/tension_sting'
+                open: 'audio://sfx/popup_open_dramatic'
+                open_delay_ms: 10
+                okay: 'audio://sfx/confirm'
+                okay_delay_ms: 20
+                cancel: ''
+                cancel_delay_ms: 30
+            """);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+        Assert.NotNull(popup.Audio);
+        Assert.Equal("audio://bgm/tension_sting", popup.Audio!.Music);
+        Assert.Equal("audio://sfx/popup_open_dramatic", popup.Audio.Open);
+        Assert.Equal(10, popup.Audio.OpenDelayMs);
+        Assert.Equal("audio://sfx/confirm", popup.Audio.Okay);
+        Assert.Equal(20, popup.Audio.OkayDelayMs);
+        Assert.Equal("", popup.Audio.Cancel);
+        Assert.Equal(30, popup.Audio.CancelDelayMs);
+    }
+
+    [Fact]
+    public void PopupAudio_AbsentAudioBlock_ResolvesToNullAudio()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              content: []
+            """);
+
+        var result = Render(passage, module, store);
+        var popup = Assert.IsType<RenderedPopup>(result.Nodes.Single());
+        Assert.Null(popup.Audio);
+    }
+
+    [Fact]
+    public void AudioTrack_EmitsRenderedAudioTrackWithResolvedFields()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+              title: 'Narration'
+              style: 'narration-inline'
+              autoplay: 500
+              bgm_behavior: 'duck'
+            """);
+
+        var result = Render(passage, module, store);
+        var track = Assert.IsType<RenderedAudioTrack>(result.Nodes.Single());
+        Assert.Equal("audio://vo/greeting", track.Asset);
+        Assert.Equal("Narration", track.Title);
+        Assert.Equal("narration-inline", track.Style);
+        Assert.True(track.Autoplay);
+        Assert.Equal(500, track.AutoplayDelayMs);
+        Assert.Equal("duck", track.BgmBehavior);
+    }
+
+    [Fact]
+    public void AudioTrack_ExpressionAsset_EvaluatedAtRenderTime()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: '${voiceGender == "female" ? "audio://vo/greeting_f" : "audio://vo/greeting_m"}'
+            """, variablesYaml: """
+            standard_variables: []
+            variables:
+              voiceGender:
+                type: 'string'
+                default: 'male'
+            """);
+
+        var result = Render(passage, module, store);
+        var track = Assert.IsType<RenderedAudioTrack>(result.Nodes.Single());
+        Assert.Equal("audio://vo/greeting_m", track.Asset);
+    }
+
+    [Fact]
+    public void AudioTrack_DefaultAutoplayAndBgmBehavior_NotOverridden()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'audio_track'
+              asset: 'audio://vo/greeting'
+            """);
+
+        var result = Render(passage, module, store);
+        var track = Assert.IsType<RenderedAudioTrack>(result.Nodes.Single());
+        Assert.True(track.Autoplay);
+        Assert.Null(track.AutoplayDelayMs);
+        Assert.Equal("pause", track.BgmBehavior);
+    }
+
     // ── Check progress ───────────────────────────────────────────────────────
 
     [Fact]

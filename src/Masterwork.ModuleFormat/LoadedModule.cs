@@ -31,4 +31,11 @@ public sealed record LoadedModule
 
     /// <summary>Module-authored layout chrome (header/footer/before/after regions), keyed by layout id.</summary>
     public required IReadOnlyDictionary<string, LayoutChromeDoc> LayoutChrome { get; init; }
+
+    /// <summary>
+    /// The manifest's <c>audio:</c> section (module-level default music/SFX), if declared. Threaded
+    /// through from <c>manifest.yaml</c> the same way <see cref="StartPassageId"/> is overridden by
+    /// <c>entry:</c> — see <c>LoadedModuleContent.BuildAsync</c> (Masterwork.App.Shared).
+    /// </summary>
+    public ModuleAudioManifest? Audio { get; init; }
 }

@@ -169,4 +169,64 @@ public class LoadedModuleContentTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task BuildAsync_ManifestAudioSection_ThreadedThroughToLoadedModule()
+    {
+        var dir = MakeSourceDirectory(includeStyle: false);
+        File.WriteAllText(Path.Combine(dir, "manifest.yaml"), """
+            id: 'test.module'
+            title: 'Test Module'
+            version: '1.0.0'
+            audio:
+              music:
+                default_tracks:
+                - 'audio://bgm/theme_a'
+                order: 'shuffle'
+              sfx:
+                click:
+                - 'audio://sfx/ui_click'
+            """);
+
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets);
+
+            Assert.NotNull(loaded.Module.Audio);
+            Assert.Equal(["audio://bgm/theme_a"], loaded.Module.Audio!.Music!.DefaultTracks);
+            Assert.Equal("shuffle", loaded.Module.Audio.Music.Order);
+            Assert.Equal(["audio://sfx/ui_click"], loaded.Module.Audio.Sfx!.Click);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BuildAsync_NoManifestAudioSection_LoadedModuleAudioIsNull()
+    {
+        var dir = MakeSourceDirectory(includeStyle: false);
+
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets);
+
+            Assert.Null(loaded.Module.Audio);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

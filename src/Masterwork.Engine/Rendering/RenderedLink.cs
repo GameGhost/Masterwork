@@ -26,4 +26,10 @@ public sealed record RenderedLink : RenderedAction
     /// <see cref="GameSession.FollowLinkAsync"/>, before resolving a dynamic target.
     /// </summary>
     public required IReadOnlyList<Node> OnClickRaw { get; init; }
+
+    /// <summary>Click-sound override, or <see langword="null"/> to use the module's <c>click</c> default. Present-but-empty means explicit silence.</summary>
+    public string? ClickSfx { get; init; }
+
+    /// <summary>Milliseconds to delay <see cref="ClickSfx"/>.</summary>
+    public int? ClickSfxDelayMs { get; init; }
 }

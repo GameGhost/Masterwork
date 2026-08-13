@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Masterwork.ModuleFormat;
+using Masterwork.Engine.Audio;
 using Masterwork.Engine.Expressions;
 using Masterwork.Engine.Rendering;
 using Masterwork.Engine.Session;
@@ -425,6 +426,14 @@ public sealed class GameSession
 
     /// <summary>Records an in-progress (not yet submitted) input value in <see cref="ViewState"/>.</summary>
     public void UpdateInputDraft(string actionId, object draft) => ViewState.InputDrafts[actionId] = draft;
+
+    /// <summary>
+    /// Resolves the currently-effective background music for <see cref="CurrentRender"/>, walking
+    /// the "topmost active element wins" stack (<see cref="ViewState"/>'s currently-open popups, then
+    /// the current passage, then the module default) — see <see cref="AudioResolver"/>.
+    /// </summary>
+    public AudioResolution ResolveAudio() =>
+        AudioResolver.ResolveMusic(CurrentRender, ViewState.ExpandedPopups, _module.Audio);
 
     // ── Timeline navigation ──────────────────────────────────────────────────
 

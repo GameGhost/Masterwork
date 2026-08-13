@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Masterwork.Engine;
+using Masterwork.Engine.Audio;
 using Masterwork.Engine.Rendering;
 using Masterwork.Engine.Session;
 using Masterwork.ModuleFormat;
@@ -2551,5 +2552,69 @@ public class GameSessionTests
 
         var restored = GameSession.Restore(module, roundTripped!);
         Assert.Equal("Final", restored.CurrentRender.PassageId);
+    }
+
+    // ── ResolveAudio ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ResolveAudio_NoOverridesAnywhere_ResolvesToSilence()
+    {
+        var (session, _) = MakeSimpleSession();
+
+        var resolution = session.ResolveAudio();
+
+        Assert.IsType<AudioResolution.Silence>(resolution);
+    }
+
+    [Fact]
+    public void ResolveAudio_ModuleDefault_UsedWhenNoPassageOverride()
+    {
+        var (_, moduleWithoutAudio) = MakeSimpleSession();
+        var module = moduleWithoutAudio with
+        {
+            Audio = new ModuleAudioManifest { Music = new ModuleMusicManifest { DefaultTracks = ["audio://bgm/module_theme"] } },
+        };
+        var session = new GameSession(module, masterSeed: 1);
+
+        var resolution = session.ResolveAudio();
+
+        var single = Assert.IsType<AudioResolution.SingleTrack>(resolution);
+        Assert.Equal("audio://bgm/module_theme", single.Url);
+    }
+
+    [Fact]
+    public void ResolveAudio_TracksExpandedPopups_AddAndRemove()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            audio:
+              music: 'audio://bgm/passage_theme'
+            nodes:
+            - type: 'popup'
+              content: []
+              audio:
+                music: 'audio://bgm/tension'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+
+        // Not open yet — the passage's own music wins.
+        var beforeOpen = Assert.IsType<AudioResolution.SingleTrack>(session.ResolveAudio());
+        Assert.Equal("audio://bgm/passage_theme", beforeOpen.Url);
+
+        session.ViewState.ExpandedPopups.Add(popup.Id);
+        var whileOpen = Assert.IsType<AudioResolution.SingleTrack>(session.ResolveAudio());
+        Assert.Equal("audio://bgm/tension", whileOpen.Url);
+
+        session.ViewState.ExpandedPopups.Remove(popup.Id);
+        var afterClose = Assert.IsType<AudioResolution.SingleTrack>(session.ResolveAudio());
+        Assert.Equal("audio://bgm/passage_theme", afterClose.Url);
     }
 }

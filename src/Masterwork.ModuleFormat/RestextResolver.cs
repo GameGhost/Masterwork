@@ -131,6 +131,10 @@ public sealed partial class RestextResolver : IRestextResolver
             Display = ResolveDisplay(cp.Display, locale, warnings),
             Diagnostic = ResolveDisplay(cp.Diagnostic, locale, warnings),
         },
+        AudioTrackNode at => at with
+        {
+            Title = ResolveDisplay(at.Title, locale, warnings),
+        },
         _ => node,
     };
 

@@ -456,6 +456,31 @@ public class ModuleLoaderTests
     }
 
     [Fact]
+    public void LoadFromSources_AudioTrackTitleContainsRestextRef_ResolvesLikeContent()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'P1'
+                tags:
+                - 'Begins-Here'
+                layout: 'narration'
+                nodes:
+                - type: 'audio_track'
+                  asset: 'audio://vo/greeting'
+                  title: 'restext://TrackTitle_001'
+                """,
+            ],
+            restextText: "TrackTitle_001=Listen to the greeting\n");
+
+        var track = Assert.IsType<AudioTrackNode>(module.Passages["P1"].Nodes[0]);
+        Assert.Equal("Listen to the greeting", track.Title);
+    }
+
+    [Fact]
     public void LoadFromSources_PassageTitleAndSubtitleContainRestextRefs_ResolveLikeContent()
     {
         var loader = new ModuleLoader();

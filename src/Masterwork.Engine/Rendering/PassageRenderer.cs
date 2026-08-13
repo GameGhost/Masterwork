@@ -54,7 +54,12 @@ public sealed class PassageRenderer : IPassageRenderer
             Actions: ctx.Actions,
             Checkpoints: ctx.Checkpoints,
             PendingGoto: ctx.PendingGoto,
-            Chrome: chrome);
+            Chrome: chrome)
+        {
+            Music = ResolveAudioField(passage.Audio?.Music, ctx),
+            OnDisplaySound = ResolveAudioField(passage.Audio?.OnDisplay, ctx),
+            OnDisplaySoundDelayMs = passage.Audio?.OnDisplayDelayMs,
+        };
     }
 
     // Renders a module's layout chrome (see LayoutChromeDoc) for `layout`, against `store` — the
@@ -196,6 +201,16 @@ public sealed class PassageRenderer : IPassageRenderer
                 // Achievement triggers are deferred to Phase 3; no-op at runtime.
                 _logger.LogDebug("Skipping 'record' node (achievement triggers deferred to Phase 3): {Id}", rec.Id);
                 break;
+            case AudioTrackNode track:
+                output.Add(new RenderedAudioTrack(ResolveAudioField(track.Asset, ctx)!)
+                {
+                    Style = track.Style,
+                    Title = ExpandOrNull(track.Title, ctx.Store),
+                    Autoplay = track.Autoplay,
+                    AutoplayDelayMs = track.AutoplayDelayMs,
+                    BgmBehavior = track.BgmBehavior,
+                });
+                break;
         }
     }
 
@@ -210,6 +225,8 @@ public sealed class PassageRenderer : IPassageRenderer
             StateAffecting = link.StateAffecting,
             SnapshotLabel = ExpandOrNull(link.SnapshotLabel, ctx.Store),
             OnClickRaw = link.OnClick,
+            ClickSfx = ResolveAudioField(link.Audio?.Click, ctx),
+            ClickSfxDelayMs = link.Audio?.ClickDelayMs,
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -247,6 +264,16 @@ public sealed class PassageRenderer : IPassageRenderer
             Target = popup.Target,
             StateAffecting = popup.StateAffecting,
             SnapshotLabel = ExpandOrNull(popup.SnapshotLabel, ctx.Store),
+            Audio = popup.Audio is null ? null : new RenderedPopupAudio
+            {
+                Music = ResolveAudioField(popup.Audio.Music, ctx),
+                Open = ResolveAudioField(popup.Audio.Open, ctx),
+                OpenDelayMs = popup.Audio.OpenDelayMs,
+                Okay = ResolveAudioField(popup.Audio.Okay, ctx),
+                OkayDelayMs = popup.Audio.OkayDelayMs,
+                Cancel = ResolveAudioField(popup.Audio.Cancel, ctx),
+                CancelDelayMs = popup.Audio.CancelDelayMs,
+            },
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -359,6 +386,21 @@ public sealed class PassageRenderer : IPassageRenderer
         {
             ModuleEntrypointTarget => ctx.Module.StartPassageId
                 ?? throw new InvalidOperationException("'module::entrypoint' was used as a target, but this module has no 'Begins-Here' passage."),
+            _ when raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') =>
+                _evaluator.Evaluate(raw[2..^1], ctx.Store).AsString(),
+            _ => raw,
+        };
+
+    // Resolves an audio field (a URI, or "${expr}") eagerly, at render time — same strip-and-evaluate
+    // shape as ResolveTargetNow, but preserving the null (absent, inherit from the enclosing tier)
+    // vs. "" (present-but-empty, explicit silence) vs. literal tri-state that YamlNodeExtensions.GetString
+    // already produces at parse time, rather than collapsing null/empty together the way
+    // ExpandTemplate's plain template expansion would.
+    private string? ResolveAudioField(string? raw, RenderContext ctx) =>
+        raw switch
+        {
+            null => null,
+            "" => "",
             _ when raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') =>
                 _evaluator.Evaluate(raw[2..^1], ctx.Store).AsString(),
             _ => raw,
