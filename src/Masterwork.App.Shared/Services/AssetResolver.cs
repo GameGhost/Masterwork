@@ -6,6 +6,7 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
     private const string IconScheme = "icon://";
     private const string ImageScheme = "image://";
     private const string FontScheme = "font://";
+    private const string AudioScheme = "audio://";
 
     // Keyed by the raw assetUri. Blazor re-renders a component tree (and thus re-resolves every
     // {icon:...}/image node it contains) far more often than the underlying module assets ever
@@ -55,6 +56,15 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         (".otf", "font/otf"),
     ];
 
+    // Same convention again for audio:// — one scheme, not three (bgm/sfx/vo are folder-naming
+    // conventions within it, not separate schemes; see docs/mws-format-latest.md §6).
+    private static readonly (string Ext, string MimeType)[] AudioExtensions =
+    [
+        (".mp3", "audio/mpeg"),
+        (".ogg", "audio/ogg"),
+        (".wav", "audio/wav"),
+    ];
+
     /// <inheritdoc/>
     public async Task<string?> ResolveAsync(string assetUri)
     {
@@ -76,6 +86,15 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
 
     private async Task<string?> ResolveUncachedAsync(string assetUri)
     {
+        // audio:// gets its own dedicated path rather than joining the scheme dispatch below —
+        // unlike icon/image/font it needs a culture-suffix probe first (see TryResolveAudioAsync),
+        // and it deliberately has only one resolution tier (no dependency-pack/engine-fallback —
+        // see that method's own remarks), so it doesn't fit the shared tier1→tier2→tier3 shape.
+        if (assetUri.StartsWith(AudioScheme, StringComparison.Ordinal))
+        {
+            return await TryResolveAudioAsync(assetUri[AudioScheme.Length..]);
+        }
+
         string scheme;
         string folder;
         (string Ext, string MimeType)[] extensions;
@@ -137,5 +156,34 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
         }
 
         return null;
+    }
+
+    // audio:// resolves through bundle-local only — no dependency-pack placeholder (nothing
+    // sensible stands in for real audio the way TestAssetPack's SVGs do for icons) and no
+    // engine-fallback tier (unlike icon://'s generic fallback icon, there's no equivalent to "a
+    // generic placeholder sound" that wouldn't be actively strange to hear); unresolved means
+    // silence, matching image://'s/font://'s own no-fallback behavior.
+    //
+    // Culture-suffixed filenames (<slug>.<culture>.<ext>) are probed first, against
+    // GameSessionState.Language — the same effective module-content locale already driving
+    // .restext resolution — falling back to the bare <slug>{ext}, understood as the module's
+    // default/authoring culture. No separate manifest field declares this: the absence of a
+    // culture suffix *is* the declaration, mirroring how en-US.restext needs no explicit "this is
+    // the default" marker beyond its own naming.
+    private async Task<string?> TryResolveAudioAsync(string slug)
+    {
+        if (sessionState.Language is { } culture)
+        {
+            foreach (var (ext, mime) in AudioExtensions)
+            {
+                var url = await sessionState.Assets.GetAssetUrlAsync($"assets/audio/{slug}.{culture}{ext}", mime);
+                if (url is not null)
+                {
+                    return url;
+                }
+            }
+        }
+
+        return await TryResolveBundleLocalAsync("audio", slug, AudioExtensions);
     }
 }

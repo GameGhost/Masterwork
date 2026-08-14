@@ -152,4 +152,116 @@ public class AssetResolverTests
 
         Assert.Equal($"data:image/png;base64,{Convert.ToBase64String([9])}", url);
     }
+
+    // ── audio:// ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UnresolvedAudioScheme_ReturnsNull()
+    {
+        // audio:// has no dependency-pack/fallback tier either — only bundle-local. With no module
+        // loaded (empty GameSessionState), there's nothing to resolve against.
+        var url = await Resolver.ResolveAsync("audio://bgm/theme");
+        Assert.Null(url);
+    }
+
+    [Fact]
+    public async Task BundleLocalAudio_ResolvesToDataUri()
+    {
+        var bytes = new byte[] { 1, 2, 3 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/audio/bgm/theme.mp3"] = bytes }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://bgm/theme");
+
+        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bytes)}", url);
+    }
+
+    [Fact]
+    public async Task BundleLocalAudio_SubpathSlug_ResolvesToDataUri()
+    {
+        // audio://[<path>/]<slug> — bgm/sfx/vo are folder-naming conventions within the one scheme,
+        // not special-cased by the resolver; a multi-segment slug just addresses a nested path, the
+        // same as image://'s own subpath-slug support.
+        var bytes = new byte[] { 4, 5, 6 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.ogg"] = bytes }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/greeting");
+
+        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(bytes)}", url);
+    }
+
+    [Fact]
+    public async Task BundleLocalAudio_CultureSuffixedFileExists_PreferredOverBare()
+    {
+        var cultureBytes = new byte[] { 7, 7, 7 };
+        var bareBytes = new byte[] { 8, 8, 8 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", "fr-CA",
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]>
+                {
+                    ["assets/audio/vo/battletime_narration.fr-CA.mp3"] = cultureBytes,
+                    ["assets/audio/vo/battletime_narration.mp3"] = bareBytes,
+                }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/battletime_narration");
+
+        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(cultureBytes)}", url);
+    }
+
+    [Fact]
+    public async Task BundleLocalAudio_NoCultureSuffixedFile_FallsBackToBare()
+    {
+        var bareBytes = new byte[] { 9, 9, 9 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", "fr-CA",
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]>
+                {
+                    ["assets/audio/vo/battletime_narration.mp3"] = bareBytes,
+                }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/battletime_narration");
+
+        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bareBytes)}", url);
+    }
+
+    [Fact]
+    public async Task BundleLocalAudio_NoSessionLanguage_SkipsCultureProbe_ResolvesBare()
+    {
+        var bareBytes = new byte[] { 2, 2, 2 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.mp3"] = bareBytes }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/greeting");
+
+        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bareBytes)}", url);
+    }
 }

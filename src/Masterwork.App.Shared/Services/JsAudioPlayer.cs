@@ -23,6 +23,13 @@ public sealed class JsAudioPlayer(IJSRuntime js) : IAudioPlayer, IAsyncDisposabl
     }
 
     /// <inheritdoc/>
+    public async Task PlayBgmPlaylistAsync(IReadOnlyList<string> urls, string order)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("playBgmPlaylist", urls, order);
+    }
+
+    /// <inheritdoc/>
     public async Task StopBgmAsync()
     {
         var module = await ModuleAsync();
@@ -74,6 +81,55 @@ public sealed class JsAudioPlayer(IJSRuntime js) : IAudioPlayer, IAsyncDisposabl
     {
         var module = await ModuleAsync();
         await module.InvokeVoidAsync("setSfxMuted", muted);
+    }
+
+    /// <inheritdoc/>
+    public async Task LoadTrackAsync(string handle, string url, string bgmBehavior)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("loadTrack", handle, url, bgmBehavior);
+    }
+
+    /// <inheritdoc/>
+    public async Task PlayTrackAsync(string handle)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("playTrack", handle);
+    }
+
+    /// <inheritdoc/>
+    public async Task PauseTrackAsync(string handle)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("pauseTrack", handle);
+    }
+
+    /// <inheritdoc/>
+    public async Task SeekTrackAsync(string handle, double seconds)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("seekTrack", handle, seconds);
+    }
+
+    /// <inheritdoc/>
+    public async Task<TrackStatus> GetTrackStatusAsync(string handle)
+    {
+        var module = await ModuleAsync();
+        return await module.InvokeAsync<TrackStatus>("getTrackStatus", handle);
+    }
+
+    /// <inheritdoc/>
+    public async Task DisposeTrackAsync(string handle)
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("disposeTrack", handle);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetTrackEndedCallbackAsync<T>(string handle, DotNetObjectReference<T> callbackTarget, string callbackMethodName) where T : class
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("setTrackEndedCallback", handle, callbackTarget, callbackMethodName);
     }
 
     /// <inheritdoc/>
