@@ -1,6 +1,9 @@
 @namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
+@using Masterwork.App.Shared.Services
+@inject AudioCoordinator AudioCoordinator
+@inject GameSessionState SessionState
 
 <button type="button" class="mws-link style-@(Node.Style ?? "link") @(Node.StateAffecting ? "state-affecting" : "in-place")" disabled="@(_busy || IsRewound || !Session.AreCurrentInputsValid())" @onclick="HandleClick">
     @Node.Label
@@ -41,6 +44,7 @@
         _busy = true;
         try
         {
+            await AudioCoordinator.PlaySfxAsync(Node.ClickSfx, SessionState.Module?.Audio?.Sfx?.Click, Node.ClickSfxDelayMs);
             await Session.FollowLinkAsync(Node.Id);
             await OnStateChanged.InvokeAsync();
         }

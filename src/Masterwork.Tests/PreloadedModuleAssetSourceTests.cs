@@ -24,6 +24,38 @@ public class PreloadedModuleAssetSourceTests
             Task.FromResult<IReadOnlyList<string>>([.. urls.Keys]);
     }
 
+    // Progress<T> posts each Report call through whatever SynchronizationContext was current at
+    // construction time. xUnit test threads have none installed by default, so Report defers to the
+    // thread pool instead of running inline — meaning PreloadAllAsync can return, and the awaiting
+    // test can reach its assertions, before every queued report has actually been delivered. This is
+    // a real (if low-probability) race in the two progress-reporting tests below, not a SUT bug: the
+    // real app always has a synchronization context (Blazor's own renderer context), which is what
+    // makes Report() run synchronously there. Installing an equivalent synchronous context for the
+    // duration of these two tests makes them deterministic without changing PreloadedModuleAssetSource
+    // itself.
+    private sealed class ImmediateSynchronizationContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => d(state);
+    }
+
+    private static async Task<List<(int Done, int Total)>> PreloadWithSynchronousProgressAsync(PreloadedModuleAssetSource preloaded)
+    {
+        var reports = new List<(int Done, int Total)>();
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new ImmediateSynchronizationContext());
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(reports.Add);
+            await preloaded.PreloadAllAsync(progress);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        return reports;
+    }
+
     [Fact]
     public async Task PreloadAllAsync_ResolvesEveryListedAsset()
     {
@@ -100,10 +132,8 @@ public class PreloadedModuleAssetSourceTests
             ["d"] = "blob:d",
         });
         var preloaded = new PreloadedModuleAssetSource(inner);
-        var reports = new List<(int Done, int Total)>();
-        var progress = new Progress<(int Done, int Total)>(reports.Add);
 
-        await preloaded.PreloadAllAsync(progress);
+        var reports = await PreloadWithSynchronousProgressAsync(preloaded);
 
         Assert.Contains((0, 4), reports);
         Assert.Contains((4, 4), reports);
@@ -114,10 +144,8 @@ public class PreloadedModuleAssetSourceTests
     {
         var inner = new CountingAssetSource(new Dictionary<string, string>());
         var preloaded = new PreloadedModuleAssetSource(inner);
-        var reports = new List<(int Done, int Total)>();
-        var progress = new Progress<(int Done, int Total)>(reports.Add);
 
-        await preloaded.PreloadAllAsync(progress);
+        var reports = await PreloadWithSynchronousProgressAsync(preloaded);
 
         Assert.Equal([(0, 0)], reports);
     }

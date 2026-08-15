@@ -21,6 +21,17 @@ const pausingTracks = new Set(); // handles currently applying bgm_behavior "pau
 
 function ensureContext() {
     audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    // A freshly-constructed AudioContext starts "suspended" until explicitly resumed — playSfx
+    // never hits this (it plays a plain <audio> element with no Web Audio routing at all, so it's
+    // unaffected), but anything routed through this context (playBgm, playlists, addressable
+    // tracks) produces genuinely silent output while suspended, even though the underlying
+    // <audio> element itself is happily "playing" (currentTime advancing) — the browser just isn't
+    // pulling samples out of the graph. Not awaited: connections/automation scheduled below are
+    // valid regardless of resume timing, since ctx.currentTime simply resumes advancing once this
+    // resolves.
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
     return audioCtx;
 }
 
@@ -184,6 +195,10 @@ function applyBgmGain() {
 }
 
 function applyAllTrackGains() {
+    if (tracks.size === 0) {
+        return;
+    }
+
     const ctx = ensureContext();
     for (const track of tracks.values()) {
         track.gain.gain.linearRampToValueAtTime(sfxGain(), ctx.currentTime + 0.2);

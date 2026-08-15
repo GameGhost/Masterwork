@@ -3,6 +3,7 @@
 @using Masterwork.App.Shared.Services
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
+@inject AudioSettingsState AudioState
 @inject IModuleStore ModuleStore
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -145,6 +146,12 @@
 
     private View _view = View.Options;
     private AppSettings _draft = AppSettings.Default;
+
+    // Captured once, right after loading — Cancel reverts live audio back to this rather than
+    // whatever the last-dragged slider left it at (see AudioSettingsState's own remarks on why
+    // volume/mute are pushed live instead of waiting for Apply).
+    private AppSettings _original = AppSettings.Default;
+
     private string _saveName = "";
     private IReadOnlyList<string> _availableModuleLanguages = [];
 
@@ -168,6 +175,7 @@
         }
 
         _draft = await SettingsStore.LoadAsync();
+        _original = _draft;
 
         if (DialogContext == OptionsDialogContext.MainMenu)
         {
@@ -176,8 +184,21 @@
         }
     }
 
-    private void OnBgmVolumeInput(ChangeEventArgs e) => _draft = _draft with { BgmVolume = ParsePercent(e.Value) };
-    private void OnSfxVolumeInput(ChangeEventArgs e) => _draft = _draft with { SfxVolume = ParsePercent(e.Value) };
+    // Volume/mute changes are pushed live (immediately audible while dragging/toggling), not just
+    // staged into _draft for Apply — see AudioSettingsState's own remarks. Text size and locale stay
+    // draft-only; there's no live-preview need for either.
+    private async Task OnBgmVolumeInput(ChangeEventArgs e)
+    {
+        _draft = _draft with { BgmVolume = ParsePercent(e.Value) };
+        await AppSettingsApplier.ApplyAudioAsync(_draft, AudioPlayer, AudioState);
+    }
+
+    private async Task OnSfxVolumeInput(ChangeEventArgs e)
+    {
+        _draft = _draft with { SfxVolume = ParsePercent(e.Value) };
+        await AppSettingsApplier.ApplyAudioAsync(_draft, AudioPlayer, AudioState);
+    }
+
     private void OnTextSizeInput(ChangeEventArgs e) => _draft = _draft with { TextSizeStep = ParseInt(e.Value, _draft.TextSizeStep) };
 
     // Mirrors wwwroot/appSettings.js's own SCALES array exactly — the step index itself is
@@ -192,8 +213,17 @@
         _draft = _draft with { PreferredModuleLanguage = string.IsNullOrEmpty(value) ? null : value };
     }
 
-    private void OnBgmMutedChanged(ChangeEventArgs e) => _draft = _draft with { BgmMuted = e.Value is true };
-    private void OnSfxMutedChanged(ChangeEventArgs e) => _draft = _draft with { SfxMuted = e.Value is true };
+    private async Task OnBgmMutedChanged(ChangeEventArgs e)
+    {
+        _draft = _draft with { BgmMuted = e.Value is true };
+        await AppSettingsApplier.ApplyAudioAsync(_draft, AudioPlayer, AudioState);
+    }
+
+    private async Task OnSfxMutedChanged(ChangeEventArgs e)
+    {
+        _draft = _draft with { SfxMuted = e.Value is true };
+        await AppSettingsApplier.ApplyAudioAsync(_draft, AudioPlayer, AudioState);
+    }
 
     private static double ParsePercent(object? value) =>
         double.TryParse(value?.ToString(), out var pct) ? pct / 100.0 : 1.0;
@@ -212,7 +242,10 @@
         try
         {
             await SettingsStore.SaveAsync(_draft);
-            await AppSettingsApplier.ApplyAsync(_draft, AudioPlayer, JS);
+            // Volume/mute are already live (pushed on every prior slider/checkbox change) — this
+            // re-applies them too (harmless, idempotent), and is what actually applies culture/text
+            // size, which stayed draft-only until now.
+            await AppSettingsApplier.ApplyAsync(_draft, AudioPlayer, AudioState, JS);
             await OnClose.InvokeAsync();
         }
         finally
@@ -221,7 +254,14 @@
         }
     }
 
-    private async Task Cancel() => await OnClose.InvokeAsync();
+    private async Task Cancel()
+    {
+        // Volume/mute may have been live-pushed by a slider drag or mute toggle the player then
+        // backed out of — revert to whatever was in effect before this dialog opened, or "Cancel"
+        // would silently leave those changes in effect anyway.
+        await AppSettingsApplier.ApplyAudioAsync(_original, AudioPlayer, AudioState);
+        await OnClose.InvokeAsync();
+    }
 
     private async Task ManageModules() => await OnManageModules.InvokeAsync();
 

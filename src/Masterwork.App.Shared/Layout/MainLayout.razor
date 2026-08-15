@@ -3,6 +3,8 @@
 @using Masterwork.App.Shared.Services
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
+@inject AudioSettingsState AudioState
+@inject IMainMenuTheme Theme
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject AppNavigationHistory NavHistory
@@ -33,8 +35,50 @@
         HardwareBackButtonBridge.Register(Nav, NavHistory);
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
         NavHistory.Track(Nav.ToBaseRelativePath(e.Location));
+        _ = SyncThemeMusicAsync(e.Location);
+    }
+
+    // Starts the theme's own background music whenever the app shell (anything other than /play) is
+    // showing, but only actually triggers playback on a genuine shell<->play transition — not on
+    // every intra-shell navigation (Main Menu -> Help -> Achievements shouldn't restart/crossfade
+    // the theme track each time just because the route changed). /play itself never starts theme
+    // music here — the flows that navigate into it (ContinueList/StartNewGame) already stop theme
+    // music explicitly, immediately before navigating, rather than waiting for this handler to catch
+    // up a tick later; returning from /play to the shell is what re-triggers this method into
+    // actually starting it again.
+    private bool _themeMusicActive;
+
+    private async Task SyncThemeMusicAsync(string location)
+    {
+        var isPlayRoute = string.Equals(Nav.ToBaseRelativePath(location), "play", StringComparison.OrdinalIgnoreCase);
+        if (isPlayRoute)
+        {
+            _themeMusicActive = false;
+            return;
+        }
+
+        if (_themeMusicActive)
+        {
+            return;
+        }
+
+        _themeMusicActive = true;
+
+        // PlayBgmAsync(null) is a no-op, not a stop (see IAudioPlayer's remarks) — a theme with no
+        // music of its own must still explicitly silence whatever the module was playing a moment
+        // ago on the way out of Play, or it would keep looping forever once back on the shell.
+        if (Theme.MusicUrl is null)
+        {
+            await AudioPlayer.StopBgmAsync();
+        }
+        else
+        {
+            await AudioPlayer.PlayBgmAsync(Theme.MusicUrl);
+        }
+    }
 
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 
@@ -48,7 +92,8 @@
         if (firstRender)
         {
             var settings = await SettingsStore.LoadAsync();
-            await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, JS);
+            await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, AudioState, JS);
+            await SyncThemeMusicAsync(Nav.Uri);
 
             // The current page (@Body) already rendered once before this completed, using whatever
             // culture was in effect at that point — without this, the just-applied UI language

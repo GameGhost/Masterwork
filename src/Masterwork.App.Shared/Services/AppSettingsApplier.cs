@@ -68,12 +68,25 @@ public static class AppSettingsApplier
         CultureInfo.DefaultThreadCurrentUICulture = culture;
     }
 
-    public static async Task ApplyAsync(AppSettings settings, IAudioPlayer audioPlayer, IJSRuntime js)
+    /// <summary>
+    /// Pushes just the four audio fields to <paramref name="audioPlayer"/> and mirrors them into
+    /// <paramref name="audioState"/>. Split out from <see cref="ApplyAsync"/> so
+    /// <c>OptionsDialog.razor</c> can call this alone on every slider drag/mute toggle — a live
+    /// preview the player can hear immediately, without touching culture or text size, which stay
+    /// draft-only until Apply (see <see cref="AudioSettingsState"/>'s own remarks).
+    /// </summary>
+    public static async Task ApplyAudioAsync(AppSettings settings, IAudioPlayer audioPlayer, AudioSettingsState audioState)
     {
         await audioPlayer.SetBgmVolumeAsync(settings.BgmVolume);
         await audioPlayer.SetBgmMutedAsync(settings.BgmMuted);
         await audioPlayer.SetSfxVolumeAsync(settings.SfxVolume);
         await audioPlayer.SetSfxMutedAsync(settings.SfxMuted);
+        audioState.Update(settings.BgmVolume, settings.BgmMuted, settings.SfxVolume, settings.SfxMuted);
+    }
+
+    public static async Task ApplyAsync(AppSettings settings, IAudioPlayer audioPlayer, AudioSettingsState audioState, IJSRuntime js)
+    {
+        await ApplyAudioAsync(settings, audioPlayer, audioState);
         ApplyCulture(settings.UiLocale);
 
         var module = await js.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/appSettings.js");

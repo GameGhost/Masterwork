@@ -7,6 +7,7 @@
 @inject ISaveStore SaveStore
 @inject IModuleStore ModuleStore
 @inject GameSessionState State
+@inject IAudioPlayer AudioPlayer
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
@@ -271,6 +272,9 @@
             var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
             State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
+            // Stopped explicitly here rather than waiting for MainLayout's own route-change handler
+            // to catch up a tick later — see MainLayout.SyncThemeMusicAsync's remarks.
+            await AudioPlayer.StopBgmAsync();
             Nav.NavigateTo("/play");
         }
         catch (InvalidOperationException ex)

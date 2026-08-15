@@ -183,6 +183,51 @@ h1:focus {
 .mws-image.align-center { margin-left: auto; margin-right: auto; }
 .mws-image.align-right { margin-left: auto; margin-right: 0; }
 
+.mws-audio-track {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.mws-audio-track-title {
+    font-style: italic;
+}
+
+.mws-audio-track-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.mws-audio-track-play,
+.mws-audio-track-pause {
+    width: 2rem;
+    height: 2rem;
+    flex: none;
+    border: none;
+    border-radius: 50%;
+    background: #1a56db;
+    cursor: pointer;
+}
+
+.mws-audio-track-play:disabled,
+.mws-audio-track-pause:disabled {
+    background: #888;
+    cursor: default;
+}
+
+.mws-audio-track-scrubber {
+    flex: 1 1 auto;
+}
+
+.mws-audio-track-time {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 .mws-input {
     padding: 0.5rem;
     margin: 0.5rem 0;

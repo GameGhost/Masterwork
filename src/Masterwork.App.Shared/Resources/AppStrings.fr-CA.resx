@@ -180,6 +180,9 @@
   <data name="OptionsDialog_AbandonGame" xml:space="preserve"><value>Quitter</value></data>
   <data name="OptionsDialog_NameSaveTitle" xml:space="preserve"><value>Nommer cette sauvegarde</value></data>
 
+  <data name="AudioTrack_Play" xml:space="preserve"><value>Lecture</value></data>
+  <data name="AudioTrack_Pause" xml:space="preserve"><value>Pause</value></data>
+
   <data name="Play_NoSessionMessage" xml:space="preserve"><value>Aucune session active.</value></data>
   <data name="Play_ReturnToMainMenuLink" xml:space="preserve"><value>Retour au menu principal</value></data>
   <data name="Play_NavErrorTitle" xml:space="preserve"><value>Un problème est survenu</value></data>

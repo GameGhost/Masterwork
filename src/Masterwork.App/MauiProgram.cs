@@ -43,6 +43,8 @@ public static class MauiProgram
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
         builder.Services.AddScoped<IAppSettingsStore, PreferencesAppSettingsStore>();
         builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
+        builder.Services.AddScoped<AudioCoordinator>();
+        builder.Services.AddScoped<AudioSettingsState>();
         builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
         // Overrides Shared's NullNativeFilePicker default — see INativeFilePicker's own remarks for
         // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload /

@@ -1,6 +1,9 @@
 @namespace Masterwork.App.Shared.Rendering
 @using Masterwork.Engine
 @using Masterwork.Engine.Rendering
+@using Masterwork.App.Shared.Services
+@inject AudioCoordinator AudioCoordinator
+@inject GameSessionState SessionState
 
 @if (!IsOpen)
 {
@@ -100,11 +103,11 @@ else
     private bool IsOpen => Session.ViewState.ExpandedPopups.Contains(Node.Id);
     private string? _firstFocusableInputId;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         if (Node.AutoDisplay && !IsRewound && !IsOpen)
         {
-            Open();
+            await Open();
         }
     }
 
@@ -120,7 +123,7 @@ else
             Node.Chrome.Header, Node.Header, Node.Chrome.BeforeContent, Node.Content, Node.Chrome.AfterContent, Node.Chrome.Footer);
     }
 
-    private void Open()
+    private async Task Open()
     {
         if (IsRewound)
         {
@@ -128,6 +131,11 @@ else
         }
 
         Session.ViewState.ExpandedPopups.Add(Node.Id);
+        // Opening never calls the engine (see RenderedPopup's remarks), so unlike Accept below,
+        // nothing else recomputes the music stack for us — this popup may now be the new topmost
+        // tier, so it's synced directly here.
+        await AudioCoordinator.SyncMusicAsync(Session);
+        await AudioCoordinator.PlaySfxAsync(Node.Audio?.Open, SessionState.Module?.Audio?.Sfx?.PopupOpen, Node.Audio?.OpenDelayMs);
     }
 
     // Guards against a double-click double-firing ClosePopupAsync — see RenderedLinkView's
@@ -146,6 +154,12 @@ else
         _busy = true;
         try
         {
+            // Fired before ClosePopupAsync rather than after: Okay may navigate to a new passage
+            // (or even end the session), and the click itself is what the sound acknowledges, not
+            // whatever ClosePopupAsync ends up doing. OnStateChanged below already routes through
+            // Play.razor's Refresh (see its own remarks), which resyncs the music stack for us —
+            // no direct SyncMusicAsync call needed here, unlike Open/Cancel.
+            await AudioCoordinator.PlaySfxAsync(Node.Audio?.Okay, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.OkayDelayMs);
             await Session.ClosePopupAsync(Node.Id, accept: true);
             await OnStateChanged.InvokeAsync();
         }
@@ -158,9 +172,14 @@ else
     private async Task Cancel()
     {
         // Never touches Session — a plain dismiss with no navigation or committed state, so it's the
-        // cheap path (no ambient-audio sync, no autosave), matching the reported "popups are slow to
-        // dismiss even with no close/navigation action" symptom.
+        // cheap path (no autosave), matching the reported "popups are slow to dismiss even with no
+        // close/navigation action" symptom. It DOES still need its own direct music-stack recompute
+        // below, though: OnInputChanged (unlike OnStateChanged) never reaches Play.razor's Refresh,
+        // so closing this popup would otherwise leave whatever tier it was topmost for stuck audible
+        // even after it's gone — this is that missing hook.
         Session.ViewState.ExpandedPopups.Remove(Node.Id);
+        await AudioCoordinator.SyncMusicAsync(Session);
+        await AudioCoordinator.PlaySfxAsync(Node.Audio?.Cancel, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.CancelDelayMs);
         await OnInputChanged.InvokeAsync();
     }
 }

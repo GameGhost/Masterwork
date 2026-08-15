@@ -262,7 +262,13 @@ public sealed class GameSession
 
         if (pendingGoto is null && link.Target is null)
         {
-            ViewState.Reset();
+            // Nothing to navigate to and CurrentRender doesn't change — a full ViewState.Reset()
+            // would wrongly close every open popup too, not just clear this interaction's own
+            // drafts (a real bug: a link with no target/goto, nested inside a popup's content,
+            // used only for its onclick side effects, would otherwise snap all the way back to the
+            // enclosing passage). Only drafts are stale here; ExpandedPopups reflects reality until
+            // an actual navigation changes what's on screen.
+            ViewState.InputDrafts.Clear();
             return Task.FromResult(CurrentRender);
         }
 
@@ -333,8 +339,13 @@ public sealed class GameSession
             // Nothing to navigate to — Okay just closes the popup. Don't re-render the current
             // passage: that would re-run its whole node list, which can re-trigger guard
             // conditions (re-showing this same popup) or re-draw random values, for no reason
-            // since nothing about the passage itself is meant to change here.
-            ViewState.Reset();
+            // since nothing about the passage itself is meant to change here. Only this popup's own
+            // id is removed from ExpandedPopups — not a full ViewState.Reset() — since a nested
+            // popup accepted this way must return to its *enclosing* popup, not blow past it all the
+            // way back to the passage (a real bug: the enclosing popup is still legitimately open in
+            // this same, unchanged render).
+            ViewState.ExpandedPopups.Remove(actionId);
+            ViewState.InputDrafts.Clear();
             return Task.FromResult(CurrentRender);
         }
 

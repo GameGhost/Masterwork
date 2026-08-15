@@ -1,0 +1,182 @@
+@namespace Masterwork.App.Shared.Rendering
+@using Masterwork.Engine.Rendering
+@using Masterwork.App.Shared.Services
+@using Masterwork.App.Shared.Resources
+@implements IAsyncDisposable
+@inject IAssetResolver AssetResolver
+@inject IAudioPlayer AudioPlayer
+@inject AudioSettingsState AudioState
+
+<div class="mws-audio-track style-@(Node.Style ?? "default")">
+    @if (Node.Title is not null)
+    {
+        <div class="mws-audio-track-title">@Node.Title</div>
+    }
+    <div class="mws-audio-track-controls">
+        <button type="button" class="mws-audio-track-play" disabled="@(_url is null || _status.IsPlaying || AudioState.SfxMuted)"
+                @onclick="PlayAsync" aria-label="@AppStrings.AudioTrack_Play" title="@AppStrings.AudioTrack_Play"></button>
+        <button type="button" class="mws-audio-track-pause" disabled="@(_url is null || !_status.IsPlaying || AudioState.SfxMuted)"
+                @onclick="PauseAsync" aria-label="@AppStrings.AudioTrack_Pause" title="@AppStrings.AudioTrack_Pause"></button>
+        <input type="range" class="mws-audio-track-scrubber" min="0" max="@Math.Max(_status.DurationSeconds, 0.01)" step="0.01"
+               value="@(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)"
+               disabled="@(_url is null || AudioState.SfxMuted)" @oninput="OnScrubPreview" @onchange="OnScrubCommitAsync" />
+        <span class="mws-audio-track-time">
+            <span class="mws-audio-track-current">@FormatTime(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)</span> / <span class="mws-audio-track-total">@FormatTime(_status.DurationSeconds)</span>
+        </span>
+    </div>
+</div>
+
+@code {
+    /// <summary>The audio_track node to render.</summary>
+    [Parameter, EditorRequired]
+    public RenderedAudioTrack Node { get; set; } = null!;
+
+    // Unique per rendered element (RenderedAudioTrack isn't a RenderedAction, so it carries no id of
+    // its own — see its own remarks) — stable for this component instance's lifetime, which is all
+    // IAudioPlayer's addressable-track API needs it for.
+    private readonly string _handle = $"audio_track_{Guid.NewGuid():n}";
+
+    private string? _url;
+    private string? _resolvedFor;
+    private TrackStatus _status = new(false, 0, 0);
+    private Timer? _pollTimer;
+    private DotNetObjectReference<RenderedAudioTrackView>? _selfRef;
+
+    // While the player is dragging the scrubber, the slider's displayed value/time follow this
+    // local preview instead of _status.PositionSeconds — seeking only happens once, on release (see
+    // OnScrubCommitAsync). Seeking on every intermediate @oninput tick (once per pixel of drag)
+    // repeatedly interrupts the underlying <audio> element's decode pipeline, which is what produced
+    // the "grinding" noise reported during manual testing.
+    private bool _scrubbing;
+    private double _scrubPreviewSeconds;
+
+    // Same guard shape as RenderedImageView.OnParametersSetAsync — skips the async resolve/reload
+    // entirely on a re-render where the asset hasn't actually changed (e.g. an unrelated sibling
+    // state change re-rendering this whole passage).
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Node.Asset == _resolvedFor)
+        {
+            return;
+        }
+
+        _resolvedFor = Node.Asset;
+        _url = await AssetResolver.ResolveAsync(Node.Asset);
+        if (_url is null)
+        {
+            return;
+        }
+
+        await AudioPlayer.LoadTrackAsync(_handle, _url, Node.BgmBehavior);
+        _selfRef ??= DotNetObjectReference.Create(this);
+        await AudioPlayer.SetTrackEndedCallbackAsync(_handle, _selfRef, nameof(OnTrackEnded));
+        await RefreshStatusAsync();
+
+        // Polling (not an event push from audio.js) is what keeps the scrubber/time display live
+        // while playing — cheap enough at this interval, and avoids a second JS interop surface just
+        // for position updates when GetTrackStatusAsync already exists for on-demand reads. Also
+        // doubles as the live SFX-mute check below, piggybacking on the same cadence rather than a
+        // second timer/event subscription.
+        _pollTimer ??= new Timer(_ => _ = InvokeAsync(RefreshStatusAsync), null, 100, 100);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _url is null || !Node.Autoplay || AudioState.SfxMuted)
+        {
+            return;
+        }
+
+        if (Node.AutoplayDelayMs is > 0)
+        {
+            await Task.Delay(Node.AutoplayDelayMs.Value);
+        }
+
+        await PlayAsync();
+    }
+
+    private async Task PlayAsync()
+    {
+        if (_url is null || AudioState.SfxMuted)
+        {
+            return;
+        }
+
+        await AudioPlayer.PlayTrackAsync(_handle);
+        await RefreshStatusAsync();
+    }
+
+    private async Task PauseAsync()
+    {
+        if (_url is null)
+        {
+            return;
+        }
+
+        await AudioPlayer.PauseTrackAsync(_handle);
+        await RefreshStatusAsync();
+    }
+
+    // Live-updates the slider/time display only — no seek, so dragging produces no audible
+    // artifacts. ChangeEventArgs (not the drag position in isolation) is what @oninput hands us for
+    // a range input on every intermediate tick.
+    private void OnScrubPreview(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            _scrubbing = true;
+            _scrubPreviewSeconds = seconds;
+        }
+    }
+
+    // @onchange fires once, on release (or on a keyboard-driven commit) — this is the only point
+    // that actually seeks the underlying track.
+    private async Task OnScrubCommitAsync(ChangeEventArgs e)
+    {
+        _scrubbing = false;
+        if (_url is null || !double.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            return;
+        }
+
+        await AudioPlayer.SeekTrackAsync(_handle, seconds);
+        await RefreshStatusAsync();
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        _status = await AudioPlayer.GetTrackStatusAsync(_handle);
+
+        // audio_track shares the SFX volume channel (see IAudioPlayer's remarks) — playing on while
+        // it's muted would be misleading, so this pauses itself the moment mute is toggled on, live,
+        // via the same poll tick rather than a separate subscription to AudioSettingsState.
+        if (AudioState.SfxMuted && _status.IsPlaying)
+        {
+            await AudioPlayer.PauseTrackAsync(_handle);
+            _status = await AudioPlayer.GetTrackStatusAsync(_handle);
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Invoked via JS interop when this track reaches its natural end — see <see cref="IAudioPlayer.SetTrackEndedCallbackAsync{T}"/>.</summary>
+    [JSInvokable]
+    public async Task OnTrackEnded() => await RefreshStatusAsync();
+
+    private static string FormatTime(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(double.IsFinite(seconds) ? Math.Max(0, seconds) : 0);
+        return $"{(int)t.TotalMinutes}:{t.Seconds:D2}";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _pollTimer?.Dispose();
+        if (_url is not null)
+        {
+            await AudioPlayer.DisposeTrackAsync(_handle);
+        }
+
+        _selfRef?.Dispose();
+    }
+}

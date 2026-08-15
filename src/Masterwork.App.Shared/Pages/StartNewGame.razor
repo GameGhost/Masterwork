@@ -9,6 +9,7 @@
 @inject ISaveStore SaveStore
 @inject IAppSettingsStore SettingsStore
 @inject GameSessionState State
+@inject IAudioPlayer AudioPlayer
 @inject IModuleStyleInjector StyleInjector
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
@@ -420,6 +421,9 @@
                 var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
                 State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session);
                 await StyleInjector.ApplyAsync(loaded.StyleCss);
+                // See MainLayout.SyncThemeMusicAsync's remarks — stopped explicitly rather than
+                // waiting for its own route-change handler to catch up a tick later.
+                await AudioPlayer.StopBgmAsync();
                 Nav.NavigateTo("/play");
             }
             finally
@@ -491,6 +495,9 @@
             var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64(), logger: GameSessionLogger);
             State.Start(module.ModuleId, module.Version, language, loaded, session);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
+            // See MainLayout.SyncThemeMusicAsync's remarks — stopped explicitly rather than waiting
+            // for its own route-change handler to catch up a tick later.
+            await AudioPlayer.StopBgmAsync();
             Nav.NavigateTo("/play");
         }
         finally

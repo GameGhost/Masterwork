@@ -26,6 +26,8 @@ builder.Services.AddScoped<AppNavigationHistory>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
 builder.Services.AddScoped<IAppSettingsStore, LocalStorageAppSettingsStore>();
 builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
+builder.Services.AddScoped<AudioCoordinator>();
+builder.Services.AddScoped<AudioSettingsState>();
 builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 // No WebView2 host here — the InputFile elements StartNewGame.razor/ContinueList.razor use for
 // module upload/save import don't hit the crash INativeFilePicker documents, so this default

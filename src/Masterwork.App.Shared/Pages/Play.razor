@@ -6,6 +6,7 @@
 @using Masterwork.App.Shared.Services
 @inject GameSessionState State
 @inject IAudioPlayer AudioPlayer
+@inject AudioCoordinator AudioCoordinator
 @inject IModuleStyleInjector StyleInjector
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
@@ -110,6 +111,12 @@ else
             return;
         }
 
+        // Theme audio (or a previous session's own music) may have been playing moments ago and was
+        // stopped independently before navigating here — AudioCoordinator has no way to observe
+        // that on its own, so every fresh mount forces its next SyncMusicAsync to actually apply
+        // rather than risk wrongly comparing against stale state. See AudioCoordinator.Reset's own
+        // remarks.
+        AudioCoordinator.Reset();
         _locationChangingRegistration = Nav.RegisterLocationChangingHandler(OnLocationChanging);
     }
 
@@ -138,6 +145,7 @@ else
     {
         if (firstRender && State.Session is not null)
         {
+            await SyncAudioAsync();
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
             await HandleGameOverOrAutosaveAsync();
         }
@@ -148,9 +156,25 @@ else
         StateHasChanged();
         if (State.Session is not null)
         {
+            await SyncAudioAsync();
             await AudioPlayer.SetAmbientOnlyAsync(State.Session.IsRewound);
             await HandleGameOverOrAutosaveAsync();
         }
+    }
+
+    // Background music (the "topmost active element wins" stack) and the current passage's
+    // on_display SFX both need to be (re)applied every time CurrentRender changes to a genuinely
+    // new render — exactly the two call sites above, both already gated on State.Session being
+    // non-null. AudioCoordinator.SyncMusicAsync no-ops when the resolution hasn't actually changed,
+    // so calling it unconditionally here (rather than only on passages that declare their own
+    // audio:) is cheap. on_display, unlike music, is a one-shot fire, not a resolution to compare
+    // against — it just fires every time this runs, matching "once when this passage becomes the
+    // active passage."
+    private async Task SyncAudioAsync()
+    {
+        await AudioCoordinator.SyncMusicAsync(State.Session!);
+        var render = State.Session!.CurrentRender;
+        await AudioCoordinator.PlaySfxAsync(render.OnDisplaySound, State.Module?.Audio?.Sfx?.Transition, render.OnDisplaySoundDelayMs);
     }
 
     // For input drafts and other purely-local view-state toggles (e.g. cancelling a popup) that

@@ -1290,6 +1290,84 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task PopupAccept_NestedPopupWithNoTarget_ClosesOnlyNestedPopup_LeavesOuterOpen()
+    {
+        // Regression: accepting a nested popup with no target/onclose-goto of its own (just an
+        // "Okay" that dismisses it) used to call the same full ViewState.Reset() a top-level popup's
+        // equivalent close uses. ExpandedPopups is a flat set with no nesting concept of its own, so
+        // that wiped out the OUTER popup's own open state too — the player landed all the way back
+        // on the passage instead of the enclosing popup. Confirmed via manual testing during Phase 4
+        // Milestone B (a nested popup's own music/SFX override made the bug audible).
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Open outer'
+              cancel: 'Close outer'
+              content:
+              - type: 'text'
+                value: 'Outer popup content.'
+              - type: 'popup'
+                label: 'Open inner'
+                okay: 'Close inner'
+                content:
+                - type: 'text'
+                  value: 'Inner popup content.'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var outerPopup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        session.ViewState.ExpandedPopups.Add(outerPopup.Id);
+        var innerPopup = Assert.Single(outerPopup.Actions.OfType<RenderedPopup>());
+        session.ViewState.ExpandedPopups.Add(innerPopup.Id);
+
+        await session.ClosePopupAsync(innerPopup.Id, accept: true);
+
+        Assert.Contains(outerPopup.Id, session.ViewState.ExpandedPopups);
+        Assert.DoesNotContain(innerPopup.Id, session.ViewState.ExpandedPopups);
+    }
+
+    [Fact]
+    public async Task FollowLink_LinkWithNoTargetInsidePopupContent_DoesNotCloseEnclosingPopup()
+    {
+        // Same bug, the FollowLinkAsync side: a link with no target, whose onclick doesn't goto
+        // anywhere (used only for its side effect), used to call the same blunt ViewState.Reset() —
+        // wrongly closing whichever popup it was nested inside even though CurrentRender doesn't
+        // change here at all.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'popup'
+              label: 'Open'
+              cancel: 'Close'
+              content:
+              - type: 'link'
+                label: 'No-op'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        var popup = session.CurrentRender.Actions.OfType<RenderedPopup>().Single();
+        session.ViewState.ExpandedPopups.Add(popup.Id);
+        var link = Assert.Single(popup.Actions.OfType<RenderedLink>());
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Contains(popup.Id, session.ViewState.ExpandedPopups);
+    }
+
+    [Fact]
     public async Task FollowLink_LinkInsidePopupContent_CommitsEnclosingPopupsSandboxFirst()
     {
         // Regression: A Time of War's ATOWSabotageIntro1 — `assign sabotagee1 = "none"` sits in a
