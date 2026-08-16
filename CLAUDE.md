@@ -137,15 +137,21 @@ reasoning applies (purely additive, no external/frozen consumers depending on th
 
 ## Security / Licensing Constraints
 
-- **Never commit** CC BY-NC-SA 4.0 reference material derived from the official app (extracted Unity project assets, original Cradle scripts, screenshots, etc.) to this repo. That material lives in a private local reference workspace, not tracked here.
+- **Never mirror the reference material wholesale** (the full `Reference/UnityOriginalApp/` Unity
+  project archive, `_extracted/` output, etc.) into this repo — the archive itself stays in a private
+  local reference workspace, not tracked here.
 - `_extracted/` output directories are also off-limits for commits here.
 - The Masterwork source code itself (this repo) is a separate work from the reference content.
-- **Exception**: `src/Masterwork.App.Theme.MyFathersWork/` is a documented, deliberate exception to
-  the rule above. Its assets come from Renegade Game Studios' own community-resources release for
-  *My Father's Work* (linked in that project's own `NOTICE.md`), not the general CC BY-NC-SA
-  reference material used for content extraction — individual files may be copied/modified per that
-  release's terms, just not mirrored wholesale. The blanket rule above still applies to everything
-  else under `Reference/`.
+- **Provenance**: the entire `Reference/UnityOriginalApp/` tree — Cradle `.cs` scripts, UI/setup
+  images, and audio (BGM/SFX/VO) alike — comes from Renegade Game Studios' own community-resources
+  release for *My Father's Work*:
+  <https://renegadegamestudios.com/blog/my-fathers-work-app-update-community-resources/>
+  Per that release, individual files may be copied and modified into a real project as needed; only
+  the reference archive itself must never be mirrored wholesale into a public repo.
+  `src/Masterwork.App.Theme.MyFathersWork/` (images/fonts — see its own `NOTICE.md`) and each
+  module's `.source/*.cs` (see `Masterwork-Modules/NOTICE.md`) are the documented examples so far;
+  any other file pulled from this same release (e.g. Phase 4's real audio content) follows the same
+  rule and should get its own `NOTICE.md`-style provenance note wherever it lands.
 
 ---
 

@@ -25,7 +25,7 @@
             <RenderedImageView @key="key" Node="image" />
             break;
         case RenderedAudioTrack track:
-            <RenderedAudioTrackView @key="key" Node="track" />
+            <RenderedAudioTrackView @key="key" Node="track" IsRewound="IsRewound" />
             break;
         case RenderedSection section:
             <RenderedSectionView @key="key" Node="section" Session="Session" IsRewound="IsRewound" OnStateChanged="OnStateChanged" OnInputChanged="OnInputChanged" FirstFocusableInputId="@FirstFocusableInputId" />

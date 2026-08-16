@@ -169,12 +169,28 @@ else
     // so calling it unconditionally here (rather than only on passages that declare their own
     // audio:) is cheap. on_display, unlike music, is a one-shot fire, not a resolution to compare
     // against — it just fires every time this runs, matching "once when this passage becomes the
-    // active passage."
+    // active passage" — except while reviewing timeline history, where nothing new should fire at
+    // all (background music still updates above, reflecting whatever's being viewed, but that's the
+    // one exception — see RenderedAudioTrackView's own identical rewind handling).
     private async Task SyncAudioAsync()
     {
         await AudioCoordinator.SyncMusicAsync(State.Session!);
-        var render = State.Session!.CurrentRender;
-        await AudioCoordinator.PlaySfxAsync(render.OnDisplaySound, State.Module?.Audio?.Sfx?.Transition, render.OnDisplaySoundDelayMs);
+
+        if (State.Session!.IsRewound)
+        {
+            return;
+        }
+
+        var render = State.Session.CurrentRender;
+        // A passage whose first content is an auto-displaying popup gets that popup's own `open`
+        // sound as its arrival sound instead of on_display — RenderedPopupView.OnInitializedAsync
+        // already fires it unconditionally as soon as the popup mounts, so playing on_display too
+        // would audibly overlap it (reported during Milestone C manual testing).
+        var hasAutoShowPopup = render.Actions.OfType<RenderedPopup>().Any(p => p.AutoDisplay);
+        if (!hasAutoShowPopup)
+        {
+            await AudioCoordinator.PlaySfxAsync(render.OnDisplaySound, State.Module?.Audio?.Sfx?.Transition, render.OnDisplaySoundDelayMs);
+        }
     }
 
     // For input drafts and other purely-local view-state toggles (e.g. cancelling a popup) that

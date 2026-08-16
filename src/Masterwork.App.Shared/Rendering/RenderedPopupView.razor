@@ -154,13 +154,22 @@ else
         _busy = true;
         try
         {
-            // Fired before ClosePopupAsync rather than after: Okay may navigate to a new passage
-            // (or even end the session), and the click itself is what the sound acknowledges, not
-            // whatever ClosePopupAsync ends up doing. OnStateChanged below already routes through
-            // Play.razor's Refresh (see its own remarks), which resyncs the music stack for us —
-            // no direct SyncMusicAsync call needed here, unlike Open/Cancel.
-            await AudioCoordinator.PlaySfxAsync(Node.Audio?.Okay, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.OkayDelayMs);
-            await Session.ClosePopupAsync(Node.Id, accept: true);
+            var before = Session.CurrentRender;
+            var after = await Session.ClosePopupAsync(Node.Id, accept: true);
+            // Only play this popup's own Okay SFX if closing it did NOT navigate anywhere — if it
+            // did, the destination gets its own arrival sound instead (on_display, or an auto-show
+            // popup's own open sound — see Play.razor.SyncAudioAsync), and playing this one too
+            // would audibly overlap it (a real symptom reported during Milestone C manual testing:
+            // a setup popup closing straight into another passage's own auto-open setup popup). Not
+            // fired before the call the way it originally was — ClosePopupAsync returns CurrentRender
+            // unchanged (the exact same reference) specifically when there was nothing to navigate to
+            // (see its own remarks), which is the only reliable way to know in advance which case
+            // this is; it's fast enough that the click still feels immediate.
+            if (ReferenceEquals(after, before))
+            {
+                await AudioCoordinator.PlaySfxAsync(Node.Audio?.Okay, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.OkayDelayMs);
+            }
+
             await OnStateChanged.InvokeAsync();
         }
         finally

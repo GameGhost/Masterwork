@@ -13,13 +13,13 @@
         <div class="mws-audio-track-title">@Node.Title</div>
     }
     <div class="mws-audio-track-controls">
-        <button type="button" class="mws-audio-track-play" disabled="@(_url is null || _status.IsPlaying || AudioState.SfxMuted)"
+        <button type="button" class="mws-audio-track-play" disabled="@(_url is null || _status.IsPlaying || AudioState.SfxMuted || IsRewound)"
                 @onclick="PlayAsync" aria-label="@AppStrings.AudioTrack_Play" title="@AppStrings.AudioTrack_Play"></button>
-        <button type="button" class="mws-audio-track-pause" disabled="@(_url is null || !_status.IsPlaying || AudioState.SfxMuted)"
+        <button type="button" class="mws-audio-track-pause" disabled="@(_url is null || !_status.IsPlaying || AudioState.SfxMuted || IsRewound)"
                 @onclick="PauseAsync" aria-label="@AppStrings.AudioTrack_Pause" title="@AppStrings.AudioTrack_Pause"></button>
         <input type="range" class="mws-audio-track-scrubber" min="0" max="@Math.Max(_status.DurationSeconds, 0.01)" step="0.01"
                value="@(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)"
-               disabled="@(_url is null || AudioState.SfxMuted)" @oninput="OnScrubPreview" @onchange="OnScrubCommitAsync" />
+               disabled="@(_url is null || AudioState.SfxMuted || IsRewound)" @oninput="OnScrubPreview" @onchange="OnScrubCommitAsync" />
         <span class="mws-audio-track-time">
             <span class="mws-audio-track-current">@FormatTime(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)</span> / <span class="mws-audio-track-total">@FormatTime(_status.DurationSeconds)</span>
         </span>
@@ -30,6 +30,17 @@
     /// <summary>The audio_track node to render.</summary>
     [Parameter, EditorRequired]
     public RenderedAudioTrack Node { get; set; } = null!;
+
+    /// <summary>
+    /// True while reviewing timeline history (or merely paused — see <c>Play.razor</c>'s combined
+    /// <c>Session.IsRewound || _paused</c> signal, threaded down uniformly to every rendered node).
+    /// Freezes this element entirely: no autoplay, no interactive controls, and any already-playing
+    /// track pauses itself (see <see cref="RefreshStatusAsync"/>) — reviewing history shouldn't
+    /// trigger or advance narration audio. Background music is unaffected (see
+    /// <c>AudioCoordinator.SyncMusicAsync</c>'s own remarks) — this only concerns this one element.
+    /// </summary>
+    [Parameter]
+    public bool IsRewound { get; set; }
 
     // Unique per rendered element (RenderedAudioTrack isn't a RenderedAction, so it carries no id of
     // its own — see its own remarks) — stable for this component instance's lifetime, which is all
@@ -82,7 +93,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _url is null || !Node.Autoplay || AudioState.SfxMuted)
+        if (!firstRender || _url is null || !Node.Autoplay || AudioState.SfxMuted || IsRewound)
         {
             return;
         }
@@ -97,7 +108,7 @@
 
     private async Task PlayAsync()
     {
-        if (_url is null || AudioState.SfxMuted)
+        if (_url is null || AudioState.SfxMuted || IsRewound)
         {
             return;
         }
@@ -134,7 +145,7 @@
     private async Task OnScrubCommitAsync(ChangeEventArgs e)
     {
         _scrubbing = false;
-        if (_url is null || !double.TryParse(e.Value?.ToString(), out var seconds))
+        if (_url is null || IsRewound || !double.TryParse(e.Value?.ToString(), out var seconds))
         {
             return;
         }
@@ -149,8 +160,15 @@
 
         // audio_track shares the SFX volume channel (see IAudioPlayer's remarks) — playing on while
         // it's muted would be misleading, so this pauses itself the moment mute is toggled on, live,
-        // via the same poll tick rather than a separate subscription to AudioSettingsState.
-        if (AudioState.SfxMuted && _status.IsPlaying)
+        // via the same poll tick rather than a separate subscription to AudioSettingsState. Rewind
+        // gets the identical treatment for the identical reason: reviewing history shouldn't leave
+        // narration audibly advancing in the background. Reactive (checked every poll tick, not just
+        // on a rewind *transition*) rather than tracked explicitly — simpler, and 100ms is more than
+        // responsive enough for "stop admitting new progress while paused/rewound," which is all
+        // this needs to guarantee. Deliberately doesn't auto-resume when IsRewound later clears
+        // (e.g. after "Resume from here") — the player presses Play again, same as any other
+        // manually-paused track; nothing here tracks "was this our pause or the player's."
+        if ((AudioState.SfxMuted || IsRewound) && _status.IsPlaying)
         {
             await AudioPlayer.PauseTrackAsync(_handle);
             _status = await AudioPlayer.GetTrackStatusAsync(_handle);
