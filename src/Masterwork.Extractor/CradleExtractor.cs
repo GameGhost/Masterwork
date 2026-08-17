@@ -1468,16 +1468,29 @@ public partial class CradleExtractor
         // non-greedy) — a bold span elsewhere mid-sentence isn't a heading candidate; this only
         // matches when the bold span starts at position 0 of the merged template.
         //
-        // The REMAINDER within this same merged template — the plain text immediately after the
-        // bold span, still part of the identical TextNode — must also be short (combined with the
-        // bold span, against MaxHeadingLength), not just the bold span alone: A Time of War's
-        // OptiontoKillYesPattern merges a short bold callout ("**Gain 1 Body,**") directly into a
-        // long, multi-sentence paragraph ("Lose 1 and Gain 1VP. Then they must return a piece to
-        // Lost.") with no break — an inline emphasis at the START of ordinary prose, not a heading,
-        // even though it syntactically matches "leading bold span". Unlike
-        // MaxPossibleBoldContinuationLength's job (bounding more BOLD content that might extend the
-        // title), an unbounded-length PLAIN remainder within the same node is a much stronger signal
-        // this was never a heading to begin with, so it's checked directly here rather than reused.
+        // The remainder within this same merged template — the plain text immediately after the
+        // bold span, still part of the identical TextNode — becomes body content unconditionally,
+        // regardless of its own length, once the bold span itself passes the MaxHeadingLength gate
+        // above. This mirrors the original app's own TwineTMProPlayer.RefreshText: title
+        // accumulation stops the instant the bold style scope closes, and the 50-char cutoff only
+        // ever bounds what accumulated *while bold* — never what follows once it's plain body text
+        // (exactly Shape 1's own philosophy above, which likewise never checks trailing body length,
+        // only continuing BOLD content via MaxPossibleBoldContinuationLength below). A previous
+        // version of this rule instead required bold+remainder combined to stay under
+        // MaxHeadingLength, on the theory that an unbounded-length plain remainder signals "inline
+        // emphasis mid-sentence, not a real heading" — but that broke a confirmed real heading: Cost
+        // of Disease's S5Special1, `styleScope("bold"){ text("The Town Is in Need of Direction") }
+        // text("Before resolving this event, all players should complete all start of round
+        // actions.")` with no lineBreak in between, which the reference app renders as a genuine
+        // title ("The Town Is in Need of Direction") followed by a normal first body paragraph, even
+        // though that paragraph alone is well over MaxHeadingLength — confirmed directly against the
+        // reference app's own rendering, not just the decompiled source. The cited counter-example
+        // (a short bold callout merging into a long paragraph, meant as inline emphasis) doesn't
+        // actually reach this branch in the current corpus — whatever passage motivated it, if any,
+        // no longer needs the combined-length guard to be excluded, since a leading-bold-then-plain
+        // merge only ever reaches here as literally the first content of a passage (or a branch),
+        // where the reference app's own style-scope-close rule applies just as mechanically as it
+        // does for S5Special1.
         if (headingSuffix is [TextNode { Style: not "bold", Template: { } mixedTemplate } mixedFirst, .. var mixedRest]
             && System.Text.RegularExpressions.Regex.Match(mixedTemplate, @"^\*\*(.+?)\*\*") is { Success: true } leadingBoldMatch
             && leadingBoldMatch.Groups[1].Value.Length > 0
@@ -1494,13 +1507,13 @@ public partial class CradleExtractor
                 mixedAfterIdx++;
             }
 
-            var mixedCombinedLength = EstimateRenderedLength(leadingText) + EstimateRenderedLength(remainderTemplate);
-            var continuationOk = mixedCombinedLength <= MaxHeadingLength;
-            if (continuationOk && mixedAfterIdx < mixedRest.Count && mixedRest[mixedAfterIdx] is not (BreakNode or ParagraphBreakNode))
+            var titleLength = EstimateRenderedLength(leadingText);
+            var continuationOk = true;
+            if (mixedAfterIdx < mixedRest.Count && mixedRest[mixedAfterIdx] is not (BreakNode or ParagraphBreakNode))
             {
                 var continuationLength = MaxPossibleBoldContinuationLength(mixedRest[mixedAfterIdx]);
                 continuationOk = continuationLength is not null
-                    && mixedCombinedLength + continuationLength.Value <= MaxHeadingLength;
+                    && titleLength + continuationLength.Value <= MaxHeadingLength;
             }
 
             if (continuationOk)

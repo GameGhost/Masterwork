@@ -1485,10 +1485,9 @@ public class ExtractorTests
         // next text() call. CanJoinGroup merges adjacent TextNodes regardless of style match
         // whenever nothing separates them, producing ONE TextNode with Style: null (mixed) and
         // Template: "**Destiny Awaits**Your choice has been made." — the flat shape-1 check
-        // (requiring Style == "bold" on the WHOLE node) never matched this at all. The combined
-        // length here (14 + 27 = 41 chars) is short, so this hoists — contrast with the sibling test
-        // for OptiontoKillYesPattern's shape, where the remainder is long enough to correctly block
-        // the hoist instead.
+        // (requiring Style == "bold" on the WHOLE node) never matched this at all. See the sibling
+        // test below (LeadingBoldSpanMergedWithLongPlainRemainder) for why the remainder's own
+        // length doesn't gate this at all, unlike the bold span itself.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -1514,6 +1513,47 @@ public class ExtractorTests
         Assert.Equal("Destiny Awaits", passages[0].Title);
         Assert.Null(passages[0].Subtitle);
         var body = Assert.Single(passages[0].Nodes.OfType<TextNode>(), t => t.Template == "Your choice has been made.");
+        Assert.Null(body.Style);
+    }
+
+    [Fact]
+    public void NarrationLayout_LeadingBoldSpanMergedWithLongPlainRemainder_StillHoistsJustTheSpan()
+    {
+        // Regression: Cost of Disease's S5Special1 — `styleScope("bold"){ text("The Town Is in Need
+        // of Direction") } text("Before resolving this event, all players should complete all start
+        // of round actions.")`, no lineBreak in between (the same CanJoinGroup merge as the sibling
+        // FPYesHub test above), producing one mixed-style TextNode whose bold span (33 chars) is
+        // well under MaxHeadingLength but whose remainder (86 chars) alone is well over it. A
+        // previous version of this rule required bold+remainder combined to stay under
+        // MaxHeadingLength, which wrongly blocked this real title — confirmed directly against the
+        // reference app's own rendering (a title reading "The Town Is in Need of Direction" and a
+        // separate first body paragraph starting "Before resolving..."), not just the decompiled
+        // source. TwineTMProPlayer.RefreshText stops title accumulation the instant the bold style
+        // scope closes — the 50-char cutoff only ever bounds what accumulated *while bold*, never
+        // what follows once it's plain body text, regardless of that body text's own length.
+        var passages = Extract("""
+            private void passage1_Init()
+            {
+                base.Passages["P1"] = new StoryPassage("P1", new string[] { }, new Func<IEnumerable<StoryOutput>>(this.passage1_Main));
+            }
+            private IEnumerable<StoryOutput> passage1_Main()
+            {
+                using (base.styleScope("bold", true))
+                {
+                    yield return base.text("The Town Is in Need of Direction");
+                }
+                yield return base.text("Before resolving this event, all players should complete all start of round actions.");
+                yield return base.lineBreak();
+                yield return base.lineBreak();
+                yield return base.text("Body text.");
+                yield break;
+            }
+            """);
+
+        Assert.Equal("The Town Is in Need of Direction", passages[0].Title);
+        Assert.Null(passages[0].Subtitle);
+        var body = Assert.Single(passages[0].Nodes.OfType<TextNode>(),
+            t => t.Template == "Before resolving this event, all players should complete all start of round actions.");
         Assert.Null(body.Style);
     }
 
@@ -2982,6 +3022,15 @@ public class ExtractorTests
         // with the newlines silently collapsed to spaces at restext-write time, losing every
         // paragraph break. Expect 3 separate text blocks, 2 paragraph breaks, and a plain
         // break directly before the link — matching the user's worked-example spec exactly.
+        //
+        // A leading plain-text block precedes the bold "Gain 1 Body," span here, matching the
+        // real passage's own actual shape (OptiontoKillYes's "Gain 1 Body," sits well into the
+        // body, after several earlier paragraphs — never at the passage's own start) — without
+        // it, this synthetic repro would put the bold span at position 0, where it becomes a
+        // legitimate title-hoisting candidate in its own right (see
+        // NarrationLayout_LeadingBoldSpanMergedWithLongPlainRemainder_StillHoistsJustTheSpan)
+        // and this test's own paragraph-break assertions below would need to account for the
+        // title being consumed out of textNodes[0], which isn't what this test is about.
         var passages = Extract("""
             private void passage1_Init()
             {
@@ -2989,6 +3038,8 @@ public class ExtractorTests
             }
             private IEnumerable<StoryOutput> passage1_Main()
             {
+                yield return base.text("If a player discards an Immortality card, they immediately:");
+                yield return base.lineBreak();
                 using (base.styleScope("bold", true))
                 {
                     yield return base.text("Gain 1 Body,");
@@ -3006,14 +3057,19 @@ public class ExtractorTests
 
         var nodes = passages[0].Nodes;
         var textNodes = nodes.OfType<TextNode>().ToList();
-        Assert.Equal(3, textNodes.Count);
-        Assert.Equal("**Gain 1 Body,** Lose 1 and Gain 1VP. Then they must return a piece to Lost.", textNodes[0].Template);
-        Assert.Equal("If a player chooses to keep their card, they receive no special bonus.", textNodes[1].Template);
-        Assert.Equal("Once all players have chosen", textNodes[2].Template);
+        Assert.Equal(4, textNodes.Count);
+        Assert.Equal("If a player discards an Immortality card, they immediately:", textNodes[0].Template);
+        Assert.Equal("**Gain 1 Body,** Lose 1 and Gain 1VP. Then they must return a piece to Lost.", textNodes[1].Template);
+        Assert.Equal("If a player chooses to keep their card, they receive no special bonus.", textNodes[2].Template);
+        Assert.Equal("Once all players have chosen", textNodes[3].Template);
 
         Assert.Equal(2, nodes.OfType<ParagraphBreakNode>().Count());
-        var plainBreak = Assert.Single(nodes.OfType<BreakNode>());
-        var breakIndex = nodes.IndexOf(plainBreak);
+        // Two plain breaks now — the leading one (before the bold span) and the trailing one
+        // (before the link); only the latter is this test's own concern.
+        var plainBreaks = nodes.OfType<BreakNode>().ToList();
+        Assert.Equal(2, plainBreaks.Count);
+        var trailingBreak = plainBreaks[^1];
+        var breakIndex = nodes.IndexOf(trailingBreak);
         Assert.IsType<LinkNode>(nodes[breakIndex + 1]);
         Assert.Equal(breakIndex, nodes.Count - 2);
     }
