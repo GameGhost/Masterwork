@@ -75,6 +75,12 @@
         _url = await AssetResolver.ResolveAsync(Node.Asset);
         if (_url is null)
         {
+            // Deliberate graceful-degrade contract, not just an early return: _status is left at its
+            // default (false, 0, 0), so the markup above already shows disabled play/pause/scrubber
+            // controls and a 0:00/0:00 time readout rather than crashing or rendering nothing — the
+            // title (if any) still shows. AssetResolver itself logs a warning with the missing slug;
+            // this component doesn't need its own. Exercised for real by The Cost of Disease's
+            // GloomyWolvesIntro, which has no real female VO take (Q33, masterwork-plan-rev23.md).
             return;
         }
 

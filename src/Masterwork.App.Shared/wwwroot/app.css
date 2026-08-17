@@ -234,6 +234,20 @@ h1:focus {
     background: #f0f0f0;
 }
 
+.mws-input-options {
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    background: #f0f0f0;
+    border: none;
+}
+
+.mws-input-option {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0;
+}
+
 .mws-popup-trigger {
     margin: 0.25rem 0.5rem 0.25rem 0;
     padding: 0.4rem 0.9rem;

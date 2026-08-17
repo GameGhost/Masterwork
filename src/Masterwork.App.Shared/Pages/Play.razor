@@ -23,8 +23,8 @@ else
     @if (!_paused)
     {
         <div class="mws-play-chrome">
-            <button type="button" class="mws-pause-button" @onclick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause"></button>
-            <button type="button" class="mws-options-button" @onclick="() => _showOptions = true" aria-label="@AppStrings.Play_Options" title="@AppStrings.Play_Options"></button>
+            <ChromeButton class="mws-pause-button" OnClick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause"></ChromeButton>
+            <ChromeButton class="mws-options-button" OnClick="() => _showOptions = true" aria-label="@AppStrings.Play_Options" title="@AppStrings.Play_Options"></ChromeButton>
         </div>
     }
 
@@ -58,8 +58,8 @@ else
                         <p>@AppStrings.Play_NavErrorBody</p>
                         <p class="mws-nav-error-detail">@ex.Message</p>
                         <div class="mws-dialog-actions">
-                            <button type="button" class="mws-btn-sm style-btn-green" @onclick="RecoverFromNavError">@AppStrings.Play_NavErrorReturnButton</button>
-                            <button type="button" class="mws-btn-sm style-btn-red mws-quit-button" @onclick="() => _showQuitFromNavError = true">@AppStrings.OptionsDialog_Quit</button>
+                            <ChromeButton class="mws-btn-sm style-btn-green" OnClick="RecoverFromNavError">@AppStrings.Play_NavErrorReturnButton</ChromeButton>
+                            <ChromeButton class="mws-btn-sm style-btn-red mws-quit-button" OnClick="() => _showQuitFromNavError = true">@AppStrings.OptionsDialog_Quit</ChromeButton>
                         </div>
                     </div>
                 </div>
@@ -189,7 +189,10 @@ else
         var hasAutoShowPopup = render.Actions.OfType<RenderedPopup>().Any(p => p.AutoDisplay);
         if (!hasAutoShowPopup)
         {
-            await AudioCoordinator.PlaySfxAsync(render.OnDisplaySound, State.Module?.Audio?.Sfx?.Transition, render.OnDisplaySoundDelayMs);
+            await AudioCoordinator.PlaySfxAsync(
+                render.OnDisplaySound, render.OnDisplaySoundDelayMs,
+                render.Chrome.Audio?.OnDisplay, render.Chrome.Audio?.OnDisplayDelayMs,
+                State.Module?.Audio?.Sfx?.Transition);
         }
     }
 

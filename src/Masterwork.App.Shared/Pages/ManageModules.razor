@@ -1,4 +1,5 @@
 @page "/modules/manage"
+@using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject IModuleStore ModuleStore
@@ -10,9 +11,9 @@
 
 <div class="mws-scenario-screen">
     <div class="mws-scenario-border" aria-hidden="true"></div>
-    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/")'>
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
-    </button>
+    </ChromeButton>
 
     <h2 class="mws-screen-title">@AppStrings.ManageModules_Heading</h2>
 
@@ -24,7 +25,7 @@
                     <strong>@module.Title</strong>
                     <span class="mws-module-version">v@(module.Version)</span>
                 </div>
-                <button type="button" class="mws-btn-sm style-btn-red" @onclick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</button>
+                <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</ChromeButton>
             </div>
         }
     </div>
@@ -36,9 +37,9 @@
                 <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
                 <p>@AppStrings.ManageModules_ConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_loading" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</button>
-                    <button type="button" class="mws-btn-sm style-btn-red" disabled="@_loading" @onclick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</button>
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_loading" OnClick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_loading" OnClick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _confirmingDeleteId = null">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
             </div>
         </div>

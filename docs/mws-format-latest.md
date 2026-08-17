@@ -274,7 +274,7 @@ URI field — `audio.music`, `audio.on_display` (passage header), `audio.music`/
 `target` fields (resolved at follow/close time, since `onclick`/`onclose` may run first), audio
 fields resolve eagerly at render time, the same way `goto`/`include_passage` targets do — there's no
 equivalent "run onclick first" step for an audio value. This is what lets e.g. voice-gender selection
-be expressed inline: `music: '${voiceGender == "female" ? "audio://vo/intro_f" : "audio://vo/intro_m"}'`.
+be expressed inline: `music: '${narrationVoice == "female" ? "audio://vo/intro_f" : "audio://vo/intro_m"}'`.
 Module-manifest audio fields (§9) do **not** support expressions — a manifest is parsed once, before
 any session exists, so there's no variable scope to evaluate against.
 
@@ -907,6 +907,7 @@ A player-fillable field, rendered inline wherever it appears — directly in a p
 | `var` | string | yes | Session variable to receive the value |
 | `min` | int | no | Minimum accepted value. Only meaningful when `var`'s declared type is numeric |
 | `max` | int | no | Maximum accepted value. Only meaningful when `var`'s declared type is numeric |
+| `options` | list of `{value, label}` | no | Renders as a radio-button group instead of `var`'s usual text/number/checkbox control — see "Options" below |
 
 The field's value type — text, number, or checkbox — is **not** declared on the node — it's derived from `var`'s own declared type in the module's variable manifest: an integer-typed variable gets a number field, a boolean-typed variable gets a checkbox, anything else gets a text field. There's nowhere a mismatch between the two could come from, since they're the same value.
 
@@ -922,6 +923,44 @@ The field's value type — text, number, or checkbox — is **not** declared on 
   target: 'Feverheart'
   snapshot: true
 ```
+
+#### Options
+
+`options:` is a list of `{value, label}` entries, both strings and both restext-eligible (`value`
+isn't expected to actually contain a `restext://` reference in practice, but is resolved uniformly
+with `label` rather than special-cased out of resolution). It's **orthogonal to `var`'s declared
+type**, not a fourth value-type alongside text/number/checkbox — it composes with a string, numeric,
+or boolean variable alike. `value` is the literal string committed to `var` when that option is
+selected, converted per `var`'s own type exactly the same way a typed/checked field's value would be
+(`bool.Parse` for boolean, integer parse for numeric, verbatim for string).
+
+An `options` field is **unconditionally required**, regardless of what leniency `var`'s own type
+would otherwise allow — in particular, this overrides a boolean-typed `var`'s normal "unchecked is
+itself a valid value" leniency: nothing selected means the enclosing `link`/popup `okay` stays
+disabled until the player picks one, the same "standard required" behavior a text/number field
+already has. If `var` already has a value that matches one of `options` (e.g. a declared default)
+when this field is first shown, that option starts pre-selected and already valid — the player isn't
+forced to click something that's already correct before proceeding.
+
+```yaml
+- type: 'input'
+  label: 'Choose a narrator voice'
+  var: 'narrationVoice'
+  options:
+  - value: 'male'
+    label: 'restext://NarrationVoice_Male'
+  - value: 'female'
+    label: 'restext://NarrationVoice_Female'
+- type: 'link'
+  label: 'Continue'
+  target: 'Preparations'
+  snapshot: true
+```
+
+If `narrationVoice` is declared with `default: 'male'` in the module's variable manifest, this passage
+shows "Male" pre-selected and the Continue link is immediately enabled; the player can proceed as-is
+or switch to "Female" first. A `narrationVoice` with no declared default (or one that doesn't match
+either option) shows nothing pre-selected, and Continue stays disabled until a choice is made.
 
 ---
 
@@ -1232,7 +1271,7 @@ the `audio:` block described below). The first narration-capable node.
 
 ```yaml
 - type: 'audio_track'
-  asset: '${voiceGender == "female" ? "audio://vo/battletime_narration_f" : "audio://vo/battletime_narration_m"}'
+  asset: '${narrationVoice == "female" ? "audio://vo/battletime_narration_f" : "audio://vo/battletime_narration_m"}'
   title: 'restext://BattleTime_NarrationTitle'  # "Listen to the Call to Arms"
   autoplay: false
   bgm_behavior: 'duck'
@@ -1264,8 +1303,15 @@ wins (empty = silence, stop; non-empty = that value, stop; absent = check the ne
 unopened popup never participates — its `audio.music` only counts once the popup is actually open.
 Music changes always crossfade; there's no delay field for `music`, since a crossfade already covers
 the transition. SFX fields (`on_display`, `open`, `okay`, `cancel`, `click`) are one-shot events, not
-part of this stack — each just checks the node override, else the module's matching default bucket,
-else silence.
+part of the music stack above — each resolves independently at the moment it fires. `on_display`,
+`open`, and `okay`/`cancel` additionally consult a third tier: the node override, else the layout
+chrome's own `audio:` default (§8, if the passage/popup's `layout` has one), else the module's
+matching default bucket, else silence — present-but-empty at the node tier still means explicit
+silence with no fallback to the layout or module tier, and likewise for present-but-empty at the
+layout tier falling through to the module tier. `click` has no layout concept (a `link` isn't itself
+"inside" a layout the way a passage/popup is) and stays a flat node-override-else-module-default
+check. Whichever tier's URI actually wins, that tier's own delay field is what applies — a losing
+tier's delay is never mixed in.
 
 **Theme audio is a separate concept**, not part of this resolution stack at all — it applies only to
 the app's own pre-module screens (main menu, help, etc.) via a code-level theme contract, stopping the
@@ -1331,14 +1377,30 @@ header:
 before_content: []
 after_content: []
 footer: []
+audio:
+  on_display: 'audio://sfx/hub_arrive'
 ```
 
 `layout_id` is authoritative (not the filename, though they should match by convention — a mismatch
-is a soft warning, not an error). All four regions — `header`, `footer`, `before_content`,
-`after_content` — are optional node lists using the exact same vocabulary as a passage's own
-`nodes:`, including `conditional`/`switch`/`let`/`assign`, evaluated against live variable state at
-render time exactly like a passage body is. A layout name with no matching `layouts/*.yaml` file
-simply renders no chrome — the normal case for most layout names.
+is a soft warning, not an error). All four node-list regions — `header`, `footer`, `before_content`,
+`after_content` — are optional and use the exact same vocabulary as a passage's own `nodes:`,
+including `conditional`/`switch`/`let`/`assign`, evaluated against live variable state at render
+time exactly like a passage body is. A layout name with no matching `layouts/*.yaml` file simply
+renders no chrome — the normal case for most layout names.
+
+An optional fifth field, `audio:`, is a **third, SFX-only** tier in §6's "Audio" resolution stack —
+node override → this layout's own default → module default. Deliberately has no `music` field;
+background-music resolution stays passage/module/theme only, since a shared layout isn't a music
+decision the way a specific passage or popup is.
+
+| Field | Type | Description |
+|---|---|---|
+| `audio.on_display` | string or `${expr}` | Default `on_display` SFX for any passage using this layout, when neither the passage nor the module override it |
+| `audio.on_display_delay_ms` | int | Delay before `on_display` plays. Default `0` |
+| `audio.open` | string or `${expr}` | Default popup-open SFX for any popup using this layout, when neither the popup nor the module override it |
+| `audio.open_delay_ms` | int | Delay before `open` plays. Default `0` |
+| `audio.close` | string or `${expr}` | Default popup-close SFX (shared by Okay and Cancel, matching the module tier's single `popup_close` bucket) for any popup using this layout, when neither the popup nor the module override it |
+| `audio.close_delay_ms` | int | Delay before `close` plays. Default `0` |
 
 Composition order, whether the layout name came from a passage or a popup:
 

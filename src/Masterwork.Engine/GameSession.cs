@@ -369,6 +369,14 @@ public sealed class GameSession
     /// <summary>Whether <paramref name="input"/>'s current draft satisfies its implicit-required/min/max constraints.</summary>
     public bool IsInputValid(RenderedInput input)
     {
+        // Options-backed inputs are unconditionally required — standard "must pick one" behavior,
+        // checked ahead of the Boolean early-return below so a Boolean-backed choice (e.g. a
+        // male/female radio group) doesn't inherit an ordinary checkbox's "never blocks" leniency.
+        if (input.Options is { Count: > 0 })
+        {
+            return ViewState.InputDrafts.TryGetValue(input.Id, out var optionDraft) && optionDraft?.ToString() is { Length: > 0 };
+        }
+
         // A boolean field has no "empty" state to require — unchecked/false is itself a valid
         // value, so it never blocks the enclosing link/popup okay button, whether or not the
         // player has touched it yet.
@@ -416,7 +424,21 @@ public sealed class GameSession
             }
 
             StoryValue value;
-            if (input.InputType == InputValueType.Boolean)
+            if (input.Options is { Count: > 0 })
+            {
+                // Sourced from a radio-group draft (the selected option's own Value string) rather
+                // than typed free-text, but converted per InputType exactly like the non-Options
+                // branches below — Options composes with any of the three value types, it doesn't
+                // introduce a fourth conversion rule of its own.
+                var text = ViewState.InputDrafts[input.Id].ToString()!;
+                value = input.InputType switch
+                {
+                    InputValueType.Boolean => StoryValue.Of(bool.Parse(text)),
+                    InputValueType.Number => StoryValue.Of(long.Parse(text)),
+                    _ => StoryValue.Of(text),
+                };
+            }
+            else if (input.InputType == InputValueType.Boolean)
             {
                 // No draft at all (never touched) defaults to false — see IsInputValid's own
                 // note on booleans having no "empty" state.

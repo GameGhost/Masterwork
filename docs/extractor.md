@@ -47,6 +47,7 @@ dotnet run --project src/Masterwork.Extractor -- <input> <passages-out-dir> [opt
 | `--module-id <id>` | Module identifier string (reserved for future use in the manifest). |
 | `--sprite-map <json>` | Path to a `TheCostOfDisease_ItemObtain.json`-style file mapping sprite indices to asset slugs. Required for The Cost of Disease; not needed for the other scenarios. |
 | `--progress-map <json>` | Path to a `{ "PassageName": { "layout": "...", "progress": N, "end_of_round_body": "...", "end_of_round_body2": "..." }, ... }` JSON map. `layout` overrides `InferLayout`'s tag-based result for that passage. `progress`/`end_of_round_body` together drive what happens at a matching `PassageTracker.instance.CheckProgress(passageName, ...)` call: if the entry has end-of-round body text, the link that calls `CheckProgress` becomes a `layout: end_of_round` popup (label/target carried over from the original link, `okay` fixed to the reference app's own "End of Round" button caption, `content` the two body strings, `onclose` the `_ProgressRound` assign) instead of a bare navigation link — matching the reference app's `ViewEndOfRound.SetEndOfRound` acknowledgement popup, which the source's `CheckProgress` call site alone doesn't represent (there is no Cradle passage for it; see `Masterwork-Modules/cost-of-disease/.source/TheCostofDisease_Eng_v10.cs`'s `ReminderroundEnd` passage, explicitly commented as a prototype-only stand-in never used by final app logic). If the entry has `progress` but no end-of-round body text, only the synthetic `_ProgressRound` assign is emitted (unchanged, plain-link behavior). A `CheckProgress` call whose current-passage name has no entry at all in the map is reported as a warning. Optional — omitting `--progress-map` entirely leaves layout inference and `CheckProgress` handling unchanged. `_ProgressRound` reflects rounds *completed so far* — it's `0` throughout round 1 and only reaches the mapped round's own value once the player has clicked past it *and* dismissed the end-of-round popup, not while that round's content is being displayed. See `Masterwork-Modules/progress-map.json` and `docs/mws-format-latest.md` §7 (`end_of_round`/`end_of_generation` popup examples) and §8 (including its timing note) for how a module turns `_ProgressRound` into an actual progress-bar display via `layouts/*.mws.yaml` chrome. |
+| `--audio-map <json>` | Path to a `{ "PassageName": { "male": "slug", "female": "slug", "title": "..." }, ... }` JSON map. For a matching passage, prepends a synthesized `audio_track` node — `asset: '${narrationVoice == "female" ? "audio://vo/<female-slug>" : "audio://vo/<male-slug>"}'`, `title` from the map entry, `autoplay: true`, `bgm_behavior: 'pause'` — so real voice-over narration doesn't need a hand-authored `passages-override/` file. `title` is restext-eligible like any other node title. A passage with no map entry is unaffected (no warning — most passages have no narration). Optional — omitting `--audio-map` entirely leaves node synthesis off. See `Masterwork.Extractor.AudioMapper`. |
 | `--variables-out <dir>` | Where `_variables.yaml` is written. Defaults to `<passages-out-dir>`. |
 | `--restext-out <dir>` | Where `en-US.restext` is written. Defaults to `<passages-out-dir>`. |
 | `--common-restext <file>` | Path to a manually curated `Key=Value` restext file. When a string is promoted to a Common key (used in 2+ passages), a matching curated ID (by exact text) is used instead of an auto-generated `Common_NNN` one, so override/manually-written passages have a stable name to reference instead of one that can shift on every re-extraction. Curated IDs never matched during extraction are omitted from the output restext file and reported as warnings. Purely an extractor-time input — `ModuleLoader` never reads this file. |
@@ -73,6 +74,7 @@ with different source filenames/module names).
 # sibling Masterwork-Modules repo:
 $spritemap   = "<path to a local copy of the Unity project's Assets/Resources/TheCostOfDisease_ItemObtain.json>"  # Cost of Disease only; see NOTICE.md for asset provenance — not tracked in any of these repos
 $progressmap = "<Masterwork-Modules>/progress-map.json"   # shared by all three modules' hub passages
+$audiomap    = "<Masterwork-Modules>/audio-map.json"      # shared by all three modules' VO-narrated intro passages
 $modules     = "<Masterwork-Modules>"
 
 # The Cost of Disease
@@ -85,7 +87,8 @@ dotnet run --project src/Masterwork.Extractor -- `
   --module-title "The Cost of Disease" `
   --sprite-map $spritemap `
   --common-restext "$codbase\en-US.common.restext" `
-  --progress-map $progressmap
+  --progress-map $progressmap `
+  --audio-map $audiomap
 
 # A Time of War
 $atowbase = "$modules\a-time-of-war\.source"
@@ -96,7 +99,8 @@ dotnet run --project src/Masterwork.Extractor -- `
   --restext-out "$modules\a-time-of-war" `
   --module-title "A Time of War" `
   --common-restext "$atowbase\en-US.common.restext" `
-  --progress-map $progressmap
+  --progress-map $progressmap `
+  --audio-map $audiomap
 
 # Fear of the Unknown
 $fotubase = "$modules\fear-of-the-unknown\.source"
@@ -106,7 +110,8 @@ dotnet run --project src/Masterwork.Extractor -- `
   --variables-out "$modules\fear-of-the-unknown" `
   --restext-out "$modules\fear-of-the-unknown" `
   --common-restext "$fotubase\en-US.common.restext" `
-  --progress-map $progressmap
+  --progress-map $progressmap `
+  --audio-map $audiomap
 ```
 
 `--variables-out`/`--restext-out` put `_variables.yaml`/`en-US.restext` at the module root, next to
@@ -283,6 +288,68 @@ One `Key=Value` per line; no multi-line values. Lines starting with `#` are comm
 The Cost of Disease uses TextMesh Pro inline sprite syntax (`<sprite="AtlasName" index=N>`) for icons. The `--sprite-map` JSON file maps sprite indices to named asset slugs from the Unity `ItemObtain` data. The extractor converts these to `{icon:slug}` inline syntax in the `value` field.
 
 Unknown sprites fall back to a slugified form of the atlas name.
+
+---
+
+## Audio Mapping (`--audio-map`, all three scenarios)
+
+Synthesizes a gendered `audio_track` narration node for passages that have real voice-over,
+mirroring `--sprite-map`/`--progress-map`'s "external JSON classifies passages by name" shape — but
+unlike those two, it's consulted purely by passage name at serialization time
+(`V2Serializer.ToDict`), not while walking the Cradle AST, since a synthesized node has no
+corresponding source construct to parse in the first place. See `Masterwork.Extractor.AudioMapper`
+and the `--audio-map` row above for the exact JSON shape and emitted node.
+
+```json
+{
+  "Hospitalintro": {
+    "male": "hospitalintro_m",
+    "female": "hospitalintro_f",
+    "title": "Thriving in Adversity"
+  }
+}
+```
+
+emits, prepended to `Hospitalintro`'s node list:
+
+```yaml
+- type: 'audio_track'
+  asset: '${narrationVoice == "female" ? "audio://vo/hospitalintro_f" : "audio://vo/hospitalintro_m"}'
+  title: 'restext://Hospitalintro_001'   # "Thriving in Adversity"
+  autoplay: true
+  bgm_behavior: 'pause'
+```
+
+The referenced `audio://vo/...` assets and the `narrationVoice` variable itself are the module's own
+responsibility (a real audio file per slug under `assets/audio/vo/`, and a declared `narrationVoice`
+variable with a sensible default) — this option only ever emits the node and expression, it doesn't
+declare the variable or supply the audio files.
+
+---
+
+## Special-Event On-Display SFX (automatic, no flag needed)
+
+Unlike `--audio-map`, this isn't an opt-in option — the extractor unconditionally synthesizes a
+passage-level `audio.on_display` override (`audio://sfx/special_event`) whenever a passage's node
+list contains the special-event overlay marker (`type: 'text', style: 'special-event'`, itself
+already synthesized whenever `PassageBodyVisitor.IsShowEventPopupCall` recognizes a
+`ViewSpecialEvent.instance.ShowEventPopup()` call site — see `V2Serializer.HasSpecialEventMarker`).
+No per-passage JSON map is needed the way VO needs one: every real occurrence plays the identical
+fixed sound, so the trigger condition alone is enough. Matches the original app's own
+`ViewSpecialEvent.clip`, fired via `SoundManager.Instance.OnOpenPopupPlayAudio(clip)` the instant the
+overlay appears — a real gap the original `audio-inventory.md` asset survey missed (it mis-reported
+`ViewSpecialEvent` as having no resolvable clip guid; see `audio-survey-new-sfx.md`'s correction).
+
+```yaml
+# synthesized passage header, whenever the marker is present anywhere in the passage:
+audio:
+  on_display: 'audio://sfx/special_event'
+```
+
+The referenced `audio://sfx/special_event` asset is template-canonical
+(`my-fathers-work-template/assets/audio/sfx/special_event.ogg`, propagated to all three official
+modules via `scripts/apply-template.ps1`) — same convention as `click`/`popup_open`/`popup_close`/
+`reveal`.
 
 ---
 

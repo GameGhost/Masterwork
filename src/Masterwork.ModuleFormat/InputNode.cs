@@ -31,4 +31,14 @@ public sealed record InputNode : Node
 
     /// <summary>Maximum accepted value. Only meaningful when <see cref="Var"/>'s declared type is numeric; otherwise ignored.</summary>
     public long? Max { get; init; }
+
+    /// <summary>
+    /// Renders this field as a radio-button group instead of <see cref="Var"/>'s usual
+    /// text/number/checkbox control, when present and non-empty. Orthogonal to <see cref="Var"/>'s
+    /// declared type — composes with a string, numeric, or boolean variable alike, rather than
+    /// being a distinct value type of its own (see <c>docs/mws-format-latest.md</c>'s <c>input</c>
+    /// section). Selecting one is unconditionally required before the enclosing link/popup Okay can
+    /// proceed, regardless of what leniency <see cref="Var"/>'s own type would otherwise allow.
+    /// </summary>
+    public IReadOnlyList<InputOption>? Options { get; init; }
 }

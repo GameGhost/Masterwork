@@ -8,8 +8,8 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <div class="mws-pause-bar @(IsOpen ? "mws-pause-bar--open" : "")" inert="@(!IsOpen)">
     <div class="mws-pause-scrubber-row">
-        <button type="button" class="mws-pause-nav-button mws-pause-back" disabled="@(_busy || !Session.CanStepBack)"
-                @onclick="StepBack" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></button>
+        <ChromeButton class="mws-pause-nav-button mws-pause-back" disabled="@(_busy || !Session.CanStepBack)"
+                OnClick="StepBack" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></ChromeButton>
         <ol class="mws-timeline-list">
             @for (var i = 0; i < Session.Timeline.Count; i++)
             {
@@ -29,17 +29,17 @@
             }
         </ol>
         <div class="mws-pause-forward-group">
-            <button type="button" class="mws-pause-nav-button mws-pause-forward" disabled="@(_busy || !Session.CanStepForward)"
-                    @onclick="StepForward" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></button>
-            <button type="button" class="mws-pause-nav-button mws-pause-jump-to-present" disabled="@(_busy || !Session.IsRewound)"
-                    @onclick="JumpToPresent" aria-label="@AppStrings.TimelineScrubber_ReturnToPresent" title="@AppStrings.TimelineScrubber_ReturnToPresent"></button>
+            <ChromeButton class="mws-pause-nav-button mws-pause-forward" disabled="@(_busy || !Session.CanStepForward)"
+                    OnClick="StepForward" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></ChromeButton>
+            <ChromeButton class="mws-pause-nav-button mws-pause-jump-to-present" disabled="@(_busy || !Session.IsRewound)"
+                    OnClick="JumpToPresent" aria-label="@AppStrings.TimelineScrubber_ReturnToPresent" title="@AppStrings.TimelineScrubber_ReturnToPresent"></ChromeButton>
         </div>
     </div>
     <div class="mws-pause-actions-row">
-        <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</button>
-        <button type="button" class="mws-resume-button mws-btn-sm style-btn-green @(Session.IsRewound ? "mws-resume-button--long" : "")" disabled="@_busy" @onclick="OnResumeClicked">
+        <ChromeButton class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" OnClick="() => _showQuitDialog = true">@AppStrings.OptionsDialog_Quit</ChromeButton>
+        <ChromeButton class="@($"mws-resume-button mws-btn-sm style-btn-green {(Session.IsRewound ? "mws-resume-button--long" : "")}")" disabled="@_busy" OnClick="OnResumeClicked">
             <span class="mws-resume-button-text">@(Session.IsRewound ? AppStrings.TimelineScrubber_ResumeFromHere : AppStrings.Common_Resume)</span>
-        </button>
+        </ChromeButton>
     </div>
 </div>
 
@@ -51,8 +51,8 @@
             <p>@AppStrings.TimelineScrubber_ResumeConfirmBody</p>
             <p>@AppStrings.TimelineScrubber_ResumeConfirmQuestion</p>
             <div class="mws-dialog-actions">
-                <button type="button" class="style-btn-red mws-btn-sm" disabled="@_busy" @onclick="ConfirmResumeFromHere">@AppStrings.Common_Yes</button>
-                <button type="button" class="style-btn-brown mws-btn-sm" @onclick="() => _showResumeConfirm = false">@AppStrings.Common_No</button>
+                <ChromeButton class="style-btn-red mws-btn-sm" disabled="@_busy" OnClick="ConfirmResumeFromHere">@AppStrings.Common_Yes</ChromeButton>
+                <ChromeButton class="style-btn-brown mws-btn-sm" OnClick="() => _showResumeConfirm = false">@AppStrings.Common_No</ChromeButton>
             </div>
         </div>
     </div>

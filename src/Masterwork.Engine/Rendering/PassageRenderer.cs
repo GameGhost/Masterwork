@@ -56,8 +56,8 @@ public sealed class PassageRenderer : IPassageRenderer
             PendingGoto: ctx.PendingGoto,
             Chrome: chrome)
         {
-            Music = ResolveAudioField(passage.Audio?.Music, ctx),
-            OnDisplaySound = ResolveAudioField(passage.Audio?.OnDisplay, ctx),
+            Music = ResolveAudioField(passage.Audio?.Music, ctx.Store),
+            OnDisplaySound = ResolveAudioField(passage.Audio?.OnDisplay, ctx.Store),
             OnDisplaySoundDelayMs = passage.Audio?.OnDisplayDelayMs,
         };
     }
@@ -88,7 +88,18 @@ public sealed class PassageRenderer : IPassageRenderer
         actionsSink.AddRange(before.Actions);
         actionsSink.AddRange(after.Actions);
 
-        return new RenderedLayoutChrome(header.Nodes, footer.Nodes, before.Nodes, after.Nodes);
+        return new RenderedLayoutChrome(header.Nodes, footer.Nodes, before.Nodes, after.Nodes)
+        {
+            Audio = chrome.Audio is null ? null : new RenderedLayoutAudio
+            {
+                OnDisplay = ResolveAudioField(chrome.Audio.OnDisplay, store),
+                OnDisplayDelayMs = chrome.Audio.OnDisplayDelayMs,
+                Open = ResolveAudioField(chrome.Audio.Open, store),
+                OpenDelayMs = chrome.Audio.OpenDelayMs,
+                Close = ResolveAudioField(chrome.Audio.Close, store),
+                CloseDelayMs = chrome.Audio.CloseDelayMs,
+            },
+        };
     }
 
     /// <inheritdoc/>
@@ -202,7 +213,7 @@ public sealed class PassageRenderer : IPassageRenderer
                 _logger.LogDebug("Skipping 'record' node (achievement triggers deferred to Phase 3): {Id}", rec.Id);
                 break;
             case AudioTrackNode track:
-                output.Add(new RenderedAudioTrack(ResolveAudioField(track.Asset, ctx)!)
+                output.Add(new RenderedAudioTrack(ResolveAudioField(track.Asset, ctx.Store)!)
                 {
                     Style = track.Style,
                     Title = ExpandOrNull(track.Title, ctx.Store),
@@ -225,7 +236,7 @@ public sealed class PassageRenderer : IPassageRenderer
             StateAffecting = link.StateAffecting,
             SnapshotLabel = ExpandOrNull(link.SnapshotLabel, ctx.Store),
             OnClickRaw = link.OnClick,
-            ClickSfx = ResolveAudioField(link.Audio?.Click, ctx),
+            ClickSfx = ResolveAudioField(link.Audio?.Click, ctx.Store),
             ClickSfxDelayMs = link.Audio?.ClickDelayMs,
         };
         output.Add(rendered);
@@ -266,12 +277,12 @@ public sealed class PassageRenderer : IPassageRenderer
             SnapshotLabel = ExpandOrNull(popup.SnapshotLabel, ctx.Store),
             Audio = popup.Audio is null ? null : new RenderedPopupAudio
             {
-                Music = ResolveAudioField(popup.Audio.Music, ctx),
-                Open = ResolveAudioField(popup.Audio.Open, ctx),
+                Music = ResolveAudioField(popup.Audio.Music, ctx.Store),
+                Open = ResolveAudioField(popup.Audio.Open, ctx.Store),
                 OpenDelayMs = popup.Audio.OpenDelayMs,
-                Okay = ResolveAudioField(popup.Audio.Okay, ctx),
+                Okay = ResolveAudioField(popup.Audio.Okay, ctx.Store),
                 OkayDelayMs = popup.Audio.OkayDelayMs,
-                Cancel = ResolveAudioField(popup.Audio.Cancel, ctx),
+                Cancel = ResolveAudioField(popup.Audio.Cancel, ctx.Store),
                 CancelDelayMs = popup.Audio.CancelDelayMs,
             },
         };
@@ -290,6 +301,11 @@ public sealed class PassageRenderer : IPassageRenderer
             InputType = ResolveInputType(input.Var, ctx),
             Min = input.Min,
             Max = input.Max,
+            Options = input.Options?.Select(o => new RenderedInputOption
+            {
+                Value = ctx.Store.ExpandTemplate(o.Value),
+                Label = ctx.Store.ExpandTemplate(o.Label),
+            }).ToList(),
         };
         output.Add(rendered);
         ctx.Actions.Add(rendered);
@@ -396,13 +412,13 @@ public sealed class PassageRenderer : IPassageRenderer
     // vs. "" (present-but-empty, explicit silence) vs. literal tri-state that YamlNodeExtensions.GetString
     // already produces at parse time, rather than collapsing null/empty together the way
     // ExpandTemplate's plain template expansion would.
-    private string? ResolveAudioField(string? raw, RenderContext ctx) =>
+    private string? ResolveAudioField(string? raw, VariableStore store) =>
         raw switch
         {
             null => null,
             "" => "",
             _ when raw.StartsWith("${", StringComparison.Ordinal) && raw.EndsWith('}') =>
-                _evaluator.Evaluate(raw[2..^1], ctx.Store).AsString(),
+                _evaluator.Evaluate(raw[2..^1], store).AsString(),
             _ => raw,
         };
 

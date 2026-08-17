@@ -63,6 +63,10 @@ partial class Program
             ? ProgressMapper.FromJsonFile(opts.ProgressMapPath)
             : ProgressMapper.Empty();
 
+        var audioMapper = opts.AudioMapPath is not null
+            ? AudioMapper.FromJsonFile(opts.AudioMapPath)
+            : AudioMapper.Empty();
+
         // Derive a human-readable module title: prefer explicit --module-title, fall back to source filename.
         var moduleTitle = opts.ModuleTitle;
         if (string.IsNullOrEmpty(moduleTitle) && sourceFiles.Count == 1)
@@ -104,6 +108,11 @@ partial class Program
         if (opts.ProgressMapPath is not null)
         {
             report.Settings["Progress map"] = Path.GetFileName(opts.ProgressMapPath);
+        }
+
+        if (opts.AudioMapPath is not null)
+        {
+            report.Settings["Audio map"] = Path.GetFileName(opts.AudioMapPath);
         }
 
         if (opts.RestextExcludeTags.Count > 0)
@@ -233,7 +242,8 @@ partial class Program
             var ctx = new SerializationContext(
                 SourceRelativePath: relSourcePath,
                 PassageFileMap: passageFileMap,
-                Variables: vars
+                Variables: vars,
+                AudioMapper: audioMapper
             );
             var dict = V2Serializer.ToDict(passage, ctx);
             if (!excludedFromRestext.Contains(passage.PassageId))
@@ -374,6 +384,8 @@ partial class Program
                     opts.SpriteMapPath = args[++i]; break;
                 case "--progress-map" when i + 1 < args.Length:
                     opts.ProgressMapPath = args[++i]; break;
+                case "--audio-map" when i + 1 < args.Length:
+                    opts.AudioMapPath = args[++i]; break;
                 case "--include-debug":
                     opts.IncludeDebug = true; break;
                 case "--dry-run":
@@ -826,6 +838,10 @@ partial class Program
                                       overrides InferLayout's tag-based result; progress emits a
                                       synthetic _ProgressRound assign at matching
                                       PassageTracker.instance.CheckProgress(...) call sites
+              --audio-map <json>      Path to a passage-name → {male, female, title} JSON map:
+                                      synthesizes an audio_track node with a gendered
+                                      ${narrationVoice == ...} asset expression for a mapped passage.
+                                      See AudioMapper
               --include-debug         Include devpage-gated debug passages
               --dry-run               Parse and report without writing files
               --seed-analysis         Emit seed dependency report

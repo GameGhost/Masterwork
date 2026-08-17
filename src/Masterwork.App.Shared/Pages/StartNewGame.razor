@@ -1,5 +1,6 @@
 @page "/new-game"
 @using System.Text.Json
+@using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
@@ -26,9 +27,9 @@
    same leather background + main-menu border, rather than only the happy-path content getting it. *@
 <div class="mws-scenario-screen">
     <div class="mws-scenario-border" aria-hidden="true"></div>
-    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/")'>
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
-    </button>
+    </ChromeButton>
 
     <ErrorBoundary @ref="_errorBoundary">
         <ChildContent>
@@ -37,7 +38,7 @@
                     <button type="button" class="style-btn-brown" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
                     @if (FilePicker.IsAvailable)
                     {
-                        <button type="button" class="mws-upload-button style-btn-brown" disabled="@_busy" @onclick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</button>
+                        <ChromeButton class="mws-upload-button style-btn-brown" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</ChromeButton>
                     }
                     else
                     {
@@ -53,8 +54,8 @@
 
                 <div class="mws-scenario-content">
                     <div class="mws-module-carousel-row">
-                        <button type="button" class="mws-carousel-nav-button mws-carousel-back" disabled="@(!CanStepCarousel(-1))"
-                                @onclick="() => StepCarousel(-1)" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></button>
+                        <ChromeButton class="mws-carousel-nav-button mws-carousel-back" disabled="@(!CanStepCarousel(-1))"
+                                OnClick="() => StepCarousel(-1)" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></ChromeButton>
                         <div class="mws-module-carousel">
                             @for (var i = 0; i < _modules.Count; i++)
                             {
@@ -70,8 +71,8 @@
                                 </div>
                             }
                         </div>
-                        <button type="button" class="mws-carousel-nav-button mws-carousel-forward" disabled="@(!CanStepCarousel(1))"
-                                @onclick="() => StepCarousel(1)" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></button>
+                        <ChromeButton class="mws-carousel-nav-button mws-carousel-forward" disabled="@(!CanStepCarousel(1))"
+                                OnClick="() => StepCarousel(1)" aria-label="@AppStrings.TimelineScrubber_Forward" title="@AppStrings.TimelineScrubber_Forward"></ChromeButton>
                     </div>
 
                     @if (_selected is null)
@@ -89,9 +90,9 @@
                                         <option value="@lang">@lang</option>
                                     }
                                 </select>
-                                <button type="button" class="mws-scenario-play-button" disabled="@_busy" @onclick="() => Play(_selected)">
+                                <ChromeButton class="mws-scenario-play-button" disabled="@_busy" OnClick="() => Play(_selected)">
                                     <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
-                                </button>
+                                </ChromeButton>
                             </div>
                             <div class="mws-module-detail-text">
                                 <p>@_selected.Description</p>
@@ -112,9 +113,9 @@
                                 <p class="mws-save-timestamp">@summary</p>
                             }
                             <div class="mws-dialog-actions">
-                                <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ResumeConflicting">@AppStrings.Common_Resume</button>
-                                <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</button>
-                                <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</button>
+                                <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ResumeConflicting">@AppStrings.Common_Resume</ChromeButton>
+                                <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_busy" OnClick="DiscardAndStartFresh">@AppStrings.StartNewGame_DiscardPrevious</ChromeButton>
+                                <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => { _conflictModule = null; _conflictSave = null; }">@AppStrings.Common_Cancel</ChromeButton>
                             </div>
                         </div>
                     </div>
@@ -127,8 +128,8 @@
                             <h3>@_pendingUpload.Title</h3>
                             <p>@_pendingUpload.Message</p>
                             <div class="mws-dialog-actions">
-                                <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</button>
-                                <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingUpload = null">@AppStrings.Common_Cancel</button>
+                                <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</ChromeButton>
+                                <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingUpload = null">@AppStrings.Common_Cancel</ChromeButton>
                             </div>
                         </div>
                     </div>
@@ -140,7 +141,7 @@
         <ErrorContent>
             <div class="mws-start-new-game">
                 <p class="mws-version-warning">@AppStrings.StartNewGame_ErrorFallback</p>
-                <button type="button" class="style-btn-brown" @onclick="Recover">@AppStrings.Common_TryAgain</button>
+                <ChromeButton class="style-btn-brown" OnClick="Recover">@AppStrings.Common_TryAgain</ChromeButton>
             </div>
         </ErrorContent>
     </ErrorBoundary>

@@ -200,6 +200,134 @@ public class GameSessionTests
         return new GameSession(module, masterSeed: 1);
     }
 
+    private static GameSession MakeStringOptionsInputSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              label: 'Voice'
+              var: 'narrationVoice'
+              options:
+              - value: 'male'
+                label: 'Male'
+              - value: 'female'
+                label: 'Female'
+            - type: 'link'
+              label: 'Submit'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Voice: {narrationVoice}'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              narrationVoice:
+                type: 'string'
+                default: 'male'
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    private static GameSession MakeBooleanOptionsInputSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              label: 'Agree'
+              var: 'agreed'
+              options:
+              - value: 'true'
+                label: 'Yes'
+              - value: 'false'
+                label: 'No'
+            - type: 'link'
+              label: 'Submit'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Agreed: {agreed}'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              agreed:
+                type: 'bool'
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
+    private static GameSession MakeNumberOptionsInputSession()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              label: 'Difficulty'
+              var: 'difficulty'
+              options:
+              - value: '1'
+                label: 'Easy'
+              - value: '2'
+                label: 'Hard'
+            - type: 'link'
+              label: 'Submit'
+              target: 'P2'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'P2'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Difficulty: {difficulty}'
+            """,
+        ],
+        variablesYaml: """
+            standard_variables: []
+            variables:
+              difficulty:
+                type: 'int'
+                default: 0
+            """);
+        return new GameSession(module, masterSeed: 1);
+    }
+
     private static GameSession MakePopupSession()
     {
         var module = new ModuleLoader().LoadFromSources(
@@ -1788,6 +1916,81 @@ public class GameSessionTests
         await session.FollowLinkAsync(link.Id);
 
         Assert.True(session.Current.Variables["completedMasterwork"].AsBool());
+    }
+
+    // ── Options-backed input (`options:` field, orthogonal to InputType) ───────
+
+    [Fact]
+    public void IsInputValid_OptionsBackedByString_NoDraft_Invalid()
+    {
+        var session = MakeStringOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+
+        Assert.False(session.IsInputValid(input));
+        Assert.False(session.AreCurrentInputsValid());
+    }
+
+    [Fact]
+    public void IsInputValid_OptionsBackedByBoolean_NoDraft_Invalid()
+    {
+        // The key behavior this overrides: an ordinary Boolean input is always valid (unchecked is
+        // a legitimate value), but an Options-backed one — even when InputType happens to be
+        // Boolean — must still require an explicit pick, same as any other Options input.
+        var session = MakeBooleanOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+
+        Assert.Equal(InputValueType.Boolean, input.InputType);
+        Assert.False(session.IsInputValid(input));
+        Assert.False(session.AreCurrentInputsValid());
+    }
+
+    [Fact]
+    public void IsInputValid_OptionsWithDraft_Valid()
+    {
+        var session = MakeStringOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+        session.UpdateInputDraft(input.Id, "male");
+
+        Assert.True(session.IsInputValid(input));
+    }
+
+    [Fact]
+    public async Task FollowLink_OptionsBackedByString_CommitsSelectedValue()
+    {
+        var session = MakeStringOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "female");
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal("female", session.Current.Variables["narrationVoice"].AsString());
+    }
+
+    [Fact]
+    public async Task FollowLink_OptionsBackedByNumber_CommitsParsedInt()
+    {
+        var session = MakeNumberOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "2");
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.Equal(2L, session.Current.Variables["difficulty"].AsInt());
+    }
+
+    [Fact]
+    public async Task FollowLink_OptionsBackedByBoolean_CommitsParsedBool()
+    {
+        var session = MakeBooleanOptionsInputSession();
+        var input = session.CurrentRender.Actions.OfType<RenderedInput>().Single();
+        var link = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
+        session.UpdateInputDraft(input.Id, "true");
+
+        await session.FollowLinkAsync(link.Id);
+
+        Assert.True(session.Current.Variables["agreed"].AsBool());
     }
 
     // ── Game over (app::gameover) ────────────────────────────────────────────

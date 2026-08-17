@@ -53,7 +53,11 @@ public static class MauiProgram
         // The active theme — swapping themes is a build-time decision (this line), not a runtime
         // one; see IMainMenuTheme's own remarks for why this wiring lives in each host rather than
         // the theme project registering itself.
-        builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene)));
+        builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(
+            typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene),
+            musicUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/main-menu-theme.ogg",
+            transitionSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/shell-transition.ogg",
+            clickSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/click.ogg"));
 
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the

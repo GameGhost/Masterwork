@@ -641,6 +641,9 @@ public sealed partial class RestextCollector
             case "image":
                 ExtractField(d, "title");
                 break;
+            case "audio_track":
+                ExtractField(d, "title");
+                break;
             case "section":
                 ExtractField(d, "title");
                 break;

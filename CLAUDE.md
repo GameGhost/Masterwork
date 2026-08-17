@@ -20,7 +20,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App/                        MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
 ├── src/MasterWork.App.Web/                    ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
 ├── src/MasterWork.App.Web.Client/             Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app"
-├── src/MasterWork.Editor/                     WPF module designer (Phase 7 placeholder — no real work started; see masterwork-plan-rev22.md §3)
+├── src/MasterWork.Editor/                     WPF module designer (Phase 8 placeholder — no real work started; see masterwork-plan-rev23.md §3)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs)
 ├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
 └── src/MasterWork.Tests/                      xUnit test suite

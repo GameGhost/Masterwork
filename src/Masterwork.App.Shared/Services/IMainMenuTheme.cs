@@ -31,13 +31,24 @@ public interface IMainMenuTheme
 
     /// <summary>SFX for app-shell screen transitions, or <see langword="null"/> for none. Same app-shell-only scope as <see cref="MusicUrl"/>.</summary>
     string? TransitionSfxUrl { get; }
+
+    /// <summary>
+    /// Click SFX for app-chrome buttons (Options dialog, confirm dialogs, the New Game/Continue
+    /// pages, the pause bar, etc.) — anything that isn't module content, which has its own
+    /// <c>audio.sfx.click</c> resolution instead (see <c>Rendering.RenderedLinkView</c>). A
+    /// currently-loaded module's own <c>audio.sfx.click</c> bucket, if declared, overrides this for
+    /// app-chrome UI that sits on top of that module (the pause bar's own Options dialog, an
+    /// in-game quit confirm) — see <c>Services.AudioCoordinator.PlayChromeClickAsync</c>.
+    /// </summary>
+    string? ClickSfxUrl { get; }
 }
 
 /// <summary>Plain <see cref="IMainMenuTheme"/> implementation — a host project just instantiates
 /// this with the active theme's own component type, no per-theme C# class needed.</summary>
-public sealed class MainMenuTheme(Type sceneComponentType, string? musicUrl = null, string? transitionSfxUrl = null) : IMainMenuTheme
+public sealed class MainMenuTheme(Type sceneComponentType, string? musicUrl = null, string? transitionSfxUrl = null, string? clickSfxUrl = null) : IMainMenuTheme
 {
     public Type SceneComponentType { get; } = sceneComponentType;
     public string? MusicUrl { get; } = musicUrl;
     public string? TransitionSfxUrl { get; } = transitionSfxUrl;
+    public string? ClickSfxUrl { get; } = clickSfxUrl;
 }

@@ -100,6 +100,11 @@ public sealed partial class RestextResolver : IRestextResolver
         InputNode i => i with
         {
             Label = ResolveDisplay(i.Label, locale, warnings)!,
+            Options = i.Options?.Select(o => o with
+            {
+                Value = ResolveDisplay(o.Value, locale, warnings)!,
+                Label = ResolveDisplay(o.Label, locale, warnings)!,
+            }).ToList(),
         },
         GotoNode g => g with
         {

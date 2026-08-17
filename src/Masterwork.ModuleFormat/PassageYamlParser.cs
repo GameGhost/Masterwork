@@ -116,6 +116,23 @@ public sealed class PassageYamlParser : IPassageYamlParser
             ctx.Warn("unexpected_format_version", $"layout chrome declares format '{format}', expected '{ExpectedFormat}' — may be stale output from an older extractor/hand-authored file");
         }
 
+        LayoutChromeAudio? audio = null;
+        var layoutAudioMap = root.GetMapping("audio", ctx);
+        if (layoutAudioMap is not null)
+        {
+            audio = new LayoutChromeAudio
+            {
+                OnDisplay = layoutAudioMap.GetString("on_display", ctx),
+                OnDisplayDelayMs = layoutAudioMap.GetInt("on_display_delay_ms", ctx),
+                Open = layoutAudioMap.GetString("open", ctx),
+                OpenDelayMs = layoutAudioMap.GetInt("open_delay_ms", ctx),
+                Close = layoutAudioMap.GetString("close", ctx),
+                CloseDelayMs = layoutAudioMap.GetInt("close_delay_ms", ctx),
+            };
+            layoutAudioMap.WarnUnmatchedFields(ctx, "layout chrome audio",
+                "on_display", "on_display_delay_ms", "open", "open_delay_ms", "close", "close_delay_ms");
+        }
+
         var chrome = new LayoutChromeDoc
         {
             LayoutId = root.GetRequiredString("layout_id", ctx),
@@ -123,10 +140,11 @@ public sealed class PassageYamlParser : IPassageYamlParser
             Footer = BuildNodeList(root.TryGet("footer"), ctx, "layout chrome footer"),
             BeforeContent = BuildNodeList(root.TryGet("before_content"), ctx, "layout chrome before_content"),
             AfterContent = BuildNodeList(root.TryGet("after_content"), ctx, "layout chrome after_content"),
+            Audio = audio,
         };
 
         root.WarnUnmatchedFields(ctx, "layout chrome",
-            "format", "layout_id", "header", "footer", "before_content", "after_content");
+            "format", "layout_id", "header", "footer", "before_content", "after_content", "audio");
 
         _logger.LogDebug("Parsed layout chrome '{LayoutId}'", chrome.LayoutId);
         return chrome;
@@ -293,6 +311,21 @@ public sealed class PassageYamlParser : IPassageYamlParser
             }
             case "input":
             {
+                List<InputOption>? options = null;
+                if (map.GetSequence("options", ctx) is { } optionsSeq)
+                {
+                    options = [];
+                    foreach (var optionMap in AsNodeMappings(optionsSeq, ctx, "'input' node options entry"))
+                    {
+                        options.Add(new InputOption
+                        {
+                            Value = optionMap.GetRequiredString("value", ctx),
+                            Label = optionMap.GetRequiredString("label", ctx),
+                        });
+                        optionMap.WarnUnmatchedFields(ctx, "'input' node options entry", "value", "label");
+                    }
+                }
+
                 var result = new InputNode
                 {
                     Label = map.GetString("label", ctx),
@@ -300,8 +333,9 @@ public sealed class PassageYamlParser : IPassageYamlParser
                     Var = map.GetRequiredString("var", ctx),
                     Min = map.GetLong("min", ctx),
                     Max = map.GetLong("max", ctx),
+                    Options = options,
                 };
-                map.WarnUnmatchedFields(ctx, "'input' node", "type", "label", "style", "var", "min", "max");
+                map.WarnUnmatchedFields(ctx, "'input' node", "type", "label", "style", "var", "min", "max", "options");
                 return result;
             }
             case "goto":

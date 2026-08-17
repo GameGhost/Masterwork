@@ -23,4 +23,7 @@ public sealed record LayoutChromeDoc
 
     /// <summary>Rendered immediately after the passage/popup's own body content.</summary>
     public IReadOnlyList<Node> AfterContent { get; init; } = [];
+
+    /// <summary>SFX-only third resolution tier for anything using this layout — see <see cref="LayoutChromeAudio"/>.</summary>
+    public LayoutChromeAudio? Audio { get; init; }
 }

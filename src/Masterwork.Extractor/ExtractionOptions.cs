@@ -20,6 +20,10 @@ public class ExtractionOptions
     // tag-based result; progress becomes a synthetic `_ProgressRound` assign wherever the source
     // has a matching PassageTracker.instance.CheckProgress(passageName, ...) call. See ProgressMapper.
     public string? ProgressMapPath { get; set; }
+    // Path to a JSON map of passage name -> { male, female, title }: synthesizes an audio_track
+    // node (gendered ${narrationVoice == ...} narration) for a mapped passage at serialization time.
+    // See AudioMapper.
+    public string? AudioMapPath { get; set; }
     public bool IncludeDebug { get; set; }
     public bool DryRun { get; set; }
     public bool SeedAnalysis { get; set; }

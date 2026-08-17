@@ -1,4 +1,5 @@
 @page "/achievements"
+@using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject IModuleStore ModuleStore
@@ -7,12 +8,12 @@
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.Achievements_PageTitle</PageTitle>
 
-<button type="button" class="mws-back-button" @onclick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</button>
+<ChromeButton class="mws-back-button" OnClick='() => Nav.NavigateTo("/")'>@AppStrings.Common_Back</ChromeButton>
 
 <div class="mws-achievements">
     <nav class="mws-tabs">
-        <button type="button" class="@(_tab == Tab.Achievements ? "selected" : "")" @onclick="() => _tab = Tab.Achievements">@AppStrings.Achievements_Tab_Achievements</button>
-        <button type="button" class="@(_tab == Tab.Memories ? "selected" : "")" @onclick="() => _tab = Tab.Memories">@AppStrings.Achievements_Tab_Memories</button>
+        <ChromeButton class="@(_tab == Tab.Achievements ? "selected" : "")" OnClick="() => _tab = Tab.Achievements">@AppStrings.Achievements_Tab_Achievements</ChromeButton>
+        <ChromeButton class="@(_tab == Tab.Memories ? "selected" : "")" OnClick="() => _tab = Tab.Memories">@AppStrings.Achievements_Tab_Memories</ChromeButton>
     </nav>
 
     @if (_tab == Tab.Achievements)

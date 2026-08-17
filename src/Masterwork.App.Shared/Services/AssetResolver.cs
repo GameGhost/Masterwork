@@ -1,8 +1,13 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Masterwork.App.Shared.Services;
 
 /// <inheritdoc cref="IAssetResolver"/>
-public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolver
+public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetResolver>? logger = null) : IAssetResolver
 {
+    private readonly ILogger<AssetResolver> _logger = logger ?? NullLogger<AssetResolver>.Instance;
+
     private const string IconScheme = "icon://";
     private const string ImageScheme = "image://";
     private const string FontScheme = "font://";
@@ -184,6 +189,18 @@ public sealed class AssetResolver(GameSessionState sessionState) : IAssetResolve
             }
         }
 
-        return await TryResolveBundleLocalAsync("audio", slug, AudioExtensions);
+        var bundleLocal = await TryResolveBundleLocalAsync("audio", slug, AudioExtensions);
+        if (bundleLocal is null)
+        {
+            // The one deliberately-missing case this covers today: The Cost of Disease's
+            // GloomyWolvesIntro has no real female VO take (Q33, masterwork-plan-rev23.md) — its
+            // audio_track still references audio://vo/gloomywolvesintro_f so the gap is visible
+            // and diagnosable, rather than silently omitting the node. Callers (RenderedAudioTrackView)
+            // already degrade gracefully on a null resolution — disabled controls, 0:00/0:00 — this
+            // warning is purely for anyone reading the log to understand why.
+            _logger.LogWarning("Could not resolve audio asset 'audio://{Slug}' — no matching file in the loaded module's assets/audio/", slug);
+        }
+
+        return bundleLocal;
     }
 }

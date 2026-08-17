@@ -1,5 +1,6 @@
 @page "/continue"
 @using System.Text.Json
+@using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.Engine.Session
@@ -20,14 +21,14 @@
 
 <div class="mws-scenario-screen">
     <div class="mws-scenario-border" aria-hidden="true"></div>
-    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/")'>
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
-    </button>
+    </ChromeButton>
 
     <div class="mws-module-toolbar">
         @if (FilePicker.IsAvailable)
         {
-            <button type="button" class="mws-upload-button mws-import-save-button style-btn-brown" disabled="@_busy" @onclick="OnNativePickerClicked">@AppStrings.ContinueList_ImportSave</button>
+            <ChromeButton class="mws-upload-button mws-import-save-button style-btn-brown" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.ContinueList_ImportSave</ChromeButton>
         }
         else
         {
@@ -75,11 +76,11 @@
                         }
                     </div>
                     <div class="mws-save-actions">
-                        <button type="button" class="mws-btn-sm style-btn-green" disabled="@(_busy || installed is null)"
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@(_busy || installed is null)"
                                 title="@(installed is null ? AppStrings.ContinueList_ModuleMissingTitle : null)"
-                                @onclick="() => Resume(save)">@AppStrings.Common_Resume</button>
-                        <button type="button" class="mws-btn-sm style-btn-brown" disabled="@_busy" @onclick="() => Export(save)">@AppStrings.Common_Export</button>
-                        <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => _pendingDelete = save">@AppStrings.Common_Delete</button>
+                                OnClick="() => Resume(save)">@AppStrings.Common_Resume</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-brown" disabled="@_busy" OnClick="() => Export(save)">@AppStrings.Common_Export</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_busy" OnClick="() => _pendingDelete = save">@AppStrings.Common_Delete</ChromeButton>
                     </div>
                 </div>
             }
@@ -95,8 +96,8 @@
                 <h3>@AppStrings.ContinueList_ResumeConfirmTitle</h3>
                 <p>@string.Format(AppStrings.EffectiveCulture, AppStrings.ContinueList_ResumeConfirmBody, moduleTitle)</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingResume = null">@AppStrings.Common_Cancel</button>
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => ConfirmResume(_pendingResume)">@AppStrings.ContinueList_ResumeAnyway</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingResume = null">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
             </div>
         </div>
@@ -109,8 +110,8 @@
                 <h3>@AppStrings.ContinueList_DeleteConfirmTitle</h3>
                 <p>@AppStrings.ContinueList_DeleteConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-red" disabled="@_busy" @onclick="() => Delete(_pendingDelete)">@AppStrings.Common_Yes</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingDelete = null">@AppStrings.Common_No</button>
+                    <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_busy" OnClick="() => Delete(_pendingDelete)">@AppStrings.Common_Yes</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingDelete = null">@AppStrings.Common_No</ChromeButton>
                 </div>
             </div>
         </div>
@@ -123,8 +124,8 @@
                 <h3>@AppStrings.ContinueList_ImportConfirmTitle</h3>
                 <p>@_pendingImport.Message</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmPendingImport">@AppStrings.Common_Yes</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _pendingImport = null">@AppStrings.Common_No</button>
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmPendingImport">@AppStrings.Common_Yes</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingImport = null">@AppStrings.Common_No</ChromeButton>
                 </div>
             </div>
         </div>
@@ -137,7 +138,7 @@
                 <h3>@AppStrings.ContinueList_ResumeErrorTitle</h3>
                 <p>@_resumeError</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _resumeError = null">@AppStrings.Common_Ok</button>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _resumeError = null">@AppStrings.Common_Ok</ChromeButton>
                 </div>
             </div>
         </div>

@@ -42,4 +42,22 @@ unrelated, separately-licensed source, copied here (also via `my-fathers-work-te
 bundles the full family) purely for visual consistency between in-game chrome and the app's own
 shell, not part of the RGS asset exception above.
 
+## Audio assets
+
+`wwwroot/audio/main-menu-theme.ogg`, `wwwroot/audio/shell-transition.ogg`, and
+`wwwroot/audio/click.ogg` are copied unmodified from the same Renegade Game Studios
+community-resources release cited above:
+
+- `main-menu-theme.ogg` ← `Assets/SFX/Fathers work Title theme.ogg`
+- `shell-transition.ogg` ← `Assets/SFX/New_8_April/welcome to my fathers work-window.ogg`
+- `click.ogg` ← `Assets/New SFX/click-to-continue.ogg` — same source file as
+  `my-fathers-work-template`'s own `assets/audio/sfx/click.ogg` (`Masterwork-Modules` repo), copied
+  separately here since module `audio://` resolution never reaches into the app theme project's own
+  assets (see that module's own `NOTICE.md`). Used for app-chrome button clicks (Options dialog,
+  confirm dialogs, New Game/Continue pages, pause bar) — a currently-loaded module's own
+  `audio.sfx.click` bucket overrides this where app chrome sits on top of an active module.
+
+Same provenance and licensing posture as the images above — individual files copied/modified as
+needed from the community release, not the reference archive itself.
+
 CSS and any other original content in this project are Masterwork's own work.

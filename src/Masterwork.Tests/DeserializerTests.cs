@@ -786,6 +786,112 @@ public class DeserializerTests
         Assert.Empty(chrome.AfterContent);
     }
 
+    [Fact]
+    public void ParseLayoutChrome_Audio_Deserializes()
+    {
+        var chrome = new PassageYamlParser().ParseLayoutChrome("""
+            format: 'mws/0.4'
+            layout_id: 'setup'
+            audio:
+              on_display: 'audio://sfx/setup_display'
+              on_display_delay_ms: 100
+              open: 'audio://sfx/setup_open'
+              open_delay_ms: 200
+              close: 'audio://sfx/setup_close'
+              close_delay_ms: 300
+            """);
+
+        Assert.NotNull(chrome.Audio);
+        Assert.Equal("audio://sfx/setup_display", chrome.Audio.OnDisplay);
+        Assert.Equal(100, chrome.Audio.OnDisplayDelayMs);
+        Assert.Equal("audio://sfx/setup_open", chrome.Audio.Open);
+        Assert.Equal(200, chrome.Audio.OpenDelayMs);
+        Assert.Equal("audio://sfx/setup_close", chrome.Audio.Close);
+        Assert.Equal(300, chrome.Audio.CloseDelayMs);
+    }
+
+    [Fact]
+    public void ParseLayoutChrome_NoAudio_IsNull()
+    {
+        var chrome = new PassageYamlParser().ParseLayoutChrome("""
+            format: 'mws/0.4'
+            layout_id: 'hub_early'
+            """);
+
+        Assert.Null(chrome.Audio);
+    }
+
+    // ── Input options ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void InputNode_Options_Deserialize()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              var: 'narrationVoice'
+              options:
+              - value: 'male'
+                label: 'Male'
+              - value: 'female'
+                label: 'Female'
+            """);
+
+        var input = Assert.IsType<InputNode>(passage.Nodes.Single());
+        Assert.NotNull(input.Options);
+        Assert.Equal(2, input.Options.Count);
+        Assert.Equal("male", input.Options[0].Value);
+        Assert.Equal("Male", input.Options[0].Label);
+        Assert.Equal("female", input.Options[1].Value);
+        Assert.Equal("Female", input.Options[1].Label);
+    }
+
+    [Fact]
+    public void InputNode_NoOptions_IsNull()
+    {
+        var passage = ParseOne("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              var: 'z'
+            """);
+
+        var input = Assert.IsType<InputNode>(passage.Nodes.Single());
+        Assert.Null(input.Options);
+    }
+
+    [Fact]
+    public void InputNode_Options_RestextResolvesBothValueAndLabel()
+    {
+        var module = new ModuleLoader().LoadFromSources(
+            passageYamls:
+            [
+                """
+                format: 'mws/0.3'
+                passage_id: 'P1'
+                layout: 'narration'
+                nodes:
+                - type: 'input'
+                  var: 'narrationVoice'
+                  options:
+                  - value: 'restext://Voice_Male_Value'
+                    label: 'restext://Voice_Male_Label'
+                """,
+            ],
+            restextText: "Voice_Male_Value=male\nVoice_Male_Label=Male\n");
+
+        var passage = module.Passages.Values.Single();
+        var input = Assert.IsType<InputNode>(passage.Nodes.Single());
+        var option = Assert.Single(input.Options!);
+        Assert.Equal("male", option.Value);
+        Assert.Equal("Male", option.Label);
+    }
+
     // ── Audio ─────────────────────────────────────────────────────────────────
 
     [Fact]

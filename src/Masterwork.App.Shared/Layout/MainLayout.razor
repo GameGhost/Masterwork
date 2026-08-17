@@ -30,15 +30,20 @@
     // LocationChanged subscription covers every navigation without needing to re-subscribe).
     protected override void OnInitialized()
     {
-        NavHistory.Track(Nav.ToBaseRelativePath(Nav.Uri));
+        var initialPath = Nav.ToBaseRelativePath(Nav.Uri);
+        NavHistory.Track(initialPath);
+        _previousPath = initialPath;
         Nav.LocationChanged += OnLocationChanged;
         HardwareBackButtonBridge.Register(Nav, NavHistory);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        NavHistory.Track(Nav.ToBaseRelativePath(e.Location));
+        var newPath = Nav.ToBaseRelativePath(e.Location);
+        NavHistory.Track(newPath);
         _ = SyncThemeMusicAsync(e.Location);
+        _ = SyncThemeTransitionSfxAsync(newPath, cameFromPlay: IsPlayPath(_previousPath));
+        _previousPath = newPath;
     }
 
     // Starts the theme's own background music whenever the app shell (anything other than /play) is
@@ -80,6 +85,39 @@
         }
     }
 
+    // The original app's own "welcome" window-transition clip only ever played on the main menu
+    // itself — first launch, or landing back on it after a module ends/is quit — never on plain
+    // in-shell navigation (Main Menu -> Help -> Achievements shouldn't replay it). So this fires
+    // only when the *destination* is the main menu (root) and either this is app boot or the
+    // player is arriving there straight from /play — tracked via _previousPath rather than
+    // anything /play's own quit flows need to know about (they all just NavigateTo("/") like any
+    // other navigation). Every other shell screen transition (Help, Achievements, New Game,
+    // Continue, Manage Modules) plays no transition SFX at all now — those buttons get the
+    // ordinary ChromeButton click sound instead, same as everywhere else in app chrome.
+    private string? _previousPath;
+    private bool _isBoot = true;
+
+    private static bool IsPlayPath(string? path) => string.Equals(path, "play", StringComparison.OrdinalIgnoreCase);
+    private static bool IsRootPath(string path) => string.IsNullOrEmpty(path);
+
+    private async Task SyncThemeTransitionSfxAsync(string newPath, bool cameFromPlay)
+    {
+        var wasBoot = _isBoot;
+        _isBoot = false;
+
+        if (!IsRootPath(newPath) || Theme.TransitionSfxUrl is null)
+        {
+            return;
+        }
+
+        if (!cameFromPlay && !wasBoot)
+        {
+            return;
+        }
+
+        await AudioPlayer.PlaySfxAsync(Theme.TransitionSfxUrl);
+    }
+
     public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 
     // Runs once per app session (MainLayout wraps every page and isn't recreated on navigation) —
@@ -94,6 +132,7 @@
             var settings = await SettingsStore.LoadAsync();
             await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, AudioState, JS);
             await SyncThemeMusicAsync(Nav.Uri);
+            await SyncThemeTransitionSfxAsync(Nav.ToBaseRelativePath(Nav.Uri), cameFromPlay: false);
 
             // The current page (@Body) already rendered once before this completed, using whatever
             // culture was in effect at that point — without this, the just-applied UI language

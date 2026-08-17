@@ -22,4 +22,12 @@ public sealed record RenderedInput : RenderedAction
 
     /// <summary>Maximum accepted value. Only meaningful when <see cref="InputType"/> is <see cref="InputValueType.Number"/>.</summary>
     public long? Max { get; init; }
+
+    /// <summary>
+    /// Renders as a radio-button group instead of <see cref="InputType"/>'s usual text/number/checkbox
+    /// control when present and non-empty — see <see cref="Masterwork.ModuleFormat.InputNode.Options"/>.
+    /// Orthogonal to <see cref="InputType"/>, which still governs how the selected option's
+    /// <see cref="RenderedInputOption.Value"/> is converted on commit (see <see cref="GameSession.CommitInputs"/>).
+    /// </summary>
+    public IReadOnlyList<RenderedInputOption>? Options { get; init; }
 }

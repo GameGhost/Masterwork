@@ -25,19 +25,19 @@
 
     <h1 class="mws-visually-hidden">Masterwork - My Father's Work</h1>
 
-    <button type="button" class="mws-main-menu-help" @onclick='() => Nav.NavigateTo("/help")'>
+    <ChromeButton class="mws-main-menu-help" OnClick='() => Nav.NavigateTo("/help")'>
         <span class="mws-visually-hidden">@AppStrings.MainMenu_Help</span>
-    </button>
+    </ChromeButton>
 
     <div class="mws-main-menu-content">
         <div class="mws-main-menu-logo" role="img" aria-label="My Father's Work"></div>
         <p class="mws-main-menu-tagline">@((MarkupString)AppStrings.MainMenu_Tagline)</p>
 
         <nav class="mws-main-menu-buttons">
-            <button type="button" @onclick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</button>
-            <button type="button" @onclick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</button>
-            <button type="button" @onclick="() => _showOptions = true">@AppStrings.MainMenu_Options</button>
-            <button type="button" disabled title="@AppStrings.Common_ComingSoon" @onclick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</button>
+            <ChromeButton OnClick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</ChromeButton>
+            <ChromeButton OnClick='() => Nav.NavigateTo("/continue")'>@AppStrings.MainMenu_Continue</ChromeButton>
+            <ChromeButton OnClick="() => _showOptions = true">@AppStrings.MainMenu_Options</ChromeButton>
+            <ChromeButton disabled title="@AppStrings.Common_ComingSoon" OnClick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</ChromeButton>
         </nav>
     </div>
 </div>

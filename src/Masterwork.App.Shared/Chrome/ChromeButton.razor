@@ -1,0 +1,33 @@
+@namespace Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Services
+@inject AudioCoordinator AudioCoordinator
+@inject GameSessionState State
+
+@* Drop-in replacement for a plain <button type="button">, used throughout app chrome (never
+   module-rendered content — that has its own audio.sfx.click resolution, see
+   Rendering.RenderedLinkView) so every app button click gets a consistent sound with no per-call-site
+   wiring. Self-contained: reads GameSessionState directly rather than taking a module-click-bucket
+   parameter, so it works unmodified whether or not a module happens to be loaded (Options
+   dialog/pause bar during Play vs. Main Menu/New Game/Continue, where State.Module is always null). *@
+<button type="button" @attributes="AdditionalAttributes" @onclick="HandleClickAsync">
+    @ChildContent
+</button>
+
+@code {
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private async Task HandleClickAsync()
+    {
+        // A currently-loaded module's own click bucket overrides the theme default — see
+        // AudioCoordinator.PlayChromeClickAsync's own remarks.
+        await AudioCoordinator.PlayChromeClickAsync(State.Module?.Audio?.Sfx?.Click);
+        await OnClick.InvokeAsync();
+    }
+}

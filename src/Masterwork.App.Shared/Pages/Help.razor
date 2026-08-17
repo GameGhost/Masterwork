@@ -1,4 +1,5 @@
 @page "/help"
+@using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject NavigationManager Nav
@@ -8,9 +9,9 @@
 
 <div class="mws-scenario-screen">
     <div class="mws-scenario-border" aria-hidden="true"></div>
-    <button type="button" class="mws-scenario-back-button" @onclick='() => Nav.NavigateTo("/")'>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/")'>
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
-    </button>
+    </ChromeButton>
 
     <h2 class="mws-screen-title">@AppStrings.Help_Heading</h2>
 
@@ -18,7 +19,7 @@
         <nav class="mws-help-topics">
             @foreach (var topic in Topics)
             {
-                <button type="button" class="@(topic == _selected ? "selected" : "")" @onclick="() => _selected = topic">@TopicLabel(topic)</button>
+                <ChromeButton class="@(topic == _selected ? "selected" : "")" OnClick="() => _selected = topic">@TopicLabel(topic)</ChromeButton>
             }
         </nav>
         <div class="mws-help-content">

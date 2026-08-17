@@ -1,10 +1,24 @@
 using System.Text;
 using Masterwork.App.Shared.Services;
+using Microsoft.Extensions.Logging;
 
 namespace Masterwork.Tests;
 
 public class AssetResolverTests
 {
+    // Minimal capturing ILogger — just enough to assert a warning was (or wasn't) logged, without
+    // pulling in a mocking library this test project doesn't otherwise use.
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception)));
+    }
+
     // Minimal in-memory IModuleAssetSource, same shape as LoadedModuleContentTests's own adapter —
     // just enough to drive AssetResolver against a fixed set of bytes without a real
     // IndexedDB/filesystem-backed implementation.
@@ -263,5 +277,41 @@ public class AssetResolverTests
         var url = await resolver.ResolveAsync("audio://vo/greeting");
 
         Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bareBytes)}", url);
+    }
+
+    [Fact]
+    public async Task UnresolvedAudio_LogsWarningWithSlug()
+    {
+        // Covers GloomyWolvesIntro's deliberately-missing female take (Q33, masterwork-plan-rev23.md)
+        // — the caller (RenderedAudioTrackView) already degrades gracefully on the null return; this
+        // is purely so the gap is diagnosable from the log rather than silently invisible.
+        var log = new CapturingLogger<AssetResolver>();
+        var resolver = new AssetResolver(new GameSessionState(), log);
+
+        var url = await resolver.ResolveAsync("audio://vo/gloomywolvesintro_f");
+
+        Assert.Null(url);
+        var warning = Assert.Single(log.Entries, e => e.Level == LogLevel.Warning);
+        Assert.Contains("gloomywolvesintro_f", warning.Message);
+    }
+
+    [Fact]
+    public async Task ResolvedAudio_LogsNoWarning()
+    {
+        var log = new CapturingLogger<AssetResolver>();
+        var bytes = new byte[] { 1, 2, 3 };
+        var state = new GameSessionState();
+        state.Start("m", "1.0.0", null,
+            new LoadedModuleContent(
+                Module: null!,
+                Assets: new DictionaryModuleAssetSource(new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.ogg"] = bytes }),
+                StyleCss: null),
+            session: null!);
+        var resolver = new AssetResolver(state, log);
+
+        var url = await resolver.ResolveAsync("audio://vo/greeting");
+
+        Assert.NotNull(url);
+        Assert.DoesNotContain(log.Entries, e => e.Level == LogLevel.Warning);
     }
 }

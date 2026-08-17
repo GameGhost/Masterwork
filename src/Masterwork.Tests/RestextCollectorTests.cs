@@ -109,6 +109,35 @@ public class RestextCollectorTests
     }
 
     [Fact]
+    public void CollectPassage_AudioTrackTitle_ExtractedAsRestextRef()
+    {
+        // Covers the --audio-map synthesis path (V2Serializer.ToDict's prepended audio_track dict)
+        // — without this case, a synthesized title never gets a restext:// key at all.
+        var collector = new RestextCollector();
+        var dict = new Dictionary<string, object?>
+        {
+            ["nodes"] = new List<Dictionary<string, object?>>
+            {
+                new()
+                {
+                    ["type"] = "audio_track",
+                    ["asset"] = "${narrationVoice == \"female\" ? \"audio://vo/f\" : \"audio://vo/m\"}",
+                    ["title"] = "Thriving in Adversity",
+                },
+            },
+        };
+
+        collector.CollectPassage("Hospitalintro", "000-Hospitalintro.mws.yaml", dict);
+
+        var nodes = (List<Dictionary<string, object?>>)dict["nodes"]!;
+        Assert.Equal("restext://Hospitalintro_001", nodes[0]["title"]);
+        var entries = Assert.Single(collector.Passages).Entries;
+        var entry = Assert.Single(entries);
+        Assert.Equal("Hospitalintro_001", entry.Key);
+        Assert.Equal("Thriving in Adversity", entry.Value);
+    }
+
+    [Fact]
     public void CollectPassage_TernaryTitle_DoesNotExtractConditionComparandLiterals()
     {
         // Regression: Cost of Disease's Gen1CreepyYes — "{hunters == "evil" ? "Agreed" : "Agreed"}"

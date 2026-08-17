@@ -11,11 +11,16 @@ namespace Masterwork.Extractor;
 /// Variables: the module's discovered-variables dictionary (mutable, shared with the caller) —
 /// <see cref="V2Serializer.TransformInputAction"/> registers a synthetic guard variable into it
 /// while serializing an <c>OnGenerationBtn</c>-derived input popup (see its remarks).
+/// AudioMapper: optional passage-name → gendered VO mapping (--audio-map), consulted in
+/// <see cref="V2Serializer.ToDict"/> to synthesize an <c>audio_track</c> node — see
+/// <see cref="Masterwork.Extractor.AudioMapper"/>'s own remarks for why this lives here rather than
+/// threaded through <c>PassageBodyVisitor</c> like <c>SpriteMapper</c>/<c>ProgressMapper</c>.
 /// </summary>
 public record SerializationContext(
     string? SourceRelativePath,
     IReadOnlyDictionary<string, string>? PassageFileMap,
-    Dictionary<string, VarDef>? Variables = null
+    Dictionary<string, VarDef>? Variables = null,
+    AudioMapper? AudioMapper = null
 );
 
 /// <summary>
@@ -38,6 +43,12 @@ public static partial class V2Serializer
     // target which looks like a bug in the extractor rather than a (theoretical, never-in-practice)
     // gap in the source's own conditional logic.
     private const string UnreachableTarget = "__UNREACHABLE__";
+
+    // See ToDict's own "Special-event on-display SFX" remarks.
+    private const string SpecialEventSfxAsset = "audio://sfx/special_event";
+
+    private static bool HasSpecialEventMarker(List<MwsNode> nodes) =>
+        nodes.Any(n => n is TextNode { Style: "special-event" });
 
     public static Dictionary<string, object?> ToDict(MwsPassage passage, SerializationContext? ctx = null)
     {
@@ -91,7 +102,40 @@ public static partial class V2Serializer
             d["check_progress"] = checkProgress;
         }
 
-        d["nodes"] = TransformNodeList(bodyNodes, ctx);
+        // Special-event on-display SFX — synthesized unconditionally (no --audio-map-style
+        // per-passage JSON needed, unlike VO: every occurrence plays the identical fixed sound,
+        // so the trigger condition alone is enough). Matches the original app's own
+        // ViewSpecialEvent.clip, fired via SoundManager.Instance.OnOpenPopupPlayAudio(clip) the
+        // instant the overlay appears — audio-survey-new-sfx.md confirmed this GUID resolves
+        // cleanly in Main.unity, a gap the original audio-inventory.md survey missed entirely.
+        // Safe to key off bodyNodes' own leading position: confirmed live (grep) that every real
+        // occurrence across all three modules has the special-event marker as the passage's own
+        // first node, so passage-level on_display exactly matches "plays once when this passage,
+        // which opens on the special-event overlay, becomes active" — no need to model this as
+        // its own node-level audio field.
+        if (HasSpecialEventMarker(bodyNodes))
+        {
+            d["audio"] = new Dictionary<string, object?> { ["on_display"] = SpecialEventSfxAsset };
+        }
+
+        var nodes = TransformNodeList(bodyNodes, ctx);
+        // Synthesized directly here, bypassing the MwsNode/TransformNode intermediate round-trip —
+        // there's no Cradle source construct a mapped passage's audio_track corresponds to (see
+        // AudioMapper's own remarks). Prepended (not appended) so narration starts immediately on
+        // arrival, matching the Phase 4 pilot's own hand-authored Hospitalintro shape exactly.
+        if (ctx?.AudioMapper?.TryGetEntry(passage.PassageId, out var audioEntry) == true)
+        {
+            nodes.Insert(0, new Dictionary<string, object?>
+            {
+                ["type"] = "audio_track",
+                ["asset"] = $"${{narrationVoice == \"female\" ? \"audio://vo/{audioEntry.FemaleSlug}\" : \"audio://vo/{audioEntry.MaleSlug}\"}}",
+                ["title"] = audioEntry.Title,
+                ["autoplay"] = true,
+                ["bgm_behavior"] = "pause",
+            });
+        }
+
+        d["nodes"] = nodes;
         return d;
     }
 

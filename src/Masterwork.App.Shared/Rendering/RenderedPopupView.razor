@@ -135,7 +135,10 @@ else
         // nothing else recomputes the music stack for us — this popup may now be the new topmost
         // tier, so it's synced directly here.
         await AudioCoordinator.SyncMusicAsync(Session);
-        await AudioCoordinator.PlaySfxAsync(Node.Audio?.Open, SessionState.Module?.Audio?.Sfx?.PopupOpen, Node.Audio?.OpenDelayMs);
+        await AudioCoordinator.PlaySfxAsync(
+            Node.Audio?.Open, Node.Audio?.OpenDelayMs,
+            Node.Chrome.Audio?.Open, Node.Chrome.Audio?.OpenDelayMs,
+            SessionState.Module?.Audio?.Sfx?.PopupOpen);
     }
 
     // Guards against a double-click double-firing ClosePopupAsync — see RenderedLinkView's
@@ -167,7 +170,10 @@ else
             // this is; it's fast enough that the click still feels immediate.
             if (ReferenceEquals(after, before))
             {
-                await AudioCoordinator.PlaySfxAsync(Node.Audio?.Okay, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.OkayDelayMs);
+                await AudioCoordinator.PlaySfxAsync(
+                    Node.Audio?.Okay, Node.Audio?.OkayDelayMs,
+                    Node.Chrome.Audio?.Close, Node.Chrome.Audio?.CloseDelayMs,
+                    SessionState.Module?.Audio?.Sfx?.PopupClose);
             }
 
             await OnStateChanged.InvokeAsync();
@@ -188,7 +194,10 @@ else
         // even after it's gone — this is that missing hook.
         Session.ViewState.ExpandedPopups.Remove(Node.Id);
         await AudioCoordinator.SyncMusicAsync(Session);
-        await AudioCoordinator.PlaySfxAsync(Node.Audio?.Cancel, SessionState.Module?.Audio?.Sfx?.PopupClose, Node.Audio?.CancelDelayMs);
+        await AudioCoordinator.PlaySfxAsync(
+            Node.Audio?.Cancel, Node.Audio?.CancelDelayMs,
+            Node.Chrome.Audio?.Close, Node.Chrome.Audio?.CloseDelayMs,
+            SessionState.Module?.Audio?.Sfx?.PopupClose);
         await OnInputChanged.InvokeAsync();
     }
 }

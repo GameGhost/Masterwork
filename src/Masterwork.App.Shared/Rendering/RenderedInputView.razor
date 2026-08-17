@@ -4,28 +4,52 @@
 @using Masterwork.ModuleFormat
 @inject IJSRuntime JS
 
-<label class="mws-input style-@(Node.Style ?? "default")">
-    @Node.Label
-    @if (Node.InputType == InputValueType.Boolean)
-    {
-        <input type="checkbox"
-               @key="Node.InputType"
-               checked="@_checked"
-               disabled="@IsRewound"
-               @onchange="HandleCheckboxChange" />
-    }
-    else
-    {
-        <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
-               @key="Node.InputType"
-               id="@InputElementId"
-               min="@Node.Min" max="@Node.Max"
-               value="@_value"
-               disabled="@IsRewound"
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               @oninput="HandleInput" />
-    }
-</label>
+@if (Node.Options is { Count: > 0 } options)
+{
+    <fieldset class="mws-input-options style-@(Node.Style ?? "default")" @key="@("options")">
+        @if (!string.IsNullOrEmpty(Node.Label))
+        {
+            <legend>@Node.Label</legend>
+        }
+        @foreach (var opt in options)
+        {
+            <label class="mws-input-option">
+                <input type="radio"
+                       name="mws-input-@Node.Id"
+                       value="@opt.Value"
+                       checked="@(_selectedValue == opt.Value)"
+                       disabled="@IsRewound"
+                       @onchange="@(() => HandleOptionChange(opt.Value))" />
+                @opt.Label
+            </label>
+        }
+    </fieldset>
+}
+else
+{
+    <label class="mws-input style-@(Node.Style ?? "default")">
+        @Node.Label
+        @if (Node.InputType == InputValueType.Boolean)
+        {
+            <input type="checkbox"
+                   @key="Node.InputType"
+                   checked="@_checked"
+                   disabled="@IsRewound"
+                   @onchange="HandleCheckboxChange" />
+        }
+        else
+        {
+            <input type="@(Node.InputType == InputValueType.Number ? "number" : "text")"
+                   @key="Node.InputType"
+                   id="@InputElementId"
+                   min="@Node.Min" max="@Node.Max"
+                   value="@_value"
+                   disabled="@IsRewound"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   @oninput="HandleInput" />
+        }
+    </label>
+}
 
 @code {
     /// <summary>The input node to render.</summary>
@@ -62,6 +86,7 @@
 
     private string _value = "";
     private bool _checked;
+    private string _selectedValue = "";
 
     // A plain DOM id, not an ElementReference captured via @ref — see inputFocus.js's own comment
     // on OnAfterRenderAsync's call below for why. Prefixed against collision with anything else on
@@ -71,6 +96,40 @@
 
     protected override void OnParametersSet()
     {
+        if (Node.Options is { Count: > 0 } options)
+        {
+            if (IsRewound)
+            {
+                _selectedValue = Session.Current.Variables.TryGetValue(Node.Var, out var historicalOption) ? historicalOption.AsString() : "";
+                return;
+            }
+
+            if (Session.ViewState.InputDrafts.TryGetValue(Node.Id, out var optionDraft))
+            {
+                _selectedValue = optionDraft.ToString() ?? "";
+                return;
+            }
+
+            // No draft yet — pre-select from the variable's own already-committed value (e.g. a
+            // declared default) if it matches one of this input's options, and write it into the
+            // draft immediately so the enclosing link/popup Okay sees it as already valid too,
+            // without the player having to click something that's already correct. Scoped to
+            // Options only — plain text/number/boolean inputs have no such fallback (see
+            // GameSession.IsInputValid's own remarks on why Options is required unconditionally).
+            if (Session.Current.Variables.TryGetValue(Node.Var, out var liveValue)
+                && options.Any(o => o.Value == liveValue.AsString()))
+            {
+                _selectedValue = liveValue.AsString();
+                Session.UpdateInputDraft(Node.Id, _selectedValue);
+            }
+            else
+            {
+                _selectedValue = "";
+            }
+
+            return;
+        }
+
         if (Node.InputType == InputValueType.Boolean)
         {
             _checked = IsRewound
@@ -92,7 +151,7 @@
     // (checkbox) inputs and while rewound (disabled anyway, and nothing to type into mid-review).
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !IsRewound && Node.InputType != InputValueType.Boolean && Node.Id == FirstFocusableInputId)
+        if (firstRender && !IsRewound && Node.InputType != InputValueType.Boolean && Node.Options is not { Count: > 0 } && Node.Id == FirstFocusableInputId)
         {
             var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Masterwork.App.Shared/inputFocus.js");
             await module.InvokeVoidAsync("focusWithoutMobileKeyboard", InputElementId);
@@ -110,6 +169,13 @@
     {
         _checked = e.Value is bool b && b;
         Session.UpdateInputDraft(Node.Id, _checked);
+        await OnInputChanged.InvokeAsync();
+    }
+
+    private async Task HandleOptionChange(string value)
+    {
+        _selectedValue = value;
+        Session.UpdateInputDraft(Node.Id, _selectedValue);
         await OnInputChanged.InvokeAsync();
     }
 }

@@ -13,7 +13,7 @@ namespace Masterwork.App.Shared.Services;
 /// <see cref="GameSessionState"/>), so <see cref="SyncMusicAsync"/>'s dedup cache lives for the app
 /// session, not just one component.
 /// </summary>
-public sealed class AudioCoordinator(IAudioPlayer audioPlayer, IAssetResolver assetResolver)
+public sealed class AudioCoordinator(IAudioPlayer audioPlayer, IAssetResolver assetResolver, IMainMenuTheme theme)
 {
     private AudioResolution? _lastPushed;
 
@@ -90,7 +90,29 @@ public sealed class AudioCoordinator(IAudioPlayer audioPlayer, IAssetResolver as
     /// </summary>
     public async Task PlaySfxAsync(string? nodeOverride, IReadOnlyList<string>? moduleBucket, int? delayMs)
     {
-        var uri = ResolveSfxCandidate(nodeOverride, moduleBucket);
+        var (uri, resolvedDelayMs) = ResolveSfxCandidate(nodeOverride, delayMs, null, null, moduleBucket);
+        await PlayResolvedAsync(uri, resolvedDelayMs);
+    }
+
+    /// <summary>
+    /// Three-tier sibling of the 3-arg overload above, adding a <paramref name="layoutOverride"/>
+    /// tier between the node and module levels (see <see cref="Masterwork.ModuleFormat.LayoutChromeAudio"/>).
+    /// Resolution is node → layout → module, same present-but-empty-means-silence semantics at each
+    /// tier as the 2-tier overload. Critically, <c>(uri, delayMs)</c> are picked together as one pair
+    /// — whichever tier's URI wins is the tier whose own delay applies; a losing tier's delay is never
+    /// mixed in, since only one tier's delay is even meaningful once its own URI didn't win.
+    /// <see cref="Rendering.RenderedLinkView"/>'s click SFX has no layout concept and stays on the
+    /// 3-arg overload above.
+    /// </summary>
+    public async Task PlaySfxAsync(
+        string? nodeOverride, int? nodeDelayMs, string? layoutOverride, int? layoutDelayMs, IReadOnlyList<string>? moduleBucket)
+    {
+        var (uri, resolvedDelayMs) = ResolveSfxCandidate(nodeOverride, nodeDelayMs, layoutOverride, layoutDelayMs, moduleBucket);
+        await PlayResolvedAsync(uri, resolvedDelayMs);
+    }
+
+    private async Task PlayResolvedAsync(string? uri, int? delayMs)
+    {
         if (uri is null)
         {
             return;
@@ -117,18 +139,54 @@ public sealed class AudioCoordinator(IAudioPlayer audioPlayer, IAssetResolver as
         await audioPlayer.PlaySfxAsync(url);
     }
 
-    private static string? ResolveSfxCandidate(string? nodeOverride, IReadOnlyList<string>? moduleBucket)
+    /// <summary>
+    /// Click SFX for app-chrome buttons (Options dialog, confirm dialogs, New Game/Continue pages,
+    /// pause bar) — not module content, so there's no node/layout tier the way a link's own click
+    /// SFX has. <paramref name="moduleClickBucket"/> is the currently-loaded module's own
+    /// <c>audio.sfx.click</c> bucket if one is active (app chrome sitting on top of an active
+    /// module — the pause bar's own Options dialog, an in-game quit confirm — should sound
+    /// consistent with the rest of that module's SFX) and <see langword="null"/> everywhere else
+    /// (Main Menu, New Game, Continue, Manage Modules — no module is loaded there yet). When
+    /// present and non-empty it wins, picked at random exactly like any other module SFX bucket;
+    /// otherwise falls back to <see cref="IMainMenuTheme.ClickSfxUrl"/>.
+    /// </summary>
+    public async Task PlayChromeClickAsync(IReadOnlyList<string>? moduleClickBucket)
+    {
+        if (moduleClickBucket is { Count: > 0 })
+        {
+            var uri = moduleClickBucket[Random.Shared.Next(moduleClickBucket.Count)];
+            var moduleUrl = await assetResolver.ResolveAsync(uri);
+            if (moduleUrl is not null)
+            {
+                await audioPlayer.PlaySfxAsync(moduleUrl);
+                return;
+            }
+        }
+
+        if (theme.ClickSfxUrl is not null)
+        {
+            await audioPlayer.PlaySfxAsync(theme.ClickSfxUrl);
+        }
+    }
+
+    private static (string? Uri, int? DelayMs) ResolveSfxCandidate(
+        string? nodeOverride, int? nodeDelayMs, string? layoutOverride, int? layoutDelayMs, IReadOnlyList<string>? moduleBucket)
     {
         if (nodeOverride is not null)
         {
-            return nodeOverride.Length == 0 ? null : nodeOverride;
+            return nodeOverride.Length == 0 ? (null, null) : (nodeOverride, nodeDelayMs);
+        }
+
+        if (layoutOverride is not null)
+        {
+            return layoutOverride.Length == 0 ? (null, null) : (layoutOverride, layoutDelayMs);
         }
 
         if (moduleBucket is null || moduleBucket.Count == 0)
         {
-            return null;
+            return (null, null);
         }
 
-        return moduleBucket[Random.Shared.Next(moduleBucket.Count)];
+        return (moduleBucket[Random.Shared.Next(moduleBucket.Count)], null);
     }
 }

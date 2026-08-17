@@ -73,14 +73,14 @@
                 }
 
                 <div class="mws-dialog-actions">
-                    <button type="button" class="style-btn-green" disabled="@_busy" @onclick="Apply">@AppStrings.Common_Apply</button>
-                    <button type="button" class="style-btn-red" @onclick="Cancel">@AppStrings.Common_Cancel</button>
+                    <ChromeButton class="style-btn-green" disabled="@_busy" OnClick="Apply">@AppStrings.Common_Apply</ChromeButton>
+                    <ChromeButton class="style-btn-red" OnClick="Cancel">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
 
                 @if (DialogContext == OptionsDialogContext.MainMenu)
                 {
                     <div class="mws-dialog-footer">
-                        <button type="button" class="mws-manage-modules-button style-btn-brown" @onclick="ManageModules">@AppStrings.OptionsDialog_ManageModules</button>
+                        <ChromeButton class="mws-manage-modules-button style-btn-brown" OnClick="ManageModules">@AppStrings.OptionsDialog_ManageModules</ChromeButton>
                     </div>
                 }
                 break;
@@ -89,9 +89,9 @@
                 <h3>@AppStrings.OptionsDialog_QuitConfirmTitle</h3>
                 <p>@AppStrings.OptionsDialog_QuitConfirmBody</p>
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" @onclick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</button>
-                    <button type="button" class="mws-btn-sm style-btn-green" @onclick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="CancelQuitConfirm">@AppStrings.Common_Cancel</button>
+                    <ChromeButton class="mws-quit-button mws-btn-sm style-btn-red" disabled="@_busy" OnClick="AbandonGame">@AppStrings.OptionsDialog_AbandonGame</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-green" OnClick="BeginSaveAndQuit">@AppStrings.OptionsDialog_SaveAndQuit</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="CancelQuitConfirm">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
                 break;
 
@@ -99,8 +99,8 @@
                 <h3>@AppStrings.OptionsDialog_NameSaveTitle</h3>
                 <input type="text" @bind="_saveName" @bind:event="oninput" class="mws-save-name-input" />
                 <div class="mws-dialog-actions">
-                    <button type="button" class="mws-btn-sm style-btn-green" disabled="@_busy" @onclick="ConfirmSaveAndQuit">@AppStrings.Common_Save</button>
-                    <button type="button" class="mws-btn-sm style-btn-brown" @onclick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</button>
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmSaveAndQuit">@AppStrings.Common_Save</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _view = View.QuitConfirm">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
                 break;
         }

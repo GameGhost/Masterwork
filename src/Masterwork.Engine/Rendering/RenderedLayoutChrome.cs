@@ -14,4 +14,7 @@ public sealed record RenderedLayoutChrome(
 {
     /// <summary>No chrome registered for this layout — all four regions empty.</summary>
     public static readonly RenderedLayoutChrome Empty = new([], [], [], []);
+
+    /// <summary>Resolved SFX defaults for this layout, if it declared any — see <see cref="RenderedLayoutAudio"/>. <see langword="null"/> for <see cref="Empty"/> and any layout with no <c>audio:</c> block of its own.</summary>
+    public RenderedLayoutAudio? Audio { get; init; }
 }

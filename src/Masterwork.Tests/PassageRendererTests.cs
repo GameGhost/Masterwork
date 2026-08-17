@@ -851,6 +851,55 @@ public class PassageRendererTests
         Assert.Equal("", input.Label);
     }
 
+    [Fact]
+    public void InputOptions_TemplateExpandBothValueAndLabel()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              var: 'narrationVoice'
+              options:
+              - value: 'male'
+                label: 'Male ({townname})'
+            """,
+            variablesYaml: """
+                standard_variables: []
+                variables:
+                  narrationVoice:
+                    type: 'string'
+                    default: 'male'
+                  townname:
+                    type: 'string'
+                    default: 'Millbrook'
+                """);
+
+        var result = Render(passage, module, store);
+        var input = Assert.IsType<RenderedInput>(result.Actions.Single());
+        var option = Assert.Single(input.Options!);
+        Assert.Equal("male", option.Value);
+        Assert.Equal("Male (Millbrook)", option.Label);
+    }
+
+    [Fact]
+    public void InputWithNoOptions_RenderedOptionsIsNull()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes:
+            - type: 'input'
+              var: 'z'
+            """);
+
+        var result = Render(passage, module, store);
+        var input = Assert.IsType<RenderedInput>(result.Actions.Single());
+        Assert.Null(input.Options);
+    }
+
     // ── Goto ─────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1210,6 +1259,112 @@ public class PassageRendererTests
         Assert.Empty(popup.Chrome.AfterContent);
     }
 
+    [Fact]
+    public void LayoutChromeAudio_LiteralFields_ResolveOntoRenderedChrome()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'setup'
+            nodes: []
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'setup'
+                audio:
+                  on_display: 'audio://sfx/setup_display'
+                  on_display_delay_ms: 100
+                  open: 'audio://sfx/setup_open'
+                  open_delay_ms: 200
+                  close: 'audio://sfx/setup_close'
+                  close_delay_ms: 300
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+
+        Assert.NotNull(result.Chrome.Audio);
+        Assert.Equal("audio://sfx/setup_display", result.Chrome.Audio.OnDisplay);
+        Assert.Equal(100, result.Chrome.Audio.OnDisplayDelayMs);
+        Assert.Equal("audio://sfx/setup_open", result.Chrome.Audio.Open);
+        Assert.Equal(200, result.Chrome.Audio.OpenDelayMs);
+        Assert.Equal("audio://sfx/setup_close", result.Chrome.Audio.Close);
+        Assert.Equal(300, result.Chrome.Audio.CloseDelayMs);
+    }
+
+    [Fact]
+    public void LayoutChromeAudio_ExpressionField_EvaluatedAtRenderTime()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'setup'
+            nodes: []
+            """,
+            variablesYaml: """
+            standard_variables: []
+            variables:
+              narrationVoice:
+                type: 'string'
+                default: 'female'
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'setup'
+                audio:
+                  on_display: '${narrationVoice == "female" ? "audio://sfx/setup_f" : "audio://sfx/setup_m"}'
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+        Assert.Equal("audio://sfx/setup_f", result.Chrome.Audio!.OnDisplay);
+    }
+
+    [Fact]
+    public void LayoutChromeNoAudio_ChromeAudioIsNull()
+    {
+        var (passage, module, store) = Load(
+            """
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'hub_early'
+            nodes: []
+            """,
+            layoutChromeYamls:
+            [
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_early'
+                header:
+                - type: 'text'
+                  value: 'header text'
+                """,
+            ]);
+
+        var result = Render(passage, module, store);
+        Assert.Null(result.Chrome.Audio);
+    }
+
+    [Fact]
+    public void NoMatchingLayoutChrome_ChromeAudioIsNull()
+    {
+        var (passage, module, store) = Load("""
+            format: 'mws/0.4'
+            passage_id: 'P1'
+            layout: 'narration'
+            nodes: []
+            """);
+
+        var result = Render(passage, module, store);
+        Assert.Null(result.Chrome.Audio);
+    }
+
     // ── Audio ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1273,12 +1428,12 @@ public class PassageRendererTests
             passage_id: 'P1'
             layout: 'narration'
             audio:
-              music: '${voiceGender == "female" ? "audio://bgm/theme_f" : "audio://bgm/theme_m"}'
+              music: '${narrationVoice == "female" ? "audio://bgm/theme_f" : "audio://bgm/theme_m"}'
             nodes: []
             """, variablesYaml: """
             standard_variables: []
             variables:
-              voiceGender:
+              narrationVoice:
                 type: 'string'
                 default: 'female'
             """);
@@ -1411,11 +1566,11 @@ public class PassageRendererTests
             layout: 'narration'
             nodes:
             - type: 'audio_track'
-              asset: '${voiceGender == "female" ? "audio://vo/greeting_f" : "audio://vo/greeting_m"}'
+              asset: '${narrationVoice == "female" ? "audio://vo/greeting_f" : "audio://vo/greeting_m"}'
             """, variablesYaml: """
             standard_variables: []
             variables:
-              voiceGender:
+              narrationVoice:
                 type: 'string'
                 default: 'male'
             """);
