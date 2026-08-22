@@ -35,6 +35,9 @@
         _previousPath = initialPath;
         Nav.LocationChanged += OnLocationChanged;
         HardwareBackButtonBridge.Register(Nav, NavHistory);
+        // See AppLifecycleAudioBridge's own remarks — lets native app-lifecycle events (MAUI heads
+        // only) pause/resume background music without needing their own DI access.
+        AppLifecycleAudioBridge.Register(AudioPlayer);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)

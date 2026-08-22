@@ -61,9 +61,17 @@ real filesystem:
 
 | Host | Log location |
 |---|---|
-| `Masterwork.App` (MAUI — Windows/Android) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
+| `Masterwork.App` (MAUI — Windows) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
+| `Masterwork.App` (MAUI — Android) | `Android/data/ca.digitalghost.masterwork.app/files/logs/masterwork-{yyyy-MM-dd}.log` on the device's external storage (`Context.GetExternalFilesDir(null)`, not `FileSystem.AppDataDirectory`'s private internal storage) — needs no special permission for the app's own files and is reachable via USB/MTP from a PC, unlike internal storage which needs `adb shell run-as` even to list. Falls back to `FileSystem.AppDataDirectory` only if external storage genuinely isn't mounted. |
 | `Masterwork.App.Web` (ASP.NET Core host) | `{ContentRootPath}/logs/masterwork-{yyyy-MM-dd}.log` (next to the project when run via `dotnet run`) |
 | `Masterwork.App.Web.Client` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
+
+`wwwroot/audio.js`'s own diagnostic trail (`logAudio`) is also forwarded into this same file log on
+MAUI via `JsAudioLogBridge` (`Masterwork.App.Shared/Services/JsAudioLogBridge.cs`) — a static
+`[JSInvokable]` method JS calls directly (`DotNet.invokeMethodAsync("Masterwork.App.Shared", "Log", ...)`),
+since audio.js's own log calls fire from native DOM/media events with no single C# component
+instance to hand a `DotNetObjectReference` to. Configured once in `MauiProgram`; never configured on
+WASM (no file log to forward into there either — the browser console stays authoritative).
 
 ---
 
@@ -111,6 +119,37 @@ the hosting `UIViewController`'s `View.SafeAreaInsets` (or set `AdditionalSafeAr
 constrain/inset the native `WKWebView`'s frame accordingly, re-applied on `ViewSafeAreaInsetsDidChange`
 so rotation (notch/Dynamic Island top in portrait, safe-area sides in landscape, home indicator
 bottom) is handled the same way `WindowInsetsCompat` handles it on Android.
+
+### Mobile audio: autoplay gate and app-lifecycle pause/resume
+Android's native `WebView` defaults to `Settings.MediaPlaybackRequiresUserGesture = true` — a gate
+enforced by the native WebView itself, beneath the JS layer, entirely separate from Chromium's own
+JS-level autoplay policy (which `wwwroot/audio.js`'s `attachUnlockListener` already handles for
+desktop/web). No JS-side trick can satisfy this one. Fixed in
+`Masterwork.App/Platforms/Android/MainActivity.cs`: `OnCreate` registers a
+`BlazorWebViewHandler.BlazorWebViewMapper` customization (before `base.OnCreate`, i.e. before the
+native `Android.Webkit.WebView` is actually created) that sets
+`webView.Settings.MediaPlaybackRequiresUserGesture = false` once the handler creates it.
+
+Background music also pauses when the app itself loses foreground focus and resumes on return —
+`AppLifecycleAudioBridge` (`Masterwork.App.Shared/Services/AppLifecycleAudioBridge.cs`, same
+static-bridge pattern as `HardwareBackButtonBridge`: `MainLayout.razor` registers its injected
+`IAudioPlayer` once, native lifecycle callbacks registered in `MauiProgram.cs`'s
+`ConfigureLifecycleEvents` call back in) wired to Android's `OnPause`/`OnResume` and Windows'
+`Window.Activated` (`WindowActivationState.Deactivated` vs. anything else) — Windows pauses on any
+focus loss (alt-tab, clicking another window), not just minimizing, since that's the only signal a
+desktop window actually has; revisit if that turns out to feel too aggressive in practice. The web
+build (`Masterwork.App.Web.Client`) needs none of this C# machinery — `audio.js`'s own
+`document.visibilitychange` listener (already there for the AudioContext-resume-on-return fix) calls
+the same JS-level pause/resume functions directly.
+
+**iOS/MacCatalyst (not yet implemented — same deferred status as the rest of the iOS target):**
+WKWebView's equivalent autoplay gate is `WKWebViewConfiguration.mediaTypesRequiringUserActionForPlayback`
+(defaults to requiring a gesture for both audio and video) — set it to `[]` on the configuration
+before the `WKWebView` is created, likely in `Platforms/iOS/AppDelegate.cs` or a
+`BlazorWebViewHandler` mapper the same way the Android fix works, mirroring this section's own
+`Page.On<iOS>()`/`BlazorWebViewHandler` precedent above for safe-area insets. For app-lifecycle
+pause/resume, wire `AppLifecycleAudioBridge` to `OnResignActivation`/`OnActivated` via MAUI's
+`events.AddiOS(...)` lifecycle events, the same shape as the Android `ConfigureLifecycleEvents` block.
 
 ---
 

@@ -12,6 +12,11 @@ let sfxMuted = false;
 let currentBgm = null;
 let currentPlaylist = null; // { urls, order, queue, index }
 
+// True while the app itself (not the player) has intentionally paused bgm — the app losing
+// foreground focus (backgrounded on mobile, deactivated on desktop) or, on the web build, the tab
+// becoming hidden. See pauseBgmForBackground/resumeBgmFromBackground below.
+let backgroundPaused = false;
+
 // audio_track elements, keyed by an opaque handle (their RenderedAudioTrack action id) — each gets
 // its own persistent GainNode (unlike playSfx's one-shot fire-and-forget) so live SfxVolume/SfxMuted
 // changes apply while a track is open and playing, not just at the moment it started.
@@ -27,8 +32,23 @@ const pausingTracks = new Set(); // handles currently applying bgm_behavior "pau
 // startBgmSource's immediate cancelPending below) didn't fully explain it, so the next real
 // reproduction needs an actual trail: open devtools, enable Verbose, reproduce, read back what
 // actually fired and in what order.
+//
+// Also forwarded into the .NET-side file log (JsAudioLogBridge, MAUI heads only) — a real Android
+// bug (silent bgm at boot) turned out to need exactly this trail, but devtools access on a locked
+// device isn't realistic for a player to provide; the file log already is (see CLAUDE.md's logging
+// table). Fire-and-forget and defensively guarded: DotNet may not be defined yet during the very
+// first script evaluation, and Web/WASM heads never call JsAudioLogBridge.Configure() at all (no
+// filesystem there either), so the interop call harmlessly resolves to a no-op either way.
 function logAudio(...args) {
     console.debug('[masterwork-audio]', new Date().toISOString().slice(11, 23), ...args);
+    if (typeof DotNet !== 'undefined') {
+        const message = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+        // Logged, not silently swallowed — a bridge failure (trimmed-away Log method, interop not
+        // ready yet) should be visible to whoever has devtools access, even though it wasn't to the
+        // player who reported the original bug this bridge exists for.
+        DotNet.invokeMethodAsync('Masterwork.App.Shared', 'Log', 'debug', message)
+            .catch(err => console.error('[masterwork-audio] JsAudioLogBridge interop failed:', err));
+    }
 }
 
 function ensureContext() {
@@ -53,14 +73,22 @@ function ensureContext() {
 
 // Chrome (and others) can auto-suspend a backgrounded tab's AudioContext as a power-saving
 // measure — explicitly resuming the moment the tab becomes visible again is the documented
-// mitigation. Doesn't by itself explain a *restart from position 0* (a suspended context just goes
-// silent, its own currentTime frozen — the underlying <audio> element and currentBgm's own gain
-// automation aren't touched), but it's cheap, correct, and removes one real candidate.
+// mitigation. Also the web build's own trigger for pauseBgmForBackground/resumeBgmFromBackground
+// below (declared further down this file) — the MAUI heads use native app-lifecycle events
+// instead (AppLifecycleAudioBridge), since visibilitychange inside an embedded WebView doesn't
+// reliably fire when the *native* app is backgrounded, only when the page itself is hidden within
+// it, which isn't the same thing. In an actual browser tab, hidden/visible IS the right signal.
 document.addEventListener('visibilitychange', () => {
     logAudio('visibilitychange ->', document.visibilityState, 'audioCtx.state =', audioCtx?.state, 'currentBgm.url =', currentBgm?.url);
-    if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
+    if (document.visibilityState === 'hidden') {
+        pauseBgmForBackground();
+        return;
+    }
+
+    if (audioCtx && audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
+    resumeBgmFromBackground();
 });
 
 function targetGain() {
@@ -85,11 +113,29 @@ function sfxGain() {
 // Browsers refuse audio.play() until the page has seen a real user gesture (click/touch/key) —
 // on a fresh load/refresh this rejects every autoplay attempt (module bgm, on_display SFX,
 // autoplay audio_track) with an unhandled NotAllowedError, and nothing ever plays until the
-// player happens to navigate somewhere. Every .play() call in this file routes through here:
-// on that specific rejection, the element is parked in pendingPlays and a one-time
-// pointerdown/keydown listener is installed to retry every pending element the moment a real
-// gesture occurs. Not an issue for the MAUI heads (WebView2/Android WebView don't enforce this
-// restriction the same way), so this is web-only in effect but harmless everywhere.
+// player happens to navigate somewhere. Every .play() call in this file routes through
+// safePlay() below: on that specific rejection, the element is parked in pendingPlays for
+// attachUnlockListener's own retry.
+//
+// attachUnlockListener() itself is installed UNCONDITIONALLY at module load (see the call at the
+// bottom of this block) — not only reactively from a caught rejection. Android's WebView
+// (Chromium) turns out to need this even though it does NOT reject audio.play() the way desktop
+// browsers do (confirmed: button/SFX clicks — plain playSfx(), no AudioContext involved — worked
+// immediately on a real device). What's actually gated there is AudioContext.resume() itself:
+// Chromium's autoplay policy requires resume() to run synchronously inside a trusted user-gesture
+// event handler, and every call site in this file that reaches ensureContext() (app boot's theme
+// bgm, a module's own bgm sync on passage render) does so from a Blazor/JS-interop callback, not
+// a native DOM event — so resume() silently no-ops there, the AudioContext stays 'suspended'
+// forever, and everything routed through it (bgm, playlists, audio_track) stays genuinely silent
+// even though the underlying <audio> elements are happily "playing" and gain/mute changes are
+// applied correctly to a graph nobody can hear. Reactive-only attachment (the old behavior) never
+// even got a chance to fire on Android, since nothing there ever produced the NotAllowedError it
+// was waiting for. A plain `document.addEventListener('pointerdown', ...)` sidesteps the whole
+// problem — it's a real native listener, synchronous with the actual touch, regardless of how
+// many interop hops separate the *rest* of this file's own attempts from the gesture that caused
+// them. Symptom this fixed, reported on a real device: no theme music/transition SFX at boot, mute
+// toggles had no audible effect, starting a module produced no bgm — until directly interacting
+// with an audio_track's own controls happened to coincide with the graph finally unmuting.
 const pendingPlays = new Set();
 let unlockListenerAttached = false;
 
@@ -124,6 +170,7 @@ function attachUnlockListener() {
     const unlock = () => {
         unlockListenerAttached = false;
         if (audioCtx && audioCtx.state === 'suspended') {
+            logAudio('unlock() resuming suspended audioCtx on a real gesture');
             audioCtx.resume();
         }
         const toRetry = [...pendingPlays];
@@ -134,10 +181,18 @@ function attachUnlockListener() {
         for (const audio of toRetry) {
             audio.play().catch(() => {}); // best-effort — a real gesture just occurred
         }
+        // Re-arm immediately — a still-suspended context (e.g. this same gesture's resume() call
+        // hasn't resolved yet, or a later platform quirk needs a second try) shouldn't leave the
+        // page with no listener at all for the next tap.
+        attachUnlockListener();
     };
     document.addEventListener('pointerdown', unlock, { once: true });
     document.addEventListener('keydown', unlock, { once: true });
 }
+
+// Unconditional — see this block's own remarks above for why reactive-only attachment (on a
+// caught play() rejection) never even engages on Android.
+attachUnlockListener();
 
 // Logs the underlying <audio> element's own native lifecycle events — not things our own code
 // triggers, but things the *browser itself* can do to a background-music element unprompted
@@ -165,12 +220,24 @@ function makeLoopingSource(ctx, url) {
     const audio = new Audio(url);
     audio.loop = true;
     logMediaLifecycle(audio, `bgm[${url}]`);
-    safePlay(audio);
+    // Skipped (not started) if the app is currently backgrounded — a passage/module transition
+    // that resolves new bgm while backgrounded (unlikely, since JS is typically throttled/frozen
+    // then, but not impossible) shouldn't sneak audible playback past the pause. mediaResume below
+    // is what actually starts it once the app comes back.
+    if (!backgroundPaused) {
+        safePlay(audio);
+    }
     const node = ctx.createMediaElementSource(audio);
-    return { url, node, stop: () => { cancelPendingPlay(audio); audio.pause(); }, cancelPending: () => cancelPendingPlay(audio) };
+    return {
+        url, node,
+        stop: () => { cancelPendingPlay(audio); audio.pause(); },
+        cancelPending: () => cancelPendingPlay(audio),
+        mediaPause: () => audio.pause(),
+        mediaResume: () => safePlay(audio),
+    };
 }
 
-function startBgmSource({ url, node, stop, cancelPending }, crossfadeSeconds) {
+function startBgmSource({ url, node, stop, cancelPending, mediaPause, mediaResume }, crossfadeSeconds) {
     const ctx = ensureContext();
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, ctx.currentTime);
@@ -179,7 +246,7 @@ function startBgmSource({ url, node, stop, cancelPending }, crossfadeSeconds) {
     gain.gain.linearRampToValueAtTime(targetGain(), ctx.currentTime + crossfadeSeconds);
 
     const previous = currentBgm;
-    currentBgm = { url, gain, stop, cancelPending };
+    currentBgm = { url, gain, stop, cancelPending, mediaPause, mediaResume };
     logAudio('startBgmSource', url, 'crossfadeSeconds =', crossfadeSeconds, 'supersedes =', previous?.url ?? null);
 
     if (previous) {
@@ -259,9 +326,19 @@ function playCurrentPlaylistTrack(crossfadeSeconds) {
         }
         advancePlaylist(playlist);
     });
-    safePlay(audio);
+    // See makeLoopingSource's own identical guard — don't sneak audible playback past an active
+    // background pause.
+    if (!backgroundPaused) {
+        safePlay(audio);
+    }
     const node = ctx.createMediaElementSource(audio);
-    startBgmSource({ url, node, stop: () => { cancelPendingPlay(audio); audio.pause(); }, cancelPending: () => cancelPendingPlay(audio) }, crossfadeSeconds);
+    startBgmSource({
+        url, node,
+        stop: () => { cancelPendingPlay(audio); audio.pause(); },
+        cancelPending: () => cancelPendingPlay(audio),
+        mediaPause: () => audio.pause(),
+        mediaResume: () => safePlay(audio),
+    }, crossfadeSeconds);
 }
 
 function advancePlaylist(playlist) {
@@ -287,6 +364,37 @@ export function stopBgm(fadeSeconds = 1.0) {
     const toStop = currentBgm;
     currentBgm = null;
     setTimeout(() => toStop.stop(), fadeSeconds * 1000 + 100);
+}
+
+// Called when the app itself loses foreground focus (native app-lifecycle events on MAUI heads,
+// via AppLifecycleAudioBridge — see its own remarks; document.visibilitychange directly on the web
+// build, below) — pauses the actual underlying <audio> element for whichever bgm is currently
+// playing, not just its gain (silencing gain alone leaves the element decoding/using battery in
+// the background, and doesn't stop it from being audible again the instant gain ramps back up
+// mid-transition). One-shot SFX and audio_track (explicit player-initiated narration playback)
+// are deliberately untouched — this is scoped to ambient background music only.
+export function pauseBgmForBackground() {
+    if (backgroundPaused) {
+        return;
+    }
+    backgroundPaused = true;
+    logAudio('pauseBgmForBackground, currentBgm.url =', currentBgm?.url ?? null);
+    currentBgm?.mediaPause?.();
+}
+
+export function resumeBgmFromBackground() {
+    if (!backgroundPaused) {
+        return;
+    }
+    backgroundPaused = false;
+    logAudio('resumeBgmFromBackground, currentBgm.url =', currentBgm?.url ?? null);
+    // Covers both "was actually paused" and "was created while backgrounded and never started at
+    // all" (makeLoopingSource/playCurrentPlaylistTrack's own backgroundPaused guard) — mediaResume
+    // is safePlay() either way, idempotent if the element happens to already be playing.
+    currentBgm?.mediaResume?.();
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
 }
 
 export function playSfx(url) {

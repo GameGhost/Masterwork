@@ -28,6 +28,19 @@ public interface IAudioPlayer
     /// <summary>Fades out and stops the current background track or playlist, if any.</summary>
     Task StopBgmAsync();
 
+    /// <summary>
+    /// Pauses whatever background music is currently playing because the app itself has lost
+    /// foreground focus (backgrounded on mobile, deactivated on desktop, or the browser tab
+    /// hidden on the web build) — not a player action, so it doesn't clear <c>StopBgmAsync</c>'s
+    /// own "nothing playing" state; the same track resumes from where it left off via
+    /// <see cref="ResumeBgmFromBackgroundAsync"/>. One-shot SFX and <c>audio_track</c> (explicit
+    /// player-initiated narration playback) are untouched — scoped to ambient background music only.
+    /// </summary>
+    Task PauseBgmForBackgroundAsync();
+
+    /// <summary>Resumes background music paused by <see cref="PauseBgmForBackgroundAsync"/> once the app regains foreground focus. No-op if nothing was paused that way.</summary>
+    Task ResumeBgmFromBackgroundAsync();
+
     /// <summary>Plays a one-shot sound effect.</summary>
     Task PlaySfxAsync(string? url);
 

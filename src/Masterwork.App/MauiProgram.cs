@@ -62,7 +62,21 @@ public static class MauiProgram
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the
         // exact log location.
-        builder.Logging.AddMasterworkFileLogger(Path.Combine(FileSystem.AppDataDirectory, "logs"));
+        //
+        // Android specifically uses the app's external-files directory (Android/data/<package>/files),
+        // not FileSystem.AppDataDirectory's private internal storage (Context.FilesDir) — the latter
+        // needs `adb shell run-as` to reach at all, which a player reporting a bug can't be expected
+        // to have; the external-files directory needs no special permission for the app's own files
+        // (unlike shared/public storage) and is visible via USB/MTP from a PC. Falls back to
+        // AppDataDirectory only if external storage genuinely isn't mounted (GetExternalFilesDir
+        // returning null), which the Android docs allow for but is vanishingly rare on a real device.
+#if ANDROID
+        var logRoot = Android.App.Application.Context.GetExternalFilesDir(null)?.AbsolutePath
+            ?? FileSystem.AppDataDirectory;
+#else
+        var logRoot = FileSystem.AppDataDirectory;
+#endif
+        builder.Logging.AddMasterworkFileLogger(Path.Combine(logRoot, "logs"));
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();
@@ -99,10 +113,44 @@ public static class MauiProgram
                 // See MainWindowState's own remarks — MauiModuleFilePicker needs this WindowId to
                 // associate the native file picker with this window.
                 Masterwork.App.Platforms.Windows.MainWindowState.Initialize(windowId);
+
+                // Desktop has no true OS-level "backgrounded" concept the way mobile does — window
+                // focus loss (alt-tab, clicking another window) is the closest real signal, so
+                // that's what AppLifecycleAudioBridge pauses/resumes on here. Deliberately not tied
+                // to minimize/restore specifically: WinUI doesn't expose a dedicated minimize event
+                // on Window itself, and Activated already covers the common case. Revisit if pausing
+                // on every focus loss (not just minimizing) turns out to feel too aggressive.
+                window.Activated += (_, args) =>
+                {
+                    if (args.WindowActivationState == Microsoft.UI.Xaml.WindowActivationState.Deactivated)
+                    {
+                        AppLifecycleAudioBridge.OnBackgrounded();
+                    }
+                    else
+                    {
+                        AppLifecycleAudioBridge.OnForegrounded();
+                    }
+                };
             }));
         });
 #endif
 
-        return builder.Build();
+#if ANDROID
+        builder.ConfigureLifecycleEvents(events =>
+        {
+            events.AddAndroid(android => android
+                .OnPause(_ => AppLifecycleAudioBridge.OnBackgrounded())
+                .OnResume(_ => AppLifecycleAudioBridge.OnForegrounded()));
+        });
+#endif
+
+        var app = builder.Build();
+
+        // Routes audio.js's own diagnostic trail into the same file log configured above — see
+        // JsAudioLogBridge's own remarks for why this needs to be a static bridge rather than a
+        // per-component DotNetObjectReference.
+        JsAudioLogBridge.Configure(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("audio.js"));
+
+        return app;
     }
 }

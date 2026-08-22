@@ -29,6 +29,8 @@ public class AudioCoordinatorTests
         public Task PlayBgmAsync(string? url) => Task.CompletedTask;
         public Task PlayBgmPlaylistAsync(IReadOnlyList<string> urls, string order) => Task.CompletedTask;
         public Task StopBgmAsync() => Task.CompletedTask;
+        public Task PauseBgmForBackgroundAsync() => Task.CompletedTask;
+        public Task ResumeBgmFromBackgroundAsync() => Task.CompletedTask;
         public Task SetAmbientOnlyAsync(bool ambientOnly) => Task.CompletedTask;
         public Task SetBgmVolumeAsync(double volume) => Task.CompletedTask;
         public Task SetBgmMutedAsync(bool muted) => Task.CompletedTask;

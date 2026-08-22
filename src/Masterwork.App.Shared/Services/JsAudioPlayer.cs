@@ -37,6 +37,20 @@ public sealed class JsAudioPlayer(IJSRuntime js) : IAudioPlayer, IAsyncDisposabl
     }
 
     /// <inheritdoc/>
+    public async Task PauseBgmForBackgroundAsync()
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("pauseBgmForBackground");
+    }
+
+    /// <inheritdoc/>
+    public async Task ResumeBgmFromBackgroundAsync()
+    {
+        var module = await ModuleAsync();
+        await module.InvokeVoidAsync("resumeBgmFromBackground");
+    }
+
+    /// <inheritdoc/>
     public async Task PlaySfxAsync(string? url)
     {
         if (url is null)
