@@ -75,6 +75,16 @@ public sealed record ModuleManifest
     /// <summary>Content languages this module ships restext for (from the top-level <c>languages:</c> list). Empty if not declared.</summary>
     public IReadOnlyList<string> Languages { get; init; } = [];
 
+    /// <summary>
+    /// This module's own default content locale — the fallback target for both localized-field
+    /// resolution (<see cref="Title"/>, <see cref="Description"/>, <see cref="ModuleInfo.Playtime"/>)
+    /// and per-key restext fallback when the player's preferred locale is missing an entry.
+    /// Declared via the top-level <c>default_locale:</c> field; defaults to
+    /// <see cref="ModuleLocales.Default"/> (<c>en-US</c>) when omitted, so a module with no such
+    /// field needs no changes.
+    /// </summary>
+    public string DefaultLocale { get; init; } = ModuleLocales.Default;
+
     /// <summary>Module-select thumbnail, if declared.</summary>
     public ModuleThumbnail? Thumbnail { get; init; }
 

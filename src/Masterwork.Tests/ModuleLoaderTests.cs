@@ -582,6 +582,134 @@ public class ModuleLoaderTests
         Assert.Equal("She said \"hi\" today", session.CurrentRender.Title);
     }
 
+    // ── per-key restext fallback across preferred/default locale ────────────
+
+    [Fact]
+    public void LoadFromSources_PreferredLocaleHasKey_PreferredValueWinsOverDefault()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Greeting'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            defaultRestextText: "Greeting=Hello\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Bonjour", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_KeyMissingFromPreferredLocale_FallsBackToDefaultLocaleValue()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://OnlyInDefault'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            defaultRestextText: "Greeting=Hello\nOnlyInDefault=Fallback text\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Fallback text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_KeyMissingFromBothLocales_StillWarnsAndLeavesRawRestextUri()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Missing'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            defaultRestextText: "Greeting=Hello\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("restext://Missing", text.Value);
+        Assert.Contains(module.Warnings.Items, w => w.Message.Contains("Missing"));
+    }
+
+    [Fact]
+    public void LoadFromSources_DefaultRestextOverrideText_MergesIntoFallbackBeforeOverlay()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://OnlyInDefault'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            defaultRestextText: "Greeting=Hello\nOnlyInDefault=Base fallback\n",
+            defaultRestextOverrideText: "OnlyInDefault=Overridden fallback\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Overridden fallback", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_NoDefaultRestextText_PreservesOldBehavior_RawUriForMissingKey()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Missing'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("restext://Missing", text.Value);
+    }
+
     [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {

@@ -103,14 +103,32 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         var meta = await jsModule.InvokeAsync<ModuleMetaRecord?>("getModuleMeta", moduleId)
             ?? throw new InvalidOperationException($"Module '{moduleId}' is not installed.");
 
-        var resolvedLocale = ModuleLocales.SelectLocale(meta.RestextByLocale, locale);
+        // Read ahead of restext selection so a module's own manifest-declared default_locale (if
+        // any) is what SelectLocale/the per-key fallback below fall back to — see FileModuleStore's
+        // own identical block for the full reasoning.
+        var defaultLocale = meta.ManifestYaml is not null
+            ? new ManifestParser().Parse(meta.ManifestYaml).DefaultLocale
+            : ModuleLocales.Default;
+
+        var resolvedLocale = ModuleLocales.SelectLocale(meta.RestextByLocale, locale, defaultLocale);
         var restext = resolvedLocale is not null ? meta.RestextByLocale[resolvedLocale] : null;
         var restextOverride = resolvedLocale is not null
             ? meta.RestextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
+
+        // Per-key restext fallback — only meaningful when the resolved locale isn't already the
+        // module's own default.
+        string? defaultRestext = null;
+        string? defaultRestextOverride = null;
+        if (resolvedLocale != defaultLocale && meta.RestextByLocale.TryGetValue(defaultLocale, out var defaultText))
+        {
+            defaultRestext = defaultText;
+            defaultRestextOverride = meta.RestextOverridesByLocale.GetValueOrDefault(defaultLocale);
+        }
+
         var loadedModule = loader.LoadFromSources(
             meta.PassageYamls, meta.VariablesYaml, restext, meta.OverridePassageYamls, restextOverride,
-            meta.LayoutYamls, meta.AdditionalVariableYamls);
+            meta.LayoutYamls, meta.AdditionalVariableYamls, defaultRestext, defaultRestextOverride);
 
         var assets = new IndexedDbModuleAssetSource(jsModule, moduleId);
         return await LoadedModuleContent.BuildAsync(loadedModule, meta.ManifestYaml, assets);

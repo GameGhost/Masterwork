@@ -29,6 +29,11 @@ public sealed class ManifestParser : IManifestParser
         stream.Load(new StringReader(yamlText));
         var root = (YamlMappingNode)stream.Documents[0].RootNode;
 
+        // Read before any localized field below, so a module's own custom default_locale (rather
+        // than the hardcoded ModuleLocales.Default) is what title/description/playtime fall back to
+        // when preferredLocale doesn't have an entry.
+        var defaultLocale = root.GetString("default_locale", ctx) ?? ModuleLocales.Default;
+
         var dependencies = new List<ModuleDependency>();
         if (root.GetSequence("dependencies", ctx) is { } seq)
         {
@@ -68,7 +73,7 @@ public sealed class ManifestParser : IManifestParser
             {
                 PlayersMin = infoMap.GetInt("players-min", ctx),
                 PlayersMax = infoMap.GetInt("players-max", ctx),
-                Playtime = GetOptionalLocalizedString(infoMap, "playtime", ctx, preferredLocale),
+                Playtime = GetOptionalLocalizedString(infoMap, "playtime", ctx, preferredLocale, defaultLocale),
             };
             infoMap.WarnUnmatchedFields(ctx, "info", "players-min", "players-max", "playtime");
         }
@@ -114,10 +119,10 @@ public sealed class ManifestParser : IManifestParser
         var manifest = new ModuleManifest
         {
             Id = root.GetRequiredString("id", ctx),
-            Title = GetRequiredLocalizedString(root, "title", ctx, preferredLocale),
+            Title = GetRequiredLocalizedString(root, "title", ctx, preferredLocale, defaultLocale),
             Version = root.GetRequiredString("version", ctx),
             ModuleType = root.GetString("type", ctx) ?? "original_scenario",
-            Description = GetOptionalLocalizedString(root, "description", ctx, preferredLocale),
+            Description = GetOptionalLocalizedString(root, "description", ctx, preferredLocale, defaultLocale),
             Dependencies = dependencies,
             Languages = root.GetStringList("languages", ctx),
             Thumbnail = thumbnail,
@@ -127,11 +132,13 @@ public sealed class ManifestParser : IManifestParser
             PassagesPath = root.GetString("passages", ctx) ?? "passages",
             PassagesOverridePath = root.GetString("passages_override", ctx) ?? "passages-override",
             StylePath = root.GetString("style", ctx) ?? "assets/style.css",
+            DefaultLocale = defaultLocale,
         };
 
         root.WarnUnmatchedFields(ctx, "manifest.yaml",
             "id", "title", "version", "type", "description", "dependencies",
-            "languages", "thumbnail", "info", "audio", "entry", "passages", "passages_override", "style");
+            "languages", "thumbnail", "info", "audio", "entry", "passages", "passages_override", "style",
+            "default_locale");
 
         _logger.LogDebug("Parsed manifest '{Id}' v{Version} ({DependencyCount} dependencies)", manifest.Id, manifest.Version, dependencies.Count);
         return manifest;
@@ -139,9 +146,10 @@ public sealed class ManifestParser : IManifestParser
 
     // `title`/`description`/`info.playtime` may be a plain scalar (simple single-language modules)
     // or a localized list (`- en-US: 'The Cost of Disease'`, one or more locale:value entries per
-    // list item). Resolves to preferredLocale, falling back to ModuleLocales.Default, then to
-    // whichever locale is actually present.
-    private static string? ResolveLocalizedOrPlainString(YamlNode node, string key, YamlParseContext ctx, string? preferredLocale)
+    // list item). Resolves to preferredLocale, falling back to the manifest's own defaultLocale
+    // (itself ModuleLocales.Default unless overridden by default_locale:), then to whichever locale
+    // is actually present.
+    private static string? ResolveLocalizedOrPlainString(YamlNode node, string key, YamlParseContext ctx, string? preferredLocale, string defaultLocale)
     {
         if (node is YamlScalarNode s)
         {
@@ -181,10 +189,10 @@ public sealed class ManifestParser : IManifestParser
             return preferred;
         }
 
-        return localized.TryGetValue(ModuleLocales.Default, out var fallback) ? fallback : localized.Values.First();
+        return localized.TryGetValue(defaultLocale, out var fallback) ? fallback : localized.Values.First();
     }
 
-    private static string GetRequiredLocalizedString(YamlMappingNode map, string key, YamlParseContext ctx, string? preferredLocale)
+    private static string GetRequiredLocalizedString(YamlMappingNode map, string key, YamlParseContext ctx, string? preferredLocale, string defaultLocale)
     {
         var node = map.TryGet(key);
         if (node is null)
@@ -192,7 +200,7 @@ public sealed class ManifestParser : IManifestParser
             throw new MwsParseException($"{ctx.Source}: missing required field '{key}'");
         }
 
-        var value = ResolveLocalizedOrPlainString(node, key, ctx, preferredLocale);
+        var value = ResolveLocalizedOrPlainString(node, key, ctx, preferredLocale, defaultLocale);
         if (value is null)
         {
             throw new MwsParseException($"{ctx.Source}: field '{key}' must be a text value or a localized list but found a {YamlNodeExtensions.DescribeKind(node)}");
@@ -201,7 +209,7 @@ public sealed class ManifestParser : IManifestParser
         return value;
     }
 
-    private static string? GetOptionalLocalizedString(YamlMappingNode map, string key, YamlParseContext ctx, string? preferredLocale)
+    private static string? GetOptionalLocalizedString(YamlMappingNode map, string key, YamlParseContext ctx, string? preferredLocale, string defaultLocale)
     {
         var node = map.TryGet(key);
         if (node is null)
@@ -209,7 +217,7 @@ public sealed class ManifestParser : IManifestParser
             return null;
         }
 
-        var value = ResolveLocalizedOrPlainString(node, key, ctx, preferredLocale);
+        var value = ResolveLocalizedOrPlainString(node, key, ctx, preferredLocale, defaultLocale);
         if (value is null)
         {
             ctx.Warn("wrong_field_type", $"field '{key}' expected a text value or a localized list but found a {YamlNodeExtensions.DescribeKind(node)}; ignoring it");

@@ -65,15 +65,35 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
             ? await ReadAllTextFilesAsync(additionalVariablesDir, "*.yaml")
             : [];
 
+        // Read ahead of restext selection so a module's own manifest-declared default_locale (if
+        // any) is what SelectLocale/the per-key fallback below fall back to, not the hardcoded
+        // ModuleLocales.Default. Re-parsed again below (for style/entry) rather than threaded
+        // through — manifest parsing is cheap and this mirrors InstallAsync's own separate parse.
+        var defaultLocale = manifestYaml is not null
+            ? new ManifestParser().Parse(manifestYaml).DefaultLocale
+            : ModuleLocales.Default;
+
         var (restextByLocale, restextOverridesByLocale) = ReadRestextFiles(moduleDir);
-        var resolvedLocale = ModuleLocales.SelectLocale(restextByLocale, locale);
+        var resolvedLocale = ModuleLocales.SelectLocale(restextByLocale, locale, defaultLocale);
         var restext = resolvedLocale is not null ? restextByLocale[resolvedLocale] : null;
         var restextOverride = resolvedLocale is not null
             ? restextOverridesByLocale.GetValueOrDefault(resolvedLocale)
             : null;
 
+        // Per-key restext fallback — only meaningful when the resolved locale isn't already the
+        // module's own default; passing the same text twice would just be a harmless no-op merge
+        // inside LoadFromSources, but skipping it here avoids a redundant parse.
+        string? defaultRestext = null;
+        string? defaultRestextOverride = null;
+        if (resolvedLocale != defaultLocale && restextByLocale.TryGetValue(defaultLocale, out var defaultText))
+        {
+            defaultRestext = defaultText;
+            defaultRestextOverride = restextOverridesByLocale.GetValueOrDefault(defaultLocale);
+        }
+
         var module = loader.LoadFromSources(
-            passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride, layoutYamls, additionalVariableYamls);
+            passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride, layoutYamls, additionalVariableYamls,
+            defaultRestext, defaultRestextOverride);
 
         var assets = new FileModuleAssetSource(moduleDir);
         return await LoadedModuleContent.BuildAsync(module, manifestYaml, assets);

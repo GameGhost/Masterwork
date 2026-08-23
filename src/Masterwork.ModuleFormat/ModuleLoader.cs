@@ -123,7 +123,8 @@ public sealed class ModuleLoader : IModuleLoader
     public LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
-        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null)
+        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null,
+        string? defaultRestextText = null, string? defaultRestextOverrideText = null)
     {
         var warnings = new ModuleWarnings();
 
@@ -160,6 +161,36 @@ public sealed class ModuleLoader : IModuleLoader
             }
 
             locale = mergedLocale;
+        }
+
+        // Per-key restext fallback: without this, a preferred locale that's missing even one key
+        // resolves that one key to a raw, unresolved
+        // "restext://Key" string spliced directly into player-facing text — not an error, not a
+        // fallback to the module's default-language text, just a literal URI leaking into the UI.
+        // Built as: start from the default locale's own (base+override-merged) dictionary, then
+        // overlay every one of the preferred locale's own entries on top — so any key the
+        // preferred locale genuinely has wins, and only a key it's actually missing falls through
+        // to the default's value. A no-op whenever the caller has nothing to fall back to (e.g.
+        // LoadFromDirectory, which only ever resolves a single locale to begin with, or a preferred
+        // locale that already *is* the default) — RestextResolver's own missing-key
+        // warning/raw-string behavior is unchanged for a key absent from both dictionaries.
+        if (defaultRestextText is not null)
+        {
+            var defaultLocale = new Dictionary<string, string>(_restextFile.Parse(defaultRestextText), StringComparer.Ordinal);
+            if (defaultRestextOverrideText is not null)
+            {
+                foreach (var (key, value) in _restextFile.Parse(defaultRestextOverrideText))
+                {
+                    defaultLocale[key] = value;
+                }
+            }
+
+            foreach (var (key, value) in locale)
+            {
+                defaultLocale[key] = value;
+            }
+
+            locale = defaultLocale;
         }
 
         var passages = new Dictionary<string, MwsPassageDoc>();

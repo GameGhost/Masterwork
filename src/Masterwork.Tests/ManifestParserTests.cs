@@ -133,6 +133,51 @@ public class ManifestParserTests
         Assert.Equal("A village beset by fever.", manifest.Description);
     }
 
+    // ── default_locale: ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void DefaultLocale_NotDeclared_FallsBackToModuleLocalesDefault()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            """);
+
+        Assert.Equal(ModuleLocales.Default, manifest.DefaultLocale);
+    }
+
+    [Fact]
+    public void DefaultLocale_Declared_IsParsed()
+    {
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            default_locale: 'fr-FR'
+            """);
+
+        Assert.Equal("fr-FR", manifest.DefaultLocale);
+    }
+
+    [Fact]
+    public void DefaultLocale_Declared_IsLocalizedFieldFallbackTarget()
+    {
+        // Neither preferredLocale ("de-DE") nor ModuleLocales.Default ("en-US") has an entry — only
+        // the manifest's own declared default_locale ("fr-FR") does. Confirms the fallback chain
+        // actually consults the manifest's own default, not the hardcoded engine-wide one.
+        var manifest = new ManifestParser().Parse("""
+            id: 'x'
+            title:
+              - fr-FR: 'Le Titre'
+              - es: 'El Título'
+            version: '1.0.0'
+            default_locale: 'fr-FR'
+            """, preferredLocale: "de-DE");
+
+        Assert.Equal("Le Titre", manifest.Title);
+    }
+
     [Fact]
     public void ParsesThumbnailInfoEntryAndPassagePaths()
     {

@@ -32,6 +32,20 @@ public class ModuleLocalesTests
     }
 
     [Fact]
+    public void SelectRestext_CustomDefaultLocale_UsedWhenPreferredMissing()
+    {
+        var byLocale = new Dictionary<string, string> { ["fr-FR"] = "fr", ["es"] = "es-text" };
+        Assert.Equal("fr", ModuleLocales.SelectRestext(byLocale, "de-DE", defaultLocale: "fr-FR"));
+    }
+
+    [Fact]
+    public void SelectLocale_CustomDefaultLocale_NotFoundInPresentLocales_FallsBackToWhateverExists()
+    {
+        var byLocale = new Dictionary<string, string> { ["es"] = "es-text" };
+        Assert.Equal("es", ModuleLocales.SelectLocale(byLocale, "de-DE", defaultLocale: "fr-FR"));
+    }
+
+    [Fact]
     public void SortedLocales_EmptyMapDefaultsToDefaultLocale()
     {
         Assert.Equal([ModuleLocales.Default], ModuleLocales.SortedLocales(new Dictionary<string, string>()));

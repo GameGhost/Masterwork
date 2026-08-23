@@ -55,10 +55,27 @@ public interface IModuleLoader
     /// re-extraction without editing the extractor-owned <c>_variables.yaml</c>, and lets authors
     /// split declarations across multiple files by concern.
     /// </param>
+    /// <param name="defaultRestextText">
+    /// Raw <c>{ModuleLocales.Default}.restext</c> text, if the caller has already resolved a
+    /// *different*, non-default locale for <paramref name="restextText"/> — enables genuine
+    /// per-key fallback: a key present in <paramref name="restextText"/> (after
+    /// <paramref name="restextOverrideText"/> is merged on top of it) always wins, but a key
+    /// missing from it falls back to this dictionary's value instead of resolving to a raw,
+    /// unresolved <c>restext://Key</c> string. Omit (or pass the same text as
+    /// <paramref name="restextText"/>) when there's nothing to fall back to — e.g.
+    /// <see cref="LoadFromDirectory"/> never passes this, since it only ever resolves a single
+    /// locale to begin with.
+    /// </param>
+    /// <param name="defaultRestextOverrideText">
+    /// Raw <c>{ModuleLocales.Default}.overrides.restext</c> text, if any — merged into
+    /// <paramref name="defaultRestextText"/>'s entries the same way <paramref name="restextOverrideText"/>
+    /// merges into <paramref name="restextText"/>'s, before that dictionary is used as the fallback.
+    /// </param>
     LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
-        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null);
+        IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null,
+        string? defaultRestextText = null, string? defaultRestextOverrideText = null);
 
     /// <summary>
     /// Merges a dependency (typically an asset pack) into <paramref name="module"/> — its passages

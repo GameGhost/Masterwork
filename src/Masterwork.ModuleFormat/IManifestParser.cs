@@ -8,7 +8,8 @@ public interface IManifestParser
     /// <param name="warnings">Collector for unmatched/wrong-shaped field warnings. Pass <see langword="null"/> to discard them.</param>
     /// <param name="preferredLocale">
     /// Locale to resolve localized fields (<c>title</c>, <c>description</c>, <c>info.playtime</c>)
-    /// against, e.g. <c>"es"</c>. Falls back to <see cref="ModuleLocales.Default"/>, then to
+    /// against, e.g. <c>"es"</c>. Falls back to the manifest's own <see cref="ModuleManifest.DefaultLocale"/>
+    /// (<c>default_locale:</c>, itself <see cref="ModuleLocales.Default"/> unless declared), then to
     /// whichever locale the field actually has, if <see langword="null"/> or not present.
     /// </param>
     ModuleManifest Parse(string yamlText, ModuleWarnings? warnings = null, string? preferredLocale = null);

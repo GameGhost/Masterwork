@@ -232,6 +232,16 @@ Common_027=Unified Monarchists
 - Lines starting with `#` are comments; blank lines are ignored
 - Keys are case-sensitive; no spaces around `=`
 
+**Locale selection and fallback:** a module may ship more than one `{culture}.restext` file. The
+player's preferred locale is selected if the module has one, else the module's own default locale
+(`en-US`, unless the module's `manifest.yaml` declares a top-level `default_locale:` string to use
+instead), else whichever locale is actually present. Selection is **per key**, not per file: if the
+preferred locale's file is missing a key that the module's default-locale file has, that key falls
+back to the default locale's value rather than resolving to a raw, unresolved `restext://Key` string.
+A key missing from both still resolves to the raw URI (and logs a load-time warning), same as a
+single-locale module today. This fallback only ever applies when the preferred locale isn't already
+the default — a module's default-locale file is expected to be complete.
+
 ---
 
 ## 4. String and Expression Encoding
