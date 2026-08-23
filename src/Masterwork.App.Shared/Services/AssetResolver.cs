@@ -194,10 +194,10 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         {
             // The one deliberately-missing case this covers today: The Cost of Disease's
             // GloomyWolvesIntro has no real female VO take — its audio_track still references
-            // audio://vo/gloomywolvesintro_f so the gap is visible
-            // and diagnosable, rather than silently omitting the node. Callers (RenderedAudioTrackView)
-            // already degrade gracefully on a null resolution — disabled controls, 0:00/0:00 — this
-            // warning is purely for anyone reading the log to understand why.
+            // audio://vo/gloomywolvesintro_f so the gap is visible and diagnosable, rather than
+            // silently omitting the node. Callers (RenderedAudioTrackView) already degrade
+            // gracefully on a null resolution — disabled controls, 0:00/0:00 — this warning is
+            // purely for anyone reading the log to understand why.
             _logger.LogWarning("Could not resolve audio asset 'audio://{Slug}' — no matching file in the loaded module's assets/audio/", slug);
         }
 
