@@ -632,7 +632,7 @@
     // Compares the uploaded manifest's version against what's already installed under the same id
     // and prepares an appropriately-worded confirm prompt — same content is a no-op-ish notice, an
     // upgrade/downgrade gets a warning scaled to the risk, mentioning existing saves if there are any
-    // (masterwork-plan-rev14's upload-conflict design, added after manual testing surfaced the need).
+    // (added after manual testing surfaced the need).
     private async Task PrepareConflictPromptAsync(byte[] bytes, string sha256, ModuleManifest manifest, InstalledModule existing)
     {
         var saveCount = (await SaveStore.ListAsync()).Count(s => s.ModuleId == manifest.Id);

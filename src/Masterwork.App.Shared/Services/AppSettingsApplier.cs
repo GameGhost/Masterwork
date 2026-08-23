@@ -39,8 +39,7 @@ public static class AppSettingsApplier
     /// <see cref="CultureInfo.CurrentCulture"/>/<see cref="CultureInfo.CurrentUICulture"/> are
     /// genuinely per-thread, not per-SynchronizationContext, so a change made on the thread that
     /// handled an Options "Apply" click doesn't reliably reach whichever thread later renders the
-    /// page (this is what broke live language switching on Windows/Android — see
-    /// masterwork-plan-rev19.md).
+    /// page (this is what broke live language switching on Windows/Android).
     ///
     /// Called via <c>@{ ReassertCulture(); }</c> at the top of every page and every independently-
     /// re-rendering chrome component (<c>OptionsDialog</c>, <c>PauseBar</c>) —

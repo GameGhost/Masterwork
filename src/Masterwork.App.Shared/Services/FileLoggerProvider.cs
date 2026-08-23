@@ -5,9 +5,9 @@ namespace Masterwork.App.Shared.Services;
 
 /// <summary>
 /// A minimal rolling-daily file logger — no external logging package, just enough to leave a trail
-/// on disk for diagnosing crashes a user hits before they can describe them (see MAUI's first-launch
-/// upload crash, masterwork-plan-rev14.md). Only usable where real file I/O exists: MAUI heads and
-/// the <c>Masterwork.App.Web</c> ASP.NET Core host. Not registered for <c>Masterwork.App.Web.Client</c>
+/// on disk for diagnosing crashes a user hits before they can describe them. Only usable where real
+/// file I/O exists: MAUI heads and the <c>Masterwork.App.Web</c> ASP.NET Core host. Not registered
+/// for <c>Masterwork.App.Web.Client</c>
 /// (WASM) — there's no filesystem in the browser sandbox; the browser console is the log there.
 /// </summary>
 public sealed class FileLoggerProvider : ILoggerProvider

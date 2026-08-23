@@ -873,7 +873,7 @@ public sealed class GameSession
 
     // "${module::entrypoint}" is a special sentinel, not an ordinary expression — it's how a shared
     // asset-pack onboarding flow's final goto/navigation reaches the loaded module's own Begins-Here
-    // passage without hardcoding a passage id it can't know in advance (masterwork-plan-rev14.md Q24).
+    // passage without hardcoding a passage id it can't know in advance.
     private const string ModuleEntrypointTarget = "${module::entrypoint}";
 
     // "app::gameover" — a module-authored signal that this playthrough is complete, distinct from

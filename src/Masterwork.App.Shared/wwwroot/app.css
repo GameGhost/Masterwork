@@ -780,7 +780,7 @@ body {
 }
 
 /* Web-only: shown in Components/App.razor while the WASM bundle downloads and boots (prerendering
-   is off — see masterwork-plan-rev17.md), removed once Blazor.start() resolves. Structural only —
+   is off), removed once Blazor.start() resolves. Structural only —
    same split as .mws-main-menu: colors/logo/tagline art come from the theme's own theme.css
    (.mws-splash / .mws-splash-logo / .mws-splash-tagline), not from here. */
 .mws-splash {

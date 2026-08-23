@@ -1,11 +1,10 @@
 namespace Masterwork.ModuleFormat;
 
 /// <summary>
-/// Module-content locale fallback (masterwork-plan Section 11): player's preferred module language
-/// → the module's own default locale (<see cref="ModuleManifest.DefaultLocale"/>, itself
-/// <see cref="Default"/> unless the manifest declares <c>default_locale:</c>) → whatever's actually
-/// there. Distinct from the app-shell's own UI language (Section 13/Milestone A.1), which is a
-/// separate setting entirely.
+/// Module-content locale fallback: player's preferred module language → the module's own default
+/// locale (<see cref="ModuleManifest.DefaultLocale"/>, itself <see cref="Default"/> unless the
+/// manifest declares <c>default_locale:</c>) → whatever's actually there. Distinct from the
+/// app-shell's own UI language, which is a separate setting entirely.
 /// </summary>
 public static class ModuleLocales
 {

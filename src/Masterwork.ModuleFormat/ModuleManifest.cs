@@ -63,7 +63,7 @@ public sealed record ModuleManifest
     /// <summary>Semver-ish version string.</summary>
     public required string Version { get; init; }
 
-    /// <summary>One of the module types from masterwork-plan's Section 8 (<c>original_scenario</c>, <c>asset_pack</c>, etc.). Defaults to <c>original_scenario</c>.</summary>
+    /// <summary>One of the module types (<c>original_scenario</c>, <c>asset_pack</c>, etc.). Defaults to <c>original_scenario</c>.</summary>
     public string ModuleType { get; init; } = "original_scenario";
 
     /// <summary>Human-readable description, resolved to the requested/default locale, shown in the Start New Game module detail panel. <c>description:</c> may be a plain string or a localized list, same as <see cref="Title"/>.</summary>
@@ -95,7 +95,7 @@ public sealed record ModuleManifest
     public ModuleAudioManifest? Audio { get; init; }
 
     /// <summary>
-    /// Entry passage id (masterwork-plan §9), if declared. Authoritative over the <c>Begins-Here</c>
+    /// Entry passage id, if declared. Authoritative over the <c>Begins-Here</c>
     /// tag scan <see cref="ModuleLoader"/> falls back to — <c>LoadedModuleContent.BuildAsync</c>
     /// (Masterwork.App.Shared) overrides <see cref="LoadedModule.StartPassageId"/> with this value
     /// when it names a real passage, since <see cref="ModuleLoader"/> itself has no manifest

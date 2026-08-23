@@ -282,9 +282,9 @@ public class AssetResolverTests
     [Fact]
     public async Task UnresolvedAudio_LogsWarningWithSlug()
     {
-        // Covers GloomyWolvesIntro's deliberately-missing female take (Q33, masterwork-plan-rev23.md)
-        // — the caller (RenderedAudioTrackView) already degrades gracefully on the null return; this
-        // is purely so the gap is diagnosable from the log rather than silently invisible.
+        // Covers GloomyWolvesIntro's deliberately-missing female take — the caller
+        // (RenderedAudioTrackView) already degrades gracefully on the null return; this is purely so
+        // the gap is diagnosable from the log rather than silently invisible.
         var log = new CapturingLogger<AssetResolver>();
         var resolver = new AssetResolver(new GameSessionState(), log);
 

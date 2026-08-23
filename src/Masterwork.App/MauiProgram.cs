@@ -60,8 +60,7 @@ public static class MauiProgram
             clickSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/click.ogg"));
 
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
-        // attempt crashed with no on-screen error (masterwork-plan-rev14.md). See CLAUDE.md for the
-        // exact log location.
+        // attempt crashed with no on-screen error. See CLAUDE.md for the exact log location.
         //
         // Android specifically uses the app's external-files directory (Android/data/<package>/files),
         // not FileSystem.AppDataDirectory's private internal storage (Context.FilesDir) — the latter

@@ -150,7 +150,7 @@
             // is genuinely on screen now. Tying splash removal to this instead of Blazor.start()'s
             // own promise is deliberate: that promise was found to resolve before the app's first
             // real render, leaving a blank-white gap between the splash disappearing and content
-            // appearing (see masterwork-plan-rev18.md).
+            // appearing.
             _splashHidden = true;
             await JS.InvokeVoidAsync("mwsHideSplash");
         }

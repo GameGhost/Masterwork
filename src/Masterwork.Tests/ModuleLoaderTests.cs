@@ -6,7 +6,7 @@ namespace Masterwork.Tests;
 
 public class ModuleLoaderTests
 {
-    // ── module::entrypoint (masterwork-plan-rev14.md Q24) ───────────────────
+    // ── module::entrypoint ────────────────────────────────────────────────
 
     [Fact]
     public async Task ModuleEntrypoint_NavigationTarget_ResolvesToModuleStartPassage()

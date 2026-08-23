@@ -106,8 +106,7 @@ public static partial class V2Serializer
         // per-passage JSON needed, unlike VO: every occurrence plays the identical fixed sound,
         // so the trigger condition alone is enough). Matches the original app's own
         // ViewSpecialEvent.clip, fired via SoundManager.Instance.OnOpenPopupPlayAudio(clip) the
-        // instant the overlay appears — audio-survey-new-sfx.md confirmed this GUID resolves
-        // cleanly in Main.unity, a gap the original audio-inventory.md survey missed entirely.
+        // instant the overlay appears — confirmed this GUID resolves cleanly in Main.unity.
         // Safe to key off bodyNodes' own leading position: confirmed live (grep) that every real
         // occurrence across all three modules has the special-event marker as the passage's own
         // first node, so passage-level on_display exactly matches "plays once when this passage,

@@ -1261,7 +1261,7 @@ public partial class CradleExtractor
         // trigger is handled at the call site itself — see PassageBodyVisitor.IsShowEventPopupCall.
 
         // Cradle tag "INTRO" marks a generation-opening passage — visually distinct in the
-        // reference app from ordinary narration (see masterwork-plan notes on layout survey).
+        // reference app from ordinary narration.
         if (tags.Any(t => t.Equals("INTRO", StringComparison.OrdinalIgnoreCase)))
         {
             return "introduction";

@@ -19,7 +19,7 @@ public sealed class PreferencesAppSettingsStore : IAppSettingsStore
     /// thing in <c>MauiProgram.CreateMauiApp()</c>, before the host is built and the first render
     /// happens. <see cref="Preferences"/> is synchronous, unlike <see cref="LoadAsync"/>'s async
     /// contract, which is what makes this possible: without it, the main view always paints once in
-    /// English regardless of what's saved (see masterwork-plan-rev17.md).
+    /// English regardless of what's saved.
     /// </summary>
     public static void ApplyStartupCulture() =>
         AppSettingsApplier.ApplyCulture(Preferences.Get(UiLocaleKey, AppSettings.Default.UiLocale));

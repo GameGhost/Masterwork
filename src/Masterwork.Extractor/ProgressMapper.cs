@@ -5,8 +5,8 @@ namespace Masterwork.Extractor;
 // Loads an external per-passage-name classification map (--progress-map): a layout override and/or
 // a progress-tracker value, keyed by the passage name a source file's PassageTracker.instance
 // calls/tags use. Two independent, module-agnostic concerns share one file because in practice
-// (Cost of Disease) they cover the same passage names — see docs/mws-format-latest.md and
-// masterwork-plan notes on the progress-bar survey for the reference-app mechanism this reproduces.
+// (Cost of Disease) they cover the same passage names — see docs/mws-format-latest.md for the
+// reference-app mechanism this reproduces.
 public class ProgressMapper
 {
     private sealed record Entry(string? Layout, int? Progress, bool HasProgressField, string? EndOfRoundBody, string? EndOfRoundBody2);

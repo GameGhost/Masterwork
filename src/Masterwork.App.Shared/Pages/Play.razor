@@ -250,7 +250,7 @@ else
     }
 
     // Continuously updates the module's autosave while playing live (not while just reviewing
-    // history via the timeline scrubber) — see masterwork-plan-rev13.md Section 13's save model.
+    // history via the timeline scrubber).
     private async Task PersistAutosaveAsync()
     {
         if (State.Session is null || State.ModuleId is null || State.Session.IsRewound)

@@ -390,7 +390,7 @@ public sealed class PassageRenderer : IPassageRenderer
     }
 
     // "${module::entrypoint}" is a special sentinel, not an ordinary expression — see the same
-    // constant/comment on GameSession.ResolveTarget (masterwork-plan-rev14.md Q24).
+    // constant/comment on GameSession.ResolveTarget.
     private const string ModuleEntrypointTarget = "${module::entrypoint}";
 
     // Resolves a target field immediately: strips the "${...}" wrapper and evaluates it if present,

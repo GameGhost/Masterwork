@@ -27,8 +27,8 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
     private readonly Dictionary<string, string?> _cache = new(StringComparer.Ordinal);
     private IModuleAssetSource? _cachedForAssets;
 
-    // Stand-in for the MFW_Common_Assets dependency pack, which doesn't exist until asset packs are
-    // unshelved (masterwork-plan Q27). These are small hand-authored placeholder SVGs
+    // Stand-in for the MFW_Common_Assets dependency pack, which doesn't exist until real asset-pack
+    // support is built. These are small hand-authored placeholder SVGs
     // (wwwroot/assets/test-pack/), not derived from any copyrighted source — real assets are a
     // drop-in replacement, same slugs. icon:// only; image:// has no placeholder pack.
     private static readonly IReadOnlyDictionary<string, string> TestAssetPack = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -193,8 +193,8 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         if (bundleLocal is null)
         {
             // The one deliberately-missing case this covers today: The Cost of Disease's
-            // GloomyWolvesIntro has no real female VO take (Q33, masterwork-plan-rev23.md) — its
-            // audio_track still references audio://vo/gloomywolvesintro_f so the gap is visible
+            // GloomyWolvesIntro has no real female VO take — its audio_track still references
+            // audio://vo/gloomywolvesintro_f so the gap is visible
             // and diagnosable, rather than silently omitting the node. Callers (RenderedAudioTrackView)
             // already degrade gracefully on a null resolution — disabled controls, 0:00/0:00 — this
             // warning is purely for anyone reading the log to understand why.
