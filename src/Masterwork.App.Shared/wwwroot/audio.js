@@ -167,7 +167,22 @@ function attachUnlockListener() {
     }
     unlockListenerAttached = true;
 
+    // Real bug found via a player report: typing a name in onboarding made the WebView
+    // progressively laggier and then fully unresponsive. Root cause was here — `{ once: true }`
+    // only removes the ONE listener that actually fired, not its pointerdown/keydown sibling
+    // registered in the same call below, and the re-arm added below (attachUnlockListener() at
+    // the end of unlock()) then added a fresh pair on top of that permanently-orphaned sibling
+    // every single time. Typing is almost pure keydown traffic, so each keystroke left one more
+    // dangling pointerdown listener behind, invisibly (an unfired listener costs nothing) — until
+    // the player tapped the text field again to reposition the cursor, at which point every
+    // accumulated orphan fired at once, each independently re-arming and orphaning its own new
+    // sibling, compounding combinatorially. An AbortController shared by both listeners fixes
+    // this at the root: aborting removes both registrations together, from whichever one actually
+    // fired, so exactly one pointerdown+keydown pair ever exists at a time — matching the original
+    // "always ready for the next gesture" intent without ever leaving a stale duplicate behind.
+    const controller = new AbortController();
     const unlock = () => {
+        controller.abort();
         unlockListenerAttached = false;
         if (audioCtx && audioCtx.state === 'suspended') {
             logAudio('unlock() resuming suspended audioCtx on a real gesture');
@@ -186,8 +201,8 @@ function attachUnlockListener() {
         // page with no listener at all for the next tap.
         attachUnlockListener();
     };
-    document.addEventListener('pointerdown', unlock, { once: true });
-    document.addEventListener('keydown', unlock, { once: true });
+    document.addEventListener('pointerdown', unlock, { signal: controller.signal });
+    document.addEventListener('keydown', unlock, { signal: controller.signal });
 }
 
 // Unconditional — see this block's own remarks above for why reactive-only attachment (on a
