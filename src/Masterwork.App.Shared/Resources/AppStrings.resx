@@ -108,6 +108,18 @@
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Delete module + saves</value></data>
   <data name="ManageModules_DeleteModuleOnly" xml:space="preserve"><value>Delete module only</value></data>
 
+  <data name="ManageModules_AssetPacksHeading" xml:space="preserve"><value>Asset Packs</value></data>
+  <data name="ManageModules_UploadAssetPack" xml:space="preserve"><value>Add</value></data>
+  <data name="ManageModules_AssetPackSource_Auto" xml:space="preserve"><value>Automatic</value></data>
+  <data name="ManageModules_AssetPackSource_Manual" xml:space="preserve"><value>Manual</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmTitle" xml:space="preserve"><value>Delete this asset pack?</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmBody" xml:space="preserve"><value>No installed module depends on this asset pack.</value></data>
+  <data name="ManageModules_AssetPackHashMismatchTitle" xml:space="preserve"><value>Replace installed asset pack?</value></data>
+  <data name="ManageModules_AssetPackHashMismatchBody" xml:space="preserve"><value>A different file is already installed under this same id and version. Replacing it may affect modules that depend on it.</value></data>
+  <data name="ManageModules_InstallAnyway" xml:space="preserve"><value>Install anyway</value></data>
+  <data name="ManageModules_AssetPackUploadError_NoManifest" xml:space="preserve"><value>This file has no manifest.yaml and can't be installed.</value></data>
+  <data name="ManageModules_AssetPackUploadError_Generic" xml:space="preserve"><value>Couldn't install that asset pack: {0}</value></data>
+
   <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continue</value></data>
   <data name="ContinueList_Heading" xml:space="preserve"><value>Continue</value></data>
   <data name="ContinueList_Empty" xml:space="preserve"><value>No saved sessions yet.</value></data>

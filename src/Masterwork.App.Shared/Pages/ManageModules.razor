@@ -2,9 +2,12 @@
 @using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
+@using Masterwork.ModuleFormat
 @inject IModuleStore ModuleStore
+@inject IAssetPackStore AssetPackStore
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ManageModules_PageTitle</PageTitle>
@@ -30,6 +33,37 @@
         }
     </div>
 
+    <h2 class="mws-screen-title">@AppStrings.ManageModules_AssetPacksHeading</h2>
+
+    <div class="mws-module-toolbar">
+        <label for="mws-upload-asset-pack-input" class="mws-upload-button style-btn-brown">@AppStrings.ManageModules_UploadAssetPack</label>
+        <InputFile id="mws-upload-asset-pack-input" class="mws-visually-hidden" OnChange="OnAssetPackFileSelected"
+                   accept=".mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
+    </div>
+    @if (_assetPackUploadError is not null)
+    {
+        <p class="mws-version-warning">@_assetPackUploadError</p>
+    }
+
+    <div class="mws-manage-modules">
+        @foreach (var pack in _assetPacks)
+        {
+            <div class="mws-module-row">
+                <div class="mws-module-row-info">
+                    <strong>@pack.Title</strong>
+                    <span class="mws-module-version">v@(pack.Version)</span>
+                    <span class="mws-module-version">
+                        @(pack.InstallSource == AssetPackInstallSource.Auto ? AppStrings.ManageModules_AssetPackSource_Auto : AppStrings.ManageModules_AssetPackSource_Manual)
+                    </span>
+                </div>
+                @if (!AssetPackDependencyGuard.HasDependent(_modules, pack.AssetPackId, pack.Version))
+                {
+                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteAssetPack = pack">@AppStrings.Common_Delete</ChromeButton>
+                }
+            </div>
+        }
+    </div>
+
     @if (_confirmingDeleteId is not null)
     {
         <div class="mws-dialog-overlay">
@@ -45,12 +79,44 @@
         </div>
     }
 
+    @if (_confirmingDeleteAssetPack is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ManageModules_AssetPackDeleteConfirmTitle</h3>
+                <p>@AppStrings.ManageModules_AssetPackDeleteConfirmBody</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_loading" OnClick="ConfirmDeleteAssetPack">@AppStrings.Common_Delete</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _confirmingDeleteAssetPack = null">@AppStrings.Common_Cancel</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_pendingAssetPackInstall is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ManageModules_AssetPackHashMismatchTitle</h3>
+                <p>@AppStrings.ManageModules_AssetPackHashMismatchBody</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_loading" OnClick="ConfirmPendingAssetPackInstall">@AppStrings.ManageModules_InstallAnyway</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingAssetPackInstall = null">@AppStrings.Common_Cancel</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
     <LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
 </div>
 
 @code {
     private IReadOnlyList<InstalledModule> _modules = [];
+    private IReadOnlyList<InstalledAssetPack> _assetPacks = [];
     private string? _confirmingDeleteId;
+    private InstalledAssetPack? _confirmingDeleteAssetPack;
+    private (byte[] Bytes, string Sha256)? _pendingAssetPackInstall;
+    private string? _assetPackUploadError;
     private bool _loading;
 
     protected override async Task OnInitializedAsync()
@@ -64,6 +130,7 @@
         try
         {
             _modules = await ModuleStore.ListAsync();
+            _assetPacks = await AssetPackStore.ListAsync();
         }
         finally
         {
@@ -71,12 +138,8 @@
         }
     }
 
-    // The disabled bindings above are just visual feedback -- this check is what actually matters:
-    // _loading is set synchronously below, before any await, so it also works as a re-entrancy
-    // guard against a double-click firing this twice before the re-render disables the buttons (see
-    // RenderedLinkView.HandleClick for why that ordering is sufficient under Blazor's cooperative
-    // event dispatch). Unlike StartNewGame's multi-phase _busy flag, this method's _loading stays
-    // true for its entire body in one contiguous try/finally, so reusing it as the guard is safe.
+    // See this method's own equivalent on StartNewGame.razor for why _loading doubles as a
+    // re-entrancy guard here.
     private async Task ConfirmDelete(string? moduleId, bool deleteSaves)
     {
         if (_loading || moduleId is null)
@@ -87,10 +150,7 @@
         _loading = true;
         try
         {
-            // Dependency-asset-pack reference counting (don't free a shared pack's storage while
-            // another installed module still depends on it) is still a TODO — it doesn't matter yet
-            // since real modules don't declare dependencies against anything installable until asset
-            // packs exist (Milestone C), but it needs solving before that changes.
+            var deletedModule = _modules.FirstOrDefault(m => m.ModuleId == moduleId);
             await ModuleStore.DeleteAsync(moduleId);
 
             if (deleteSaves)
@@ -104,6 +164,131 @@
 
             _confirmingDeleteId = null;
             _modules = await ModuleStore.ListAsync();
+
+            // Auto-installed dependencies this module was the last one holding onto get cleaned up
+            // too — a manually-installed pack, or one still depended on by another module, is left
+            // alone (see AssetPackDependencyGuard/AssetPackInstallSource).
+            if (deletedModule is not null)
+            {
+                foreach (var dependency in deletedModule.Dependencies)
+                {
+                    if (dependency.Version is null || AssetPackDependencyGuard.HasDependent(_modules, dependency.Id, dependency.Version))
+                    {
+                        continue;
+                    }
+
+                    var pack = _assetPacks.FirstOrDefault(p => p.AssetPackId == dependency.Id && p.Version == dependency.Version);
+                    if (pack is { InstallSource: AssetPackInstallSource.Auto })
+                    {
+                        await AssetPackStore.DeleteAsync(pack.AssetPackId, pack.Version);
+                    }
+                }
+
+                _assetPacks = await AssetPackStore.ListAsync();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ConfirmDeleteAssetPack()
+    {
+        if (_loading || _confirmingDeleteAssetPack is not { } pack)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            await AssetPackStore.DeleteAsync(pack.AssetPackId, pack.Version);
+            _confirmingDeleteAssetPack = null;
+            _assetPacks = await AssetPackStore.ListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnAssetPackFileSelected(InputFileChangeEventArgs e)
+    {
+        _assetPackUploadError = null;
+        byte[] bytes;
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            bytes = memory.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _assetPackUploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_AssetPackUploadError_Generic, ex.Message);
+            return;
+        }
+
+        await ProcessAssetPackUploadAsync(bytes);
+    }
+
+    private async Task ProcessAssetPackUploadAsync(byte[] bytes)
+    {
+        var manifestYaml = AssetPackPackage.ReadManifestOnly(bytes);
+        if (manifestYaml is null)
+        {
+            _assetPackUploadError = AppStrings.ManageModules_AssetPackUploadError_NoManifest;
+            return;
+        }
+
+        _loading = true;
+        string sha256;
+        try
+        {
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, js: JS);
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        var manifest = new AssetPackManifestParser().Parse(manifestYaml);
+        var existing = _assetPacks.FirstOrDefault(p => p.AssetPackId == manifest.Id && p.Version == manifest.Version);
+
+        switch (AssetPackManualInstall.Decide(existing, sha256))
+        {
+            case AssetPackManualInstallDecision.ConfirmHashMismatch:
+                _pendingAssetPackInstall = (bytes, sha256);
+                break;
+            default:
+                await InstallAssetPackAsync(bytes, sha256);
+                break;
+        }
+    }
+
+    private async Task ConfirmPendingAssetPackInstall()
+    {
+        if (_pendingAssetPackInstall is not { } pending)
+        {
+            return;
+        }
+
+        _pendingAssetPackInstall = null;
+        await InstallAssetPackAsync(pending.Bytes, pending.Sha256);
+    }
+
+    private async Task InstallAssetPackAsync(byte[] bytes, string sha256)
+    {
+        _loading = true;
+        try
+        {
+            await AssetPackStore.InstallAsync(bytes, sha256, AssetPackInstallSource.Manual);
+            _assetPacks = await AssetPackStore.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            _assetPackUploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_AssetPackUploadError_Generic, ex.Message);
         }
         finally
         {
