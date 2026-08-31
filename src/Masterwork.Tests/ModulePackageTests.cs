@@ -336,4 +336,127 @@ public class ModulePackageTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    private static string MakeAssetPackDirectory(string id = "test.assets")
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "mw-assetpack-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(dir, "layouts"));
+        Directory.CreateDirectory(Path.Combine(dir, "assets", "images"));
+
+        File.WriteAllText(Path.Combine(dir, "manifest.yaml"), $"""
+            id: '{id}'
+            title: 'Test Assets'
+            version: '0.1.0'
+            """);
+        File.WriteAllText(Path.Combine(dir, "_variables.yaml"), """
+            variables:
+              sharedVar:
+                type: 'bool'
+                default: false
+            """);
+        File.WriteAllText(Path.Combine(dir, "layouts", "note.mws.yaml"), """
+            format: 'mws/0.5'
+            layout_id: 'note'
+            """);
+        File.WriteAllBytes(Path.Combine(dir, "assets", "images", "shared.png"), [9, 9, 9]);
+
+        return dir;
+    }
+
+    [Fact]
+    public void WriteStandaloneToBytes_MergesAssetPackContentAndBlanksDependencies()
+    {
+        var moduleDir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(moduleDir, "passages"));
+        var assetPackDir = MakeAssetPackDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(moduleDir, "manifest.yaml"), """
+                id: 'test.module'
+                title: 'Test Module'
+                version: '1.0.0'
+                # A comment right above dependencies, like the real modules have.
+                dependencies:
+                - id: 'test.assets'
+                  version: '0.1.0'
+                """);
+            File.WriteAllText(Path.Combine(moduleDir, "passages", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'note'
+                nodes: []
+                """);
+
+            var bytes = ModulePackage.WriteStandaloneToBytes(moduleDir, [assetPackDir]);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+
+            Assert.DoesNotContain("dependencies:\n-", contents.ManifestYaml);
+            Assert.Contains("dependencies: []", contents.ManifestYaml);
+            Assert.Contains("id: 'test.module'", contents.ManifestYaml);
+
+            Assert.Single(contents.LayoutYamls);
+            Assert.Contains("layout_id: 'note'", contents.LayoutYamls[0]);
+            Assert.True(contents.Assets.ContainsKey("assets/images/shared.png"));
+
+            Assert.Single(contents.AdditionalVariableYamls);
+            Assert.Contains("sharedVar:", contents.AdditionalVariableYamls[0]);
+
+            var module = new ModuleLoader().LoadFromSources(
+                contents.PassageYamls, layoutChromeYamls: contents.LayoutYamls,
+                additionalVariableYamls: contents.AdditionalVariableYamls);
+            Assert.True(module.LayoutChrome.ContainsKey("note"));
+            Assert.True(module.Variables.ContainsKey("sharedVar"));
+        }
+        finally
+        {
+            Directory.Delete(moduleDir, recursive: true);
+            Directory.Delete(assetPackDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WriteStandaloneToBytes_ModuleOwnFileWinsOnPathCollision()
+    {
+        var moduleDir = Path.Combine(Path.GetTempPath(), "mw-package-test-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Path.Combine(moduleDir, "passages"));
+        Directory.CreateDirectory(Path.Combine(moduleDir, "layouts"));
+        var assetPackDir = MakeAssetPackDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(moduleDir, "manifest.yaml"), """
+                id: 'test.module'
+                title: 'Test Module'
+                version: '1.0.0'
+                dependencies: []
+                """);
+            File.WriteAllText(Path.Combine(moduleDir, "passages", "001-Start.mws.yaml"), """
+                format: 'mws/0.3'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'note'
+                nodes: []
+                """);
+            File.WriteAllText(Path.Combine(moduleDir, "layouts", "note.mws.yaml"), """
+                format: 'mws/0.5'
+                layout_id: 'note'
+                header:
+                - type: 'text'
+                  value: 'Module-owned override'
+                """);
+
+            var bytes = ModulePackage.WriteStandaloneToBytes(moduleDir, [assetPackDir]);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+
+            var layoutYaml = Assert.Single(contents.LayoutYamls);
+            Assert.Contains("Module-owned override", layoutYaml);
+        }
+        finally
+        {
+            Directory.Delete(moduleDir, recursive: true);
+            Directory.Delete(assetPackDir, recursive: true);
+        }
+    }
 }

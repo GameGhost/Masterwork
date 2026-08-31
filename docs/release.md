@@ -142,22 +142,26 @@ Get a scenario to play from the [Masterwork-Modules releases](https://github.com
 Only needed if module content changed since the last module release. From `Masterwork-Modules`:
 
 ```powershell
-# Re-bundle any module whose content changed (repeat per module):
-dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- cost-of-disease cost-of-disease.mwm
+# Re-bundle everything that changed — modules to .mwm, mwf-common-assets to .mwassets:
+.\scripts\repack.ps1
 
 gh release create v<VERSION> `
   "cost-of-disease.mwm" `
   "fear-of-the-unknown.mwm" `
   "a-time-of-war.mwm" `
   "my-fathers-work-template.mwm" `
+  "mwf-common-assets.mwassets" `
   --repo GameGhost/Masterwork-Modules `
   --title "v<VERSION>" `
   --notes "<what changed in the module content>"
 ```
 
-All four bundles ship together even though `my-fathers-work-template` isn't a playable scenario
-(it's a design/reference module) — since v0.2.0, every Modules release includes it alongside the
-three scenarios rather than treating it as a separate, unbundled artifact.
+All four module bundles ship together even though `my-fathers-work-template` isn't a playable
+scenario (it's a design/reference module) — since v0.2.0, every Modules release includes it
+alongside the three scenarios rather than treating it as a separate, unbundled artifact.
+`mwf-common-assets.mwassets` ships alongside them too — all four modules declare it as a
+`dependencies:` entry in their own `manifest.yaml`, and load without the app's `missing_dependency`
+warning only once it's installed.
 
 The Modules repo's own release version doesn't need to track the app's version lockstep — only cut
 one when module content actually changed. Each module bundle has its own `version` in its own
