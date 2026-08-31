@@ -16,7 +16,7 @@ namespace Masterwork.App.Services;
 /// picks a single fixed culture. MAUI-only — lives in the MAUI head rather than the
 /// platform-agnostic Shared project.
 /// </remarks>
-public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
+public sealed class FileModuleStore(IModuleLoader loader, IAssetPackStore assetPackStore) : IModuleStore
 {
     private static string ModulesDir => Path.Combine(FileSystem.AppDataDirectory, "modules");
 
@@ -65,13 +65,13 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
             ? await ReadAllTextFilesAsync(additionalVariablesDir, "*.yaml")
             : [];
 
-        // Read ahead of restext selection so a module's own manifest-declared default_locale (if
-        // any) is what SelectLocale/the per-key fallback below fall back to, not the hardcoded
-        // ModuleLocales.Default. Re-parsed again below (for style/entry) rather than threaded
-        // through — manifest parsing is cheap and this mirrors InstallAsync's own separate parse.
-        var defaultLocale = manifestYaml is not null
-            ? new ManifestParser().Parse(manifestYaml).DefaultLocale
-            : ModuleLocales.Default;
+        // Read ahead of restext selection so a module's own manifest-declared default_locale/
+        // dependencies: (if any) are what SelectLocale/the per-key fallback below fall back to, not
+        // the hardcoded ModuleLocales.Default. Re-parsed again below (for style/entry) rather than
+        // threaded through — manifest parsing is cheap and this mirrors InstallAsync's own separate
+        // parse.
+        var manifest = manifestYaml is not null ? new ManifestParser().Parse(manifestYaml) : null;
+        var defaultLocale = manifest?.DefaultLocale ?? ModuleLocales.Default;
 
         var (restextByLocale, restextOverridesByLocale) = ReadRestextFiles(moduleDir);
         var resolvedLocale = ModuleLocales.SelectLocale(restextByLocale, locale, defaultLocale);
@@ -91,9 +91,23 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
             defaultRestextOverride = restextOverridesByLocale.GetValueOrDefault(defaultLocale);
         }
 
+        // Dependency-sourced layout/variable YAML is listed *before* the module's own, relying on
+        // LoadFromSources' "later entry wins on a matching id" behavior so the module always
+        // overrides a dependency on collision.
+        var dependencyResult = manifest is not null
+            ? await ModuleDependencyResolver.ResolveAsync(manifest.Dependencies, assetPackStore, resolvedLocale)
+            : new ModuleDependencyResolver.Result([], [], [], []);
+
         var module = loader.LoadFromSources(
-            passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride, layoutYamls, additionalVariableYamls,
-            defaultRestext, defaultRestextOverride);
+            passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride,
+            [.. dependencyResult.LayoutChromeYamls, .. layoutYamls],
+            [.. dependencyResult.AdditionalVariableYamls, .. additionalVariableYamls],
+            defaultRestext, defaultRestextOverride, dependencyResult.DependencyRestexts);
+
+        foreach (var warning in dependencyResult.MissingDependencyWarnings)
+        {
+            module.Warnings.Add("missing_dependency", warning);
+        }
 
         var assets = new FileModuleAssetSource(moduleDir);
         return await LoadedModuleContent.BuildAsync(module, manifestYaml, assets);
@@ -138,7 +152,7 @@ public sealed class FileModuleStore(IModuleLoader loader) : IModuleStore
         var thumbnailAssets = new FileModuleAssetSource(moduleDir);
         var thumbnailUrl = await ModuleThumbnailResolver.ResolveAsync(thumbnailAssets, manifest.Thumbnail?.Image);
 
-        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, thumbnailUrl);
+        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, thumbnailUrl, manifest.Dependencies);
         var index = await ReadIndexAsync();
         var updated = index.Where(m => m.ModuleId != entryRecord.ModuleId).Append(entryRecord).ToList();
         await WriteIndexAsync(updated);

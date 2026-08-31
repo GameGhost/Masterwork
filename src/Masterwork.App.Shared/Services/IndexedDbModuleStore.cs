@@ -12,7 +12,7 @@ namespace Masterwork.App.Shared.Services;
 /// entire decompressed package (including every image) in memory at once. Registered for the web
 /// heads only.
 /// </remarks>
-public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : IModuleStore
+public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader, IAssetPackStore assetPackStore) : IModuleStore
 {
     // Mirrors moduleStore.js's moduleMeta record shape; JSInterop's default camelCase naming policy
     // maps these PascalCase properties to/from the store's camelCase JSON keys.
@@ -72,28 +72,20 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         var result = new List<InstalledModule>(rows.Length);
         foreach (var m in rows)
         {
-            var thumbnailUrl = await ResolveThumbnailAsync(jsModule, m.Id, m.ManifestYaml);
+            var manifest = m.ManifestYaml is null ? null : new ManifestParser().Parse(m.ManifestYaml);
+
+            var thumbnailUrl = manifest is null
+                ? null
+                : await ModuleThumbnailResolver.ResolveAsync(new IndexedDbModuleAssetSource(jsModule, m.Id), manifest.Thumbnail?.Image);
             if (thumbnailUrl is not null)
             {
                 _thumbnailBlobUrls.Add(thumbnailUrl);
             }
 
-            result.Add(new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256, thumbnailUrl));
+            result.Add(new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256, thumbnailUrl, manifest?.Dependencies ?? []));
         }
 
         return result;
-    }
-
-    private static async Task<string?> ResolveThumbnailAsync(IJSObjectReference jsModule, string moduleId, string? manifestYaml)
-    {
-        if (manifestYaml is null)
-        {
-            return null;
-        }
-
-        var manifest = new ManifestParser().Parse(manifestYaml);
-        var assets = new IndexedDbModuleAssetSource(jsModule, moduleId);
-        return await ModuleThumbnailResolver.ResolveAsync(assets, manifest.Thumbnail?.Image);
     }
 
     /// <inheritdoc/>
@@ -103,12 +95,11 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         var meta = await jsModule.InvokeAsync<ModuleMetaRecord?>("getModuleMeta", moduleId)
             ?? throw new InvalidOperationException($"Module '{moduleId}' is not installed.");
 
-        // Read ahead of restext selection so a module's own manifest-declared default_locale (if
-        // any) is what SelectLocale/the per-key fallback below fall back to — see FileModuleStore's
-        // own identical block for the full reasoning.
-        var defaultLocale = meta.ManifestYaml is not null
-            ? new ManifestParser().Parse(meta.ManifestYaml).DefaultLocale
-            : ModuleLocales.Default;
+        // Read ahead of restext selection so a module's own manifest-declared default_locale/
+        // dependencies: (if any) are what SelectLocale/the per-key fallback below fall back to —
+        // see FileModuleStore's own identical block for the full reasoning.
+        var manifest = meta.ManifestYaml is not null ? new ManifestParser().Parse(meta.ManifestYaml) : null;
+        var defaultLocale = manifest?.DefaultLocale ?? ModuleLocales.Default;
 
         var resolvedLocale = ModuleLocales.SelectLocale(meta.RestextByLocale, locale, defaultLocale);
         var restext = resolvedLocale is not null ? meta.RestextByLocale[resolvedLocale] : null;
@@ -126,9 +117,21 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
             defaultRestextOverride = meta.RestextOverridesByLocale.GetValueOrDefault(defaultLocale);
         }
 
+        // See FileModuleStore's own identical block for the full reasoning.
+        var dependencyResult = manifest is not null
+            ? await ModuleDependencyResolver.ResolveAsync(manifest.Dependencies, assetPackStore, resolvedLocale)
+            : new ModuleDependencyResolver.Result([], [], [], []);
+
         var loadedModule = loader.LoadFromSources(
             meta.PassageYamls, meta.VariablesYaml, restext, meta.OverridePassageYamls, restextOverride,
-            meta.LayoutYamls, meta.AdditionalVariableYamls, defaultRestext, defaultRestextOverride);
+            [.. dependencyResult.LayoutChromeYamls, .. meta.LayoutYamls],
+            [.. dependencyResult.AdditionalVariableYamls, .. meta.AdditionalVariableYamls],
+            defaultRestext, defaultRestextOverride, dependencyResult.DependencyRestexts);
+
+        foreach (var warning in dependencyResult.MissingDependencyWarnings)
+        {
+            loadedModule.Warnings.Add("missing_dependency", warning);
+        }
 
         var assets = new IndexedDbModuleAssetSource(jsModule, moduleId);
         return await LoadedModuleContent.BuildAsync(loadedModule, meta.ManifestYaml, assets);
@@ -201,7 +204,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader) : 
         // always re-lists right after a successful install (to refresh the whole carousel), so
         // resolving a second blob URL here just to have it immediately superseded (and needing its own
         // tracking to avoid leaking it, on top of ListAsync's) isn't worth it.
-        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256);
+        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, Dependencies: manifest.Dependencies);
     }
 
     /// <inheritdoc/>

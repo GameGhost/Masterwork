@@ -21,6 +21,7 @@ builder.Services.AddSingleton<IModuleLoader>(sp => new ModuleLoader(
 builder.Services.AddScoped<IAssetResolver, AssetResolver>();
 builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
 builder.Services.AddScoped<IModuleStore, IndexedDbModuleStore>();
+builder.Services.AddScoped<IAssetPackStore, IndexedDbAssetPackStore>();
 builder.Services.AddScoped<GameSessionState>();
 builder.Services.AddScoped<AppNavigationHistory>();
 builder.Services.AddScoped<ISaveStore, LocalStorageSaveStore>();
