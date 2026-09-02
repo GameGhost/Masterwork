@@ -79,4 +79,50 @@ public class AssetPackManifestParserTests
 
         Assert.Contains(warnings.Items, w => w.Kind == "unmatched_field");
     }
+
+    [Fact]
+    public void TypeField_ToleratedAndNotFlaggedAsUnmatched()
+    {
+        var warnings = new ModuleWarnings();
+        new AssetPackManifestParser().Parse("""
+            type: 'assets'
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            """, warnings);
+
+        Assert.Empty(warnings.Items);
+    }
+
+    [Fact]
+    public void ParsesFormat_MatchingCurrentVersion_NoWarning()
+    {
+        var warnings = new ModuleWarnings();
+        var manifest = new AssetPackManifestParser().Parse($"""
+            type: 'assets'
+            format: '{MwsFormatVersion.Current}'
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            """, warnings);
+
+        Assert.Equal(MwsFormatVersion.Current, manifest.Format);
+        Assert.Empty(warnings.Items);
+    }
+
+    [Fact]
+    public void ParsesFormat_StaleVersion_Warns()
+    {
+        var warnings = new ModuleWarnings();
+        var manifest = new AssetPackManifestParser().Parse("""
+            type: 'assets'
+            format: 'mws/0.3'
+            id: 'x'
+            title: 'X'
+            version: '1.0.0'
+            """, warnings);
+
+        Assert.Equal("mws/0.3", manifest.Format);
+        Assert.Contains(warnings.Items, w => w.Kind == "unexpected_format_version");
+    }
 }

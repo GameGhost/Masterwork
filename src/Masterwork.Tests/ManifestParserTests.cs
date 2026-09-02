@@ -16,7 +16,8 @@ public class ManifestParserTests
         Assert.Equal("original.cost_of_disease", manifest.Id);
         Assert.Equal("The Cost of Disease", manifest.Title);
         Assert.Equal("1.0.0", manifest.Version);
-        Assert.Equal("original_scenario", manifest.ModuleType);
+        Assert.Equal("module", manifest.ModuleType);
+        Assert.Null(manifest.Format);
         Assert.Null(manifest.Description);
         Assert.Empty(manifest.Dependencies);
     }
@@ -25,15 +26,47 @@ public class ManifestParserTests
     public void ParsesTypeAndDescription()
     {
         var manifest = new ManifestParser().Parse("""
+            type: 'assets'
             id: 'MFW_Common_Assets'
             title: 'MFW Common Assets'
             version: '1.0.0'
-            type: 'asset_pack'
             description: 'Shared icons, audio, and onboarding flow for MFW-family modules.'
             """);
 
-        Assert.Equal("asset_pack", manifest.ModuleType);
+        Assert.Equal("assets", manifest.ModuleType);
         Assert.Equal("Shared icons, audio, and onboarding flow for MFW-family modules.", manifest.Description);
+    }
+
+    [Fact]
+    public void ParsesFormat_MatchingCurrentVersion_NoWarning()
+    {
+        var warnings = new ModuleWarnings();
+        var manifest = new ManifestParser().Parse($"""
+            type: 'module'
+            format: '{MwsFormatVersion.Current}'
+            id: 'test.module'
+            title: 'Test Module'
+            version: '1.0.0'
+            """, warnings);
+
+        Assert.Equal(MwsFormatVersion.Current, manifest.Format);
+        Assert.Empty(warnings.Items);
+    }
+
+    [Fact]
+    public void ParsesFormat_StaleVersion_Warns()
+    {
+        var warnings = new ModuleWarnings();
+        var manifest = new ManifestParser().Parse("""
+            type: 'module'
+            format: 'mws/0.3'
+            id: 'test.module'
+            title: 'Test Module'
+            version: '1.0.0'
+            """, warnings);
+
+        Assert.Equal("mws/0.3", manifest.Format);
+        Assert.Contains(warnings.Items, w => w.Kind == "unexpected_format_version");
     }
 
     [Fact]

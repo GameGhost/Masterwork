@@ -11,8 +11,6 @@ namespace Masterwork.ModuleFormat;
 /// </summary>
 public sealed class PassageYamlParser : IPassageYamlParser
 {
-    private const string ExpectedFormat = "mws/0.5";
-
     private readonly ILogger<PassageYamlParser> _logger;
 
     /// <summary>Creates a parser that discards log output.</summary>
@@ -46,9 +44,9 @@ public sealed class PassageYamlParser : IPassageYamlParser
         _logger.LogDebug("Parsing passage '{PassageId}'", ctx.Source);
 
         var format = root.GetRequiredString("format", ctx);
-        if (format != ExpectedFormat)
+        if (format != MwsFormatVersion.Current)
         {
-            ctx.Warn("unexpected_format_version", $"passage declares format '{format}', expected '{ExpectedFormat}' — may be stale output from an older extractor/hand-authored file");
+            ctx.Warn("unexpected_format_version", $"passage declares format '{format}', expected '{MwsFormatVersion.Current}' — may be stale output from an older extractor/hand-authored file");
         }
 
         Location? location = null;
@@ -111,9 +109,9 @@ public sealed class PassageYamlParser : IPassageYamlParser
         _logger.LogDebug("Parsing layout chrome '{LayoutId}'", ctx.Source);
 
         var format = root.GetRequiredString("format", ctx);
-        if (format != ExpectedFormat)
+        if (format != MwsFormatVersion.Current)
         {
-            ctx.Warn("unexpected_format_version", $"layout chrome declares format '{format}', expected '{ExpectedFormat}' — may be stale output from an older extractor/hand-authored file");
+            ctx.Warn("unexpected_format_version", $"layout chrome declares format '{format}', expected '{MwsFormatVersion.Current}' — may be stale output from an older extractor/hand-authored file");
         }
 
         LayoutChromeAudio? audio = null;

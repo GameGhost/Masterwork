@@ -25,4 +25,10 @@ public sealed record AssetPackManifest
     /// dependent module's own default locale. Defaults to <see cref="ModuleLocales.Default"/> (<c>en-US</c>).
     /// </summary>
     public string DefaultLocale { get; init; } = ModuleLocales.Default;
+
+    /// <summary>
+    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.5"</c>), if
+    /// present — optional, same as <see cref="ModuleManifest.Format"/>, and for the same reason.
+    /// </summary>
+    public string? Format { get; init; }
 }
