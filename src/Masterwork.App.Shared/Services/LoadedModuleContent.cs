@@ -6,13 +6,15 @@ namespace Masterwork.App.Shared.Services;
 /// <summary>
 /// Everything <see cref="IModuleStore.LoadAsync"/> produces for one module: the parsed
 /// <see cref="Module"/> itself, an <see cref="IModuleAssetSource"/> for <see cref="IAssetResolver"/>'s
-/// bundle-local tier, and its stylesheet text (decoded from the manifest's declared <c>style</c>
+/// bundle-local tier, its declared asset-pack dependencies' own asset sources for the
+/// dependency-pack tier, and its stylesheet text (decoded from the manifest's declared <c>style</c>
 /// path, UTF-8) for module-provided CSS injection. <see cref="StyleCss"/> is <see langword="null"/>
 /// for a module that doesn't have one.
 /// </summary>
 public sealed record LoadedModuleContent(
     LoadedModule Module,
     IModuleAssetSource Assets,
+    IReadOnlyList<IModuleAssetSource> DependencyAssets,
     string? StyleCss
 )
 {
@@ -23,10 +25,16 @@ public sealed record LoadedModuleContent(
     /// style-path and entry-passage resolution both live in one place. Fetches only the one asset the
     /// manifest names (<paramref name="manifestYaml"/>'s <c>style</c> path, default
     /// <c>"assets/style.css"</c>) rather than the whole asset set — the point of
-    /// <see cref="IModuleAssetSource"/> being lazy in the first place.
+    /// <see cref="IModuleAssetSource"/> being lazy in the first place. Falls back to each of
+    /// <paramref name="dependencyAssets"/> in order if the module's own bundle doesn't have it — a
+    /// module whose style.css moved into a shared asset pack (see mwf-common-assets) has none of its
+    /// own to find here.
     /// </summary>
-    public static async Task<LoadedModuleContent> BuildAsync(LoadedModule module, string? manifestYaml, IModuleAssetSource assets)
+    public static async Task<LoadedModuleContent> BuildAsync(
+        LoadedModule module, string? manifestYaml, IModuleAssetSource assets,
+        IReadOnlyList<IModuleAssetSource>? dependencyAssets = null)
     {
+        dependencyAssets ??= [];
         string? styleCss = null;
         if (manifestYaml is not null)
         {
@@ -51,6 +59,16 @@ public sealed record LoadedModuleContent(
             }
 
             var cssBytes = await assets.GetAssetAsync(manifest.StylePath);
+            foreach (var dependency in dependencyAssets)
+            {
+                if (cssBytes is not null)
+                {
+                    break;
+                }
+
+                cssBytes = await dependency.GetAssetAsync(manifest.StylePath);
+            }
+
             if (cssBytes is not null)
             {
                 styleCss = Encoding.UTF8.GetString(cssBytes);
@@ -59,7 +77,7 @@ public sealed record LoadedModuleContent(
             module = module with { Audio = manifest.Audio };
         }
 
-        return new LoadedModuleContent(module, assets, styleCss);
+        return new LoadedModuleContent(module, assets, dependencyAssets, styleCss);
     }
 
     /// <summary>

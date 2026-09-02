@@ -102,6 +102,10 @@ public sealed class FileAssetPackStore : IAssetPackStore
     }
 
     /// <inheritdoc/>
+    public Task<IModuleAssetSource> GetAssetSourceAsync(string assetPackId, string version) =>
+        Task.FromResult<IModuleAssetSource>(new FileModuleAssetSource(PackDir(assetPackId, version)));
+
+    /// <inheritdoc/>
     public async Task DeleteAsync(string assetPackId, string version)
     {
         var dir = PackDir(assetPackId, version);

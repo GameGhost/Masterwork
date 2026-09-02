@@ -76,13 +76,6 @@
                     <ChromeButton class="style-btn-green" disabled="@_busy" OnClick="Apply">@AppStrings.Common_Apply</ChromeButton>
                     <ChromeButton class="style-btn-red" OnClick="Cancel">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
-
-                @if (DialogContext == OptionsDialogContext.MainMenu)
-                {
-                    <div class="mws-dialog-footer">
-                        <ChromeButton class="mws-manage-modules-button style-btn-brown" OnClick="ManageModules">@AppStrings.OptionsDialog_ManageModules</ChromeButton>
-                    </div>
-                }
                 break;
 
             case View.QuitConfirm:
@@ -117,10 +110,6 @@
     /// <summary>Invoked when the dialog should close (Apply, Cancel, or after a quit action completes).</summary>
     [Parameter, EditorRequired]
     public EventCallback OnClose { get; set; }
-
-    /// <summary>Invoked when "Manage Modules" is tapped — <see cref="OptionsDialogContext.MainMenu"/> only.</summary>
-    [Parameter]
-    public EventCallback OnManageModules { get; set; }
 
     /// <summary>Invoked with the chosen name once "Save and Quit" is confirmed — <see cref="OptionsDialogContext.InGame"/> only.</summary>
     [Parameter]
@@ -262,8 +251,6 @@
         await AppSettingsApplier.ApplyAudioAsync(_original, AudioPlayer, AudioState);
         await OnClose.InvokeAsync();
     }
-
-    private async Task ManageModules() => await OnManageModules.InvokeAsync();
 
     private void BeginSaveAndQuit()
     {

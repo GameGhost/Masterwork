@@ -15,7 +15,6 @@
 @inject NavigationManager Nav
 @inject ILogger<GameSession> GameSessionLogger
 @inject ILogger<StartNewGame> Logger
-@inject INativeFilePicker FilePicker
 @inject IJSRuntime JS
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -34,23 +33,11 @@
     <ErrorBoundary @ref="_errorBoundary">
         <ChildContent>
             <div class="mws-start-new-game">
+                @* Manual module/asset-pack install (upload, conflict/version prompts, progress
+                   feedback) all lives on ManageModules.razor now — this button just gets there. *@
                 <div class="mws-module-toolbar">
-                    <button type="button" class="style-btn-brown" disabled title="@AppStrings.StartNewGame_DownloadModulesHint">@AppStrings.StartNewGame_DownloadModules</button>
-                    @if (FilePicker.IsAvailable)
-                    {
-                        <ChromeButton class="mws-upload-button style-btn-brown" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</ChromeButton>
-                    }
-                    else
-                    {
-                        <label for="mws-upload-input" class="mws-upload-button style-btn-brown">@AppStrings.StartNewGame_UploadModule</label>
-                        <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
-                                   accept=".mwm,application/zip,application/x-zip-compressed,application/octet-stream" />
-                    }
+                    <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/manage")'>@AppStrings.OptionsDialog_ManageModules</ChromeButton>
                 </div>
-                @if (_uploadError is not null)
-                {
-                    <p class="mws-version-warning">@_uploadError</p>
-                }
 
                 <div class="mws-scenario-content">
                     <div class="mws-module-carousel-row">
@@ -121,20 +108,6 @@
                     </div>
                 }
 
-                @if (_pendingUpload is not null)
-                {
-                    <div class="mws-dialog-overlay">
-                        <div class="mws-dialog mws-dialog--sm">
-                            <h3>@_pendingUpload.Title</h3>
-                            <p>@_pendingUpload.Message</p>
-                            <div class="mws-dialog-actions">
-                                <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</ChromeButton>
-                                <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingUpload = null">@AppStrings.Common_Cancel</ChromeButton>
-                            </div>
-                        </div>
-                    </div>
-                }
-
                 <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
             </div>
         </ChildContent>
@@ -148,16 +121,12 @@
 </div>
 
 @code {
-    private sealed record PendingUpload(byte[] Bytes, string Sha256, string Title, string Message, string ConfirmLabel);
-
     private IReadOnlyList<InstalledModule> _modules = [];
     private string? _selectedId;
     private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
     private string? _selectedLanguage;
     private InstalledModule? _conflictModule;
     private SaveEntry? _conflictSave;
-    private string? _uploadError;
-    private PendingUpload? _pendingUpload;
     private ErrorBoundary? _errorBoundary;
     private AppSettings _appSettings = AppSettings.Default;
     private bool _loading;
@@ -165,15 +134,15 @@
     private int? _loadingDone;
     private int? _loadingTotal;
 
-    // Guards Play/ResumeConflicting/DiscardAndStartFresh/ConfirmPendingUpload/the upload handlers
-    // against a double-click re-invoking one of them (or racing a different one) before the first
-    // invocation's re-render disables the buttons -- see RenderedLinkView.HandleClick for why a
-    // plain bool set before the first await is sufficient under Blazor's cooperative event dispatch.
-    // Distinct from _loading (which only drives the LoadingOverlay's visibility/message and is
-    // toggled on and off multiple times within a single one of these flows) -- _busy stays true for
-    // an entry method's *entire* body, which is what double-clicking "Play" actually needs guarded:
-    // without it, two clicks could both pass the pre-loading conflict check and each start their own
-    // GameSession/State.Start, racing each other into /play.
+    // Guards Play/ResumeConflicting/DiscardAndStartFresh against a double-click re-invoking one of
+    // them (or racing a different one) before the first invocation's re-render disables the
+    // buttons — see RenderedLinkView.HandleClick for why a plain bool set before the first await is
+    // sufficient under Blazor's cooperative event dispatch. Distinct from _loading (which only
+    // drives the LoadingOverlay's visibility/message and is toggled on and off multiple times within
+    // a single one of these flows) -- _busy stays true for an entry method's *entire* body, which is
+    // what double-clicking "Play" actually needs guarded: without it, two clicks could both pass the
+    // pre-loading conflict check and each start their own GameSession/State.Start, racing each other
+    // into /play.
     private bool _busy;
 
     // Carousel back/forward + click-to-select scrolling, same "hide the native scrollbar, scroll
@@ -216,8 +185,8 @@
         }
 
         // Only re-centers when the selection actually changes — every unrelated re-render
-        // (e.g. an upload progress tick) would otherwise re-trigger the scroll animation. Same
-        // guard PauseBar's own centering uses (_lastCenteredIndex there).
+        // would otherwise re-trigger the scroll animation. Same guard PauseBar's own centering
+        // uses (_lastCenteredIndex there).
         if (_jsModule is null || _selectedId == _lastCenteredId)
         {
             return;
@@ -299,10 +268,10 @@
 
     private void OnLanguageChanged(ChangeEventArgs e) => _selectedLanguage = e.Value?.ToString();
 
-    // Shared by the verify/install/asset-preparation phases, all of which report a real (done,
-    // total) rather than showing an indeterminate spinner — each just plugs in its own message
-    // format. Fires from Progress<T>'s posted continuation, not the calling method's own await
-    // chain, so it needs its own StateHasChanged rather than relying on the caller's next render.
+    // Shared by the resume/asset-preparation phases, both of which report a real (done, total)
+    // rather than showing an indeterminate spinner — each just plugs in its own message format.
+    // Fires from Progress<T>'s posted continuation, not the calling method's own await chain, so it
+    // needs its own StateHasChanged rather than relying on the caller's next render.
     private void ReportProgress((int Done, int Total) p, string percentFormat)
     {
         _loadingDone = p.Done;
@@ -500,224 +469,6 @@
             // for its own route-change handler to catch up a tick later.
             await AudioPlayer.StopBgmAsync();
             Nav.NavigateTo("/play");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
-    {
-        if (_busy)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            Logger.LogInformation("Module upload: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
-            _uploadError = null;
-            try
-            {
-                using var stream = e.File.OpenReadStream(maxAllowedSize: 100 * 1024 * 1024);
-                using var memory = new MemoryStream();
-                await stream.CopyToAsync(memory);
-                var bytes = memory.ToArray();
-                Logger.LogInformation("Module upload: read {Size} bytes from InputFile", bytes.Length);
-
-                await ProcessUploadedBytesAsync(bytes);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Module upload: InputFile read/process failed");
-                // ex.Message is an internal exception message (English, per the "behind the scenes
-                // strings stay in code" rule) even though it surfaces in this user-facing dialog.
-                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
-            }
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    // MAUI-only path (FilePicker.IsAvailable) — see INativeFilePicker's own remarks for why this
-    // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected.
-    private async Task OnNativePickerClicked()
-    {
-        if (_busy)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            Logger.LogInformation("Module upload: native picker opened");
-            _uploadError = null;
-            try
-            {
-                var bytes = await FilePicker.PickAsync(NativeFileKind.ModulePackage);
-                if (bytes is null)
-                {
-                    Logger.LogInformation("Module upload: native picker cancelled");
-                    return;
-                }
-                Logger.LogInformation("Module upload: read {Size} bytes from native picker", bytes.Length);
-
-                await ProcessUploadedBytesAsync(bytes);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Module upload: native picker read/process failed");
-                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
-            }
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    // Shared by both upload paths above — everything from "bytes on disk" onward, regardless of how
-    // they were picked. Reads only manifest.yaml (ReadManifestOnly), not the full package — the
-    // conflict-check prompt only ever needs the manifest, and a full ModulePackage.ReadFromBytes
-    // here would mean decompressing every asset in a 60+MB upload just to show a dialog.
-    private async Task ProcessUploadedBytesAsync(byte[] bytes)
-    {
-        var manifestYaml = ModulePackage.ReadManifestOnly(bytes);
-        if (manifestYaml is null)
-        {
-            Logger.LogWarning("Module upload: package has no manifest.yaml");
-            _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
-            return;
-        }
-
-        var manifest = new ManifestParser().Parse(manifestYaml);
-
-        // The upload is hashed exactly once here, as part of "processing" the incoming file, with
-        // its own progress feedback — not repeated later. Both the same-version conflict check below
-        // and InstallAsync itself (which takes the hash as a parameter) reuse this one result rather
-        // than re-hashing the same bytes a second and third time with no feedback.
-        _loading = true;
-        _loadingMessage = AppStrings.StartNewGame_Verifying;
-        _loadingDone = null;
-        _loadingTotal = null;
-        string sha256;
-        try
-        {
-            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
-            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
-            Logger.LogInformation("Module upload: ComputeHashAsync returned at {Timestamp:O}", DateTime.UtcNow);
-        }
-        finally
-        {
-            _loading = false;
-        }
-
-        var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
-        if (existing is null)
-        {
-            Logger.LogInformation("Module upload: installing new module {ModuleId} v{Version}", manifest.Id, manifest.Version);
-            await InstallBytesAsync(bytes, sha256);
-            return;
-        }
-
-        Logger.LogInformation("Module upload: {ModuleId} already installed (existing v{ExistingVersion}, uploaded v{UploadedVersion}) — prompting", manifest.Id, existing.Version, manifest.Version);
-        await PrepareConflictPromptAsync(bytes, sha256, manifest, existing);
-    }
-
-    // Compares the uploaded manifest's version against what's already installed under the same id
-    // and prepares an appropriately-worded confirm prompt — same content is a no-op-ish notice, an
-    // upgrade/downgrade gets a warning scaled to the risk, mentioning existing saves if there are any
-    // (added after manual testing surfaced the need).
-    private async Task PrepareConflictPromptAsync(byte[] bytes, string sha256, ModuleManifest manifest, InstalledModule existing)
-    {
-        var saveCount = (await SaveStore.ListAsync()).Count(s => s.ModuleId == manifest.Id);
-        var saveNote = saveCount switch
-        {
-            0 => "",
-            1 => AppStrings.StartNewGame_SaveNote_One,
-            _ => string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SaveNote_Many, saveCount),
-        };
-
-        var comparison = SemVer.Compare(manifest.Version, existing.Version);
-
-        if (comparison == 0)
-        {
-            // existing.Sha256 was already computed once, at that module's own install time (see
-            // ModuleHasher) — comparing against the hash ProcessUploadedBytesAsync already computed
-            // for the new upload needs no further hashing at all.
-            var identical = string.Equals(sha256, existing.Sha256, StringComparison.OrdinalIgnoreCase);
-
-            _pendingUpload = identical
-                ? new PendingUpload(bytes, sha256, AppStrings.StartNewGame_AlreadyInstalledTitle,
-                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_AlreadyInstalledBody, manifest.Title, manifest.Version),
-                    AppStrings.StartNewGame_ReinstallAnyway)
-                : new PendingUpload(bytes, sha256, AppStrings.StartNewGame_SameVersionDiffContentTitle,
-                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SameVersionDiffContentBody, manifest.Title, manifest.Version, saveNote),
-                    AppStrings.StartNewGame_ReplaceAnyway);
-            return;
-        }
-
-        if (comparison > 0)
-        {
-            _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_UpgradeTitle,
-                string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpgradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
-                AppStrings.StartNewGame_Upgrade);
-            return;
-        }
-
-        _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_DowngradeTitle,
-            string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_DowngradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
-            AppStrings.StartNewGame_DowngradeAnyway);
-    }
-
-    private async Task ConfirmPendingUpload()
-    {
-        if (_busy || _pendingUpload is null)
-        {
-            return;
-        }
-
-        _busy = true;
-        try
-        {
-            var bytes = _pendingUpload.Bytes;
-            var sha256 = _pendingUpload.Sha256;
-            _pendingUpload = null;
-            await InstallBytesAsync(bytes, sha256);
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task InstallBytesAsync(byte[] bytes, string sha256)
-    {
-        _loading = true;
-        _loadingMessage = AppStrings.StartNewGame_Installing;
-        _loadingDone = null;
-        _loadingTotal = null;
-
-        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_InstallingPercent));
-
-        try
-        {
-            var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
-            _modules = await ModuleStore.ListAsync();
-            SelectModule(installed.ModuleId);
-            Logger.LogInformation("Module upload: installed {ModuleId} v{Version}", installed.ModuleId, installed.Version);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Module upload: install failed");
-            // ex.Message is an internal exception message (English, per the "behind the scenes
-            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
-            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
         }
         finally
         {

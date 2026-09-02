@@ -38,6 +38,14 @@ public sealed class GameSessionState
     /// </summary>
     public IModuleAssetSource Assets { get; private set; } = EmptyModuleAssetSource.Instance;
 
+    /// <summary>
+    /// The active module's declared asset-pack dependencies' own asset sources, in declaration
+    /// order, for <see cref="IAssetResolver"/>'s dependency-pack tier — see
+    /// <see cref="LoadedModuleContent.DependencyAssets"/>. Empty if no session has started yet, or
+    /// the module declares no dependencies (or none resolved — see <c>missing_dependency</c> warnings).
+    /// </summary>
+    public IReadOnlyList<IModuleAssetSource> DependencyAssets { get; private set; } = [];
+
     /// <summary>The active module's stylesheet text, if it has one — see <see cref="LoadedModuleContent.StyleCss"/>.</summary>
     public string? StyleCss { get; private set; }
 
@@ -49,6 +57,7 @@ public sealed class GameSessionState
         Language = language;
         Module = content.Module;
         Assets = content.Assets;
+        DependencyAssets = content.DependencyAssets;
         StyleCss = content.StyleCss;
         Session = session;
     }
@@ -61,6 +70,7 @@ public sealed class GameSessionState
         Language = null;
         Module = null;
         Assets = EmptyModuleAssetSource.Instance;
+        DependencyAssets = [];
         StyleCss = null;
         Session = null;
     }

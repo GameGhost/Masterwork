@@ -120,7 +120,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader, IA
         // See FileModuleStore's own identical block for the full reasoning.
         var dependencyResult = manifest is not null
             ? await ModuleDependencyResolver.ResolveAsync(manifest.Dependencies, assetPackStore, resolvedLocale)
-            : new ModuleDependencyResolver.Result([], [], [], []);
+            : new ModuleDependencyResolver.Result([], [], [], [], []);
 
         var loadedModule = loader.LoadFromSources(
             meta.PassageYamls, meta.VariablesYaml, restext, meta.OverridePassageYamls, restextOverride,
@@ -134,7 +134,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader, IA
         }
 
         var assets = new IndexedDbModuleAssetSource(jsModule, moduleId);
-        return await LoadedModuleContent.BuildAsync(loadedModule, meta.ManifestYaml, assets);
+        return await LoadedModuleContent.BuildAsync(loadedModule, meta.ManifestYaml, assets, dependencyResult.AssetSources);
     }
 
     /// <inheritdoc/>

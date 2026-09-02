@@ -103,6 +103,10 @@ public sealed class IndexedDbAssetPackStore(IJSRuntime js) : IAssetPackStore
         await jsModule.InvokeVoidAsync("clearAssetPack", assetPackId, version);
     }
 
+    /// <inheritdoc/>
+    public async Task<IModuleAssetSource> GetAssetSourceAsync(string assetPackId, string version) =>
+        new IndexedDbAssetPackAssetSource(await ModuleAsync(), assetPackId, version);
+
     private static InstalledAssetPack ToInstalledAssetPack(AssetPackMetaRecord r) =>
         new(r.Id, r.Version, r.Title, r.Sha256, Enum.Parse<AssetPackInstallSource>(r.InstallSource));
 }

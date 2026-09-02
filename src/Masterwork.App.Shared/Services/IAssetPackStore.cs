@@ -48,4 +48,14 @@ public interface IAssetPackStore
 
     /// <summary>Uninstalls one asset pack version. Does not check for dependents — see <see cref="AssetPackDependencyGuard"/>.</summary>
     Task DeleteAsync(string assetPackId, string version);
+
+    /// <summary>
+    /// An <see cref="IModuleAssetSource"/> over this asset pack's own <c>assets/</c> subtree, for
+    /// <see cref="IAssetResolver"/>'s dependency-pack tier — same shape and lazy-per-file contract as
+    /// a module's own asset source, just backed by the pack's installed content instead. Does not
+    /// itself check whether the pack is actually installed at this id+version; a lookup against a
+    /// nonexistent pack simply resolves every asset to <see langword="null"/>, same as a real pack
+    /// missing that one file.
+    /// </summary>
+    Task<IModuleAssetSource> GetAssetSourceAsync(string assetPackId, string version);
 }

@@ -748,13 +748,6 @@ body {
     outline: none;
 }
 
-/* Manage Modules -- longer label than the standard button width was tuned for ("Apply"/"Cancel"/
-   the main menu's own words), so it gets its own wider size rather than wrapping/overflowing.
-   Centered via the footer's own text-align, not a per-button margin. */
-.mws-manage-modules-button.style-btn-brown {
-    width: 10em;
-}
-
 .mws-dialog-footer {
     text-align: center;
     border-top-color: rgba(232, 201, 160, 0.25);

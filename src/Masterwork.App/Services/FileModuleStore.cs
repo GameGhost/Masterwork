@@ -96,7 +96,7 @@ public sealed class FileModuleStore(IModuleLoader loader, IAssetPackStore assetP
         // overrides a dependency on collision.
         var dependencyResult = manifest is not null
             ? await ModuleDependencyResolver.ResolveAsync(manifest.Dependencies, assetPackStore, resolvedLocale)
-            : new ModuleDependencyResolver.Result([], [], [], []);
+            : new ModuleDependencyResolver.Result([], [], [], [], []);
 
         var module = loader.LoadFromSources(
             passageYamls, variablesYaml, restext, overridePassageYamls, restextOverride,
@@ -110,7 +110,7 @@ public sealed class FileModuleStore(IModuleLoader loader, IAssetPackStore assetP
         }
 
         var assets = new FileModuleAssetSource(moduleDir);
-        return await LoadedModuleContent.BuildAsync(module, manifestYaml, assets);
+        return await LoadedModuleContent.BuildAsync(module, manifestYaml, assets, dependencyResult.AssetSources);
     }
 
     /// <inheritdoc/>

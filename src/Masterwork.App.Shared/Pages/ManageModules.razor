@@ -1,22 +1,47 @@
 @page "/modules/manage"
+@using System.Text.Json
 @using Masterwork.App.Shared.Chrome
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @using Masterwork.ModuleFormat
+@using Microsoft.Extensions.Logging
 @inject IModuleStore ModuleStore
 @inject IAssetPackStore AssetPackStore
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject INativeFilePicker FilePicker
+@inject ILogger<ManageModules> Logger
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.ManageModules_PageTitle</PageTitle>
 
 <div class="mws-scenario-screen">
     <div class="mws-scenario-border" aria-hidden="true"></div>
-    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/")'>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/new-game")'>
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
     </ChromeButton>
+
+    @* The primary manual-install entry point for both packages types — module or asset pack, told
+       apart by manifest.yaml's own type: field (see ProcessUploadedBytesAsync). Same header
+       placement and same combined behavior as StartNewGame.razor's own upload button used to have,
+       before that page's upload flow moved here entirely. *@
+    <div class="mws-module-toolbar">
+        @if (FilePicker.IsAvailable)
+        {
+            <ChromeButton class="mws-upload-button style-btn-brown" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</ChromeButton>
+        }
+        else
+        {
+            <label for="mws-upload-input" class="mws-upload-button style-btn-brown">@AppStrings.StartNewGame_UploadModule</label>
+            <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
+                       accept=".mwm,.mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
+        }
+    </div>
+    @if (_uploadError is not null)
+    {
+        <p class="mws-version-warning">@_uploadError</p>
+    }
 
     <h2 class="mws-screen-title">@AppStrings.ManageModules_Heading</h2>
 
@@ -34,16 +59,6 @@
     </div>
 
     <h2 class="mws-screen-title">@AppStrings.ManageModules_AssetPacksHeading</h2>
-
-    <div class="mws-module-toolbar">
-        <label for="mws-upload-asset-pack-input" class="mws-upload-button style-btn-brown">@AppStrings.ManageModules_UploadAssetPack</label>
-        <InputFile id="mws-upload-asset-pack-input" class="mws-visually-hidden" OnChange="OnAssetPackFileSelected"
-                   accept=".mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
-    </div>
-    @if (_assetPackUploadError is not null)
-    {
-        <p class="mws-version-warning">@_assetPackUploadError</p>
-    }
 
     <div class="mws-manage-modules">
         @foreach (var pack in _assetPacks)
@@ -93,6 +108,33 @@
         </div>
     }
 
+    @if (_pendingUpload is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@_pendingUpload.Title</h3>
+                <p>@_pendingUpload.Message</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmPendingUpload">@_pendingUpload.ConfirmLabel</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingUpload = null">@AppStrings.Common_Cancel</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_infoDialog is { } infoDialog)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@infoDialog.Title</h3>
+                <p>@infoDialog.Message</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _infoDialog = null">@AppStrings.Common_Ok</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_pendingAssetPackInstall is not null)
     {
         <div class="mws-dialog-overlay">
@@ -100,24 +142,49 @@
                 <h3>@AppStrings.ManageModules_AssetPackHashMismatchTitle</h3>
                 <p>@AppStrings.ManageModules_AssetPackHashMismatchBody</p>
                 <div class="mws-dialog-actions">
-                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_loading" OnClick="ConfirmPendingAssetPackInstall">@AppStrings.ManageModules_InstallAnyway</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="ConfirmPendingAssetPackInstall">@AppStrings.ManageModules_InstallAnyway</ChromeButton>
                     <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingAssetPackInstall = null">@AppStrings.Common_Cancel</ChromeButton>
                 </div>
             </div>
         </div>
     }
 
-    <LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
+    <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
 </div>
 
 @code {
+    private sealed record PendingUpload(byte[] Bytes, string Sha256, string Title, string Message, string ConfirmLabel);
+
     private IReadOnlyList<InstalledModule> _modules = [];
     private IReadOnlyList<InstalledAssetPack> _assetPacks = [];
     private string? _confirmingDeleteId;
     private InstalledAssetPack? _confirmingDeleteAssetPack;
     private (byte[] Bytes, string Sha256)? _pendingAssetPackInstall;
-    private string? _assetPackUploadError;
+    private PendingUpload? _pendingUpload;
+    private (string Title, string Message)? _infoDialog;
+    private string? _uploadError;
     private bool _loading;
+    private string _loadingMessage = AppStrings.Common_Loading;
+    private int? _loadingDone;
+    private int? _loadingTotal;
+
+    // Guards the upload handlers against a double-click re-invoking one of them (or racing a
+    // different one) before the first invocation's re-render disables the buttons — see
+    // StartNewGame.razor's own identical field for the full reasoning (this upload flow was ported
+    // from there). Distinct from _loading, which the delete flows below still use as their own
+    // simpler re-entrancy guard.
+    private bool _busy;
+
+    // Shared by every phase that reports real (done, total) progress — mirrors StartNewGame.razor's
+    // own ReportProgress.
+    private void ReportProgress((int Done, int Total) p, string percentFormat)
+    {
+        _loadingDone = p.Done;
+        _loadingTotal = p.Total;
+        var percent = p.Total > 0 ? (int)(100.0 * p.Done / p.Total) : 0;
+        _loadingMessage = string.Format(AppStrings.EffectiveCulture, percentFormat, percent);
+        StateHasChanged();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -127,6 +194,7 @@
         }
 
         _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
         try
         {
             _modules = await ModuleStore.ListAsync();
@@ -148,6 +216,7 @@
         }
 
         _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
         try
         {
             var deletedModule = _modules.FirstOrDefault(m => m.ModuleId == moduleId);
@@ -167,7 +236,9 @@
 
             // Auto-installed dependencies this module was the last one holding onto get cleaned up
             // too — a manually-installed pack, or one still depended on by another module, is left
-            // alone (see AssetPackDependencyGuard/AssetPackInstallSource).
+            // alone (see AssetPackDependencyGuard/AssetPackInstallSource). Nothing installs a pack
+            // as Auto yet (every upload path today is manual), so this is currently a no-op in
+            // practice — kept ready for when a later phase adds automatic dependency install.
             if (deletedModule is not null)
             {
                 foreach (var dependency in deletedModule.Dependencies)
@@ -201,6 +272,7 @@
         }
 
         _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
         try
         {
             await AssetPackStore.DeleteAsync(pack.AssetPackId, pack.Version);
@@ -213,40 +285,236 @@
         }
     }
 
-    private async Task OnAssetPackFileSelected(InputFileChangeEventArgs e)
+    private async Task OnUploadFileSelected(InputFileChangeEventArgs e)
     {
-        _assetPackUploadError = null;
-        byte[] bytes;
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
         try
         {
-            using var stream = e.File.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
-            using var memory = new MemoryStream();
-            await stream.CopyToAsync(memory);
-            bytes = memory.ToArray();
-        }
-        catch (Exception ex)
-        {
-            _assetPackUploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_AssetPackUploadError_Generic, ex.Message);
-            return;
-        }
+            Logger.LogInformation("Upload: InputFile selected {FileName} ({Size} bytes)", e.File.Name, e.File.Size);
+            _uploadError = null;
+            try
+            {
+                using var stream = e.File.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                var bytes = memory.ToArray();
+                Logger.LogInformation("Upload: read {Size} bytes from InputFile", bytes.Length);
 
-        await ProcessAssetPackUploadAsync(bytes);
+                await ProcessUploadedBytesAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Upload: InputFile read/process failed");
+                // ex.Message is an internal exception message (English, per the "behind the scenes
+                // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
-    private async Task ProcessAssetPackUploadAsync(byte[] bytes)
+    // MAUI-only path (FilePicker.IsAvailable) — see INativeFilePicker's own remarks for why this
+    // bypasses the InputFile element entirely on that head instead of sharing OnUploadFileSelected
+    // (InputFile crashes WebView2 on Windows — the whole reason this abstraction exists).
+    private async Task OnNativePickerClicked()
     {
-        var manifestYaml = AssetPackPackage.ReadManifestOnly(bytes);
-        if (manifestYaml is null)
+        if (_busy)
         {
-            _assetPackUploadError = AppStrings.ManageModules_AssetPackUploadError_NoManifest;
             return;
         }
 
+        _busy = true;
+        try
+        {
+            Logger.LogInformation("Upload: native picker opened");
+            _uploadError = null;
+            try
+            {
+                var bytes = await FilePicker.PickAsync(NativeFileKind.ModulePackage);
+                if (bytes is null)
+                {
+                    Logger.LogInformation("Upload: native picker cancelled");
+                    return;
+                }
+                Logger.LogInformation("Upload: read {Size} bytes from native picker", bytes.Length);
+
+                await ProcessUploadedBytesAsync(bytes);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Upload: native picker read/process failed");
+                _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Shared by both upload paths above — everything from "bytes on disk" onward, regardless of how
+    // they were picked. manifest.yaml's own `type:` field (ManifestParser.ModuleType, defaults to
+    // 'module') decides which flow the upload goes to — both package kinds keep manifest.yaml at
+    // the zip root, so ReadManifestOnly/ManifestParser work on either one; a real asset-pack
+    // manifest has none of ModuleManifest's module-only fields, so parsing it this way produces no
+    // unmatched-field warnings.
+    private async Task ProcessUploadedBytesAsync(byte[] bytes)
+    {
+        // Reads only manifest.yaml (ReadManifestOnly), not the full package — the type check and
+        // conflict-check prompt only ever need the manifest, and a full ModulePackage.ReadFromBytes
+        // here would mean decompressing every asset in a 60+MB upload just to show a dialog.
+        var manifestYaml = ModulePackage.ReadManifestOnly(bytes);
+        if (manifestYaml is null)
+        {
+            Logger.LogWarning("Upload: package has no manifest.yaml");
+            _uploadError = AppStrings.StartNewGame_UploadError_NoManifest;
+            return;
+        }
+
+        var manifest = new ManifestParser().Parse(manifestYaml);
+        if (manifest.ModuleType == "assets")
+        {
+            await ProcessUploadedAssetPackAsync(bytes, manifestYaml);
+            return;
+        }
+
+        // No catalog/auto-install exists yet (Phase 6.3) — a declared asset-pack dependency that
+        // isn't already installed is rejected outright here rather than installed into a module
+        // that will just show a missing_dependency warning at load time. The player uploads the
+        // asset pack first (same upload control, routed above), then re-uploads the module.
+        foreach (var dependency in manifest.Dependencies)
+        {
+            if (dependency.Version is null)
+            {
+                continue;
+            }
+
+            if (!_assetPacks.Any(p => p.AssetPackId == dependency.Id && p.Version == dependency.Version))
+            {
+                Logger.LogWarning("Upload: missing asset-pack dependency {Id} v{Version}", dependency.Id, dependency.Version);
+                _infoDialog = (AppStrings.StartNewGame_MissingAssetPackTitle,
+                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_MissingAssetPack, dependency.Id, dependency.Version));
+                return;
+            }
+        }
+
+        // The upload is hashed exactly once here, as part of "processing" the incoming file, with
+        // its own progress feedback — not repeated later. Both the same-version conflict check below
+        // and InstallAsync itself (which takes the hash as a parameter) reuse this one result rather
+        // than re-hashing the same bytes a second and third time with no feedback.
         _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Verifying;
+        _loadingDone = null;
+        _loadingTotal = null;
         string sha256;
         try
         {
-            sha256 = await ModuleHasher.ComputeHashAsync(bytes, js: JS);
+            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
+            Logger.LogInformation("Upload: ComputeHashAsync returned at {Timestamp:O}", DateTime.UtcNow);
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        var existing = _modules.FirstOrDefault(m => m.ModuleId == manifest.Id);
+        if (existing is null)
+        {
+            Logger.LogInformation("Upload: installing new module {ModuleId} v{Version}", manifest.Id, manifest.Version);
+            await InstallBytesAsync(bytes, sha256);
+            return;
+        }
+
+        Logger.LogInformation("Upload: {ModuleId} already installed (existing v{ExistingVersion}, uploaded v{UploadedVersion}) — prompting", manifest.Id, existing.Version, manifest.Version);
+        await PrepareConflictPromptAsync(bytes, sha256, manifest, existing);
+    }
+
+    // Compares the uploaded manifest's version against what's already installed under the same id
+    // and prepares an appropriately-worded confirm prompt — same content is a no-op-ish notice, an
+    // upgrade/downgrade gets a warning scaled to the risk, mentioning existing saves if there are any.
+    private async Task PrepareConflictPromptAsync(byte[] bytes, string sha256, ModuleManifest manifest, InstalledModule existing)
+    {
+        var saveCount = (await SaveStore.ListAsync()).Count(s => s.ModuleId == manifest.Id);
+        var saveNote = saveCount switch
+        {
+            0 => "",
+            1 => AppStrings.StartNewGame_SaveNote_One,
+            _ => string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SaveNote_Many, saveCount),
+        };
+
+        var comparison = SemVer.Compare(manifest.Version, existing.Version);
+
+        if (comparison == 0)
+        {
+            // existing.Sha256 was already computed once, at that module's own install time (see
+            // ModuleHasher) — comparing against the hash ProcessUploadedBytesAsync already computed
+            // for the new upload needs no further hashing at all.
+            var identical = string.Equals(sha256, existing.Sha256, StringComparison.OrdinalIgnoreCase);
+
+            _pendingUpload = identical
+                ? new PendingUpload(bytes, sha256, AppStrings.StartNewGame_AlreadyInstalledTitle,
+                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_AlreadyInstalledBody, manifest.Title, manifest.Version),
+                    AppStrings.StartNewGame_ReinstallAnyway)
+                : new PendingUpload(bytes, sha256, AppStrings.StartNewGame_SameVersionDiffContentTitle,
+                    string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_SameVersionDiffContentBody, manifest.Title, manifest.Version, saveNote),
+                    AppStrings.StartNewGame_ReplaceAnyway);
+            return;
+        }
+
+        if (comparison > 0)
+        {
+            _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_UpgradeTitle,
+                string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpgradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
+                AppStrings.StartNewGame_Upgrade);
+            return;
+        }
+
+        _pendingUpload = new PendingUpload(bytes, sha256, AppStrings.StartNewGame_DowngradeTitle,
+            string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_DowngradeBody, manifest.Title, existing.Version, manifest.Version, saveNote),
+            AppStrings.StartNewGame_DowngradeAnyway);
+    }
+
+    private async Task ConfirmPendingUpload()
+    {
+        if (_busy || _pendingUpload is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var bytes = _pendingUpload.Bytes;
+            var sha256 = _pendingUpload.Sha256;
+            _pendingUpload = null;
+            await InstallBytesAsync(bytes, sha256);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ProcessUploadedAssetPackAsync(byte[] bytes, string manifestYaml)
+    {
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Verifying;
+        _loadingDone = null;
+        _loadingTotal = null;
+        string sha256;
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
         }
         finally
         {
@@ -262,33 +530,75 @@
                 _pendingAssetPackInstall = (bytes, sha256);
                 break;
             default:
-                await InstallAssetPackAsync(bytes, sha256);
+                await InstallAssetPackBytesAsync(bytes, sha256);
                 break;
         }
     }
 
     private async Task ConfirmPendingAssetPackInstall()
     {
-        if (_pendingAssetPackInstall is not { } pending)
+        if (_busy || _pendingAssetPackInstall is not { } pending)
         {
             return;
         }
 
-        _pendingAssetPackInstall = null;
-        await InstallAssetPackAsync(pending.Bytes, pending.Sha256);
-    }
-
-    private async Task InstallAssetPackAsync(byte[] bytes, string sha256)
-    {
-        _loading = true;
+        _busy = true;
         try
         {
-            await AssetPackStore.InstallAsync(bytes, sha256, AssetPackInstallSource.Manual);
+            _pendingAssetPackInstall = null;
+            await InstallAssetPackBytesAsync(pending.Bytes, pending.Sha256);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task InstallAssetPackBytesAsync(byte[] bytes, string sha256)
+    {
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Installing;
+        _loadingDone = null;
+        _loadingTotal = null;
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_InstallingPercent));
+            await AssetPackStore.InstallAsync(bytes, sha256, AssetPackInstallSource.Manual, progress);
             _assetPacks = await AssetPackStore.ListAsync();
+            Logger.LogInformation("Upload: installed asset pack (sha256 {Sha256})", sha256);
         }
         catch (Exception ex)
         {
-            _assetPackUploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_AssetPackUploadError_Generic, ex.Message);
+            Logger.LogError(ex, "Upload: asset pack install failed");
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_AssetPackUploadError_Generic, ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task InstallBytesAsync(byte[] bytes, string sha256)
+    {
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Installing;
+        _loadingDone = null;
+        _loadingTotal = null;
+
+        var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_InstallingPercent));
+
+        try
+        {
+            var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
+            _modules = await ModuleStore.ListAsync();
+            Logger.LogInformation("Upload: installed module {ModuleId} v{Version}", installed.ModuleId, installed.Version);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Upload: module install failed");
+            // ex.Message is an internal exception message (English, per the "behind the scenes
+            // strings stay in code" rule) even though it surfaces in this user-facing dialog.
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UploadError_Generic, ex.Message);
         }
         finally
         {

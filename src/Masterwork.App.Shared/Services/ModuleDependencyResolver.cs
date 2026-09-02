@@ -18,11 +18,18 @@ public static class ModuleDependencyResolver
     /// declared version). Add these to the loaded module's own <see cref="ModuleWarnings"/> after
     /// <c>LoadFromSources</c> returns rather than failing the whole module load.
     /// </param>
+    /// <param name="AssetSources">
+    /// One <see cref="IModuleAssetSource"/> per successfully-resolved dependency, in declaration
+    /// order — feed these into <see cref="IAssetResolver"/>'s dependency-pack tier (via
+    /// <see cref="GameSessionState"/>) so icon/image/font/audio references that aren't in the
+    /// module's own bundle can still resolve from the asset pack that actually ships them.
+    /// </param>
     public sealed record Result(
         IReadOnlyList<DependencyRestext> DependencyRestexts,
         IReadOnlyList<string> LayoutChromeYamls,
         IReadOnlyList<string> AdditionalVariableYamls,
-        IReadOnlyList<string> MissingDependencyWarnings
+        IReadOnlyList<string> MissingDependencyWarnings,
+        IReadOnlyList<IModuleAssetSource> AssetSources
     );
 
     /// <param name="dependencies">A module's manifest-declared <c>dependencies:</c> list, in declaration order.</param>
@@ -39,6 +46,7 @@ public static class ModuleDependencyResolver
         var layoutYamls = new List<string>();
         var variableYamls = new List<string>();
         var missingWarnings = new List<string>();
+        var assetSources = new List<IModuleAssetSource>();
 
         foreach (var dependency in dependencies)
         {
@@ -71,8 +79,10 @@ public static class ModuleDependencyResolver
             {
                 variableYamls.Add(content.VariablesYaml);
             }
+
+            assetSources.Add(await assetPackStore.GetAssetSourceAsync(dependency.Id, dependency.Version));
         }
 
-        return new Result(dependencyRestexts, layoutYamls, variableYamls, missingWarnings);
+        return new Result(dependencyRestexts, layoutYamls, variableYamls, missingWarnings, assetSources);
     }
 }

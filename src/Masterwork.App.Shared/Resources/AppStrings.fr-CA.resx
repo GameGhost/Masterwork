@@ -102,7 +102,7 @@
   <data name="Achievements_NoMemories" xml:space="preserve"><value>Aucune partie terminée pour le moment. Atteindre une fin enregistre un Souvenir ici.</value></data>
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Gérer les modules</value></data>
-  <data name="ManageModules_Heading" xml:space="preserve"><value>Gérer les modules</value></data>
+  <data name="ManageModules_Heading" xml:space="preserve"><value>Modules</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Supprimer ce module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>
@@ -132,8 +132,6 @@
   <data name="ContinueList_ImportError_Generic" xml:space="preserve"><value>Impossible d'importer cette sauvegarde : {0}</value></data>
 
   <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Nouvelle partie</value></data>
-  <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Télécharger</value></data>
-  <data name="StartNewGame_DownloadModulesHint" xml:space="preserve"><value>Bientôt disponible — nécessite un registre de modules hébergé (Phase 6)</value></data>
   <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Ajouter</value></data>
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Sélectionnez un module pour commencer.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Jouer</value></data>
@@ -172,7 +170,7 @@
   <data name="OptionsDialog_PreferredModuleLanguage" xml:space="preserve"><value>Langue préférée du module</value></data>
   <data name="OptionsDialog_NoPreference" xml:space="preserve"><value>Aucune préférence</value></data>
   <data name="OptionsDialog_ModuleLanguageHint" xml:space="preserve"><value>S'applique seulement si le module que vous jouez prend en charge cette langue — sinon, la langue par défaut du module est utilisée.</value></data>
-  <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer les modules</value></data>
+  <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quitter</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quitter?</value></data>
   <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Voulez-vous terminer votre partie maintenant?</value></data>

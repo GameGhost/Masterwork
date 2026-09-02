@@ -45,8 +45,7 @@
 @if (_showOptions)
 {
     <OptionsDialog DialogContext="OptionsDialogContext.MainMenu"
-                   OnClose="() => _showOptions = false"
-                   OnManageModules='() => Nav.NavigateTo("/modules/manage")' />
+                   OnClose="() => _showOptions = false" />
 }
 
 @code {

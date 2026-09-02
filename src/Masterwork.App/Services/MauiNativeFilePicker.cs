@@ -55,7 +55,15 @@ public sealed class MauiNativeFilePicker : INativeFilePicker
             ?? throw new InvalidOperationException("MainWindowState.Initialize hasn't run yet — the app window isn't ready.");
 
         var picker = new Microsoft.Windows.Storage.Pickers.FileOpenPicker(windowId);
-        picker.FileTypeFilter.Add(kind == NativeFileKind.ModulePackage ? ".mwm" : ".mwsave");
+        if (kind == NativeFileKind.ModulePackage)
+        {
+            picker.FileTypeFilter.Add(".mwm");
+            picker.FileTypeFilter.Add(".mwassets");
+        }
+        else
+        {
+            picker.FileTypeFilter.Add(".mwsave");
+        }
 
         var result = await picker.PickSingleFileAsync();
         if (result is null)

@@ -18,6 +18,9 @@ public class ModuleDependencyResolverTests
             throw new NotImplementedException();
 
         public Task DeleteAsync(string assetPackId, string version) => throw new NotImplementedException();
+
+        public Task<IModuleAssetSource> GetAssetSourceAsync(string assetPackId, string version) =>
+            Task.FromResult<IModuleAssetSource>(EmptyModuleAssetSource.Instance);
     }
 
     private static AssetPackPackageContents MakeContents(
@@ -36,6 +39,20 @@ public class ModuleDependencyResolverTests
         Assert.Empty(result.LayoutChromeYamls);
         Assert.Empty(result.AdditionalVariableYamls);
         Assert.Empty(result.MissingDependencyWarnings);
+        Assert.Empty(result.AssetSources);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_DependencyInstalled_IncludesItsAssetSource()
+    {
+        var store = new FakeAssetPackStore();
+        store.Installed[("MFW_Common_Assets", "1.0.0")] = MakeContents(
+            manifestYaml: "id: 'MFW_Common_Assets'\ntitle: 'x'\nversion: '1.0.0'\n");
+        var dependencies = new[] { new ModuleDependency { Id = "MFW_Common_Assets", Version = "1.0.0" } };
+
+        var result = await ModuleDependencyResolver.ResolveAsync(dependencies, store, "en-US");
+
+        Assert.Single(result.AssetSources);
     }
 
     [Fact]
@@ -131,5 +148,8 @@ public class ModuleDependencyResolverTests
         Assert.Single(result.DependencyRestexts);
         var warning = Assert.Single(result.MissingDependencyWarnings);
         Assert.Contains("PackB", warning);
+        // Only the resolved dependency (PackA) contributes an asset source — the missing one (PackB)
+        // doesn't, since there's nothing installed to build one from.
+        Assert.Single(result.AssetSources);
     }
 }

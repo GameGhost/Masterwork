@@ -69,6 +69,61 @@ export async function putAssetPackAsset(id, version, assetPath, bytes) {
     });
 }
 
+// Reads one asset's raw bytes back into .NET — used only for content that needs to be read as data
+// (style.css, injected as literal text), never for display assets (images/fonts), which should go
+// through getAssetPackAssetAsObjectUrl below instead. Mirrors moduleStore.js's getModuleAsset.
+export async function getAssetPackAsset(id, version, assetPath) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(ASSET_STORE, "readonly");
+        const req = tx.objectStore(ASSET_STORE).get([id, version, assetPath]);
+        req.onsuccess = () => resolve(req.result ? req.result.bytes : null);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+// Reads one asset's bytes and turns them into a Blob object URL entirely here in JS — same
+// bytes-never-cross-into-.NET reasoning as moduleStore.js's getModuleAssetAsObjectUrl. The caller is
+// responsible for revoking the URL once it's no longer needed.
+export async function getAssetPackAssetAsObjectUrl(id, version, assetPath, mimeType) {
+    const db = await openDb();
+    const bytes = await new Promise((resolve, reject) => {
+        const tx = db.transaction(ASSET_STORE, "readonly");
+        const req = tx.objectStore(ASSET_STORE).get([id, version, assetPath]);
+        req.onsuccess = () => resolve(req.result ? req.result.bytes : null);
+        req.onerror = () => reject(req.error);
+    });
+
+    if (!bytes) {
+        return null;
+    }
+
+    const blob = new Blob([bytes], { type: mimeType });
+    return URL.createObjectURL(blob);
+}
+
+// Lists one pack's asset paths only (key-only cursor, never reads bytes) — mirrors
+// moduleStore.js's listModuleAssetPaths.
+export async function listAssetPackAssetPaths(id, version) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(ASSET_STORE, "readonly");
+        const index = tx.objectStore(ASSET_STORE).index(ASSET_BY_PACK_INDEX);
+        const paths = [];
+        const cursorReq = index.openKeyCursor(IDBKeyRange.only([id, version]));
+        cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (cursor) {
+                paths.push(cursor.primaryKey[2]); // primaryKey is [id, version, assetPath]
+                cursor.continue();
+            } else {
+                resolve(paths);
+            }
+        };
+        cursorReq.onerror = () => reject(cursorReq.error);
+    });
+}
+
 // Deletes a pack's metadata record and every one of its asset rows as a single transaction — same
 // reasoning as moduleStore.js's clearModule.
 export async function clearAssetPack(id, version) {
