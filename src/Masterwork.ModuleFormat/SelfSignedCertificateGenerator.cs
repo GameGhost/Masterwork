@@ -4,10 +4,9 @@ using System.Security.Cryptography.X509Certificates;
 namespace Masterwork.ModuleFormat;
 
 /// <summary>
-/// Generates the one self-signed certificate a project maintainer holds to sign canonical content
-/// (<c>phase6-design.md</c> §3 in the design repo) — no CA, no chain, rotated by generating a new
-/// one and re-pinning its thumbprint in a future app build. RSA 3072-bit, matching
-/// <see cref="PackageSigner"/>'s own RSA/SHA-256/PKCS1 signing scheme.
+/// Generates the one self-signed certificate a project maintainer holds to sign canonical content —
+/// no CA, no chain, rotated by generating a new one and re-pinning its thumbprint in a future app
+/// build. RSA 3072-bit, matching <see cref="PackageSigner"/>'s own RSA/SHA-256/PKCS1 signing scheme.
 /// </summary>
 public static class SelfSignedCertificateGenerator
 {

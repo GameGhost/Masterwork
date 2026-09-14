@@ -35,7 +35,9 @@ dotnet build src/Masterwork.slnx
 dotnet test src/Masterwork.Tests/Masterwork.Tests.csproj
 ```
 
-All 215 tests must pass after any change to `ModuleFormat`, `Engine`, or `Extractor`.
+The whole suite must stay green after any change to `ModuleFormat`, `Engine`, `Extractor`, or the
+tested services in `App.Shared`. Don't pin an expected count here — it grows every phase; run the
+suite before your change and treat that number as the baseline for your own run.
 
 ### Android build setup
 

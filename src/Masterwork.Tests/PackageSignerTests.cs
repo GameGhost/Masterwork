@@ -63,6 +63,7 @@ public class PackageSignerTests
         Assert.Equal(PackageVerificationOutcome.Unsigned, result.Outcome);
         Assert.Null(result.CertificateSubject);
         Assert.Null(result.CertificateThumbprint);
+        Assert.Null(result.CertificateCommonName);
     }
 
     [Fact]
@@ -77,6 +78,10 @@ public class PackageSignerTests
         Assert.Equal(PackageVerificationOutcome.Valid, result.Outcome);
         Assert.Equal(cert.Subject, result.CertificateSubject);
         Assert.Equal(cert.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256), result.CertificateThumbprint);
+
+        // The player-facing name is the bare Common Name, not the "CN=..." distinguished form — the
+        // install prompt drops it straight into a sentence.
+        Assert.Equal("Masterwork Test Signer", result.CertificateCommonName);
     }
 
     [Fact]

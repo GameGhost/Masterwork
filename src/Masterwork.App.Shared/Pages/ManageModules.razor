@@ -8,6 +8,7 @@
 @inject IModuleStore ModuleStore
 @inject IAssetPackStore AssetPackStore
 @inject ISaveStore SaveStore
+@inject IAppSettingsStore SettingsStore
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject INativeFilePicker FilePicker
@@ -135,6 +136,41 @@
         </div>
     }
 
+    @* Unsigned and unrecognized-signer share one block: same "stop and decide" moment, differing
+       only in what can be shown about the signer and whether remembering it is on offer. A failed
+       signature never reaches here — that's a hard block, routed to the info dialog above. *@
+    @if (_pendingTrustPrompt is { } trustPrompt)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@trustPrompt.Title</h3>
+                <p>@trustPrompt.Body</p>
+
+                @if (trustPrompt.Decision == PackageTrustDecision.Unsigned)
+                {
+                    <div class="mws-dialog-actions">
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => ConfirmTrustPrompt(trustPublisher: false)">@AppStrings.ManageModules_InstallAnyway</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingTrustPrompt = null">@AppStrings.Common_Cancel</ChromeButton>
+                    </div>
+                }
+                else
+                {
+                    @* The body already names the publisher; the thumbprint is the part of its identity
+                       that can actually be checked against a value from somewhere else. *@
+                    <p class="mws-signer-details">
+                        <strong>@AppStrings.ManageModules_ThumbprintLabel:</strong>
+                        <span class="mws-thumbprint">@trustPrompt.Verification.CertificateThumbprint</span>
+                    </p>
+                    <div class="mws-dialog-actions">
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => ConfirmTrustPrompt(trustPublisher: false)">@AppStrings.ManageModules_InstallOnce</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => ConfirmTrustPrompt(trustPublisher: true)">@AppStrings.ManageModules_TrustAndInstall</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _pendingTrustPrompt = null">@AppStrings.Common_Cancel</ChromeButton>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     @if (_pendingAssetPackInstall is not null)
     {
         <div class="mws-dialog-overlay">
@@ -155,14 +191,30 @@
 @code {
     private sealed record PendingUpload(byte[] Bytes, string Sha256, string Title, string Message, string ConfirmLabel);
 
+    /// <summary>
+    /// An upload held at the signature prompt, waiting on the player's decision before the rest of
+    /// the install pipeline runs. Carries the manifest the gate already read so accepting doesn't
+    /// re-open the package to read it a second time.
+    /// </summary>
+    private sealed record PendingTrustPrompt(
+        byte[] Bytes,
+        string ManifestYaml,
+        ModuleManifest Manifest,
+        PackageVerificationResult Verification,
+        PackageTrustDecision Decision,
+        string Title,
+        string Body);
+
     private IReadOnlyList<InstalledModule> _modules = [];
     private IReadOnlyList<InstalledAssetPack> _assetPacks = [];
     private string? _confirmingDeleteId;
     private InstalledAssetPack? _confirmingDeleteAssetPack;
     private (byte[] Bytes, string Sha256)? _pendingAssetPackInstall;
     private PendingUpload? _pendingUpload;
+    private PendingTrustPrompt? _pendingTrustPrompt;
     private (string Title, string Message)? _infoDialog;
     private string? _uploadError;
+    private AppSettings _appSettings = AppSettings.Default;
     private bool _loading;
     private string _loadingMessage = AppStrings.Common_Loading;
     private int? _loadingDone;
@@ -199,6 +251,7 @@
         {
             _modules = await ModuleStore.ListAsync();
             _assetPacks = await AssetPackStore.ListAsync();
+            _appSettings = await SettingsStore.LoadAsync();
         }
         finally
         {
@@ -360,17 +413,20 @@
         }
     }
 
-    // Shared by both upload paths above — everything from "bytes on disk" onward, regardless of how
-    // they were picked. manifest.yaml's own `type:` field (ManifestParser.ModuleType, defaults to
-    // 'module') decides which flow the upload goes to — both package kinds keep manifest.yaml at
-    // the zip root, so ReadManifestOnly/ManifestParser work on either one; a real asset-pack
-    // manifest has none of ModuleManifest's module-only fields, so parsing it this way produces no
-    // unmatched-field warnings.
+    // First stage for both upload paths: read the manifest, then decide whether this content is
+    // allowed to install at all. The manifest comes first only so the prompt can say *what* is being
+    // installed and whether it's a module or an asset pack — reading it costs one zip entry, and the
+    // expensive work (full hash, extraction) still sits behind the decision. Anything needing the
+    // player's answer parks the upload in _pendingTrustPrompt and resumes at ContinueUploadAsync.
+    //
+    // Reads only manifest.yaml (ReadManifestOnly), not the full package — a ModulePackage.ReadFromBytes
+    // here would mean decompressing every asset in a 60+MB upload just to show a dialog. manifest.yaml's
+    // own `type:` field (ManifestParser.ModuleType, defaults to 'module') decides which flow the upload
+    // goes to; both package kinds keep manifest.yaml at the zip root, and an asset-pack manifest has
+    // none of ModuleManifest's module-only fields, so parsing it this way produces no unmatched-field
+    // warnings and still yields a usable Title.
     private async Task ProcessUploadedBytesAsync(byte[] bytes)
     {
-        // Reads only manifest.yaml (ReadManifestOnly), not the full package — the type check and
-        // conflict-check prompt only ever need the manifest, and a full ModulePackage.ReadFromBytes
-        // here would mean decompressing every asset in a 60+MB upload just to show a dialog.
         var manifestYaml = ModulePackage.ReadManifestOnly(bytes);
         if (manifestYaml is null)
         {
@@ -380,6 +436,96 @@
         }
 
         var manifest = new ManifestParser().Parse(manifestYaml);
+        var isAssetPack = manifest.ModuleType == "assets";
+
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Verifying;
+        _loadingDone = null;
+        _loadingTotal = null;
+
+        // Verify is synchronous and, for a signed package, potentially slow (managed SHA-256 over
+        // every entry). Yielding first lets the overlay actually paint instead of the whole call
+        // running inside one un-rendered tick.
+        StateHasChanged();
+        await Task.Yield();
+
+        PackageVerificationResult verification;
+        try
+        {
+            verification = PackageSigner.Verify(bytes);
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        var decision = PackageTrustEvaluator.Evaluate(verification, PinnedTrustAnchor.Thumbprint, _appSettings.TrustedPublisherThumbprints);
+        Logger.LogInformation("Upload: signature {Outcome}, trust decision {Decision}", verification.Outcome, decision);
+
+        switch (decision)
+        {
+            case PackageTrustDecision.Blocked:
+                _infoDialog = (AppStrings.ManageModules_SignatureBlockedTitle, AppStrings.ManageModules_SignatureBlockedBody);
+                return;
+
+            case PackageTrustDecision.Trusted:
+                await ContinueUploadAsync(bytes, manifestYaml, manifest);
+                return;
+
+            case PackageTrustDecision.Unsigned:
+                _pendingTrustPrompt = new PendingTrustPrompt(
+                    bytes, manifestYaml, manifest, verification, decision,
+                    Title: isAssetPack ? AppStrings.ManageModules_UnsignedTitleAssetPack : AppStrings.ManageModules_UnsignedTitleModule,
+                    Body: string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_UnsignedBody, manifest.Title));
+                return;
+
+            default:
+                _pendingTrustPrompt = new PendingTrustPrompt(
+                    bytes, manifestYaml, manifest, verification, decision,
+                    Title: AppStrings.ManageModules_UnrecognizedSignerTitle,
+                    Body: string.Format(
+                        AppStrings.EffectiveCulture,
+                        isAssetPack ? AppStrings.ManageModules_UnrecognizedSignerBodyAssetPack : AppStrings.ManageModules_UnrecognizedSignerBodyModule,
+                        verification.CertificateCommonName));
+                return;
+        }
+    }
+
+    private async Task ConfirmTrustPrompt(bool trustPublisher)
+    {
+        if (_busy || _pendingTrustPrompt is not { } pending)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            _pendingTrustPrompt = null;
+
+            if (trustPublisher && pending.Verification.CertificateThumbprint is { Length: > 0 } thumbprint)
+            {
+                _appSettings = _appSettings with
+                {
+                    TrustedPublisherThumbprints = [.. _appSettings.TrustedPublisherThumbprints, thumbprint],
+                };
+                await SettingsStore.SaveAsync(_appSettings);
+                Logger.LogInformation("Upload: now trusting publisher {Thumbprint}", thumbprint);
+            }
+
+            await ContinueUploadAsync(pending.Bytes, pending.ManifestYaml, pending.Manifest);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Everything from "this content is allowed to install" onward, regardless of how it was picked
+    // or how its signature resolved — the manifest arrives already read and parsed by the trust gate
+    // above.
+    private async Task ContinueUploadAsync(byte[] bytes, string manifestYaml, ModuleManifest manifest)
+    {
         if (manifest.ModuleType == "assets")
         {
             await ProcessUploadedAssetPackAsync(bytes, manifestYaml);

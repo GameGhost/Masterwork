@@ -73,6 +73,11 @@ Directory.Build.local.props
 *.keystore
 *.jks
 
+# Content-signing certificate private keys (Masterwork.ModulePacker's gencert/sign) — same rule as
+# the Android key above: a long-lived secret, never committed, backed up outside git.
+*.pfx
+*.p12
+
 # Publish/release output built for GitHub Releases — build artifacts, not source
 *.zip
 *.apk

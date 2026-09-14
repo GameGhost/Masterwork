@@ -107,6 +107,17 @@
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>
   <data name="ManageModules_DeleteModuleOnly" xml:space="preserve"><value>Supprimer le module seulement</value></data>
+  <data name="ManageModules_UnsignedTitleModule" xml:space="preserve"><value>Module non signé</value></data>
+  <data name="ManageModules_UnsignedTitleAssetPack" xml:space="preserve"><value>Pack de ressources non signé</value></data>
+  <data name="ManageModules_UnsignedBody" xml:space="preserve"><value>« {0} » n'est pas signé. Impossible de vérifier l'intégrité du contenu ni l'identité de l'éditeur. Installez-le à vos risques.</value></data>
+  <data name="ManageModules_UnrecognizedSignerTitle" xml:space="preserve"><value>Éditeur non reconnu</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyModule" xml:space="preserve"><value>Ce module a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur.</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyAssetPack" xml:space="preserve"><value>Ce pack de ressources a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur.</value></data>
+  <data name="ManageModules_ThumbprintLabel" xml:space="preserve"><value>Empreinte</value></data>
+  <data name="ManageModules_InstallOnce" xml:space="preserve"><value>Installer une fois</value></data>
+  <data name="ManageModules_TrustAndInstall" xml:space="preserve"><value>Faire confiance et installer</value></data>
+  <data name="ManageModules_SignatureBlockedTitle" xml:space="preserve"><value>Échec de la vérification de signature</value></data>
+  <data name="ManageModules_SignatureBlockedBody" xml:space="preserve"><value>La signature de ce paquet ne correspond pas à son contenu : il a peut-être été modifié ou endommagé après sa signature. Impossible de l'installer. Téléchargez-le de nouveau depuis sa source d'origine.</value></data>
 
   <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continuer</value></data>
   <data name="ContinueList_Heading" xml:space="preserve"><value>Continuer</value></data>

@@ -119,6 +119,17 @@
   <data name="ManageModules_InstallAnyway" xml:space="preserve"><value>Install anyway</value></data>
   <data name="ManageModules_AssetPackUploadError_NoManifest" xml:space="preserve"><value>This file has no manifest.yaml and can't be installed.</value></data>
   <data name="ManageModules_AssetPackUploadError_Generic" xml:space="preserve"><value>Couldn't install that asset pack: {0}</value></data>
+  <data name="ManageModules_UnsignedTitleModule" xml:space="preserve"><value>Unsigned module</value></data>
+  <data name="ManageModules_UnsignedTitleAssetPack" xml:space="preserve"><value>Unsigned asset pack</value></data>
+  <data name="ManageModules_UnsignedBody" xml:space="preserve"><value>'{0}' isn't signed. Unable to verify content integrity or publisher. Install at your own risk.</value></data>
+  <data name="ManageModules_UnrecognizedSignerTitle" xml:space="preserve"><value>Unrecognized publisher</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyModule" xml:space="preserve"><value>This module was created by '{0}'. Install if you trust the publisher.</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyAssetPack" xml:space="preserve"><value>This asset pack was created by '{0}'. Install if you trust the publisher.</value></data>
+  <data name="ManageModules_ThumbprintLabel" xml:space="preserve"><value>Thumbprint</value></data>
+  <data name="ManageModules_InstallOnce" xml:space="preserve"><value>Install once</value></data>
+  <data name="ManageModules_TrustAndInstall" xml:space="preserve"><value>Trust publisher &amp; install</value></data>
+  <data name="ManageModules_SignatureBlockedTitle" xml:space="preserve"><value>Signature check failed</value></data>
+  <data name="ManageModules_SignatureBlockedBody" xml:space="preserve"><value>This package's signature doesn't match its contents — it may have been modified or damaged after it was signed. It can't be installed. Try downloading it again from its original source.</value></data>
 
   <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continue</value></data>
   <data name="ContinueList_Heading" xml:space="preserve"><value>Continue</value></data>

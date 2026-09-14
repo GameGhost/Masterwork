@@ -666,6 +666,18 @@ body {
     color: #666;
 }
 
+/* Signer identity shown in the unrecognized-publisher prompt. The thumbprint is a 64-character hex
+   string with no natural break points, so it needs an explicit wrap rule or it overflows the
+   dialog; monospace makes it practical to compare against an expected value character by character. */
+.mws-signer-details {
+    font-size: 0.85em;
+}
+
+.mws-thumbprint {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
 .mws-save-language {
     font-size: 0.75em;
     color: #999;

@@ -20,32 +20,34 @@ public enum PackageVerificationOutcome
 }
 
 /// <summary>
-/// <see cref="PackageVerificationOutcome.Valid"/> carries <see cref="CertificateSubject"/>/
-/// <see cref="CertificateThumbprint"/> so a caller can render the trust-tier UI (compare the
-/// thumbprint against a pinned anchor or a remembered "trust this publisher" choice, or show the
-/// subject/thumbprint in an unrecognized-signer warning) without re-parsing the package itself.
-/// Both are <see langword="null"/> for <see cref="PackageVerificationOutcome.Unsigned"/> and
-/// <see cref="PackageVerificationOutcome.Invalid"/> (an invalid signature's claimed certificate
-/// isn't trustworthy information — reading a corrupted/hostile signature.sig enough to identify
-/// *whose* signature failed isn't attempted).
+/// <see cref="PackageVerificationOutcome.Valid"/> carries the signer's identity so a caller can
+/// render the trust-tier UI (compare <see cref="CertificateThumbprint"/> against a pinned anchor or
+/// a remembered "trust this publisher" choice, name the publisher in an unrecognized-signer warning)
+/// without re-parsing the package itself. <see cref="CertificateCommonName"/> is the one to show a
+/// player — the bare Common Name, e.g. <c>Masterwork Content Signing</c>; <see cref="CertificateSubject"/>
+/// is the full distinguished name behind it. All are <see langword="null"/> for
+/// <see cref="PackageVerificationOutcome.Unsigned"/> and <see cref="PackageVerificationOutcome.Invalid"/>
+/// (an invalid signature's claimed certificate isn't trustworthy information — reading a corrupted/
+/// hostile signature.sig enough to identify *whose* signature failed isn't attempted).
 /// </summary>
 public sealed record PackageVerificationResult(
     PackageVerificationOutcome Outcome,
     string? CertificateSubject = null,
-    string? CertificateThumbprint = null
+    string? CertificateThumbprint = null,
+    string? CertificateCommonName = null
 );
 
 /// <summary>
 /// Signs and verifies a <c>.mwm</c>/<c>.mwassets</c> package (or any zip — this operates on raw zip
 /// bytes, with no MWS-specific knowledge, so it needs no changes to <see cref="ModulePackage"/>/
 /// <see cref="AssetPackPackage"/> to work with either package kind) via one embedded
-/// <c>signature.sig</c> entry. Deliberately minimal for what's actually being verified — see
-/// <c>phase6-design.md</c> §3 in the design repo: MWS content is sandboxed declarative data, not
-/// executable code, so this skips certificate-chain validation, CRL/OCSP checking, and expiry
-/// checking entirely. A self-signed certificate has no chain to validate in the first place;
-/// rotation (a new certificate, re-pinned by an app update) is the only "revocation" that exists for
-/// one. <see cref="Verify"/> reports facts (signed/unsigned/valid/invalid, and the signer's
-/// identity) — deciding whether that identity is *trusted* is entirely the caller's policy.
+/// <c>signature.sig</c> entry. Deliberately minimal for what's actually being verified: MWS content
+/// is sandboxed declarative data, not executable code, so this skips certificate-chain validation,
+/// CRL/OCSP checking, and expiry checking entirely. A self-signed certificate has no chain to
+/// validate in the first place, and rotation (a new certificate, re-pinned by an app update) is the
+/// only "revocation" that exists for one. <see cref="Verify"/> reports facts (signed/unsigned/
+/// valid/invalid, and the signer's identity) — deciding whether that identity is *trusted* is
+/// entirely the caller's policy.
 /// </summary>
 public static class PackageSigner
 {
@@ -97,17 +99,29 @@ public static class PackageSigner
     /// <summary>Verifies a package's embedded signature, if any — see <see cref="PackageVerificationResult"/>.</summary>
     public static PackageVerificationResult Verify(byte[] zipBytes)
     {
-        var allEntries = ReadEntries(zipBytes, excludeSignature: false);
-        var sigEntry = allEntries.FirstOrDefault(e => e.Path.Equals(SignatureEntryPath, StringComparison.OrdinalIgnoreCase));
-        if (sigEntry.Path is null)
+        // Looked up by name before anything else — an unsigned package (every package built before
+        // signing existed) then costs one directory lookup instead of decompressing the whole
+        // archive only to discover there was nothing to check.
+        byte[] signatureEntryBytes;
+        using (var probeStream = new MemoryStream(zipBytes))
+        using (var probeArchive = new ZipArchive(probeStream, ZipArchiveMode.Read))
         {
-            return new PackageVerificationResult(PackageVerificationOutcome.Unsigned);
+            var probeEntry = probeArchive.GetEntry(SignatureEntryPath);
+            if (probeEntry is null)
+            {
+                return new PackageVerificationResult(PackageVerificationOutcome.Unsigned);
+            }
+
+            using var probeEntryStream = probeEntry.Open();
+            using var probeMemory = new MemoryStream();
+            probeEntryStream.CopyTo(probeMemory);
+            signatureEntryBytes = probeMemory.ToArray();
         }
 
         SignatureFile? signatureFile;
         try
         {
-            signatureFile = JsonSerializer.Deserialize<SignatureFile>(sigEntry.Bytes);
+            signatureFile = JsonSerializer.Deserialize<SignatureFile>(signatureEntryBytes);
         }
         catch (JsonException)
         {
@@ -137,8 +151,7 @@ public static class PackageSigner
             return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
         }
 
-        var entriesExcludingSignature = allEntries.Where(e => !e.Path.Equals(SignatureEntryPath, StringComparison.OrdinalIgnoreCase)).ToList();
-        var digest = ComputeDigest(entriesExcludingSignature);
+        var digest = ComputeDigest(ReadEntries(zipBytes, excludeSignature: true));
 
         var valid = rsa.VerifyHash(digest, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         if (!valid)
@@ -146,7 +159,11 @@ public static class PackageSigner
             return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
         }
 
-        return new PackageVerificationResult(PackageVerificationOutcome.Valid, cert.Subject, cert.GetCertHashString(HashAlgorithmName.SHA256));
+        return new PackageVerificationResult(
+            PackageVerificationOutcome.Valid,
+            cert.Subject,
+            cert.GetCertHashString(HashAlgorithmName.SHA256),
+            cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false));
     }
 
     // Order-independent (sorted by path) so re-zipping the same logical content in a different entry
