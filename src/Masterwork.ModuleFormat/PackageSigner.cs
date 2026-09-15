@@ -2,40 +2,8 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Text.Json;
 
 namespace Masterwork.ModuleFormat;
-
-/// <summary>Result of <see cref="PackageSigner.Verify"/> — a fact about the package's embedded signature, not a trust decision (that's a caller-side policy, e.g. comparing <see cref="CertificateThumbprint"/> against a pinned anchor or a "trusted publishers" list).</summary>
-public enum PackageVerificationOutcome
-{
-    /// <summary>No <c>signature.sig</c> entry present at all.</summary>
-    Unsigned,
-
-    /// <summary>A signature is present and verifies against its own embedded certificate.</summary>
-    Valid,
-
-    /// <summary><c>signature.sig</c> is present but malformed, or the signature doesn't verify against the package's actual content (tampered, corrupted, or wrong key).</summary>
-    Invalid,
-}
-
-/// <summary>
-/// <see cref="PackageVerificationOutcome.Valid"/> carries the signer's identity so a caller can
-/// render the trust-tier UI (compare <see cref="CertificateThumbprint"/> against a pinned anchor or
-/// a remembered "trust this publisher" choice, name the publisher in an unrecognized-signer warning)
-/// without re-parsing the package itself. <see cref="CertificateCommonName"/> is the one to show a
-/// player — the bare Common Name, e.g. <c>Masterwork Content Signing</c>; <see cref="CertificateSubject"/>
-/// is the full distinguished name behind it. All are <see langword="null"/> for
-/// <see cref="PackageVerificationOutcome.Unsigned"/> and <see cref="PackageVerificationOutcome.Invalid"/>
-/// (an invalid signature's claimed certificate isn't trustworthy information — reading a corrupted/
-/// hostile signature.sig enough to identify *whose* signature failed isn't attempted).
-/// </summary>
-public sealed record PackageVerificationResult(
-    PackageVerificationOutcome Outcome,
-    string? CertificateSubject = null,
-    string? CertificateThumbprint = null,
-    string? CertificateCommonName = null
-);
 
 /// <summary>
 /// Signs and verifies a <c>.mwm</c>/<c>.mwassets</c> package (or any zip — this operates on raw zip
@@ -53,8 +21,6 @@ public static class PackageSigner
 {
     private const string SignatureEntryPath = "signature.sig";
 
-    private sealed record SignatureFile(string Algorithm, string Certificate, string Signature);
-
     /// <summary>
     /// Returns a copy of <paramref name="zipBytes"/> with a <c>signature.sig</c> entry added (or
     /// replaced, if one was already present — re-signing drops the old signature rather than
@@ -65,18 +31,8 @@ public static class PackageSigner
     /// <param name="signingCertificate">Must have an RSA private key attached (e.g. loaded from a <c>.pfx</c>).</param>
     public static byte[] Sign(byte[] zipBytes, X509Certificate2 signingCertificate)
     {
-        using var rsa = signingCertificate.GetRSAPrivateKey()
-            ?? throw new InvalidOperationException("Signing certificate has no RSA private key — load it from a .pfx that includes one.");
-
         var entries = ReadEntries(zipBytes, excludeSignature: true);
-        var digest = ComputeDigest(entries);
-        var signatureBytes = rsa.SignHash(digest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-
-        var signatureFile = new SignatureFile(
-            Algorithm: "RS256",
-            Certificate: Convert.ToBase64String(signingCertificate.Export(X509ContentType.Cert)),
-            Signature: Convert.ToBase64String(signatureBytes));
-        var signatureJson = JsonSerializer.SerializeToUtf8Bytes(signatureFile);
+        var signatureJson = SignatureEnvelope.Build(ComputeDigest(entries), signingCertificate);
 
         using var outputStream = new MemoryStream();
         using (var archive = new ZipArchive(outputStream, ZipArchiveMode.Create, leaveOpen: true))
@@ -96,8 +52,8 @@ public static class PackageSigner
         return outputStream.ToArray();
     }
 
-    /// <summary>Verifies a package's embedded signature, if any — see <see cref="PackageVerificationResult"/>.</summary>
-    public static PackageVerificationResult Verify(byte[] zipBytes)
+    /// <summary>Verifies a package's embedded signature, if any — see <see cref="SignatureVerificationResult"/>.</summary>
+    public static SignatureVerificationResult Verify(byte[] zipBytes)
     {
         // Looked up by name before anything else — an unsigned package (every package built before
         // signing existed) then costs one directory lookup instead of decompressing the whole
@@ -109,7 +65,7 @@ public static class PackageSigner
             var probeEntry = probeArchive.GetEntry(SignatureEntryPath);
             if (probeEntry is null)
             {
-                return new PackageVerificationResult(PackageVerificationOutcome.Unsigned);
+                return new SignatureVerificationResult(SignatureVerificationOutcome.Unsigned);
             }
 
             using var probeEntryStream = probeEntry.Open();
@@ -118,52 +74,8 @@ public static class PackageSigner
             signatureEntryBytes = probeMemory.ToArray();
         }
 
-        SignatureFile? signatureFile;
-        try
-        {
-            signatureFile = JsonSerializer.Deserialize<SignatureFile>(signatureEntryBytes);
-        }
-        catch (JsonException)
-        {
-            return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
-        }
-
-        if (signatureFile is not { Algorithm: "RS256" })
-        {
-            return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
-        }
-
-        X509Certificate2 cert;
-        byte[] signatureBytes;
-        try
-        {
-            cert = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(signatureFile.Certificate));
-            signatureBytes = Convert.FromBase64String(signatureFile.Signature);
-        }
-        catch (Exception ex) when (ex is FormatException or CryptographicException)
-        {
-            return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
-        }
-
-        using var rsa = cert.GetRSAPublicKey();
-        if (rsa is null)
-        {
-            return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
-        }
-
         var digest = ComputeDigest(ReadEntries(zipBytes, excludeSignature: true));
-
-        var valid = rsa.VerifyHash(digest, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        if (!valid)
-        {
-            return new PackageVerificationResult(PackageVerificationOutcome.Invalid);
-        }
-
-        return new PackageVerificationResult(
-            PackageVerificationOutcome.Valid,
-            cert.Subject,
-            cert.GetCertHashString(HashAlgorithmName.SHA256),
-            cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false));
+        return SignatureEnvelope.VerifyDigest(digest, signatureEntryBytes);
     }
 
     // Order-independent (sorted by path) so re-zipping the same logical content in a different entry

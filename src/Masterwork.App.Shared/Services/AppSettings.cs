@@ -44,7 +44,7 @@ public sealed record AppSettings
     /// SHA-256 thumbprints of content publishers the player chose to trust going forward, from the
     /// unrecognized-signer prompt during a manual install (see <see cref="PackageTrustEvaluator"/>).
     /// Per-device, like every other setting here — trusting a publisher on one device says nothing
-    /// about another. Distinct from <see cref="PinnedTrustAnchor"/>, which is the build's own
+    /// about another. Distinct from <see cref="WhiteLabelConfig.PublisherThumbprint"/>, which is the build's own
     /// publisher and needs no player decision at all.
     /// </summary>
     public IReadOnlyList<string> TrustedPublisherThumbprints { get; init; } = [];

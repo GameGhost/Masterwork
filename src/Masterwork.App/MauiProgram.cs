@@ -47,6 +47,15 @@ public static class MauiProgram
         builder.Services.AddScoped<AudioCoordinator>();
         builder.Services.AddScoped<AudioSettingsState>();
         builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
+
+        // Native heads fetch upstream directly — no browser, so no CORS to satisfy. Both locations
+        // come from WhiteLabelConfig rather than from the catalog, so a tampered catalog can't
+        // reroute a download; swapping sources for another flavor is a change to that one file.
+        builder.Services.AddSingleton(WhiteLabelConfig.PrimarySource);
+        builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
+        builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
+        builder.Services.AddScoped<CatalogService>();
+        builder.Services.AddScoped<CatalogInstallService>();
         // Overrides Shared's NullNativeFilePicker default — see INativeFilePicker's own remarks for
         // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload /
         // save import.

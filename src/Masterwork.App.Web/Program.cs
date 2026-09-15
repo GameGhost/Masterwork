@@ -1,4 +1,5 @@
 using Masterwork.App.Shared.Services;
+using Masterwork.App.Web;
 using Masterwork.App.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,10 @@ builder.Services.AddRazorComponents()
 // filesystem to log to; its errors surface via the browser console and the blazor-error-ui banner
 // instead. See CLAUDE.md for the exact log location.
 builder.Logging.AddMasterworkFileLogger(Path.Combine(builder.Environment.ContentRootPath, "logs"));
+
+// The fixed /content routes this site's WebAssembly client fetches its primary catalog and packages
+// from. Where they point upstream is configuration; the client never says. See ContentEndpoints.
+builder.Services.AddContentEndpoints(builder.Configuration);
 
 var app = builder.Build();
 
@@ -37,6 +42,8 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+app.MapContentEndpoints();
 
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()

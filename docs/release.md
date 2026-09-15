@@ -21,6 +21,20 @@ In `src/Masterwork.App/Masterwork.App.csproj`:
 
 Commit the version bump with (or ahead of) whatever change is driving the release.
 
+## 0.5. Signing identities
+
+Two entirely separate keys, with entirely separate lifecycles. Don't conflate them:
+
+| Key | Signs | Where | Rotation cost |
+|---|---|---|---|
+| `masterwork-release.keystore` | The Android app package (step 3) | App repo root, gitignored | Play Store will not accept an app signed by a different key — effectively unrotatable once published |
+| `masterwork-signing.pfx` | Module/asset-pack content and the catalog (step 5) | `Masterwork-Modules`, gitignored | New certificate + new pinned thumbprint + an app update |
+
+Both are gitignored (`*.keystore`, `*.jks`, `*.pfx`, `*.p12`) in their respective repos and must never
+be committed. Both need a backup **outside** any working tree: losing the content-signing key doesn't
+invalidate already-signed packages, but nothing new can ever be signed as the same publisher, which
+means every existing install starts seeing an unrecognized-publisher prompt after the next release.
+
 ## 1. Pre-flight
 
 ```powershell
@@ -142,8 +156,22 @@ Get a scenario to play from the [Masterwork-Modules releases](https://github.com
 Only needed if module content changed since the last module release. From `Masterwork-Modules`:
 
 ```powershell
-# Re-bundle everything that changed — modules to .mwm, mwf-common-assets to .mwassets:
-.\scripts\repack.ps1
+# Content signing — the release bundles must be signed, or players get an "unsigned content"
+# prompt on every install. The .pfx is the maintainer's private key; never commit it.
+$env:MASTERWORK_SIGNING_PASSWORD = "<pfx password>"
+
+# Two runs: repack.ps1 defaults to -Mode module and packs ONLY module directories. The asset pack
+# needs its own -Mode asset run — a bare repack.ps1 leaves mwf-common-assets.mwassets untouched.
+.\scripts\repack.ps1 -SignWith <path>\masterwork-signing.pfx
+.\scripts\repack.ps1 -Mode asset -SignWith <path>\masterwork-signing.pfx
+
+Remove-Item env:\MASTERWORK_SIGNING_PASSWORD
+
+# Verify every bundle before it goes out — each must report Valid with the expected thumbprint.
+# Unsigned means a -SignWith run was missed; Invalid means the file changed after signing.
+Get-ChildItem *.mwm, *.mwassets | ForEach-Object {
+  dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- verify $_.FullName
+}
 
 gh release create v<VERSION> `
   "cost-of-disease.mwm" `
@@ -155,6 +183,14 @@ gh release create v<VERSION> `
   --title "v<VERSION>" `
   --notes "<what changed in the module content>"
 ```
+
+The thumbprint every bundle reports must match `WhiteLabelConfig.PublisherThumbprint` in the app
+repo. A mismatch means the app will treat this release as coming from an unrecognized publisher and
+prompt on every install — the two are one decision, so they move together or not at all.
+
+> **TODO**: publishing the download catalog (a signed `catalog.json` committed to
+> `Masterwork-Modules` *after* the release exists, so it never names an asset that isn't uploaded
+> yet). Documentation to be added once the catalog tooling is built.
 
 All four module bundles ship together even though `my-fathers-work-template` isn't a playable
 scenario (it's a design/reference module) — since v0.2.0, every Modules release includes it
@@ -174,6 +210,9 @@ release notes (see the v0.2.0 release for the format) since they don't move in l
 - Verify the Windows zip actually launches on a clean machine (or at minimum, unzip-and-run
   locally) — don't rely on the publish succeeding as proof it works.
 - Verify the Android APK's signature (step 3) before it's linked from the release.
+- Verify every content bundle's signature (step 5) — `ModulePacker verify` on each, expecting
+  `Valid` and the pinned thumbprint. An unsigned or wrong-signer bundle isn't broken, but it makes
+  every player acknowledge a prompt to install it.
 - If the release fixes a bug reported by a specific user, follow up with them once the real
   (non-debug, non-test-build) release artifact is out.
 - Check `README.md` and any other docs for hardcoded version numbers or stale "latest release"

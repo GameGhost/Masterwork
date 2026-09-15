@@ -107,7 +107,7 @@ if (mode == "verify")
 
     // Unsigned isn't a failure -- it's the norm for anything packed without -SignWith, and the app
     // installs it behind a prompt. Only a signature that's present and doesn't check out is.
-    return result.Outcome == PackageVerificationOutcome.Invalid ? 1 : 0;
+    return result.Outcome == SignatureVerificationOutcome.Invalid ? 1 : 0;
 }
 
 if (args.Length < 3)

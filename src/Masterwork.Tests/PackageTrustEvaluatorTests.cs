@@ -8,14 +8,14 @@ public class PackageTrustEvaluatorTests
     private const string Pinned = "AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666AAAA7777BBBB8888";
     private const string Other = "9999888877776666555544443333222211110000FFFFEEEEDDDDCCCCBBBBAAAA";
 
-    private static PackageVerificationResult Signed(string thumbprint) =>
-        new(PackageVerificationOutcome.Valid, "CN=Someone", thumbprint);
+    private static SignatureVerificationResult Signed(string thumbprint) =>
+        new(SignatureVerificationOutcome.Valid, "CN=Someone", thumbprint);
 
     [Fact]
     public void InvalidSignature_IsBlocked_EvenIfThatPublisherIsTrusted()
     {
         var result = PackageTrustEvaluator.Evaluate(
-            new PackageVerificationResult(PackageVerificationOutcome.Invalid),
+            new SignatureVerificationResult(SignatureVerificationOutcome.Invalid),
             Pinned,
             [Pinned, Other]);
 
@@ -26,7 +26,7 @@ public class PackageTrustEvaluatorTests
     public void Unsigned_IsUnsigned_NotBlocked()
     {
         var result = PackageTrustEvaluator.Evaluate(
-            new PackageVerificationResult(PackageVerificationOutcome.Unsigned),
+            new SignatureVerificationResult(SignatureVerificationOutcome.Unsigned),
             Pinned,
             []);
 
@@ -83,7 +83,7 @@ public class PackageTrustEvaluatorTests
         // Guards the degenerate "" == "" match — an empty pinned anchor must not silently trust a
         // result that carries no thumbprint of its own.
         var result = PackageTrustEvaluator.Evaluate(
-            new PackageVerificationResult(PackageVerificationOutcome.Valid, "CN=Someone", CertificateThumbprint: ""),
+            new SignatureVerificationResult(SignatureVerificationOutcome.Valid, "CN=Someone", CertificateThumbprint: ""),
             pinnedThumbprint: "",
             []);
 

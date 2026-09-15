@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Masterwork.App.Shared.Services;
 using Masterwork.ModuleFormat;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,20 @@ builder.Services.AddScoped<IAudioPlayer, JsAudioPlayer>();
 builder.Services.AddScoped<AudioCoordinator>();
 builder.Services.AddScoped<AudioSettingsState>();
 builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
+
+// This head's primary source is always this origin's own /content routes — it never names an
+// upstream host, and the browser never has to reach one. Where those routes point is the serving
+// site's configuration (ContentEndpoints in Masterwork.App.Web), mirroring what a native build
+// compiles in. A source the player adds later is fetched directly and must serve its own CORS.
+builder.Services.AddScoped(sp =>
+{
+    var origin = sp.GetRequiredService<NavigationManager>().BaseUri.TrimEnd('/');
+    return new ContentSource($"{origin}/content/catalog.json", $"{origin}/content/packages");
+});
+builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
+builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
+builder.Services.AddScoped<CatalogService>();
+builder.Services.AddScoped<CatalogInstallService>();
 // No WebView2 host here — the InputFile elements StartNewGame.razor/ContinueList.razor use for
 // module upload/save import don't hit the crash INativeFilePicker documents, so this default
 // (never actually called) is enough.

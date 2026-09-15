@@ -200,7 +200,7 @@
         byte[] Bytes,
         string ManifestYaml,
         ModuleManifest Manifest,
-        PackageVerificationResult Verification,
+        SignatureVerificationResult Verification,
         PackageTrustDecision Decision,
         string Title,
         string Body);
@@ -449,7 +449,7 @@
         StateHasChanged();
         await Task.Yield();
 
-        PackageVerificationResult verification;
+        SignatureVerificationResult verification;
         try
         {
             verification = PackageSigner.Verify(bytes);
@@ -459,7 +459,7 @@
             _loading = false;
         }
 
-        var decision = PackageTrustEvaluator.Evaluate(verification, PinnedTrustAnchor.Thumbprint, _appSettings.TrustedPublisherThumbprints);
+        var decision = PackageTrustEvaluator.Evaluate(verification, WhiteLabelConfig.PublisherThumbprint, _appSettings.TrustedPublisherThumbprints);
         Logger.LogInformation("Upload: signature {Outcome}, trust decision {Decision}", verification.Outcome, decision);
 
         switch (decision)

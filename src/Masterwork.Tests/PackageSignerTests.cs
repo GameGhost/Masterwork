@@ -60,7 +60,7 @@ public class PackageSignerTests
 
         var result = PackageSigner.Verify(zip);
 
-        Assert.Equal(PackageVerificationOutcome.Unsigned, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Unsigned, result.Outcome);
         Assert.Null(result.CertificateSubject);
         Assert.Null(result.CertificateThumbprint);
         Assert.Null(result.CertificateCommonName);
@@ -75,7 +75,7 @@ public class PackageSignerTests
         var signed = PackageSigner.Sign(zip, cert);
         var result = PackageSigner.Verify(signed);
 
-        Assert.Equal(PackageVerificationOutcome.Valid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Valid, result.Outcome);
         Assert.Equal(cert.Subject, result.CertificateSubject);
         Assert.Equal(cert.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256), result.CertificateThumbprint);
 
@@ -99,7 +99,7 @@ public class PackageSignerTests
 
         var result = PackageSigner.Verify(finalTampered);
 
-        Assert.Equal(PackageVerificationOutcome.Invalid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Invalid, result.Outcome);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class PackageSignerTests
 
         var result = PackageSigner.Verify(finalCorrupted);
 
-        Assert.Equal(PackageVerificationOutcome.Invalid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Invalid, result.Outcome);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class PackageSignerTests
 
         var result = PackageSigner.Verify(zip);
 
-        Assert.Equal(PackageVerificationOutcome.Invalid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Invalid, result.Outcome);
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class PackageSignerTests
         Assert.Single(archive.Entries, e => e.FullName == "signature.sig");
 
         var result = PackageSigner.Verify(signedTwice);
-        Assert.Equal(PackageVerificationOutcome.Valid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Valid, result.Outcome);
         Assert.Equal(cert2.Subject, result.CertificateSubject);
     }
 
@@ -168,7 +168,7 @@ public class PackageSignerTests
         var grafted = AppendEntry(zipB, "signature.sig", sigBytes);
 
         var result = PackageSigner.Verify(grafted);
-        Assert.Equal(PackageVerificationOutcome.Valid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Valid, result.Outcome);
     }
 
     [Fact]
@@ -185,6 +185,6 @@ public class PackageSignerTests
         var grafted = AppendEntry(swapped, "signature.sig", sigBytes);
 
         var result = PackageSigner.Verify(grafted);
-        Assert.Equal(PackageVerificationOutcome.Invalid, result.Outcome);
+        Assert.Equal(SignatureVerificationOutcome.Invalid, result.Outcome);
     }
 }

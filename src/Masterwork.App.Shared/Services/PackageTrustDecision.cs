@@ -26,22 +26,22 @@ public enum PackageTrustDecision
 /// </summary>
 public static class PackageTrustEvaluator
 {
-    /// <param name="pinnedThumbprint">This build's own pinned publisher — see <see cref="PinnedTrustAnchor"/>.</param>
+    /// <param name="pinnedThumbprint">This build's own pinned publisher — see <see cref="WhiteLabelConfig.PublisherThumbprint"/>.</param>
     /// <param name="trustedThumbprints">Publishers the player has previously chosen to trust going forward.</param>
     public static PackageTrustDecision Evaluate(
-        PackageVerificationResult verification,
+        SignatureVerificationResult verification,
         string? pinnedThumbprint,
         IEnumerable<string> trustedThumbprints)
     {
         switch (verification.Outcome)
         {
-            case PackageVerificationOutcome.Invalid:
+            case SignatureVerificationOutcome.Invalid:
                 return PackageTrustDecision.Blocked;
 
-            case PackageVerificationOutcome.Unsigned:
+            case SignatureVerificationOutcome.Unsigned:
                 return PackageTrustDecision.Unsigned;
 
-            case PackageVerificationOutcome.Valid:
+            case SignatureVerificationOutcome.Valid:
                 // A Valid outcome always carries a thumbprint; the null guard is just so a
                 // hand-constructed result can't silently match a null pinned anchor below.
                 if (verification.CertificateThumbprint is not { Length: > 0 } thumbprint)
