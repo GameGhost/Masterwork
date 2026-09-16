@@ -4,6 +4,21 @@ namespace Masterwork.ModuleFormat;
 public sealed record CatalogPlayers(int? Min, int? Max);
 
 /// <summary>
+/// A browse thumbnail: where to fetch it, and what it should hash to.
+/// </summary>
+/// <param name="Path">
+/// Path relative to the *catalog's own directory* (e.g. <c>thumbnails/renegade.cost_of_disease.png</c>)
+/// — not to the package base, since a thumbnail is published alongside the catalog rather than inside
+/// a release.
+/// </param>
+/// <param name="Hash">
+/// SHA-256 of the image bytes, hex. Lets a client keep a thumbnail across catalog refreshes and
+/// re-download only when the art actually changed — the path alone can't tell it that, since a
+/// thumbnail keeps its name when its content is updated.
+/// </param>
+public sealed record CatalogThumbnail(string Path, string Hash);
+
+/// <summary>
 /// One downloadable item in a <see cref="CatalogDocument"/>. Browse metadata is duplicated from the
 /// package's own <c>manifest.yaml</c> so the app can render a full browse UI without downloading
 /// anything — which means it can also drift from the package if a catalog is published by hand
@@ -54,11 +69,14 @@ public sealed record CatalogEntry
     public string? Playtime { get; init; }
 
     /// <summary>
-    /// Absolute URL of a browse thumbnail. Distinct from <see cref="ModuleThumbnail.Image"/>, which
-    /// is an <c>image://</c> URI resolvable only *inside* an already-downloaded package — a catalog
-    /// needs something fetchable before that.
+    /// Browse thumbnail, if this entry has one. Distinct from <see cref="ModuleThumbnail.Image"/>,
+    /// which is an <c>image://</c> URI resolvable only *inside* an already-downloaded package;
+    /// browsing needs something fetchable before that.
+    ///
+    /// Absent for an asset pack: packs are never browsed or installed directly, only pulled in as a
+    /// module's dependency, so nothing would ever display one.
     /// </summary>
-    public string? ThumbnailUrl { get; init; }
+    public CatalogThumbnail? Thumbnail { get; init; }
 
     /// <summary>Asset packs this entry needs installed, by id and exact version — the same declarations the package's own manifest carries.</summary>
     public IReadOnlyList<ModuleDependency> Dependencies { get; init; } = [];

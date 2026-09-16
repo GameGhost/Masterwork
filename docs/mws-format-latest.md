@@ -242,6 +242,18 @@ A key missing from both still resolves to the raw URI (and logs a load-time warn
 single-locale module today. This fallback only ever applies when the preferred locale isn't already
 the default — a module's default-locale file is expected to be complete.
 
+### Timestamps
+
+Any timestamp in a Masterwork manifest or catalog is **ISO 8601, UTC, whole seconds** —
+`2026-09-15T13:58:25Z`. Not a local-offset form (`+00:00`, `-04:00`), not sub-second precision, not
+a locale-formatted date.
+
+No manifest field carries a timestamp today; this is the rule for any that gains one, and it's what
+a catalog's own `updated` field already uses. The reason to pin the exact shape rather than "any
+valid ISO 8601": these files are read and diffed by hand, and a regenerated file should stay
+byte-comparable when nothing but its content changed — a writer's local offset or tick precision
+would otherwise churn the diff on every run from a different machine.
+
 ---
 
 ## 4. String and Expression Encoding

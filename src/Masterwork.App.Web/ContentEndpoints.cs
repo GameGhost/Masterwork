@@ -89,6 +89,29 @@ public static class ContentEndpoints
             ILoggerFactory loggers,
             CancellationToken ct) => ServeAsync(options.Value.CatalogUrl + ".sig", forceProxy: true, options.Value, context, factory, loggers, ct));
 
+        // Thumbnails live beside the catalog upstream, not in a release, so they resolve against the
+        // catalog's directory rather than the package base. Always proxied for the same reason the
+        // catalog is: they come from the repo host, which is not what a CDN would be fronting.
+        endpoints.MapGet("/content/thumbnails/{**path}", async (
+            string path,
+            Microsoft.Extensions.Options.IOptions<ContentOptions> options,
+            HttpContext context,
+            IHttpClientFactory factory,
+            ILoggerFactory loggers,
+            CancellationToken ct) =>
+        {
+            if (!Masterwork.ModuleFormat.CatalogPaths.IsSafeRelative(path))
+            {
+                return Results.BadRequest("Not a valid content path.");
+            }
+
+            var catalogUrl = options.Value.CatalogUrl;
+            var lastSlash = catalogUrl.LastIndexOf('/');
+            var catalogDirectory = lastSlash < 0 ? catalogUrl : catalogUrl[..(lastSlash + 1)];
+
+            return await ServeAsync(catalogDirectory + "thumbnails/" + path, forceProxy: true, options.Value, context, factory, loggers, ct);
+        });
+
         endpoints.MapGet("/content/packages/{**path}", async (
             string path,
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,

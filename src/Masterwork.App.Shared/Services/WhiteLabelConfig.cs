@@ -20,7 +20,7 @@ public static class WhiteLabelConfig
     /// is published first (tag plus assets), then the regenerated <c>catalog.json</c> and its
     /// signature are committed, so the catalog never names an asset that isn't there yet.
     /// </summary>
-    public const string CatalogUrl = "https://raw.githubusercontent.com/GameGhost/Masterwork-Modules/main/catalog.json";
+    public const string CatalogUrl = "https://raw.githubusercontent.com/GameGhost/Masterwork-Modules/main/.catalog/catalog.json";
 
     /// <summary>
     /// Upstream base that every catalog entry's relative path resolves against. Entry paths start

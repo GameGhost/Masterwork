@@ -43,4 +43,23 @@ public sealed record ContentSource(string CatalogUrl, string PackageBaseUrl)
 
         return PackageBaseUrl.TrimEnd('/') + "/" + relativePath;
     }
+
+    /// <summary>
+    /// Resolves an entry's thumbnail against the catalog's own directory — thumbnails are published
+    /// beside the catalog, not inside a release, so this base is derived rather than configured. On
+    /// the web head that lands on this origin's own <c>/content/</c> routes for free, since its
+    /// catalog URL already points there.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="relativePath"/> isn't a safe relative path.</exception>
+    public string ResolveThumbnailUrl(string relativePath)
+    {
+        if (!CatalogPaths.IsSafeRelative(relativePath))
+        {
+            throw new ArgumentException($"Not a safe relative content path: '{relativePath}'", nameof(relativePath));
+        }
+
+        var lastSlash = CatalogUrl.LastIndexOf('/');
+        var directory = lastSlash < 0 ? CatalogUrl : CatalogUrl[..(lastSlash + 1)];
+        return directory + relativePath;
+    }
 }

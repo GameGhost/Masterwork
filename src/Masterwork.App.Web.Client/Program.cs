@@ -45,6 +45,7 @@ builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
 builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<CatalogInstallService>();
+builder.Services.AddScoped<ThumbnailCache>();
 // No WebView2 host here — the InputFile elements StartNewGame.razor/ContinueList.razor use for
 // module upload/save import don't hit the crash INativeFilePicker documents, so this default
 // (never actually called) is enough.

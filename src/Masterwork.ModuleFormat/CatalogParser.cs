@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Masterwork.ModuleFormat;
 
@@ -17,7 +18,53 @@ public static class CatalogParser
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true,
+        Converters = { new Iso8601DateTimeConverter() },
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { OmitEmptyCollections } },
+
+        // Writes apostrophes and em-dashes as themselves rather than ' and —. The default
+        // encoder escapes anything that could be dangerous when JSON is pasted straight into HTML,
+        // which a catalog never is — it's fetched and parsed, and the app renders these strings
+        // through Blazor, which escapes on output. Every description in a real catalog contains at
+        // least one of these, so the default turns the whole file into escape sequences. Quotes,
+        // backslashes, and control characters are still escaped.
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
+
+    // An absent list and an empty one mean the same thing to every reader of a catalog, so only one
+    // of them is worth writing. Done at serialization rather than by making the properties nullable:
+    // in memory they stay non-null and always enumerable, so no caller has to null-check a list.
+    private static void OmitEmptyCollections(JsonTypeInfo typeInfo)
+    {
+        foreach (var property in typeInfo.Properties)
+        {
+            if (property.PropertyType == typeof(string)
+                || !typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType))
+            {
+                continue;
+            }
+
+            property.ShouldSerialize = static (_, value) => value switch
+            {
+                null => false,
+                System.Collections.ICollection collection => collection.Count > 0,
+                System.Collections.IEnumerable enumerable => Any(enumerable),
+                _ => true,
+            };
+        }
+    }
+
+    private static bool Any(System.Collections.IEnumerable enumerable)
+    {
+        var enumerator = enumerable.GetEnumerator();
+        try
+        {
+            return enumerator.MoveNext();
+        }
+        finally
+        {
+            (enumerator as IDisposable)?.Dispose();
+        }
+    }
 
     /// <summary>
     /// Parses catalog JSON, rejecting anything structurally unusable. An unrecognized
@@ -70,6 +117,20 @@ public static class CatalogParser
             {
                 throw new CatalogParseException(
                     $"Catalog entry '{entry.Id}' has path '{entry.Path}' — entries must be relative to the source's content base.");
+            }
+
+            if (entry.Thumbnail is { } thumbnail)
+            {
+                if (!CatalogPaths.IsSafeRelative(thumbnail.Path))
+                {
+                    throw new CatalogParseException(
+                        $"Catalog entry '{entry.Id}' has thumbnail path '{thumbnail.Path}' — thumbnails must be relative to the catalog's own directory.");
+                }
+
+                if (thumbnail.Hash.Length != 64 || !thumbnail.Hash.All(Uri.IsHexDigit))
+                {
+                    throw new CatalogParseException($"Catalog entry '{entry.Id}' has a malformed thumbnail hash.");
+                }
             }
         }
 

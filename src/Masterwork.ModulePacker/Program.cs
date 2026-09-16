@@ -11,6 +11,12 @@ void PrintUsage()
     Console.Error.WriteLine("      <common-name> is a bare name (\"Masterwork Content Signing\"), not a \"CN=...\" string.");
     Console.Error.WriteLine("  Masterwork.ModulePacker sign <package-file> <pfx-file> <pfx-password> [output-file, default overwrites package-file]");
     Console.Error.WriteLine("  Masterwork.ModulePacker verify <package-file>");
+    Console.Error.WriteLine("  Masterwork.ModulePacker catalog <output.json> <source-title> <release-tag> <package-file> [package-file ...]");
+    Console.Error.WriteLine("      Entry paths become <release-tag>/<file name>. Sign the result with 'signfile'.");
+    Console.Error.WriteLine("  Masterwork.ModulePacker signfile <file> <pfx-file> <pfx-password>");
+    Console.Error.WriteLine("      Writes a detached <file>.sig beside it.");
+    Console.Error.WriteLine("  Masterwork.ModulePacker verifyfile <file>");
+    Console.Error.WriteLine("      Checks <file> against its <file>.sig sibling.");
 }
 
 if (args.Length < 1)
@@ -108,6 +114,129 @@ if (mode == "verify")
     // Unsigned isn't a failure -- it's the norm for anything packed without -SignWith, and the app
     // installs it behind a prompt. Only a signature that's present and doesn't check out is.
     return result.Outcome == SignatureVerificationOutcome.Invalid ? 1 : 0;
+}
+
+if (mode == "catalog")
+{
+    if (args.Length < 5)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    var catalogPath = args[1];
+    var sourceTitle = args[2];
+    var releaseTag = args[3];
+    var packageFiles = args[4..];
+
+    var inputs = new List<CatalogBuilder.PackageInput>();
+    foreach (var file in packageFiles)
+    {
+        if (!File.Exists(file))
+        {
+            Console.Error.WriteLine($"Package file not found: {file}");
+            return 1;
+        }
+
+        // The release tag is the first path segment, so a catalog can reference packages from
+        // several releases at once — only entries republished this cycle move to the new tag.
+        inputs.Add(new CatalogBuilder.PackageInput($"{releaseTag}/{Path.GetFileName(file)}", File.ReadAllBytes(file)));
+    }
+
+    var built = CatalogBuilder.Build(sourceTitle, inputs);
+    var catalogDirectory = Path.GetDirectoryName(Path.GetFullPath(catalogPath))!;
+    Directory.CreateDirectory(catalogDirectory);
+    File.WriteAllBytes(catalogPath, CatalogParser.Write(built.Catalog));
+
+    // Thumbnails are published beside the catalog, not inside a release — an entry's thumbnail path
+    // is relative to the catalog's own directory, so they must be committed along with it.
+    foreach (var thumbnail in built.Thumbnails)
+    {
+        var thumbnailPath = Path.Combine(catalogDirectory, thumbnail.RelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(thumbnailPath)!);
+        File.WriteAllBytes(thumbnailPath, thumbnail.Bytes);
+    }
+
+    Console.WriteLine($"Wrote {catalogPath} ({built.Catalog.Entries.Count} entries)");
+    foreach (var entry in built.Catalog.Entries)
+    {
+        var art = entry.Thumbnail?.Path ?? "no thumbnail";
+        Console.WriteLine($"  {entry.Type,-6} {entry.Id} v{entry.Version}  {entry.Path}  ({entry.Size:N0} bytes)  [{art}]");
+    }
+
+    if (built.Thumbnails.Count > 0)
+    {
+        var totalBytes = built.Thumbnails.Sum(t => t.Bytes.LongLength);
+        Console.WriteLine($"Wrote {built.Thumbnails.Count} thumbnail(s) under {catalogDirectory} ({totalBytes:N0} bytes total)");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Not signed yet — run 'signfile' on it, and publish catalog.json.sig and the");
+    Console.WriteLine("thumbnails/ folder alongside it.");
+    return 0;
+}
+
+if (mode == "signfile")
+{
+    if (args.Length < 4)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    var filePath = args[1];
+    var pfx = args[2];
+    var pfxPassword = args[3];
+
+    if (!File.Exists(filePath))
+    {
+        Console.Error.WriteLine($"File not found: {filePath}");
+        return 1;
+    }
+    if (!File.Exists(pfx))
+    {
+        Console.Error.WriteLine($"PFX file not found: {pfx}");
+        return 1;
+    }
+
+    var signingCert = X509CertificateLoader.LoadPkcs12FromFile(pfx, pfxPassword, X509KeyStorageFlags.Exportable);
+    var content = File.ReadAllBytes(filePath);
+    var signaturePath = filePath + ".sig";
+    File.WriteAllBytes(signaturePath, DetachedSignature.Sign(content, signingCert));
+
+    Console.WriteLine($"Wrote {signaturePath}");
+    Console.WriteLine($"Signer:     {signingCert.Subject}");
+    Console.WriteLine($"Thumbprint: {signingCert.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256)}");
+    return 0;
+}
+
+if (mode == "verifyfile")
+{
+    if (args.Length < 2)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    var filePath = args[1];
+    if (!File.Exists(filePath))
+    {
+        Console.Error.WriteLine($"File not found: {filePath}");
+        return 1;
+    }
+
+    var signaturePath = filePath + ".sig";
+    var signature = File.Exists(signaturePath) ? File.ReadAllBytes(signaturePath) : null;
+    var fileResult = DetachedSignature.Verify(File.ReadAllBytes(filePath), signature);
+
+    Console.WriteLine($"{filePath}: {fileResult.Outcome}");
+    if (fileResult.CertificateSubject is not null)
+    {
+        Console.WriteLine($"Signer:     {fileResult.CertificateSubject}");
+        Console.WriteLine($"Thumbprint: {fileResult.CertificateThumbprint}");
+    }
+
+    return fileResult.Outcome == SignatureVerificationOutcome.Invalid ? 1 : 0;
 }
 
 if (args.Length < 3)

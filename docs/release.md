@@ -28,7 +28,7 @@ Two entirely separate keys, with entirely separate lifecycles. Don't conflate th
 | Key | Signs | Where | Rotation cost |
 |---|---|---|---|
 | `masterwork-release.keystore` | The Android app package (step 3) | App repo root, gitignored | Play Store will not accept an app signed by a different key — effectively unrotatable once published |
-| `masterwork-signing.pfx` | Module/asset-pack content and the catalog (step 5) | `Masterwork-Modules`, gitignored | New certificate + new pinned thumbprint + an app update |
+| `masterwork-signing.pfx` | Module/asset-pack bundles (step 5) and the catalog (step 6) | `Masterwork-Modules`, gitignored | New certificate + new pinned thumbprint + an app update |
 
 Both are gitignored (`*.keystore`, `*.jks`, `*.pfx`, `*.p12`) in their respective repos and must never
 be committed. Both need a backup **outside** any working tree: losing the content-signing key doesn't
@@ -188,9 +188,8 @@ The thumbprint every bundle reports must match `WhiteLabelConfig.PublisherThumbp
 repo. A mismatch means the app will treat this release as coming from an unrecognized publisher and
 prompt on every install — the two are one decision, so they move together or not at all.
 
-> **TODO**: publishing the download catalog (a signed `catalog.json` committed to
-> `Masterwork-Modules` *after* the release exists, so it never names an asset that isn't uploaded
-> yet). Documentation to be added once the catalog tooling is built.
+The catalog that makes these installable from inside the app is published separately, in step 6 —
+after this step, never before.
 
 All four module bundles ship together even though `my-fathers-work-template` isn't a playable
 scenario (it's a design/reference module) — since v0.2.0, every Modules release includes it
@@ -205,7 +204,69 @@ one when module content actually changed. Each module bundle has its own `versio
 independent of the shared Modules-repo release tag — mention each bundle's own version in the
 release notes (see the v0.2.0 release for the format) since they don't move in lockstep either.
 
-## 6. Post-release checklist
+## 6. Publish the download catalog
+
+This is what makes the release installable from inside the app. It runs **after** step 5 — entries
+are named by release tag, so publishing the catalog first would point players at files that aren't
+uploaded yet.
+
+```powershell
+# From Masterwork-Modules, using the bundles just uploaded. The tag argument must match step 5's
+# release tag — it becomes the first path segment of every entry.
+dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- catalog `
+  .catalog\catalog.json "My Father's Work — Official Content" v<VERSION> `
+  cost-of-disease.mwm fear-of-the-unknown.mwm a-time-of-war.mwm `
+  mwf-common-assets.mwassets
+
+# Sign it — the app won't install from a catalog it can't verify.
+dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- signfile `
+  .catalog\catalog.json <path>\masterwork-signing.pfx "<pfx password>"
+
+# Must report Valid, with the same thumbprint the bundles carry.
+dotnet run --project ..\Masterwork\src\Masterwork.ModulePacker -- verifyfile .catalog\catalog.json
+
+git add .catalog/
+git commit -m "catalog: v<VERSION>"
+git push
+```
+
+Everything published here lives under `.catalog/` — `catalog.json`, its signature, and
+`thumbnails/`. Grouping them keeps the repo root to module sources and build artifacts, and matches
+the `.source/` convention already used for content that isn't itself a module.
+
+Browse thumbnails are extracted from each module package (the image its manifest's `thumbnail.image`
+names) and written to `.catalog/thumbnails/` — entries reference them by a path relative to the
+catalog's own directory, so they must be committed along with it. Asset packs get none: they're never
+browsed or installed directly, only pulled in as a module's dependency.
+
+> **`.catalog/thumbnails/` is deliberately excluded from Git LFS** (see the modules repo's
+> `.gitattributes`). `raw.githubusercontent.com` serves an LFS *pointer file* rather than the object,
+> so an LFS-tracked thumbnail would reach the app as ~130 bytes of text instead of an image. Don't
+> add these patterns back to LFS. Every other `*.png` in that repo stays on LFS as before.
+
+Each entry also carries a `thumbnail_sha256`. The app caches thumbnails by that hash, so a catalog
+refresh that doesn't change the art re-downloads nothing — which matters, since the thumbnails are
+by far the largest thing a browse view fetches.
+
+Each entry's hash and size are measured from the bundle bytes themselves, and its browse metadata
+(title, description, languages, player count, playtime, dependencies) is read from that package's own
+`manifest.yaml` — so nothing here is retyped by hand and nothing can drift from the content it
+describes.
+
+Two properties worth knowing:
+
+- **Only republished entries need to move.** Entry paths start with the release tag, so a module that
+  didn't change this cycle can keep pointing at the tag it was last published under. Passing every
+  bundle (as above) is the simple case; a partial release means listing only what changed and
+  carrying the unchanged entries forward.
+- **Rolling back is reverting the catalog commit.** The releases themselves stay put, so a rollback
+  never removes content anyone already installed — it just stops offering the newer version.
+
+`raw.githubusercontent.com` caches for five minutes, so a freshly pushed catalog isn't visible to the
+app immediately. Immaterial against the app's own refresh cadence, but it looks like nothing happened
+if you check straight away.
+
+## 7. Post-release checklist
 
 - Verify the Windows zip actually launches on a clean machine (or at minimum, unzip-and-run
   locally) — don't rely on the publish succeeding as proof it works.
@@ -213,6 +274,8 @@ release notes (see the v0.2.0 release for the format) since they don't move in l
 - Verify every content bundle's signature (step 5) — `ModulePacker verify` on each, expecting
   `Valid` and the pinned thumbprint. An unsigned or wrong-signer bundle isn't broken, but it makes
   every player acknowledge a prompt to install it.
+- Verify the published catalog (step 6) — `ModulePacker verifyfile .catalog\catalog.json` must report `Valid`,
+  and the raw URL must actually serve it (allow five minutes for the cache).
 - If the release fixes a bug reported by a specific user, follow up with them once the real
   (non-debug, non-test-build) release artifact is out.
 - Check `README.md` and any other docs for hardcoded version numbers or stale "latest release"

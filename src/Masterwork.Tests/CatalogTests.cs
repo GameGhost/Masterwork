@@ -101,8 +101,34 @@ public class CatalogTests
         // written at all, so the published catalog stays readable.
         var json = Encoding.UTF8.GetString(CatalogParser.Write(SampleDocument()));
 
-        Assert.DoesNotContain("thumbnail_url", json);
+        Assert.DoesNotContain("thumbnail", json);
         Assert.DoesNotContain("null", json);
+    }
+
+    [Fact]
+    public void Write_OmitsEmptyCollectionsEntirely()
+    {
+        // The asset-pack entry declares neither languages nor dependencies. An absent list and an
+        // empty one say the same thing, so only one of them belongs in a published file.
+        var json = Encoding.UTF8.GetString(CatalogParser.Write(SampleDocument()));
+
+        Assert.DoesNotContain("[]", json);
+
+        // The module entry does declare both, so they're still written where they carry information.
+        Assert.Contains("\"languages\"", json);
+        Assert.Contains("\"dependencies\"", json);
+    }
+
+    [Fact]
+    public void Parse_TreatsAnOmittedCollectionAsEmpty_NotNull()
+    {
+        var parsed = CatalogParser.Parse(Json(MinimalJson(ValidEntryBody)));
+
+        // Round-trips back through the same omission, so a regenerated catalog stays byte-stable.
+        var entry = Assert.Single(parsed.Entries);
+        Assert.Empty(entry.Languages);
+        Assert.Empty(entry.Dependencies);
+        Assert.DoesNotContain("[]", Encoding.UTF8.GetString(CatalogParser.Write(parsed)));
     }
 
     [Fact]
