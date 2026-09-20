@@ -103,6 +103,23 @@
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Manage Modules</value></data>
   <data name="ManageModules_Heading" xml:space="preserve"><value>Modules</value></data>
+
+  <data name="BrowseCatalog_PageTitle" xml:space="preserve"><value>Masterwork — Get Modules</value></data>
+  <data name="BrowseCatalog_Heading" xml:space="preserve"><value>Get Modules</value></data>
+  <data name="BrowseCatalog_Browse" xml:space="preserve"><value>Get Modules</value></data>
+  <data name="BrowseCatalog_Install" xml:space="preserve"><value>Install</value></data>
+  <data name="BrowseCatalog_Update" xml:space="preserve"><value>Update</value></data>
+  <data name="BrowseCatalog_Installed" xml:space="preserve"><value>Installed</value></data>
+  <data name="BrowseCatalog_Empty" xml:space="preserve"><value>This source doesn't publish any modules yet.</value></data>
+  <data name="BrowseCatalog_Unavailable" xml:space="preserve"><value>Couldn't reach the module list. Check your connection and try again later.</value></data>
+  <data name="BrowseCatalog_Megabytes" xml:space="preserve"><value>{0:N0} MB</value></data>
+  <data name="BrowseCatalog_Downloading" xml:space="preserve"><value>Downloading '{0}'… {1}%</value></data>
+  <data name="BrowseCatalog_Verifying" xml:space="preserve"><value>Verifying '{0}'… {1}%</value></data>
+  <data name="BrowseCatalog_Installing" xml:space="preserve"><value>Installing '{0}'… {1}%</value></data>
+  <data name="BrowseCatalog_InstallFailedTitle" xml:space="preserve"><value>Couldn't install</value></data>
+  <data name="BrowseCatalog_Unsigned" xml:space="preserve"><value>This module list isn't signed, so nothing can be installed from it.</value></data>
+  <data name="BrowseCatalog_UnrecognizedSigner" xml:space="preserve"><value>This module list was signed by '{0}', who this app doesn't recognize. Nothing can be installed from it.</value></data>
+  <data name="BrowseCatalog_SignatureBlocked" xml:space="preserve"><value>This module list's signature doesn't match its contents. It may have been modified or damaged — nothing can be installed from it.</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Delete this module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Also delete this module's saves?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Delete module + saves</value></data>

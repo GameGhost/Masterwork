@@ -47,6 +47,15 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
+    // Never intercept content downloads. Packages run to tens of megabytes and are already stored
+    // in IndexedDB once installed, so caching them here would duplicate them into Cache Storage
+    // permanently for no benefit. The catalog is deliberately excluded too: CatalogService keeps its
+    // own cache with its own refresh policy and re-verifies the signature on every read, and a
+    // second, invisible cache layer underneath it only makes "why is this stale" harder to answer.
+    if (new URL(event.request.url).pathname.startsWith("/content/")) {
+        return;
+    }
+
     event.respondWith(
         fetch(event.request)
             .then((response) => {

@@ -19,6 +19,10 @@ public sealed class HttpContentDownloader(
     // declared Content-Length, since that header can lie or be absent.
     private const long MaxBytes = 512L * 1024 * 1024;
 
+    // Roughly four updates a second — fast enough to look live, rare enough not to dominate the
+    // download with renders.
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
+
     /// <inheritdoc />
     public async Task<byte[]> GetAsync(string url, IProgress<(long Done, long? Total)>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -66,9 +70,18 @@ public sealed class HttpContentDownloader(
             ? new MemoryStream(checked((int)length))
             : new MemoryStream();
 
-        var chunk = new byte[81920];
+        // 1MB rather than 80KB: on the browser every read crosses into JS, so a small buffer turns
+        // one download into thousands of interop round-trips.
+        var chunk = new byte[1024 * 1024];
         long done = 0;
         int read;
+
+        // Progress is throttled rather than reported per chunk. Each report hops to the UI thread
+        // and repaints, so reporting every chunk made a large download spend most of its time
+        // rendering — a 56MB package took minutes where the browser's own fetch took seconds.
+        var lastReport = TimeSpan.Zero;
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+
         while ((read = await source.ReadAsync(chunk, cancellationToken)) > 0)
         {
             done += read;
@@ -78,9 +91,16 @@ public sealed class HttpContentDownloader(
             }
 
             buffer.Write(chunk, 0, read);
-            progress?.Report((done, declaredLength));
+
+            if (elapsed.Elapsed - lastReport >= ProgressInterval)
+            {
+                lastReport = elapsed.Elapsed;
+                progress?.Report((done, declaredLength));
+            }
         }
 
+        // Always finish on a complete reading, whatever the throttle let through.
+        progress?.Report((done, declaredLength));
         return buffer.ToArray();
     }
 }

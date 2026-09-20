@@ -848,3 +848,19 @@ body {
         transform: rotate(360deg);
     }
 }
+
+/* Catalog browse list (BrowseCatalog.razor) — structural only; the theme owns the look. */
+.mws-catalog-thumb {
+    flex: 0 0 auto;
+    width: 4rem;
+    height: 4rem;
+    margin-right: 0.75rem;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.mws-catalog-description {
+    margin: 0.25rem 0 0;
+    font-size: 0.9em;
+}

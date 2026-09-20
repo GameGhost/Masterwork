@@ -37,6 +37,7 @@ public sealed class CatalogInstallService(
     IModuleStore moduleStore,
     IAssetPackStore assetPackStore,
     IJSRuntime js,
+    BrowserCrypto crypto,
     ILogger<CatalogInstallService> logger)
 {
     /// <summary>
@@ -119,7 +120,8 @@ public sealed class CatalogInstallService(
             bytes,
             new Progress<(int Done, int Total)>(p => progress?.Report(
                 new CatalogInstallProgress(CatalogInstallPhase.Verifying, entry.Title, Percent(p.Done, p.Total)))),
-            js);
+            js,
+            crypto);
 
         if (!string.Equals(sha256, entry.Sha256, StringComparison.OrdinalIgnoreCase))
         {

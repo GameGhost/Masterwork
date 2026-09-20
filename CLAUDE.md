@@ -97,6 +97,33 @@ Tests in `ExtractorTests.cs` check the extractor-internal node types directly (e
 - Popup content (`popup.content`) is rendered eagerly by `PassageRenderer`, alongside the rest of the passage, against a sandboxed `VariableStore` clone (`RenderedPopup.Sandbox`) — never the live store. This means opening/closing a popup's *display* is a pure UI state toggle with no engine call involved; only `ClosePopupAsync` (Accept) touches the engine, committing the sandbox to the live store and running `onclose` + navigation as a single transaction. This deliberately trades away one thing: an unopened/never-accepted popup's content still gets evaluated (so a seeded random draw inside popup content is "spent" even if the player never opens it) — acceptable since nothing else can mutate the live store while a popup sits unopened on an already-rendered passage.
   - The commit itself (`VariableStore.CommitChangesTo`) applies only the session variables the sandbox *itself* changed, relative to its own `Clone()`-time baseline — an overlay onto whatever the live store's current state is, not `RestoreSession`'s wholesale replace. This matters because the popup node isn't necessarily the last thing in its passage's own top-level node list: a top-level `assign`/`let` sibling positioned *after* the popup runs directly against the live store during that same render, well before the player ever sees/accepts the popup, since `RenderPopup` only clones the sandbox at the point the popup node itself is reached — it doesn't pause the rest of the node list. A wholesale replace at accept-time would silently discard that later sibling's effect (real bug, found via a player-submitted save file: A Time of War's `AdvancedWeaponryIntro` sets `sepinc1`/`sepinc2`/... in `assign` nodes positioned after its own setup popup; accepting that popup used to wipe them before `Martial1` — which reads `sepinc1` — ever rendered).
 
+### Cryptography under Blazor WASM (certificates and hashing)
+
+Two hard constraints in the browser runtime, both of which have already caused real failures:
+
+- **`System.Security.Cryptography.X509Certificates` does not exist there.** Every entry point throws
+  `PlatformNotSupportedException` — `X509CertificateLoader.LoadCertificate` included. Anything that
+  reads a certificate must therefore never be called from shared code that the web head can reach.
+  `SignatureEnvelope.VerifyDigest`/`PackageSigner.Verify` are managed-only for this reason; app code
+  calls `SignatureVerifier` instead, which routes the web head through `wwwroot/signatureVerify.js`
+  and Web Crypto. That JS parses the public key out of the certificate DER by hand rather than
+  taking it from a separate field, deliberately: the trust decision compares the *certificate's*
+  thumbprint to the pinned anchor, so a separately-supplied key could be paired with a trusted
+  certificate to forge a pass.
+- **Managed SHA-256 runs at roughly a second per megabyte** under the WASM interpreter — a 37MB file
+  measured at 45+ seconds versus well under one via `crypto.subtle`. Hash real content through
+  `BrowserCrypto`/`ModuleHasher`, never `SHA256.HashData` directly. `BrowserCrypto` holds the JS
+  module reference rather than importing per call (a per-call import made every hash depend on the
+  network still being up, so going offline mid-install silently became a minute-long managed hash),
+  and it refuses inputs over a few MB when the browser's crypto is unreachable instead of appearing
+  to hang.
+
+The package signature digest is shaped by the second constraint: it hashes each zip entry separately
+and then hashes those hashes, so a verifier can go entry-by-entry through `crypto.subtle` (which is
+one-shot, with no streaming API) instead of holding a whole decompressed package in memory. Both
+digest paths must agree exactly — `PackageDigestTests` pins that, and a change to one without the
+other would make packages signed on a native head fail to verify on the web head.
+
 ### Mobile safe-area / system-bar insets
 Android renders edge-to-edge by default (enforced on API 35+), which stretched `BlazorWebView` under
 the status bar and behind the gesture/button navigation bar. Fixed in

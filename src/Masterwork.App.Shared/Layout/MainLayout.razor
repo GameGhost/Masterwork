@@ -8,6 +8,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject AppNavigationHistory NavHistory
+@inject BrowserCrypto Crypto
 
 @{ AppSettingsApplier.ReassertCulture(); }
 @* This only fires on the very first paint and on page navigation (a layout doesn't re-render just
@@ -136,6 +137,10 @@
             await AppSettingsApplier.ApplyAsync(settings, AudioPlayer, AudioState, JS);
             await SyncThemeMusicAsync(Nav.Uri);
             await SyncThemeTransitionSfxAsync(Nav.ToBaseRelativePath(Nav.Uri), cameFromPlay: false);
+
+            // Fetched now, while the app is certainly online, so a later disconnection can't turn
+            // the next hash into a failed module fetch mid-install.
+            await Crypto.PreloadAsync();
 
             // The current page (@Body) already rendered once before this completed, using whatever
             // culture was in effect at that point — without this, the just-applied UI language

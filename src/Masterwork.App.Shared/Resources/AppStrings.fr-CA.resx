@@ -103,6 +103,23 @@
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Gérer les modules</value></data>
   <data name="ManageModules_Heading" xml:space="preserve"><value>Modules</value></data>
+
+  <data name="BrowseCatalog_PageTitle" xml:space="preserve"><value>Masterwork — Obtenir des modules</value></data>
+  <data name="BrowseCatalog_Heading" xml:space="preserve"><value>Obtenir des modules</value></data>
+  <data name="BrowseCatalog_Browse" xml:space="preserve"><value>Obtenir des modules</value></data>
+  <data name="BrowseCatalog_Install" xml:space="preserve"><value>Installer</value></data>
+  <data name="BrowseCatalog_Update" xml:space="preserve"><value>Mettre à jour</value></data>
+  <data name="BrowseCatalog_Installed" xml:space="preserve"><value>Installé</value></data>
+  <data name="BrowseCatalog_Empty" xml:space="preserve"><value>Cette source ne publie encore aucun module.</value></data>
+  <data name="BrowseCatalog_Unavailable" xml:space="preserve"><value>Impossible d'obtenir la liste des modules. Vérifiez votre connexion et réessayez plus tard.</value></data>
+  <data name="BrowseCatalog_Megabytes" xml:space="preserve"><value>{0:N0} Mo</value></data>
+  <data name="BrowseCatalog_Downloading" xml:space="preserve"><value>Téléchargement de « {0} »… {1} %</value></data>
+  <data name="BrowseCatalog_Verifying" xml:space="preserve"><value>Vérification de « {0} »… {1} %</value></data>
+  <data name="BrowseCatalog_Installing" xml:space="preserve"><value>Installation de « {0} »… {1} %</value></data>
+  <data name="BrowseCatalog_InstallFailedTitle" xml:space="preserve"><value>Installation impossible</value></data>
+  <data name="BrowseCatalog_Unsigned" xml:space="preserve"><value>Cette liste de modules n'est pas signée; rien ne peut en être installé.</value></data>
+  <data name="BrowseCatalog_UnrecognizedSigner" xml:space="preserve"><value>Cette liste de modules a été signée par « {0} », que l'application ne reconnaît pas. Rien ne peut en être installé.</value></data>
+  <data name="BrowseCatalog_SignatureBlocked" xml:space="preserve"><value>La signature de cette liste de modules ne correspond pas à son contenu. Elle a peut-être été modifiée ou endommagée; rien ne peut en être installé.</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Supprimer ce module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>

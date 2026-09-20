@@ -12,6 +12,8 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject INativeFilePicker FilePicker
+@inject SignatureVerifier Verifier
+@inject BrowserCrypto Crypto
 @inject ILogger<ManageModules> Logger
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -38,6 +40,7 @@
             <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
                        accept=".mwm,.mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
         }
+        <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/browse")'>@AppStrings.BrowseCatalog_Browse</ChromeButton>
     </div>
     @if (_uploadError is not null)
     {
@@ -452,7 +455,7 @@
         SignatureVerificationResult verification;
         try
         {
-            verification = PackageSigner.Verify(bytes);
+            verification = await Verifier.VerifyPackageAsync(bytes);
         }
         finally
         {
@@ -564,7 +567,7 @@
         try
         {
             var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
-            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS, Crypto);
             Logger.LogInformation("Upload: ComputeHashAsync returned at {Timestamp:O}", DateTime.UtcNow);
         }
         finally
@@ -660,7 +663,7 @@
         try
         {
             var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_VerifyingPercent));
-            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS);
+            sha256 = await ModuleHasher.ComputeHashAsync(bytes, progress, JS, Crypto);
         }
         finally
         {

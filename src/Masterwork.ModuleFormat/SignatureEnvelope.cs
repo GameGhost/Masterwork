@@ -48,20 +48,35 @@ public sealed record SignatureVerificationResult(
 /// nothing but the signed content and this envelope. What differs between them is only *what* the
 /// digest covers — every zip entry in one case, the literal file bytes in the other.
 /// </summary>
-internal static class SignatureEnvelope
+public static class SignatureEnvelope
 {
-    private const string Algorithm = "RS256";
+    // "over the digest, as data" — the signature covers SHA-256(digest) rather than the digest
+    // treated as an already-computed hash. See Build for why that distinction matters.
+    private const string Algorithm = "RS256-d";
 
-    private sealed record SignatureFile(string Algorithm, string Certificate, string Signature);
+    /// <summary>The envelope's own fields, as they appear on the wire.</summary>
+    /// <param name="Algorithm">Always <c>RS256-d</c>; anything else is unreadable by this build.</param>
+    /// <param name="Certificate">The signer's certificate, base64 DER.</param>
+    /// <param name="Signature">The signature bytes, base64.</param>
+    public sealed record SignatureFile(string Algorithm, string Certificate, string Signature);
 
-    /// <summary>Signs <paramref name="digest"/> and serializes the result to the envelope's JSON form.</summary>
+    /// <summary>
+    /// Signs <paramref name="digest"/> and serializes the result to the envelope's JSON form.
+    ///
+    /// The 32-byte digest is signed as a *message* (<c>SignData</c>), not as a pre-computed hash
+    /// (<c>SignHash</c>), so the signature covers SHA-256 of the digest. That indirection is what
+    /// makes browser-native verification possible: WebCrypto's RSASSA-PKCS1-v1_5 always hashes the
+    /// data it is given and offers no way to verify against a hash computed elsewhere. Signing the
+    /// digest-as-data means a verifier only ever needs those 32 bytes, however large the content
+    /// behind them — so a 50MB package is verified without handing 50MB to the crypto API.
+    /// </summary>
     /// <param name="signingCertificate">Must have an RSA private key attached (e.g. loaded from a <c>.pfx</c>).</param>
     internal static byte[] Build(byte[] digest, X509Certificate2 signingCertificate)
     {
         using var rsa = signingCertificate.GetRSAPrivateKey()
             ?? throw new InvalidOperationException("Signing certificate has no RSA private key — load it from a .pfx that includes one.");
 
-        var signatureBytes = rsa.SignHash(digest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var signatureBytes = rsa.SignData(digest, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
         return JsonSerializer.SerializeToUtf8Bytes(new SignatureFile(
             Algorithm,
@@ -70,24 +85,34 @@ internal static class SignatureEnvelope
     }
 
     /// <summary>
-    /// Checks an envelope against the digest it should cover. Every malformed-input path collapses to
+    /// Reads an envelope's fields without touching any certificate API — safe on every platform,
+    /// including the browser runtime, where <c>System.Security.Cryptography.X509Certificates</c>
+    /// doesn't exist. Returns <see langword="null"/> if the bytes aren't a usable envelope.
+    /// </summary>
+    public static SignatureFile? TryRead(byte[] signatureJson)
+    {
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<SignatureFile>(signatureJson);
+            return envelope is { Algorithm: Algorithm } ? envelope : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Checks an envelope against the digest it should cover. Reads a certificate, so this is
+    /// unavailable in the browser runtime — see <c>SignatureVerifier</c> for the path that works
+    /// everywhere. Every malformed-input path collapses to
     /// <see cref="SignatureVerificationOutcome.Invalid"/> deliberately: a caller can't do anything
     /// useful with "the base64 was bad" that it wouldn't do with "the signature didn't match", and
     /// distinguishing them would mean reporting detail read out of untrusted bytes.
     /// </summary>
-    internal static SignatureVerificationResult VerifyDigest(byte[] digest, byte[] signatureJson)
+    public static SignatureVerificationResult VerifyDigest(byte[] digest, byte[] signatureJson)
     {
-        SignatureFile? signatureFile;
-        try
-        {
-            signatureFile = JsonSerializer.Deserialize<SignatureFile>(signatureJson);
-        }
-        catch (JsonException)
-        {
-            return new SignatureVerificationResult(SignatureVerificationOutcome.Invalid);
-        }
-
-        if (signatureFile is not { Algorithm: Algorithm })
+        if (TryRead(signatureJson) is not { } signatureFile)
         {
             return new SignatureVerificationResult(SignatureVerificationOutcome.Invalid);
         }
@@ -110,7 +135,7 @@ internal static class SignatureEnvelope
             return new SignatureVerificationResult(SignatureVerificationOutcome.Invalid);
         }
 
-        if (!rsa.VerifyHash(digest, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+        if (!rsa.VerifyData(digest, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
         {
             return new SignatureVerificationResult(SignatureVerificationOutcome.Invalid);
         }

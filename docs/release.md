@@ -188,6 +188,14 @@ The thumbprint every bundle reports must match `WhiteLabelConfig.PublisherThumbp
 repo. A mismatch means the app will treat this release as coming from an unrecognized publisher and
 prompt on every install — the two are one decision, so they move together or not at all.
 
+> **If the signature format itself changed, everything must be re-signed.** A signature is only
+> readable by builds that understand the envelope that produced it; an older one reads as
+> `Invalid`, not as "unsupported". `ModulePacker verify` on a bundle built by the previous release
+> is the check — if it reports anything other than `Valid`, re-run the signing above before
+> publishing, and re-publish the catalog too. The app discards a cached catalog that fails to
+> verify and refetches, so players don't need to do anything, but nothing will install until the
+> published artifacts are re-signed.
+
 The catalog that makes these installable from inside the app is published separately, in step 6 —
 after this step, never before.
 

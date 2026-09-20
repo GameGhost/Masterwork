@@ -37,6 +37,7 @@ public sealed record CatalogSnapshot(
 /// </summary>
 public sealed class CatalogService(
     IContentDownloader downloader,
+    SignatureVerifier verifier,
     IAppSettingsStore settingsStore,
     IJSRuntime js,
     ILogger<CatalogService> logger)
@@ -44,6 +45,10 @@ public sealed class CatalogService(
     private const string CacheKeyPrefix = "masterwork.catalog.";
 
     private sealed record CachedCatalog(string CatalogJson, string? SignatureJson, DateTimeOffset FetchedAt);
+
+    // This service lives for the app session, so "hasn't refreshed yet" is the same thing as a cold
+    // start. Tracking it here rather than asking a caller to say so means nothing can forget to.
+    private bool _refreshedThisSession;
 
     /// <summary>
     /// Refreshes if the policy says it's due, otherwise returns what's cached. A failed refresh
@@ -57,9 +62,29 @@ public sealed class CatalogService(
     {
         var cached = await ReadCacheAsync(source);
 
-        if (!IsRefreshDue(trigger, cached?.FetchedAt))
+        // The first look at a catalog in a given session is a cold start whatever the caller said,
+        // so a cache written by an older build — one that signed or verified differently — can never
+        // outlive the app run that wrote it.
+        var effectiveTrigger = _refreshedThisSession ? trigger : CatalogRefreshTrigger.ColdStart;
+
+        if (!IsRefreshDue(effectiveTrigger, cached?.FetchedAt) && cached is not null)
         {
-            return cached is null ? null : await ToSnapshotAsync(source, cached);
+            var snapshot = await ToSnapshotAsync(source, cached);
+
+            // A cached catalog that no longer verifies is not something to report to the player —
+            // the likeliest cause is that it predates a change to how signatures are made, and the
+            // published catalog is fine. Discard it and go and look.
+            if (snapshot.Decision != PackageTrustDecision.Blocked)
+            {
+                logger.LogInformation(
+                    "Catalog for {Url} served from cache ({Age:g} old): {EntryCount} entries, signature {Outcome}, trust {Decision}",
+                    source.CatalogUrl, DateTimeOffset.UtcNow - cached.FetchedAt,
+                    snapshot.Catalog.Entries.Count, snapshot.Signature.Outcome, snapshot.Decision);
+                return snapshot;
+            }
+
+            logger.LogWarning(
+                "Cached catalog for {Url} failed verification; discarding it and refetching", source.CatalogUrl);
         }
 
         try
@@ -100,12 +125,14 @@ public sealed class CatalogService(
         // Parsed only after the bytes are in hand, and always from the same bytes the signature
         // covers — re-serializing before verifying would break the whole point of signing bytes.
         var catalog = CatalogParser.Parse(catalogBytes);
-        var verification = DetachedSignature.Verify(catalogBytes, signatureBytes);
+        var verification = await verifier.VerifyDetachedAsync(catalogBytes, signatureBytes);
 
         await WriteCacheAsync(source, new CachedCatalog(
             Encoding.UTF8.GetString(catalogBytes),
             signatureBytes is null ? null : Encoding.UTF8.GetString(signatureBytes),
             DateTimeOffset.UtcNow));
+
+        _refreshedThisSession = true;
 
         var snapshot = new CatalogSnapshot(source, catalog, verification, await DecideAsync(verification), DateTimeOffset.UtcNow);
         logger.LogInformation(
@@ -135,7 +162,7 @@ public sealed class CatalogService(
 
         // Re-verified on every read rather than caching the verdict: the pinned anchor can change
         // under a cached catalog (an app update), and so can the player's trusted-publisher list.
-        var verification = DetachedSignature.Verify(catalogBytes, signatureBytes);
+        var verification = await verifier.VerifyDetachedAsync(catalogBytes, signatureBytes);
 
         return new CatalogSnapshot(
             source,

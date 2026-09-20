@@ -54,6 +54,8 @@ public static class MauiProgram
         builder.Services.AddSingleton(WhiteLabelConfig.PrimarySource);
         builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
         builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
+        builder.Services.AddScoped<BrowserCrypto>();
+        builder.Services.AddScoped<SignatureVerifier>();
         builder.Services.AddScoped<CatalogService>();
         builder.Services.AddScoped<CatalogInstallService>();
         builder.Services.AddScoped<ThumbnailCache>();
