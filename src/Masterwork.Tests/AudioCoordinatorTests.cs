@@ -127,6 +127,11 @@ public class AudioCoordinatorTests
 
     // Polls rather than a single fixed sleep — a fire-and-forget delayed play is scheduled onto the
     // thread pool, and a single short Task.Delay proved flaky under real test-process contention.
+    // Long enough that the "hasn't fired yet" assertion below it is reliable on a loaded machine —
+    // at 10ms the delay could elapse before the assertion ran, which made these tests flaky. Still
+    // far below WaitUntilAsync's timeout, so the tests stay fast.
+    private const int WinningTierDelayMs = 250;
+
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -145,7 +150,7 @@ public class AudioCoordinatorTests
         // leak onto the *winning* tier's playback.
         var (coordinator, player) = CreateCoordinator();
 
-        await coordinator.PlaySfxAsync(null, 999_999, "audio://sfx/layout", 10, ["audio://sfx/module"]);
+        await coordinator.PlaySfxAsync(null, 999_999, "audio://sfx/layout", WinningTierDelayMs, ["audio://sfx/module"]);
         Assert.Empty(player.PlayedSfx); // not yet — the winning (layout) tier's own delay hasn't elapsed
 
         await WaitUntilAsync(() => player.PlayedSfx.Count > 0);
@@ -157,7 +162,7 @@ public class AudioCoordinatorTests
     {
         var (coordinator, player) = CreateCoordinator();
 
-        await coordinator.PlaySfxAsync("audio://sfx/node", 10, "audio://sfx/layout", 999_999, ["audio://sfx/module"]);
+        await coordinator.PlaySfxAsync("audio://sfx/node", WinningTierDelayMs, "audio://sfx/layout", 999_999, ["audio://sfx/module"]);
         Assert.Empty(player.PlayedSfx);
 
         await WaitUntilAsync(() => player.PlayedSfx.Count > 0);
