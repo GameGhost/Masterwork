@@ -59,6 +59,8 @@ public static class MauiProgram
         builder.Services.AddScoped<CatalogService>();
         builder.Services.AddScoped<CatalogInstallService>();
         builder.Services.AddScoped<ThumbnailCache>();
+        builder.Services.AddScoped<ModuleLibrary>();
+        builder.Services.AddScoped<CatalogSubscriptions>();
         // Overrides Shared's NullNativeFilePicker default — see INativeFilePicker's own remarks for
         // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload /
         // save import.

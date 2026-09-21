@@ -48,6 +48,8 @@ builder.Services.AddScoped<SignatureVerifier>();
 builder.Services.AddScoped<CatalogService>();
 builder.Services.AddScoped<CatalogInstallService>();
 builder.Services.AddScoped<ThumbnailCache>();
+builder.Services.AddScoped<ModuleLibrary>();
+builder.Services.AddScoped<CatalogSubscriptions>();
 // No WebView2 host here — the InputFile elements StartNewGame.razor/ContinueList.razor use for
 // module upload/save import don't hit the crash INativeFilePicker documents, so this default
 // (never actually called) is enough.

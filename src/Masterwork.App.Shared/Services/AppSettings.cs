@@ -49,8 +49,48 @@ public sealed record AppSettings
     /// </summary>
     public IReadOnlyList<string> TrustedPublisherThumbprints { get; init; } = [];
 
+    /// <summary>
+    /// Catalog URLs the player subscribed to themselves, in the order they added them. The build's
+    /// own source (<see cref="WhiteLabelConfig.CatalogUrl"/>) is never in this list — it can't be
+    /// removed, and it always takes precedence over these when two sources publish the same id.
+    /// </summary>
+    public IReadOnlyList<string> CustomCatalogSources { get; init; } = [];
+
+    /// <summary>
+    /// Catalog listings the player chose to hide, keyed by source *and* module — the same module
+    /// published by two sources is two listings, and hiding one says nothing about the other.
+    ///
+    /// Hiding is therefore more than a display preference: because sources resolve in subscription
+    /// order, hiding a module's listing on an earlier source lets a later source's listing of the
+    /// same module take its place. That's how a player opts one module over to a pre-release source
+    /// while everything else stays on the stable one.
+    ///
+    /// Never an uninstall, and never applied to installed content: an installed module always
+    /// appears on the New Game page whatever is hidden, because hiding a listing says where updates
+    /// come from, not whether something can be played.
+    /// </summary>
+    public IReadOnlyList<HiddenCatalogListing> HiddenCatalogListings { get; init; } = [];
+
     /// <summary>The default settings, used until the player changes and saves anything.</summary>
     public static readonly AppSettings Default = new();
+}
+
+/// <summary>One source's listing of one module, hidden by the player. See <see cref="AppSettings.HiddenCatalogListings"/>.</summary>
+/// <param name="SourceKey">
+/// Which source's listing — <see cref="CatalogSourceKeys.Primary"/> for the build's own source, or
+/// the catalog URL for one the player added. The built-in source is keyed by a constant rather than
+/// by its URL deliberately: on the web head that URL is the deployment's own origin, so keying by it
+/// would silently drop every hidden listing when the app moves between, say, localhost and its real
+/// address.
+/// </param>
+/// <param name="ModuleId">The module whose listing is hidden.</param>
+public sealed record HiddenCatalogListing(string SourceKey, string ModuleId);
+
+/// <summary>How a catalog source is identified in stored settings.</summary>
+public static class CatalogSourceKeys
+{
+    /// <summary>The build's own source — singular per build, so it needs no URL to identify it.</summary>
+    public const string Primary = "primary";
 }
 
 /// <summary>

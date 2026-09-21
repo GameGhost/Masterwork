@@ -124,6 +124,20 @@ one-shot, with no streaming API) instead of holding a whole decompressed package
 digest paths must agree exactly — `PackageDigestTests` pins that, and a change to one without the
 other would make packages signed on a native head fail to verify on the web head.
 
+### App settings persist through one path on every head
+
+`AppSettings` is saved by a different store per head (`LocalStorageAppSettingsStore` on web,
+`PreferencesAppSettingsStore` on MAUI), and both serialize through `AppSettingsJson`. Keep it that way.
+The MAUI store used to write a hand-maintained list of fields, and three settings added later —
+trusted publishers, added catalog sources, hidden catalog listings — were never added to it, so on
+Windows and Android they were silently never saved. Each *looked* like it worked, because pages hold
+settings in memory until the next reload.
+
+So: adding a setting to `AppSettings` needs no store change at all. It does need a non-default value in
+`AppSettingsSerializationTests.FullyPopulated()` — `EveryProperty_IsCoveredByTheFixture` fails until
+it has one, which is the point. The MAUI store still reads the old per-field keys once, to carry an
+upgrading player's settings over; those keys are never written again.
+
 ### Mobile safe-area / system-bar insets
 Android renders edge-to-edge by default (enforced on API 35+), which stretched `BlazorWebView` under
 the status bar and behind the gesture/button navigation bar. Fixed in

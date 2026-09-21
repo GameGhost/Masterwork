@@ -935,7 +935,8 @@ body {
 }
 
 .mws-module-toolbar .style-btn-brown,
-.mws-upload-button.style-btn-brown {
+.mws-upload-button.style-btn-brown,
+.mws-upload-button.style-btn-green {
     width: 7em;
     font-size: 1.2em;
 }
@@ -1226,7 +1227,8 @@ body {
  * centerElement() landing cleanly on a slot boundary. */
 @media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-module-toolbar .style-btn-brown,
-    .mws-upload-button.style-btn-brown {
+    .mws-upload-button.style-btn-brown,
+    .mws-upload-button.style-btn-green {
         font-size: 1em;
     }
 
@@ -1384,6 +1386,33 @@ body {
     color: #e5e0d8;
 }
 
+/* Rules between a source's listings pick up the silver of the panel's own hub-section border,
+   dimmed so they separate entries without competing with the frame around them. */
+.mws-source-divider {
+    border-top-color: rgba(192, 192, 192, 0.35);
+}
+
+/* The source URL field wears the same input_large art as the setup inputs inside modules
+   (mwf-common-assets' .style-setup-input), so typing an address here looks like typing a town
+   name during setup rather than like a bare browser control. */
+.mws-source-url {
+    padding: 0.6em 0.9em;
+    box-sizing: border-box;
+    background-image: url('images/ui/input_large.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    color: #F2B781;
+    font-family: 'Averia Libre', serif;
+    font-size: 1.1em;
+}
+
+.mws-source-url::placeholder {
+    color: rgba(242, 183, 129, 0.45);
+}
+
 .mws-save-actions {
     flex-direction: column;
     align-items: flex-end;
@@ -1436,6 +1465,14 @@ body {
         left: calc(50px + 3.25rem + 1rem);
         right: calc(50px + 8.9rem + 1rem);
         margin: 0;
+    }
+
+    /* A title inside .mws-screen-header already shares its row with the toolbar through that grid,
+       so it stays in flow. Lifting it out as above would size its clearance for Continue's single
+       Import Save button, and a wider toolbar would run under it. */
+    .mws-scenario-screen:has(.mws-module-toolbar) .mws-screen-header > .mws-screen-title {
+        position: static;
+        margin: 0 1rem;
     }
 }
 

@@ -16,6 +16,10 @@
 @inject ILogger<GameSession> GameSessionLogger
 @inject ILogger<StartNewGame> Logger
 @inject IJSRuntime JS
+@inject ModuleLibrary Library
+@inject CatalogInstallService Installer
+@inject ThumbnailCache Thumbnails
+@inject ContentSource Source
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
@@ -38,23 +42,34 @@
                 <div class="mws-module-toolbar">
                     <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/manage")'>@AppStrings.OptionsDialog_ManageModules</ChromeButton>
                 </div>
+                @if (_installError is not null)
+                {
+                    <p class="mws-version-warning">@_installError</p>
+                }
 
                 <div class="mws-scenario-content">
                     <div class="mws-module-carousel-row">
                         <ChromeButton class="mws-carousel-nav-button mws-carousel-back" disabled="@(!CanStepCarousel(-1))"
                                 OnClick="() => StepCarousel(-1)" aria-label="@AppStrings.TimelineScrubber_Back" title="@AppStrings.TimelineScrubber_Back"></ChromeButton>
                         <div class="mws-module-carousel">
-                            @for (var i = 0; i < _modules.Count; i++)
+                            @foreach (var entry in _entries)
                             {
-                                var module = _modules[i];
-                                <div @key="module.ModuleId" id="@TileElementId(module.ModuleId)"
-                                     class="mws-module-tile @(module.ModuleId == _selectedId ? "selected" : "")" title="@module.Title" @onclick="() => SelectModule(module.ModuleId)">
+                                <div @key="entry.Id" id="@TileElementId(entry.Id)"
+                                     class="mws-module-tile @(entry.Id == _selectedId ? "selected" : "")" title="@entry.Title" @onclick="() => SelectModule(entry.Id)">
                                     <div class="mws-module-tile-image">
-                                        <div class="mws-module-tile-thumb" style="@(module.ThumbnailImageUrl is { } url ? $"background-image:url('{url}')" : null)"></div>
+                                        <div class="mws-module-tile-thumb" style="@(ThumbnailFor(entry) is { } url ? $"background-image:url('{url}')" : null)"></div>
                                         <div class="mws-module-tile-border" aria-hidden="true"></div>
-                                        <span class="mws-tile-version">v@(module.Version)</span>
+                                        <span class="mws-tile-version">v@(entry.Version)</span>
+                                        @if (entry.State is LibraryEntryState.Available or LibraryEntryState.UpdateAvailable)
+                                        {
+                                            <span class="mws-tile-badge">
+                                                @(entry.State == LibraryEntryState.Available
+                                                    ? AppStrings.StartNewGame_AvailableBadge
+                                                    : AppStrings.StartNewGame_UpdateBadge)
+                                            </span>
+                                        }
                                     </div>
-                                    <strong class="mws-module-tile-title">@module.Title</strong>
+                                    <strong class="mws-module-tile-title">@entry.Title</strong>
                                 </div>
                             }
                         </div>
@@ -71,19 +86,44 @@
                         <div class="mws-module-detail">
                             <div class="mws-module-detail-header">
                                 <strong class="mws-module-detail-title" title="@_selected.Title">@_selected.Title</strong>
-                                <select class="mws-module-language" value="@_selectedLanguage" disabled="@(_selected.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
-                                    @foreach (var lang in _selected.AvailableLanguages)
-                                    {
-                                        <option value="@lang">@lang</option>
-                                    }
-                                </select>
-                                <ChromeButton class="mws-scenario-play-button" disabled="@_busy" OnClick="() => Play(_selected)">
-                                    <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
-                                </ChromeButton>
+                                @* Language and Play belong to an installed copy — there's nothing to
+                                   choose a language for, or to play, until it's downloaded. *@
+                                @if (_selected.Installed is { } installed)
+                                {
+                                    <select class="mws-module-language" value="@_selectedLanguage" disabled="@(installed.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
+                                        @foreach (var lang in installed.AvailableLanguages)
+                                        {
+                                            <option value="@lang">@lang</option>
+                                        }
+                                    </select>
+                                    <ChromeButton class="mws-scenario-play-button" disabled="@_busy" OnClick="() => Play(installed)">
+                                        <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
+                                    </ChromeButton>
+                                }
                             </div>
                             <div class="mws-module-detail-text">
                                 <p>@_selected.Description</p>
                             </div>
+
+                            @if (_selected.State is LibraryEntryState.Available or LibraryEntryState.UpdateAvailable)
+                            {
+                                <div class="mws-module-detail-actions">
+                                    @if (_selected.CanInstall)
+                                    {
+                                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => InstallFromCatalog(_selected)">
+                                            @(_selected.State == LibraryEntryState.Available
+                                                ? AppStrings.StartNewGame_Download
+                                                : string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpdateTo, _selected.Catalog!.Version))
+                                        </ChromeButton>
+                                    }
+                                    else
+                                    {
+                                        @* Its source isn't trusted, so an install could only fail. *@
+                                        <span class="mws-version-warning">@AppStrings.StartNewGame_SourceNotTrusted</span>
+                                    }
+                                </div>
+                            }
+
                             <span class="mws-module-detail-version">v@(_selected.Version)</span>
                         </div>
                     }
@@ -121,9 +161,10 @@
 </div>
 
 @code {
-    private IReadOnlyList<InstalledModule> _modules = [];
+    private IReadOnlyList<LibraryEntry> _entries = [];
+    private readonly Dictionary<string, string> _thumbnails = [];
     private string? _selectedId;
-    private InstalledModule? _selected => _modules.FirstOrDefault(m => m.ModuleId == _selectedId);
+    private LibraryEntry? _selected => _entries.FirstOrDefault(e => e.Id == _selectedId);
     private string? _selectedLanguage;
     private InstalledModule? _conflictModule;
     private SaveEntry? _conflictSave;
@@ -144,6 +185,7 @@
     // pre-loading conflict check and each start their own GameSession/State.Start, racing each other
     // into /play.
     private bool _busy;
+    private string? _installError;
 
     // Carousel back/forward + click-to-select scrolling, same "hide the native scrollbar, scroll
     // the selected element into view via JS" technique PauseBar.razor's own timeline scrubber
@@ -166,7 +208,7 @@
         _loadingMessage = AppStrings.Common_Loading;
         try
         {
-            _modules = await ModuleStore.ListAsync();
+            _entries = (await Library.LoadAsync(Source)).Entries;
             _appSettings = await SettingsStore.LoadAsync();
             // Deliberately starts with nothing selected — the carousel is meant to be browsed, not
             // auto-committed to whatever happened to load first.
@@ -175,6 +217,9 @@
         {
             _loading = false;
         }
+
+        // After the carousel has painted, so a slow image fetch never holds up the page.
+        await LoadCatalogThumbnailsAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -212,9 +257,9 @@
 
     private int SelectedIndex()
     {
-        for (var i = 0; i < _modules.Count; i++)
+        for (var i = 0; i < _entries.Count; i++)
         {
-            if (_modules[i].ModuleId == _selectedId)
+            if (_entries[i].Id == _selectedId)
             {
                 return i;
             }
@@ -226,18 +271,18 @@
     private bool CanStepCarousel(int direction)
     {
         var next = SelectedIndex() + direction;
-        return next >= 0 && next < _modules.Count;
+        return next >= 0 && next < _entries.Count;
     }
 
     private void StepCarousel(int direction)
     {
         var next = SelectedIndex() + direction;
-        if (next < 0 || next >= _modules.Count)
+        if (next < 0 || next >= _entries.Count)
         {
             return;
         }
 
-        SelectModule(_modules[next].ModuleId);
+        SelectModule(_entries[next].Id);
     }
 
     private void Recover()
@@ -251,8 +296,74 @@
     private void SelectModule(string moduleId)
     {
         _selectedId = moduleId;
-        _selectedLanguage = _selected is { } module ? DefaultLanguageFor(module, _appSettings.PreferredModuleLanguage) : null;
+        _selectedLanguage = _selected?.Installed is { } module
+            ? DefaultLanguageFor(module, _appSettings.PreferredModuleLanguage)
+            : null;
     }
+
+    // An installed module's thumbnail comes out of its own bundle; one that's only published has to
+    // come from its catalog, fetched and cached separately (see ThumbnailCache).
+    private string? ThumbnailFor(LibraryEntry entry) =>
+        entry.Installed?.ThumbnailImageUrl ?? _thumbnails.GetValueOrDefault(entry.Id);
+
+    private async Task LoadCatalogThumbnailsAsync()
+    {
+        foreach (var entry in _entries.Where(e => e.Installed is null && e.Catalog is not null && e.Source is not null))
+        {
+            if (await Thumbnails.GetAsync(entry.Source!, entry.Catalog!) is { } url)
+            {
+                _thumbnails[entry.Id] = url;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task InstallFromCatalog(LibraryEntry entry)
+    {
+        if (_busy || entry.Snapshot is not { } snapshot || entry.Catalog is not { } catalogEntry)
+        {
+            return;
+        }
+
+        _busy = true;
+        _loading = true;
+        _loadingDone = null;
+        _loadingTotal = null;
+        _loadingMessage = AppStrings.Common_Loading;
+
+        var progress = new Progress<CatalogInstallProgress>(p =>
+        {
+            _loadingMessage = string.Format(AppStrings.EffectiveCulture, InstallPhaseFormat(p.Phase), p.Title, p.Percent);
+            StateHasChanged();
+        });
+
+        try
+        {
+            await Installer.InstallAsync(snapshot, catalogEntry, progress);
+            Logger.LogInformation("New Game: installed {Id} v{Version}", catalogEntry.Id, catalogEntry.Version);
+
+            // Reloaded rather than patched: the install may also have pulled in an asset pack, and
+            // the entry's own state has to move from Available/UpdateAvailable to Installed.
+            _entries = (await Library.LoadAsync(Source)).Entries;
+        }
+        catch (CatalogInstallException ex)
+        {
+            Logger.LogWarning(ex, "New Game: install of {Id} failed", catalogEntry.Id);
+            _installError = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            _busy = false;
+        }
+    }
+
+    private static string InstallPhaseFormat(CatalogInstallPhase phase) => phase switch
+    {
+        CatalogInstallPhase.Downloading => AppStrings.CatalogInstall_Downloading,
+        CatalogInstallPhase.Verifying => AppStrings.CatalogInstall_Verifying,
+        _ => AppStrings.CatalogInstall_Installing,
+    };
 
     private static string DefaultLanguageFor(InstalledModule module, string? preferred)
     {

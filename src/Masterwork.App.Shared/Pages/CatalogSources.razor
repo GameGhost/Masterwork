@@ -1,0 +1,236 @@
+@page "/modules/sources"
+@using Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
+@using Masterwork.ModuleFormat
+@using Microsoft.Extensions.Logging
+@inject ModuleLibrary Library
+@inject CatalogSubscriptions Subscriptions
+@inject ContentSource Source
+@inject NavigationManager Nav
+@inject ILogger<CatalogSources> Logger
+
+@{ AppSettingsApplier.ReassertCulture(); }
+<PageTitle>@AppStrings.CatalogSources_PageTitle</PageTitle>
+
+@* One view per source, because what a source publishes is only meaningful alongside which of its
+   listings are hidden — and hiding is per source, not per module. Installing happens on New Game;
+   this page decides what New Game gets to offer. *@
+<div class="mws-scenario-screen">
+    <div class="mws-scenario-border" aria-hidden="true"></div>
+    <ChromeButton class="mws-scenario-back-button" OnClick='() => Nav.NavigateTo("/modules/manage")'>
+        <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
+    </ChromeButton>
+
+    <h2 class="mws-screen-title">@AppStrings.CatalogSources_Heading</h2>
+
+    <div class="mws-module-toolbar">
+        <input class="mws-source-url" type="url" placeholder="@AppStrings.CatalogSources_UrlPlaceholder"
+               value="@_newSourceUrl" disabled="@_busy" @oninput="OnSourceUrlInput" />
+        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@(_busy || string.IsNullOrWhiteSpace(_newSourceUrl))" OnClick="AddSource">
+            @AppStrings.CatalogSources_Add
+        </ChromeButton>
+    </div>
+
+    @if (_addError is not null)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.CatalogSources_AddFailedTitle</h3>
+                <p>@_addError</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _addError = null">@AppStrings.Common_Ok</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="mws-manage-modules">
+        @foreach (var source in _sources)
+        {
+            @* One panel per source: its identity at the top, then everything it publishes, in the
+               order its catalog lists them. *@
+            <div class="mws-module-row mws-source-panel" @key="source.Key">
+                <div class="mws-source-header">
+                    <div class="mws-module-row-info">
+                        <strong>@(source.Snapshot?.Catalog.Title ?? AppStrings.CatalogSources_UnreachableTitle)</strong>
+                        <span class="mws-module-version">
+                            @(source.IsPrimary ? AppStrings.CatalogSources_BuiltIn : source.Source.CatalogUrl)
+                        </span>
+                        @if (source.Snapshot is null)
+                        {
+                            <p class="mws-version-warning">@AppStrings.CatalogSources_Unreachable</p>
+                        }
+                        else if (source.Snapshot.Decision != PackageTrustDecision.Trusted)
+                        {
+                            <p class="mws-version-warning">@AppStrings.CatalogSources_NotTrusted</p>
+                        }
+                    </div>
+                    @if (!source.IsPrimary)
+                    {
+                        @* The built-in source is part of the build, not a subscription. *@
+                        <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_busy" OnClick="() => RemoveSource(source.Source.CatalogUrl)">
+                            @AppStrings.CatalogSources_Remove
+                        </ChromeButton>
+                    }
+                </div>
+
+                @foreach (var entry in source.PublishedModules)
+                {
+                    var isHidden = _hidden.Any(h => h.SourceKey == source.Key && h.ModuleId == entry.Id);
+                    <hr class="mws-source-divider" />
+                    <div class="mws-source-listing @(isHidden ? "hidden-listing" : "")" @key="entry.Id">
+                        <div class="mws-module-row-info">
+                            <strong>@entry.Title</strong>
+                            <span class="mws-module-version">v@(entry.Version)</span>
+                            @if (ResolvedFrom(entry.Id) is { } winner && winner != source.Key)
+                            {
+                                @* Another source's listing is the one New Game actually offers. *@
+                                <span class="mws-module-version">@AppStrings.CatalogSources_SupersededHere</span>
+                            }
+                        </div>
+                        <ChromeButton class="mws-btn-sm style-btn-brown" disabled="@_busy"
+                                      OnClick="() => SetHidden(source.Key, entry.Id, !isHidden)">
+                            @(isHidden ? AppStrings.CatalogSources_Show : AppStrings.CatalogSources_Hide)
+                        </ChromeButton>
+                    </div>
+                }
+
+                @if (source.Snapshot is not null && source.PublishedModules.Count == 0)
+                {
+                    <hr class="mws-source-divider" />
+                    <p class="mws-module-version">@AppStrings.CatalogSources_Empty</p>
+                }
+            </div>
+        }
+    </div>
+
+    <LoadingOverlay Show="@_loading" Message="@AppStrings.Common_Loading" />
+</div>
+
+@code {
+    private IReadOnlyList<ModuleLibrary.SubscribedSource> _sources = [];
+    private IReadOnlyList<HiddenCatalogListing> _hidden = [];
+    private IReadOnlyList<LibraryEntry> _entries = [];
+    private string _newSourceUrl = "";
+    private string? _addError;
+    private bool _busy;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private void OnSourceUrlInput(ChangeEventArgs e) => _newSourceUrl = e.Value?.ToString() ?? "";
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Library.LoadAsync(Source);
+            _sources = result.Sources;
+            _hidden = result.Hidden;
+            _entries = result.Entries;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Which source's listing of this module actually won the merge — used to mark the rest as
+    // superseded, so a hidden-vs-shadowed listing isn't mistaken for a broken one.
+    private string? ResolvedFrom(string moduleId)
+    {
+        var resolved = _entries.FirstOrDefault(e => e.Id == moduleId);
+        if (resolved?.Source is null)
+        {
+            return null;
+        }
+
+        return _sources.FirstOrDefault(s => s.Source.CatalogUrl == resolved.Source.CatalogUrl)?.Key;
+    }
+
+    private async Task SetHidden(string sourceKey, string moduleId, bool hidden)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await Subscriptions.SetHiddenAsync(sourceKey, moduleId, hidden);
+
+            // Reloaded rather than patched: hiding one listing can promote another source's, so the
+            // whole resolution changes, not just this row.
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddSource()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _loading = true;
+        _addError = null;
+
+        try
+        {
+            var result = await Subscriptions.AddAsync(_newSourceUrl, Source);
+            if (result.Succeeded)
+            {
+                _newSourceUrl = "";
+                await ReloadAsync();
+                return;
+            }
+
+            _addError = DescribeFailure(result);
+        }
+        finally
+        {
+            _loading = false;
+            _busy = false;
+        }
+    }
+
+    private static string DescribeFailure(AddSourceResult result) => result.Failure switch
+    {
+        AddSourceFailure.NotAValidUrl => AppStrings.CatalogSources_ErrorNotAUrl,
+        AddSourceFailure.AlreadySubscribed => AppStrings.CatalogSources_ErrorAlreadyAdded,
+        // On the web head the likeliest cause isn't that the source is down but that its host
+        // doesn't permit browser access — and the same URL would work in a native build.
+        AddSourceFailure.Unreachable when result.MayBeCors => AppStrings.CatalogSources_ErrorBlockedByBrowser,
+        AddSourceFailure.Unreachable => AppStrings.CatalogSources_ErrorUnreachable,
+        AddSourceFailure.NotACatalog => AppStrings.CatalogSources_ErrorNotACatalog,
+        _ => AppStrings.CatalogSources_ErrorNotTrusted,
+    };
+
+    private async Task RemoveSource(string catalogUrl)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            // Purely a subscription change — nothing installed from it is touched.
+            await Subscriptions.RemoveAsync(catalogUrl);
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

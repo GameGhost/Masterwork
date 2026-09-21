@@ -256,6 +256,11 @@ Each entry also carries a `thumbnail_sha256`. The app caches thumbnails by that 
 refresh that doesn't change the art re-downloads nothing — which matters, since the thumbnails are
 by far the largest thing a browse view fetches.
 
+**The order of the package arguments is the order players see.** Entries are written in the order
+the files are passed, and the app lists a source's modules in exactly that order — so arrange them
+deliberately rather than alphabetically. Asset packs can go anywhere; they're never listed on their
+own.
+
 Each entry's hash and size are measured from the bundle bytes themselves, and its browse metadata
 (title, description, languages, player count, playtime, dependencies) is read from that package's own
 `manifest.yaml` — so nothing here is retyped by hand and nothing can drift from the content it

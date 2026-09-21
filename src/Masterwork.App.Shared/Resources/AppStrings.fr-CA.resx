@@ -102,24 +102,46 @@
   <data name="Achievements_NoMemories" xml:space="preserve"><value>Aucune partie terminée pour le moment. Atteindre une fin enregistre un Souvenir ici.</value></data>
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Gérer les modules</value></data>
-  <data name="ManageModules_Heading" xml:space="preserve"><value>Modules</value></data>
+  <data name="ManageModules_Heading" xml:space="preserve"><value>Installés</value></data>
+  <data name="ManageModules_AssetPackLabel" xml:space="preserve"><value>Pack de ressources</value></data>
+  <data name="ManageModules_AssetPackSource_Auto" xml:space="preserve"><value>Automatique</value></data>
+  <data name="ManageModules_AssetPackSource_Manual" xml:space="preserve"><value>Manuel</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmTitle" xml:space="preserve"><value>Supprimer ce pack de ressources?</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmBody" xml:space="preserve"><value>Aucun module installé ne dépend de ce pack de ressources.</value></data>
+  <data name="ManageModules_AssetPackHashMismatchTitle" xml:space="preserve"><value>Remplacer le pack de ressources installé?</value></data>
+  <data name="ManageModules_AssetPackHashMismatchBody" xml:space="preserve"><value>Un fichier différent est déjà installé sous ce même identifiant et cette même version. Le remplacer peut affecter les modules qui en dépendent.</value></data>
+  <data name="ManageModules_AssetPackUploadError_NoManifest" xml:space="preserve"><value>Ce fichier n'a pas de manifest.yaml et ne peut pas être installé.</value></data>
+  <data name="ManageModules_AssetPackUploadError_Generic" xml:space="preserve"><value>Impossible d'installer ce pack de ressources : {0}</value></data>
+  <data name="ManageModules_InstallAnyway" xml:space="preserve"><value>Installer quand même</value></data>
+  <data name="ManageModules_UploadAssetPack" xml:space="preserve"><value>Ajouter</value></data>
+  <data name="StartNewGame_MissingAssetPackTitle" xml:space="preserve"><value>Pack de ressources requis</value></data>
+  <data name="StartNewGame_UploadError_MissingAssetPack" xml:space="preserve"><value>Le pack de ressources « {0} » v{1} doit être téléversé d'abord.</value></data>
 
-  <data name="BrowseCatalog_PageTitle" xml:space="preserve"><value>Masterwork — Obtenir des modules</value></data>
-  <data name="BrowseCatalog_Heading" xml:space="preserve"><value>Obtenir des modules</value></data>
-  <data name="BrowseCatalog_Browse" xml:space="preserve"><value>Obtenir des modules</value></data>
-  <data name="BrowseCatalog_Install" xml:space="preserve"><value>Installer</value></data>
-  <data name="BrowseCatalog_Update" xml:space="preserve"><value>Mettre à jour</value></data>
-  <data name="BrowseCatalog_Installed" xml:space="preserve"><value>Installé</value></data>
-  <data name="BrowseCatalog_Empty" xml:space="preserve"><value>Cette source ne publie encore aucun module.</value></data>
-  <data name="BrowseCatalog_Unavailable" xml:space="preserve"><value>Impossible d'obtenir la liste des modules. Vérifiez votre connexion et réessayez plus tard.</value></data>
-  <data name="BrowseCatalog_Megabytes" xml:space="preserve"><value>{0:N0} Mo</value></data>
-  <data name="BrowseCatalog_Downloading" xml:space="preserve"><value>Téléchargement de « {0} »… {1} %</value></data>
-  <data name="BrowseCatalog_Verifying" xml:space="preserve"><value>Vérification de « {0} »… {1} %</value></data>
-  <data name="BrowseCatalog_Installing" xml:space="preserve"><value>Installation de « {0} »… {1} %</value></data>
-  <data name="BrowseCatalog_InstallFailedTitle" xml:space="preserve"><value>Installation impossible</value></data>
-  <data name="BrowseCatalog_Unsigned" xml:space="preserve"><value>Cette liste de modules n'est pas signée; rien ne peut en être installé.</value></data>
-  <data name="BrowseCatalog_UnrecognizedSigner" xml:space="preserve"><value>Cette liste de modules a été signée par « {0} », que l'application ne reconnaît pas. Rien ne peut en être installé.</value></data>
-  <data name="BrowseCatalog_SignatureBlocked" xml:space="preserve"><value>La signature de cette liste de modules ne correspond pas à son contenu. Elle a peut-être été modifiée ou endommagée; rien ne peut en être installé.</value></data>
+  <data name="CatalogSources_PageTitle" xml:space="preserve"><value>Masterwork — Sources de modules</value></data>
+  <data name="CatalogSources_Heading" xml:space="preserve"><value>Sources</value></data>
+  <data name="CatalogSources_Manage" xml:space="preserve"><value>Sources</value></data>
+  <data name="CatalogSources_Add" xml:space="preserve"><value>Ajouter une source</value></data>
+  <data name="CatalogSources_Remove" xml:space="preserve"><value>Retirer la source</value></data>
+  <data name="CatalogSources_AddFailedTitle" xml:space="preserve"><value>Impossible d'ajouter la source</value></data>
+  <data name="CatalogSources_UrlPlaceholder" xml:space="preserve"><value>https://exemple.com/catalog.json</value></data>
+  <data name="CatalogSources_BuiltIn" xml:space="preserve"><value>Intégrée</value></data>
+  <data name="CatalogSources_Hide" xml:space="preserve"><value>Masquer</value></data>
+  <data name="CatalogSources_Show" xml:space="preserve"><value>Afficher</value></data>
+  <data name="CatalogSources_SupersededHere" xml:space="preserve"><value>Une autre source le fournit</value></data>
+  <data name="CatalogSources_UnreachableTitle" xml:space="preserve"><value>Source indisponible</value></data>
+  <data name="CatalogSources_Unreachable" xml:space="preserve"><value>Impossible de la joindre. Ses modules ne sont pas listés tant qu'elle ne répond pas.</value></data>
+  <data name="CatalogSources_NotTrusted" xml:space="preserve"><value>Éditeur non approuvé — rien ne peut être installé d'ici.</value></data>
+  <data name="CatalogSources_ErrorNotAUrl" xml:space="preserve"><value>Ce n'est pas une adresse https valide.</value></data>
+  <data name="CatalogSources_ErrorAlreadyAdded" xml:space="preserve"><value>Cette source est déjà dans la liste.</value></data>
+  <data name="CatalogSources_ErrorUnreachable" xml:space="preserve"><value>Rien n'a répondu à cette adresse.</value></data>
+  <data name="CatalogSources_ErrorBlockedByBrowser" xml:space="preserve"><value>Votre navigateur n'a pas pu charger cette source. Son hôte doit autoriser l'accès depuis un navigateur; la même adresse peut fonctionner dans l'application de bureau ou mobile.</value></data>
+  <data name="CatalogSources_ErrorNotACatalog" xml:space="preserve"><value>Cette adresse n'a pas renvoyé une liste de modules comprise par l'application.</value></data>
+  <data name="CatalogSources_ErrorNotTrusted" xml:space="preserve"><value>Cette source n'est pas signée par un éditeur approuvé; rien ne pourrait en être installé.</value></data>
+
+  <data name="CatalogSources_Empty" xml:space="preserve"><value>Cette source ne publie encore aucun module.</value></data>
+  <data name="CatalogInstall_Downloading" xml:space="preserve"><value>Téléchargement de « {0} »… {1} %</value></data>
+  <data name="CatalogInstall_Verifying" xml:space="preserve"><value>Vérification de « {0} »… {1} %</value></data>
+  <data name="CatalogInstall_Installing" xml:space="preserve"><value>Installation de « {0} »… {1} %</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Supprimer ce module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Supprimer aussi les sauvegardes de ce module?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Supprimer le module et les sauvegardes</value></data>
@@ -163,6 +185,11 @@
   <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Ajouter</value></data>
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Sélectionnez un module pour commencer.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Jouer</value></data>
+  <data name="StartNewGame_AvailableBadge" xml:space="preserve"><value>Disponible</value></data>
+  <data name="StartNewGame_UpdateBadge" xml:space="preserve"><value>Mise à jour</value></data>
+  <data name="StartNewGame_Download" xml:space="preserve"><value>Télécharger</value></data>
+  <data name="StartNewGame_UpdateTo" xml:space="preserve"><value>Mettre à jour vers v{0}</value></data>
+  <data name="StartNewGame_SourceNotTrusted" xml:space="preserve"><value>La source de ce module n'est pas approuvée; il ne peut pas être installé.</value></data>
   <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Reprendre la session en cours?</value></data>
   <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} a déjà une session en cours.</value></data>
   <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Recommencer</value></data>

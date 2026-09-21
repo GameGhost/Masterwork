@@ -102,6 +102,13 @@ public sealed record CatalogDocument
 
     /// <summary>Everything this source publishes — modules and asset packs together, told apart by <see cref="CatalogEntry.Type"/>.</summary>
     public IReadOnlyList<CatalogEntry> Entries { get; init; } = [];
+
+    /// <summary>
+    /// Just the modules. Asset packs are published so a module's declared dependency can be
+    /// resolved and installed alongside it — they're never browsed or installed on their own, so
+    /// anything listing content for a player wants this rather than <see cref="Entries"/>.
+    /// </summary>
+    public IEnumerable<CatalogEntry> Modules => Entries.Where(e => e.Type == "module");
 }
 
 /// <summary>Rules for <see cref="CatalogEntry.Path"/>, shared by the parser and whatever resolves a path against a base.</summary>

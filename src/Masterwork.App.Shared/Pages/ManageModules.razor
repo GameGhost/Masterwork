@@ -25,59 +25,57 @@
         <span class="mws-visually-hidden">@AppStrings.Common_Back</span>
     </ChromeButton>
 
+    @* Title and toolbar share the top row: the title centred, the buttons at the right where New
+       Game keeps its own, rather than the toolbar being pushed down under the title. *@
+    <div class="mws-screen-header">
+    <h2 class="mws-screen-title">@AppStrings.ManageModules_Heading</h2>
+
     @* The primary manual-install entry point for both packages types — module or asset pack, told
-       apart by manifest.yaml's own type: field (see ProcessUploadedBytesAsync). Same header
-       placement and same combined behavior as StartNewGame.razor's own upload button used to have,
-       before that page's upload flow moved here entirely. *@
+       apart by manifest.yaml's own type: field (see ProcessUploadedBytesAsync). *@
     <div class="mws-module-toolbar">
         @if (FilePicker.IsAvailable)
         {
-            <ChromeButton class="mws-upload-button style-btn-brown" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</ChromeButton>
+            <ChromeButton class="mws-upload-button style-btn-green" disabled="@_busy" OnClick="OnNativePickerClicked">@AppStrings.StartNewGame_UploadModule</ChromeButton>
         }
         else
         {
-            <label for="mws-upload-input" class="mws-upload-button style-btn-brown">@AppStrings.StartNewGame_UploadModule</label>
+            <label for="mws-upload-input" class="mws-upload-button style-btn-green">@AppStrings.StartNewGame_UploadModule</label>
             <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
                        accept=".mwm,.mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
         }
-        <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/browse")'>@AppStrings.BrowseCatalog_Browse</ChromeButton>
+        <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/sources")'>@AppStrings.CatalogSources_Manage</ChromeButton>
+    </div>
     </div>
     @if (_uploadError is not null)
     {
         <p class="mws-version-warning">@_uploadError</p>
     }
 
-    <h2 class="mws-screen-title">@AppStrings.ManageModules_Heading</h2>
-
+    @* Modules and asset packs in one list, since both are simply "what's installed" — modules first,
+       then asset packs, each by name. *@
     <div class="mws-manage-modules">
-        @foreach (var module in _modules)
+        @foreach (var row in InstalledRows())
         {
-            <div class="mws-module-row">
+            <div class="mws-module-row" @key="row.Key">
                 <div class="mws-module-row-info">
-                    <strong>@module.Title</strong>
-                    <span class="mws-module-version">v@(module.Version)</span>
+                    <strong>@row.Title</strong>
+                    <span class="mws-module-version">v@(row.Version)</span>
+                    @if (row.Pack is { } pack)
+                    {
+                        <span class="mws-module-version">
+                            @AppStrings.ManageModules_AssetPackLabel ·
+                            @(pack.InstallSource == AssetPackInstallSource.Auto ? AppStrings.ManageModules_AssetPackSource_Auto : AppStrings.ManageModules_AssetPackSource_Manual)
+                        </span>
+                    }
                 </div>
-                <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</ChromeButton>
-            </div>
-        }
-    </div>
-
-    <h2 class="mws-screen-title">@AppStrings.ManageModules_AssetPacksHeading</h2>
-
-    <div class="mws-manage-modules">
-        @foreach (var pack in _assetPacks)
-        {
-            <div class="mws-module-row">
-                <div class="mws-module-row-info">
-                    <strong>@pack.Title</strong>
-                    <span class="mws-module-version">v@(pack.Version)</span>
-                    <span class="mws-module-version">
-                        @(pack.InstallSource == AssetPackInstallSource.Auto ? AppStrings.ManageModules_AssetPackSource_Auto : AppStrings.ManageModules_AssetPackSource_Manual)
-                    </span>
-                </div>
-                @if (!AssetPackDependencyGuard.HasDependent(_modules, pack.AssetPackId, pack.Version))
+                @if (row.Module is { } module)
                 {
-                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteAssetPack = pack">@AppStrings.Common_Delete</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</ChromeButton>
+                }
+                else if (row.Pack is { } deletablePack && !AssetPackDependencyGuard.HasDependent(_modules, deletablePack.AssetPackId, deletablePack.Version))
+                {
+                    @* A pack something still depends on can't be deleted out from under it. *@
+                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteAssetPack = deletablePack">@AppStrings.Common_Delete</ChromeButton>
                 }
             </div>
         }
@@ -210,6 +208,23 @@
 
     private IReadOnlyList<InstalledModule> _modules = [];
     private IReadOnlyList<InstalledAssetPack> _assetPacks = [];
+
+    /// <summary>One installed item — a module or an asset pack, exactly one of which is set.</summary>
+    private sealed record InstalledRow(string Title, string Version, InstalledModule? Module, InstalledAssetPack? Pack)
+    {
+        // An asset pack is keyed by version too: several versions of one pack can be installed at
+        // once, one per module that pins it.
+        public string Key => Module is not null ? $"module:{Module.ModuleId}" : $"pack:{Pack!.AssetPackId}@{Pack.Version}";
+    }
+
+    // Every module before any asset pack, each group by name: packs are support content, so they sit
+    // below the things a player actually plays rather than interleaving with them.
+    private IEnumerable<InstalledRow> InstalledRows() =>
+        _modules.Select(m => new InstalledRow(m.Title, m.Version, m, null))
+            .Concat(_assetPacks.Select(p => new InstalledRow(p.Title, p.Version, null, p)))
+            .OrderBy(r => r.Pack is null ? 0 : 1)
+            .ThenBy(r => r.Title, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(r => r.Version, StringComparer.Ordinal);
     private string? _confirmingDeleteId;
     private InstalledAssetPack? _confirmingDeleteAssetPack;
     private (byte[] Bytes, string Sha256)? _pendingAssetPackInstall;

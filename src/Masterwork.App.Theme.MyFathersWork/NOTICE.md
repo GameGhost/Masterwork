@@ -19,11 +19,11 @@ release.
 
 Some files under `wwwroot/images/ui/` (`button_brown.png`, `button_green.png`, `button_red.png`,
 `button_question.png`, `slider_base.png`, `slider_button.png`, `checkbox_outline.png`,
-`checkbox_checkmark.png`, `input_small.png`, `button_back_orange.png`, `button_forward_orange.png`,
+`checkbox_checkmark.png`, `input_small.png`, `input_large.png`, `button_back_orange.png`, `button_forward_orange.png`,
 `arrow_left.png`, `arrow_right.png`),
 `wwwroot/images/backgrounds/` (`border.png`, `panel_general.png`, `panel_general_small.png`),
 `wwwroot/images/module-select/` (`hub-section-border.png`, `leather-background.png`), and
-`wwwroot/images/help/` (`popup-parchment-border.png`) were copied from `my-fathers-work-template`'s
+`wwwroot/images/help/` (`popup-parchment-border.png`) were copied from `my-fathers-work-template`'s (or, for `input_large.png`, `mwf-common-assets`')
 already-cropped/processed versions of the same underlying Renegade Game Studios source art
 (`Masterwork-Modules` repo) rather than re-derived from `Reference/` directly — same provenance,
 just via an already-processed copy.
