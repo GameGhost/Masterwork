@@ -812,6 +812,29 @@ body {
     text-align: center;
 }
 
+/* Version and "Powered by Masterwork" (AppCredit.razor): small, quiet, bottom-right — centred where
+   the screen is too narrow to tuck it in a corner. Its z-index keeps it above a theme's frame. */
+.mws-app-credit {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.6;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
+    .mws-app-credit {
+        left: 0;
+        right: 0;
+        text-align: center;
+    }
+}
+
 .mws-spinner {
     width: 2rem;
     height: 2rem;

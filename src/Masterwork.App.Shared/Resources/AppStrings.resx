@@ -75,7 +75,9 @@
   <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
   <data name="Common_No" xml:space="preserve"><value>No</value></data>
 
-  <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
+  <data name="App_Description" xml:space="preserve"><value>A community companion app for {0}, powered by Masterwork.</value></data>
+  <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;{0}&lt;/em&gt;.</value></data>
+  <data name="App_Credit" xml:space="preserve"><value>v{0} · Powered by Masterwork</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Help</value></data>
   <data name="MainMenu_Achievements" xml:space="preserve"><value>Endings</value></data>
   <data name="MainMenu_Options" xml:space="preserve"><value>Settings</value></data>
@@ -88,7 +90,7 @@
   <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Timeline and rewind</value></data>
   <data name="Help_Topic_Saves" xml:space="preserve"><value>Saves</value></data>
   <data name="Help_HowToUse_Title" xml:space="preserve"><value>How to Use Masterwork</value></data>
-  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork plays community-authored scenarios for &lt;em&gt;My Father's Work&lt;/em&gt;. Start a module from "Start New Game," follow the passages as they're presented, and use the timeline scrubber to review — not undo — anything you've already decided.</value></data>
+  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork plays community-authored scenarios for &lt;em&gt;{0}&lt;/em&gt;. Start a module from "Start New Game," follow the passages as they're presented, and use the timeline scrubber to review — not undo — anything you've already decided.</value></data>
   <data name="Help_TimelineRewind_Title" xml:space="preserve"><value>Timeline and Rewind</value></data>
   <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Stepping back lets you review what happened without changing it — links and inputs disable while you're looking at the past. "Resume from here" discards anything after the point you're viewing; "Return to present" just brings you back without discarding it.</value></data>
   <data name="Help_Saves_Title" xml:space="preserve"><value>Saves</value></data>

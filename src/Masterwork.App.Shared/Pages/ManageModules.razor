@@ -14,6 +14,7 @@
 @inject INativeFilePicker FilePicker
 @inject SignatureVerifier Verifier
 @inject BrowserCrypto Crypto
+@inject WhiteLabelConfig WhiteLabel
 @inject ILogger<ManageModules> Logger
 
 @{ AppSettingsApplier.ReassertCulture(); }
@@ -477,7 +478,7 @@
             _loading = false;
         }
 
-        var decision = PackageTrustEvaluator.Evaluate(verification, WhiteLabelConfig.PublisherThumbprint, _appSettings.TrustedPublisherThumbprints);
+        var decision = PackageTrustEvaluator.Evaluate(verification, WhiteLabel.PublisherThumbprint, _appSettings.TrustedPublisherThumbprints);
         Logger.LogInformation("Upload: signature {Outcome}, trust decision {Decision}", verification.Outcome, decision);
 
         switch (decision)

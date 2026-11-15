@@ -32,6 +32,10 @@ builder.Services.AddScoped<AudioCoordinator>();
 builder.Services.AddScoped<AudioSettingsState>();
 builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 
+// The flavor this build was compiled as (WhiteLabelFlavor): registers its WhiteLabelConfig and theme
+// services.
+builder.Services.AddThemeModule(typeof(Program).Assembly);
+
 // This head's primary source is always this origin's own /content routes — it never names an
 // upstream host, and the browser never has to reach one. Where those routes point is the serving
 // site's configuration (ContentEndpoints in Masterwork.App.Web), mirroring what a native build
@@ -54,14 +58,6 @@ builder.Services.AddScoped<CatalogSubscriptions>();
 // module upload/save import don't hit the crash INativeFilePicker documents, so this default
 // (never actually called) is enough.
 builder.Services.AddScoped<INativeFilePicker, NullNativeFilePicker>();
-// The active theme — swapping themes is a build-time decision (this line), not a runtime one; see
-// IMainMenuTheme's own remarks for why this wiring lives in each host rather than the theme project
-// registering itself.
-builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(
-    typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene),
-    musicUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/main-menu-theme.ogg",
-    transitionSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/shell-transition.ogg",
-    clickSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/click.ogg"));
 
 var host = builder.Build();
 

@@ -43,17 +43,15 @@
            <MauiXaml Update="MyPage.xaml" Inflator="Runtime" /> (force runtime inflation) -->
     <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
-    <!-- Display name -->
-    <ApplicationTitle>Masterwork: My Father's Work</ApplicationTitle>
+    <!-- ApplicationTitle, ApplicationId, MauiIcon and MauiSplashScreen come from the white-label
+         flavor — see the WhiteLabel.props import at the end of this file. -->
 
-    <!-- App Identifier -->
-    <ApplicationId>ca.digitalghost.masterwork.app</ApplicationId>
-
-    <!-- Versions — pre-release; ApplicationVersion (Android versionCode / build number) stays a
-         positive integer regardless of the 0.x display version, per platform requirements. Bump
-         ApplicationVersion on every release that changes the Android build, even between the same
-         ApplicationDisplayVersion — Android treats versionCode as the sole update/downgrade signal. -->
-    <ApplicationDisplayVersion>0.3.2</ApplicationDisplayVersion>
+    <!-- Versions — the display version is VersionPrefix in the root Directory.Build.props.
+         ApplicationVersion (Android versionCode / build number) stays a positive integer regardless of
+         the 0.x display version, per platform requirements. Bump it on every release that changes the
+         Android build, even between the same display version — Android treats versionCode as the sole
+         update/downgrade signal. -->
+    <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
     <ApplicationVersion>7</ApplicationVersion>
 
     <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
@@ -67,30 +65,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- App Icon — standard MauiIcon shape: `Include`/`BackgroundFile` is background only (a flat
-         #1B1D21 fill, generated, not hand-authored). `ForegroundFile` is the logo alone, generated
-         from Masterwork.App.Theme.MyFathersWork/wwwroot/images/myfatherswork-logo-1024x1024.png (the
-         official wordmark, transparent background; see that project's own NOTICE.md for provenance),
-         scaled to ~68% of its own canvas with transparent padding — confirmed empirically that
-         Resizetizer does *not* apply its own extra inset for Android's adaptive icon, so the raw
-         logo's own built-in gutter (~95% width / ~77% height of its canvas) isn't enough margin on
-         its own; without this, Android's circular/squircle/rounded-square launcher mask crops the
-         logo's own edges. This same file is used for every platform (Windows/iOS/legacy-Android/
-         round icon all get it full-size, just with a bit more background margin than a full-bleed
-         mark would have — a deliberate simplification over maintaining a separate per-platform
-         source). Resizetizer composites foreground over background itself — earlier attempts
-         pre-baked the logo into `Include` *and* separately passed a full `ForegroundFile`, which
-         Resizetizer composited a second time on top, producing a visible double-exposed logo. -->
-    <MauiIcon Include="..\Masterwork.App.Theme.MyFathersWork\AppIcon\appicon-background.png"
-              ForegroundFile="..\Masterwork.App.Theme.MyFathersWork\AppIcon\appicon-foreground.png"
-              Link="Resources\AppIcon\appicon.png" />
-
-    <!-- Splash Screen — the same properly-centered square logo the app icon derives from (not the
-         wide 1024x512 lockup, whose large dead space on one side was scaling/centering oddly here),
-         on the same #1B1D21 background as the icon for a consistent brand mark. BaseSize bumped up
-         (was 400,200 against the old wide image) so the logo actually reads as prominent on launch. -->
-    <MauiSplashScreen Include="..\Masterwork.App.Theme.MyFathersWork\wwwroot\images\myfatherswork-logo-1024x1024.png" Link="Resources\Splash\splash.png" Color="#1B1D21" BaseSize="512,512" />
-
     <!-- Images -->
     <MauiImage Include="Resources\Images\*" />
 
@@ -109,11 +83,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
-    <!-- Direct reference (not just transitive via App.Shared) needed for compile-time visibility of
-         MainMenuScene and any other theme component types this host wires into Shared's
-         IMainMenuTheme/etc. at startup — App.Shared's own reference to this project only carries its
-         static web assets through, not C# type visibility. -->
-    <ProjectReference Include="..\Masterwork.App.Theme.MyFathersWork\Masterwork.App.Theme.MyFathersWork.csproj" />
   </ItemGroup>
+
+  <Import Project="..\WhiteLabel\WhiteLabel.props" />
 
 </Project>

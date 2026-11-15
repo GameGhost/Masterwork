@@ -1,9 +1,14 @@
-﻿namespace Masterwork.App;
+﻿using Masterwork.App.Shared.Services;
+
+namespace Masterwork.App;
 
 public partial class App : Application
 {
-    public App()
+    private readonly WhiteLabelConfig _whiteLabel;
+
+    public App(WhiteLabelConfig whiteLabel)
     {
+        _whiteLabel = whiteLabel;
         InitializeComponent();
     }
 
@@ -15,7 +20,7 @@ public partial class App : Application
         // AppWindow API the way the fullscreen toggle (MauiProgram.cs) has to.
         return new Window(new MainPage())
         {
-            Title = "Masterwork - My Father's Work",
+            Title = _whiteLabel.AppName,
             MinimumWidth = 800,
             MinimumHeight = 600,
         };

@@ -1,3 +1,5 @@
+using Masterwork.App.Shared.Services;
+
 namespace Masterwork.App.Web;
 
 /// <summary>How this site hands package bytes to the browser.</summary>
@@ -26,11 +28,17 @@ public sealed class ContentOptions
     /// <summary>Configuration section name.</summary>
     public const string SectionName = "Content";
 
-    /// <summary>Upstream catalog URL. Its <c>.sig</c> sibling is derived, never configured separately.</summary>
-    public string CatalogUrl { get; set; } = Masterwork.App.Shared.Services.WhiteLabelConfig.CatalogUrl;
+    /// <summary>
+    /// Upstream catalog URL. Its <c>.sig</c> sibling is derived, never configured separately.
+    /// Defaults to the flavor's <see cref="WhiteLabelConfig.CatalogUrl"/>.
+    /// </summary>
+    public string CatalogUrl { get; set; } = "";
 
-    /// <summary>Upstream base that catalog entry paths resolve against.</summary>
-    public string PackageBaseUrl { get; set; } = Masterwork.App.Shared.Services.WhiteLabelConfig.PackageBaseUrl;
+    /// <summary>
+    /// Upstream base that catalog entry paths resolve against. Defaults to the flavor's
+    /// <see cref="WhiteLabelConfig.PackageBaseUrl"/>.
+    /// </summary>
+    public string PackageBaseUrl { get; set; } = "";
 
     /// <summary>Proxy (default) or redirect — see <see cref="ContentDeliveryMode"/>.</summary>
     public ContentDeliveryMode Mode { get; set; } = ContentDeliveryMode.Proxy;
@@ -56,10 +64,25 @@ public static class ContentEndpoints
 
     private const int MaxRedirects = 5;
 
-    /// <summary>Binds <see cref="ContentOptions"/> and registers the upstream <see cref="HttpClient"/>.</summary>
+    /// <summary>
+    /// Binds <see cref="ContentOptions"/> and registers the upstream <see cref="HttpClient"/>. The
+    /// upstream defaults to the flavor's own source (a registered <see cref="WhiteLabelConfig"/>);
+    /// configuration overrides only the values it sets.
+    /// </summary>
     public static IServiceCollection AddContentEndpoints(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<ContentOptions>(configuration.GetSection(ContentOptions.SectionName));
+        services.AddOptions<ContentOptions>()
+            .Configure<WhiteLabelConfig>((options, whiteLabel) =>
+            {
+                options.CatalogUrl = whiteLabel.CatalogUrl;
+                options.PackageBaseUrl = whiteLabel.PackageBaseUrl;
+            })
+            .Bind(configuration.GetSection(ContentOptions.SectionName))
+            // An empty or relative value (a blank appsettings entry, a typo'd environment variable)
+            // would otherwise surface only as failed fetches once players arrive.
+            .Validate(options => IsAbsoluteHttpUrl(options.CatalogUrl), $"{ContentOptions.SectionName}:{nameof(ContentOptions.CatalogUrl)} must be an absolute http(s) URL.")
+            .Validate(options => IsAbsoluteHttpUrl(options.PackageBaseUrl), $"{ContentOptions.SectionName}:{nameof(ContentOptions.PackageBaseUrl)} must be an absolute http(s) URL.")
+            .ValidateOnStart();
 
         services.AddHttpClient(HttpClientName)
             // Followed manually below so a redirect chain can't quietly exceed a sane hop count, and
@@ -69,9 +92,14 @@ public static class ContentEndpoints
         return services;
     }
 
-    /// <summary>Maps the fixed content routes.</summary>
+    /// <summary>Maps the fixed content routes, logging the upstream they serve from.</summary>
     public static void MapContentEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        var configured = endpoints.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ContentOptions>>().Value;
+        endpoints.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ContentEndpoints)).LogInformation(
+            "Content upstream: catalog {CatalogUrl}, packages {PackageBaseUrl}, mode {Mode}",
+            configured.CatalogUrl, configured.PackageBaseUrl, configured.Mode);
+
         // The catalog is always streamed, never redirected, regardless of Mode: it's small, it's
         // re-fetched far more often than packages, and the client must read its exact bytes to
         // check the detached signature over them.
@@ -131,6 +159,9 @@ public static class ContentEndpoints
             return await ServeAsync(upstream, forceProxy: false, options.Value, context, factory, loggers, ct);
         });
     }
+
+    private static bool IsAbsoluteHttpUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
 
     private static async Task<IResult> ServeAsync(
         string upstreamUrl,

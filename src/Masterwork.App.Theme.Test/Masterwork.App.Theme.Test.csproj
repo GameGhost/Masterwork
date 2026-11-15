@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- A deliberately bare flavor, selected with -p:WhiteLabelFlavor=Test. It exists to prove the
+       hosts build and run with no dependency on the My Father's Work theme, and to give tests a
+       theme module that isn't the shipping one. Not a product: its content source doesn't resolve
+       and it pins no publisher. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <StaticWebAssetBasePath>_content/theme</StaticWebAssetBasePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

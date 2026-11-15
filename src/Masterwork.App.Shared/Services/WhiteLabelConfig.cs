@@ -1,56 +1,66 @@
 namespace Masterwork.App.Shared.Services;
 
 /// <summary>
-/// What distinguishes one white-label build from another: where its content comes from, and whose
-/// signature it trusts without asking.
+/// What distinguishes one white-label build from another at runtime: what the app calls itself,
+/// where its content comes from, and whose signature it trusts without asking. Supplied by the
+/// flavor's <see cref="IThemeModule"/> and registered as a singleton.
 /// </summary>
 /// <remarks>
-/// These belong together because they are one decision. The pinned thumbprint is meaningful only
-/// against the source it was pinned for — a flavor shipping against a different catalog is
-/// necessarily trusting a different publisher, and pinning one while pointing at the other would
-/// silently downgrade every install to an unrecognized-signer prompt.
+/// The source and the pinned thumbprint belong together because they are one decision. The pinned
+/// thumbprint is meaningful only against the source it was pinned for — a flavor shipping against a
+/// different catalog is necessarily trusting a different publisher, and pinning one while pointing
+/// at the other would silently downgrade every install to an unrecognized-signer prompt.
 ///
-/// A stand-in for the real build-time configuration 6.5 introduces. Kept as a single place to change
-/// so moving it later touches nothing but this file and whatever supplies the values.
+/// OS-level identity (application id, store title, icons) is not here: the platform reads those at
+/// build time, so they live in the flavor's MSBuild props instead.
 /// </remarks>
-public static class WhiteLabelConfig
+public sealed record WhiteLabelConfig
 {
-    /// <summary>
-    /// Upstream catalog URL. The catalog on the default branch is always the current one: a release
-    /// is published first (tag plus assets), then the regenerated <c>catalog.json</c> and its
-    /// signature are committed, so the catalog never names an asset that isn't there yet.
-    /// </summary>
-    public const string CatalogUrl = "https://raw.githubusercontent.com/GameGhost/Masterwork-Modules/main/.catalog/catalog.json";
+    /// <summary>The app's in-app name — page titles, window title, the web app manifest.</summary>
+    public required string AppName { get; init; }
+
+    /// <summary>A short form of <see cref="AppName"/>, for places with little room (the PWA <c>short_name</c>).</summary>
+    public required string ShortName { get; init; }
 
     /// <summary>
-    /// Upstream base that every catalog entry's relative path resolves against. Entry paths start
-    /// with the release tag (<c>v0.4.0/cost-of-disease.mwm</c>), so one catalog can point at
-    /// packages from several different releases at once — a module that hasn't changed keeps
-    /// pointing at the older tag it was published under.
-    ///
-    /// A different host from <see cref="CatalogUrl"/> because GitHub serves repository files and
-    /// release assets separately; that split is safe precisely because both values are compiled in
-    /// rather than read out of the catalog.
+    /// The game this flavor accompanies, as it appears in running text (the main menu tagline, help)
+    /// and as the accessible name of the theme's logo.
     /// </summary>
-    public const string PackageBaseUrl = "https://github.com/GameGhost/Masterwork-Modules/releases/download";
+    public required string GameName { get; init; }
+
+    /// <summary>Browser/PWA chrome colour (<c>theme-color</c>, manifest background), as a CSS colour.</summary>
+    public required string ThemeColor { get; init; }
+
+    /// <summary>
+    /// Upstream catalog URL. For a GitHub-hosted catalog, the one on the default branch is the
+    /// current one: a release is published first (tag plus assets), then the regenerated
+    /// <c>catalog.json</c> and its signature are committed, so the catalog never names an asset that
+    /// isn't there yet.
+    /// </summary>
+    public required string CatalogUrl { get; init; }
+
+    /// <summary>
+    /// Upstream base that every catalog entry's relative path resolves against. May be a different
+    /// host from <see cref="CatalogUrl"/> (GitHub serves repository files and release assets
+    /// separately); that split is safe precisely because both values are compiled in rather than
+    /// read out of the catalog.
+    /// </summary>
+    public required string PackageBaseUrl { get; init; }
 
     /// <summary>
     /// SHA-256 thumbprint (hex, case-insensitive) of the certificate this build treats as its own
     /// publisher: content signed by it installs with no prompt, and a catalog signed by it is
     /// trusted enough for its entry hashes to stand in for per-package signatures.
     /// <see langword="null"/> means nothing is pre-trusted, so every signed package goes through the
-    /// unrecognized-signer prompt.
-    ///
-    /// Currently the Masterwork content-signing certificate — the identity <c>Masterwork-Modules</c>
-    /// signs its releases with. Rotating that certificate means changing this value and shipping an
-    /// app update; there is no revocation mechanism beyond that.
+    /// unrecognized-signer prompt. Rotating it means shipping an app update; there is no revocation
+    /// mechanism beyond that.
     /// </summary>
-    public const string? PublisherThumbprint = "15B0433E3B600F11CB5A8F3B6222C9F907CF140F7024839A3703A783C3327C59";
+    public string? PublisherThumbprint { get; init; }
 
     /// <summary>
     /// The built-in source, for heads that fetch upstream directly. The web head does not use this —
     /// its client is hard-wired to its own origin, and the *site* is configured with the upstream
     /// values instead, so the browser never needs to reach upstream at all.
     /// </summary>
-    public static ContentSource PrimarySource { get; } = new(CatalogUrl, PackageBaseUrl);
+    public ContentSource PrimarySource => new(CatalogUrl, PackageBaseUrl);
 }

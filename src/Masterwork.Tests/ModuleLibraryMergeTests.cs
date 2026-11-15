@@ -94,6 +94,7 @@ public class ModuleLibraryMergeTests
             downloader,
             new SignatureVerifier(js, new BrowserCrypto(js), NullLogger<SignatureVerifier>.Instance),
             settingsStore,
+            TestWhiteLabel.Config,
             js,
             NullLogger<CatalogService>.Instance);
 

@@ -5,17 +5,22 @@ GitHub Releases on both this repo and the companion `Masterwork-Modules` repo. F
 
 ## 0. Version bump
 
-In `src/Masterwork.App/Masterwork.App.csproj`:
+The display version is `VersionPrefix` in the root `Directory.Build.props`; Android's build number is in
+`src/Masterwork.App/Masterwork.App.csproj`:
 
 ```xml
-<ApplicationDisplayVersion>0.1.1</ApplicationDisplayVersion>
+<!-- Directory.Build.props -->
+<VersionPrefix>0.1.1</VersionPrefix>
+<!-- src/Masterwork.App/Masterwork.App.csproj -->
 <ApplicationVersion>1</ApplicationVersion>
 ```
 
-- `ApplicationDisplayVersion` is the user-facing semver (`X.Y.Z`) — bump on every release.
+- `VersionPrefix` is the user-facing semver (`X.Y.Z`) — bump on every release. It is stamped on every
+  assembly, shown in the app (main menu, help, web splash) and becomes the MAUI head's
+  `ApplicationDisplayVersion`. Numbers only: a Windows package version can't carry a pre-release suffix.
 - `ApplicationVersion` is Android's `versionCode` — a plain incrementing integer, independent of the
   display version. Bump it on every release that changes the Android build, even between releases
-  that share the same `ApplicationDisplayVersion` — Android treats `versionCode` as the sole
+  that share the same display version — Android treats `versionCode` as the sole
   update/downgrade signal, so a repeat value means the Play Store / sideload install will refuse to
   treat the new APK as an update.
 
@@ -56,13 +61,20 @@ Get-Process Masterwork.App -ErrorAction SilentlyContinue
 dotnet publish src/Masterwork.App/Masterwork.App.csproj `
   -f net10.0-windows10.0.19041.0 -c Release `
   -p:RuntimeIdentifierOverride=win-x64 -p:WindowsPackageType=None -p:WindowsAppSDKSelfContained=true `
-  -p:BuildAndroid=false
+  -p:BuildAndroid=false -p:WhiteLabelFlavor=MyFathersWork
 
 $src = "src\Masterwork.App\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish"
 $dest = "Masterwork-<VERSION>-win-x64.zip"
 if (Test-Path $dest) { Remove-Item $dest -Force }
 Compress-Archive -Path "$src\*" -DestinationPath $dest
 ```
+
+Release builds name their flavor explicitly (`-p:WhiteLabelFlavor=MyFathersWork`) even though it is
+also the default, so a release command never depends on what the default happens to be. See
+`src/WhiteLabel/WhiteLabel.props`. Any other flavor builds into `bin\<Flavor>\`/`obj\<Flavor>\`, so a
+local `Test` build can't leave its theme assembly in the folder published above. Those folders stay
+behind after a flavor build; remove them with
+`Remove-Item src\*\bin\Test, src\*\obj\Test -Recurse -Force`.
 
 `PublishSingleFile=true` does **not** work for MAUI Windows apps — don't try to add it. The
 `RuntimeIdentifierOverride`-conditional `PropertyGroup` already in `Masterwork.App.csproj` is a
@@ -81,6 +93,7 @@ $env:MwSigningPass = "<your password>"   # not committed anywhere, not shared wi
 
 dotnet publish src/Masterwork.App/Masterwork.App.csproj `
   -f net10.0-android -c Release `
+  -p:WhiteLabelFlavor=MyFathersWork `
   -p:AndroidKeyStore=true `
   -p:AndroidPackageFormats=apk `
   -p:AndroidSigningKeyStore=masterwork-release.keystore `
@@ -126,7 +139,7 @@ Should show a v2/v3 signature with the expected certificate DN. Rename the outpu
 
 ## 4. GitHub Release — Masterwork
 
-Tag format: `v<VERSION>` (e.g. `v0.1.1`), matching `ApplicationDisplayVersion`.
+Tag format: `v<VERSION>` (e.g. `v0.1.1`), matching `VersionPrefix`.
 
 ```powershell
 gh release create v<VERSION> `
@@ -184,9 +197,10 @@ gh release create v<VERSION> `
   --notes "<what changed in the module content>"
 ```
 
-The thumbprint every bundle reports must match `WhiteLabelConfig.PublisherThumbprint` in the app
-repo. A mismatch means the app will treat this release as coming from an unrecognized publisher and
-prompt on every install — the two are one decision, so they move together or not at all.
+The thumbprint every bundle reports must match the flavor's pinned `PublisherThumbprint` in the app
+repo (`MyFathersWorkTheme.cs` in `src/Masterwork.App.Theme.MyFathersWork/`). A mismatch means the app
+will treat this release as coming from an unrecognized publisher and prompt on every install — the
+two are one decision, so they move together or not at all.
 
 > **If the signature format itself changed, everything must be re-signed.** A signature is only
 > readable by builds that understand the envelope that produced it; an older one reads as

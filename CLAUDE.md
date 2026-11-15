@@ -15,7 +15,9 @@ Solution file: `src/Masterwork.slnx`
 src/Masterwork.slnx
 ├── src/MasterWork.Engine/                     pure C# — interpreter and game session (Phase 1, complete)
 ├── src/MasterWork.ModuleFormat/               VarDef, MWS reader types + YAML loader, .mwm pack/unpack (shared library)
-├── src/MasterWork.App.Theme.MyFathersWork/    Razor Class Library — the default app-shell visual skin (CSS, fonts, images, MainMenuScene)
+├── src/MasterWork.App.Theme.MyFathersWork/    Razor Class Library — the My Father's Work flavor: its IThemeModule, WhiteLabelConfig, and app-shell skin (CSS, fonts, images, MainMenuScene)
+├── src/MasterWork.App.Theme.Test/             Razor Class Library — a bare flavor proving the hosts carry no My Father's Work dependency; also the tests' theme
+├── src/WhiteLabel/                            MSBuild props selecting the flavor each head is built as (WhiteLabelFlavor)
 ├── src/MasterWork.App.Shared/                 Razor Class Library — the actual player-app UI; shared by both heads below
 ├── src/MasterWork.App/                        MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
 ├── src/MasterWork.App.Web/                    ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
@@ -26,7 +28,7 @@ src/Masterwork.slnx
 └── src/MasterWork.Tests/                      xUnit test suite
 ```
 
-All eleven projects are registered in `Masterwork.slnx`.
+All twelve projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
 
 ## Build and Test
 
@@ -137,6 +139,62 @@ So: adding a setting to `AppSettings` needs no store change at all. It does need
 `AppSettingsSerializationTests.FullyPopulated()` — `EveryProperty_IsCoveredByTheFixture` fails until
 it has one, which is the point. The MAUI store still reads the old per-field keys once, to carry an
 upgrading player's settings over; those keys are never written again.
+
+### White-label flavors
+Which theme and content source a build carries is chosen by MSBuild, never by host C#. Every head
+(`Masterwork.App`, `Masterwork.App.Web.Client`, `Masterwork.App.Web`) imports
+`src/WhiteLabel/WhiteLabel.props`, which defaults `WhiteLabelFlavor` to `WhiteLabelDefaultFlavor`
+(`MyFathersWork`, set in the root `Directory.Build.props`, so plain IDE Debug just works) and imports
+`WhiteLabel/{Flavor}.props`. That one file holds everything
+flavor-specific: the theme `ProjectReference`, an `AssemblyAttribute` stamping the host with
+`[assembly: ThemeModule(typeof(...))]`, and — for MAUI only — `ApplicationId`/`ApplicationTitle`/icon/
+splash. Hosts call `services.AddThemeModule(typeof(Program).Assembly)`, which reads that attribute and
+registers the theme's `WhiteLabelConfig` (app name, game name, content source, pinned publisher
+thumbprint) plus whatever the theme's `IThemeModule.ConfigureServices` adds (`IMainMenuTheme`).
+
+- **Discovery is an attribute holding a `typeof`, not a reflection scan**, deliberately. .NET loads
+  assemblies lazily and the compiler drops references no code uses, so scanning loaded or referenced
+  assemblies for an `IThemeModule` finds nothing — verified empirically. The literal `typeof` keeps
+  the reference, fails at compile time if a flavor names a missing type, and its
+  `[DynamicallyAccessedMembers]` annotation keeps the constructor alive under trimming.
+- **Shared never references a theme.** Themes reference Shared (to implement `IThemeModule`); the
+  reverse would be a cycle.
+- **Every theme serves its static assets from `_content/theme/`** (`StaticWebAssetBasePath`,
+  `ThemeModules.AssetBasePath`), and must provide at least `theme.css`, a square 512px `logo.png` and a
+  192px `logo-192.png`, so host markup (`index.html`, `App.razor`) and the PWA manifest never name a
+  flavor. `app.css` gives most screens their structure, but **the main menu and web splash are laid
+  out entirely by the theme**: its `theme.css` must lift `.mws-main-menu-content` above
+  `.mws-main-menu-scene` (an absolutely-positioned scene otherwise paints over it) and give
+  `.mws-main-menu-logo`/`.mws-splash-logo` a size. `Masterwork.App.Theme.Test`'s `theme.css` is the
+  minimal example.
+- **The app is named after its flavor, not "Masterwork".** `WhiteLabelConfig.AppName` (window and page
+  titles, PWA name) and the flavor props' `ApplicationTitle` (launcher/OS name) are the same string —
+  `WhiteLabelBuildTests` checks the pair. "Masterwork" appears only in running text: the app
+  description ("…, powered by Masterwork."), help, and the small version + "Powered by Masterwork"
+  credit (`Chrome/AppCredit.razor`) on the main menu, help screen and web splash — placed at the screen edge by
+  `app.css`, above any theme frame. A **store listing title** is a separate
+  thing that does carry "Masterwork", to tell the app apart from other offerings for the same game —
+  see the Phase 6 design's store-readiness section; don't fold it into `AppName`.
+- **Flavor-specific text lives in `WhiteLabelConfig`**, not in markup or resx. Resx strings that
+  mention the game take it as `{0}` (HTML-encode it first when the string is rendered as markup).
+  The web head's PWA manifest is served from config (`WebAppManifest.cs`), not a static file.
+- **`Package.appxmanifest`'s `Identity Name` stays `maui-package-name-placeholder`.** The build fills it
+  from the flavor's `ApplicationId`, and an unpackaged Windows app's data folder
+  (`%LOCALAPPDATA%\Masterwork\{ApplicationId}`) is derived from it — a literal id there made every
+  flavor share one flavor's settings, saves and modules.
+- **The web server's `/content` upstream defaults to the flavor's own source**; a `Content` section in
+  appsettings overrides only the values it sets. Startup fails if the result isn't an absolute
+  http(s) URL, and logs the upstream it settled on.
+- **A non-default flavor builds into `bin\{Flavor}\` and `obj\{Flavor}\`** (root `Directory.Build.props`),
+  so switching flavors never overwrites the default build or leaves one flavor's theme assembly in
+  another's output. The default flavor — named or not — keeps plain `bin\`/`obj\`, which is what
+  release commands publish from. The flavor folders stay behind after use; clean up with
+  `Remove-Item src\*\bin\Test, src\*\obj\Test -Recurse -Force`.
+- **The app version is `VersionPrefix` in the root `Directory.Build.props`**, shared by every head and
+  flavor; the MAUI head's `ApplicationDisplayVersion` and the in-app credit (`AppVersion`) both read it.
+- **`-p:WhiteLabelFlavor=Test`** builds the bare `Masterwork.App.Theme.Test` flavor. It's the proof that
+  hosts carry no hidden My Father's Work dependency, and it's the theme the test suite uses.
+  `WhiteLabelBuildTests` evaluates each head per flavor.
 
 ### Mobile safe-area / system-bar insets
 Android renders edge-to-edge by default (enforced on API 35+), which stretched `BlazorWebView` under

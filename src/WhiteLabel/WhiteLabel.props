@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- Selects the white-label flavor a host is built as. Imported by every head (Masterwork.App,
+       Masterwork.App.Web.Client, Masterwork.App.Web) after its own properties, so a flavor's MAUI
+       identity can depend on UseMaui.
+
+       Pick one with -p:WhiteLabelFlavor=<Name>; with none, the build is the repo's
+       WhiteLabelDefaultFlavor (My Father's Work, set in Directory.Build.props), so opening the
+       solution and pressing Debug needs no setup. Any other flavor builds into bin/<Name> and
+       obj/<Name>, so it never disturbs the default build. Each flavor is one {Name}.props beside this
+       file holding everything specific to it: the theme project reference, the ThemeModuleAttribute
+       that tells the host which IThemeModule to load, and (MAUI only) the OS-level identity, icon and
+       splash. -->
+  <PropertyGroup>
+    <WhiteLabelFlavor Condition="'$(WhiteLabelFlavor)' == ''">$(WhiteLabelDefaultFlavor)</WhiteLabelFlavor>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)$(WhiteLabelFlavor).props" />
+
+</Project>

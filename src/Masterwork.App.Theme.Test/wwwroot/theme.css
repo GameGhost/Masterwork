@@ -1,0 +1,121 @@
+/* The minimum a theme provides. app.css supplies shared structure for most screens, but the main
+   menu and the web splash are laid out entirely by the theme — so this file has to position the
+   menu's content above its scene, and give both logo slots a size. */
+
+body {
+    background: #202020;
+    color: #f0f0f0;
+    font-family: system-ui, sans-serif;
+}
+
+/* -- Main menu ------------------------------------------------------------------------------------ */
+
+.mws-main-menu {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+}
+
+/* The scene fills the screen behind everything. The help button and content below carry a z-index
+   because an absolutely-positioned scene otherwise paints over in-flow content. */
+.mws-main-menu-scene {
+    position: absolute;
+    inset: 0;
+}
+
+.mws-test-scene {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(#303030, #202020);
+}
+
+.mws-main-menu-help {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    /* Above the content, which fills the whole screen and comes later in the markup. */
+    z-index: 2;
+    width: 2.5rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+}
+
+.mws-main-menu-help::after {
+    content: '?';
+}
+
+.mws-main-menu-content {
+    position: relative;
+    z-index: 1;
+    box-sizing: border-box;
+    height: 100%;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.mws-main-menu-tagline {
+    margin: 0;
+    max-width: 26rem;
+    text-align: center;
+}
+
+.mws-main-menu-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    width: min(100%, 24rem);
+}
+
+.mws-main-menu-buttons button {
+    padding: 0.75rem;
+}
+
+/* -- Logo slots (main menu and web splash) -------------------------------------------------------- */
+
+.mws-main-menu-logo,
+.mws-splash-logo {
+    width: min(50vw, 12rem);
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    background: url('logo.png') center / contain no-repeat;
+}
+
+/* -- Web splash ----------------------------------------------------------------------------------- */
+
+.mws-splash {
+    background: #202020;
+    color: #f0f0f0;
+}
+
+/* -- Bordered screens' back button (Help, New Game, Continue, ...) --------------------------------
+   Its only text is visually hidden, so it needs a visible glyph of its own. */
+
+.mws-scenario-back-button {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 20;
+    width: 2.5rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+}
+
+.mws-scenario-back-button::after {
+    content: '\2190';
+}
+
+.mws-scenario-screen {
+    padding: 4rem 1rem 2rem;
+}
+
+/* -- Dialogs ------------------------------------------------------------------------------------
+   app.css gives dialogs a white panel; the light body text would otherwise be unreadable on it. */
+
+.mws-dialog {
+    background: #2c2c2c;
+    color: #f0f0f0;
+}

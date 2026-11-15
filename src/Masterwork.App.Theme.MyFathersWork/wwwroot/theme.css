@@ -191,7 +191,7 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-512x512.png');
+    background-image: url('logo.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -421,7 +421,7 @@ body {
 .mws-splash-logo {
     width: min(60vw, 16rem);
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-512x512.png');
+    background-image: url('logo.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -436,6 +436,13 @@ body {
 .mws-splash-tagline em {
     font-style: normal;
     color: #f2b17b;
+}
+
+/* -- Version / "Powered by" credit (AppCredit.razor) -------------------------------------------------
+ * Keeps app.css's edge placement, which sits on the frame's outer band; the shadow keeps it legible
+ * over the frame art. */
+.mws-app-credit {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .mws-spinner {

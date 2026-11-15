@@ -90,6 +90,7 @@ public class CatalogServiceTests
             downloader,
             new SignatureVerifier(js, new BrowserCrypto(js), NullLogger<SignatureVerifier>.Instance),
             new StubSettingsStore(),
+            TestWhiteLabel.Config,
             js,
             NullLogger<CatalogService>.Instance);
         return (service, downloader, js);

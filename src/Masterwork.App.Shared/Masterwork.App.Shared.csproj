@@ -25,10 +25,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
-    <!-- Pure static-web-asset reference — pulls the theme's wwwroot content through the standard
-         RCL mechanism (_content/Masterwork.App.Theme.MyFathersWork/...), same as this project's own
-         wwwroot reaches both host apps. -->
-    <ProjectReference Include="..\Masterwork.App.Theme.MyFathersWork\Masterwork.App.Theme.MyFathersWork.csproj" />
+    <!-- No theme reference, deliberately: this is the flavor-agnostic UI every white-label build
+         shares. Themes depend on this project (to implement IThemeModule), never the reverse — and
+         which theme a build carries is chosen by the host's WhiteLabelFlavor, not by anything here. -->
   </ItemGroup>
 
   <ItemGroup>

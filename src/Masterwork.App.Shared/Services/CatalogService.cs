@@ -39,6 +39,7 @@ public sealed class CatalogService(
     IContentDownloader downloader,
     SignatureVerifier verifier,
     IAppSettingsStore settingsStore,
+    WhiteLabelConfig whiteLabel,
     IJSRuntime js,
     ILogger<CatalogService> logger)
 {
@@ -152,7 +153,7 @@ public sealed class CatalogService(
     private async Task<PackageTrustDecision> DecideAsync(SignatureVerificationResult verification)
     {
         var settings = await settingsStore.LoadAsync();
-        return PackageTrustEvaluator.Evaluate(verification, WhiteLabelConfig.PublisherThumbprint, settings.TrustedPublisherThumbprints);
+        return PackageTrustEvaluator.Evaluate(verification, whiteLabel.PublisherThumbprint, settings.TrustedPublisherThumbprints);
     }
 
     private async Task<CatalogSnapshot> ToSnapshotAsync(ContentSource source, CachedCatalog cached)

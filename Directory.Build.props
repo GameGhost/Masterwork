@@ -3,4 +3,26 @@
   <!-- Machine-local overrides (JDK/Android SDK paths, etc.) — not committed. See Directory.Build.local.props.example. -->
   <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
 
+  <!-- The app version, shared by every head and flavor: stamped on every assembly (the app shows it
+       from App.Shared's) and used as the MAUI head's ApplicationDisplayVersion. Numeric only — Windows
+       package versions can't carry a pre-release suffix. -->
+  <PropertyGroup>
+    <VersionPrefix>0.3.2</VersionPrefix>
+  </PropertyGroup>
+
+  <!-- The white-label flavor a build gets when none is named (see src/WhiteLabel/WhiteLabel.props). -->
+  <PropertyGroup>
+    <WhiteLabelDefaultFlavor>MyFathersWork</WhiteLabelDefaultFlavor>
+  </PropertyGroup>
+
+  <!-- Any other flavor builds into its own bin/obj, so switching flavors never overwrites the default
+       build or leaves one flavor's theme assembly in another's output. Set here because the output
+       paths must be fixed before the SDK reads them; the excludes keep the default build's own
+       generated sources out of this one's compile globs. -->
+  <PropertyGroup Condition="'$(WhiteLabelFlavor)' != '' and '$(WhiteLabelFlavor)' != '$(WhiteLabelDefaultFlavor)'">
+    <BaseOutputPath>bin\$(WhiteLabelFlavor)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(WhiteLabelFlavor)\</BaseIntermediateOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
+  </PropertyGroup>
+
 </Project>

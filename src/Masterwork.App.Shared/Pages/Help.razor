@@ -3,6 +3,7 @@
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject NavigationManager Nav
+@inject WhiteLabelConfig WhiteLabel
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.Help_PageTitle</PageTitle>
@@ -27,7 +28,7 @@
             {
                 case HelpTopic.HowToUse:
                     <h3 class="mws-help-content-title">@AppStrings.Help_HowToUse_Title</h3>
-                    <div class="mws-help-content-body"><p>@((MarkupString)AppStrings.Help_HowToUse_Body)</p></div>
+                    <div class="mws-help-content-body"><p>@((MarkupString)string.Format(AppStrings.Help_HowToUse_Body, System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName)))</p></div>
                     break;
                 case HelpTopic.TimelineAndRewind:
                     <h3 class="mws-help-content-title">@AppStrings.Help_TimelineRewind_Title</h3>
@@ -40,6 +41,8 @@
             }
         </div>
     </div>
+
+    <AppCredit />
 </div>
 
 @code {

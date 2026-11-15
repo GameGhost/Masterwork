@@ -75,7 +75,9 @@
   <data name="Common_Yes" xml:space="preserve"><value>Oui</value></data>
   <data name="Common_No" xml:space="preserve"><value>Non</value></data>
 
-  <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
+  <data name="App_Description" xml:space="preserve"><value>Une application communautaire compagnon pour {0}, propulsée par Masterwork.</value></data>
+  <data name="MainMenu_Tagline" xml:space="preserve"><value>Une application communautaire compagnon pour &lt;em&gt;{0}&lt;/em&gt;.</value></data>
+  <data name="App_Credit" xml:space="preserve"><value>v{0} · Propulsé par Masterwork</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Aide</value></data>
   <data name="MainMenu_Achievements" xml:space="preserve"><value>Fins</value></data>
   <data name="MainMenu_Options" xml:space="preserve"><value>Paramètres</value></data>
@@ -88,7 +90,7 @@
   <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Chronologie et retour en arrière</value></data>
   <data name="Help_Topic_Saves" xml:space="preserve"><value>Sauvegardes</value></data>
   <data name="Help_HowToUse_Title" xml:space="preserve"><value>Comment utiliser Masterwork</value></data>
-  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork permet de jouer des scénarios créés par la communauté pour &lt;em&gt;My Father's Work&lt;/em&gt;. Lancez un module depuis « Nouvelle partie », suivez les passages au fur et à mesure qu'ils apparaissent, et utilisez le curseur de chronologie pour revoir — sans annuler — ce que vous avez déjà décidé.</value></data>
+  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork permet de jouer des scénarios créés par la communauté pour &lt;em&gt;{0}&lt;/em&gt;. Lancez un module depuis « Nouvelle partie », suivez les passages au fur et à mesure qu'ils apparaissent, et utilisez le curseur de chronologie pour revoir — sans annuler — ce que vous avez déjà décidé.</value></data>
   <data name="Help_TimelineRewind_Title" xml:space="preserve"><value>Chronologie et retour en arrière</value></data>
   <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Reculer dans le temps vous permet de revoir ce qui s'est passé sans rien changer — les liens et les champs de saisie sont désactivés pendant que vous consultez le passé. « Reprendre à partir d'ici » supprime tout ce qui suit le point que vous consultez; « Retour au présent » vous ramène simplement sans rien supprimer.</value></data>
   <data name="Help_Saves_Title" xml:space="preserve"><value>Sauvegardes</value></data>
