@@ -21,14 +21,17 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Shared/                 Razor Class Library — the actual player-app UI; shared by both heads below
 ├── src/MasterWork.App/                        MAUI Blazor Hybrid head — hosts Shared via BlazorWebView; Windows and Android buildable now, iOS/MacCatalyst deferred (needs a Mac build host)
 ├── src/MasterWork.App.Web/                    ASP.NET Core host for the web deliverable — serves Web.Client's WebAssembly payload
-├── src/MasterWork.App.Web.Client/             Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app"
+├── src/MasterWork.App.Web.Client/             Blazor WebAssembly client — hosts Shared in the browser; this + App.Web together are "the web app" for local runs and self-hosting
+├── src/MasterWork.App.Web.Static/             Standalone Blazor WebAssembly head — the same client as plain static files, for Azure Static Web Apps (production)
+├── src/MasterWork.App.Web.StaticPages/        Build-time tool: writes Web.Static's per-flavor index.html and manifest.json (never shipped)
+├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
 ├── src/MasterWork.Editor/                     WPF module designer (Phase 8 placeholder — no real work started; see masterwork-plan-rev23.md §3)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs)
 ├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
 └── src/MasterWork.Tests/                      xUnit test suite
 ```
 
-All twelve projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
+All fifteen projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
 
 Outside the solution, `site/` is the `masterworkapp.com` information site (static HTML/CSS, its own
 README) and holds the privacy policy both app stores link to — update it whenever what the app stores
@@ -72,7 +75,7 @@ real filesystem:
 | `Masterwork.App` (MAUI — Windows) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
 | `Masterwork.App` (MAUI — Android) | `Android/data/com.masterworkapp.myfatherswork/files/logs/masterwork-{yyyy-MM-dd}.log` on the device's external storage (`Context.GetExternalFilesDir(null)`, not `FileSystem.AppDataDirectory`'s private internal storage) — needs no special permission for the app's own files and is reachable via USB/MTP from a PC, unlike internal storage which needs `adb shell run-as` even to list. Falls back to `FileSystem.AppDataDirectory` only if external storage genuinely isn't mounted. |
 | `Masterwork.App.Web` (ASP.NET Core host) | `{ContentRootPath}/logs/masterwork-{yyyy-MM-dd}.log` (next to the project when run via `dotnet run`) |
-| `Masterwork.App.Web.Client` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
+| `Masterwork.App.Web.Client` / `Masterwork.App.Web.Static` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
 
 `wwwroot/audio.js`'s own diagnostic trail (`logAudio`) is also forwarded into this same file log on
 MAUI via `JsAudioLogBridge` (`Masterwork.App.Shared/Services/JsAudioLogBridge.cs`) — a static
@@ -146,7 +149,8 @@ upgrading player's settings over; those keys are never written again.
 
 ### White-label flavors
 Which theme and content source a build carries is chosen by MSBuild, never by host C#. Every head
-(`Masterwork.App`, `Masterwork.App.Web.Client`, `Masterwork.App.Web`) imports
+(`Masterwork.App`, `Masterwork.App.Web.Client`, `Masterwork.App.Web`, `Masterwork.App.Web.Static`,
+plus the static head's page tool `Masterwork.App.Web.StaticPages`) imports
 `src/WhiteLabel/WhiteLabel.props`, which defaults `WhiteLabelFlavor` to `WhiteLabelDefaultFlavor`
 (`MyFathersWork`, set in the root `Directory.Build.props`, so plain IDE Debug just works) and imports
 `WhiteLabel/{Flavor}.props`. That one file holds everything
@@ -189,7 +193,16 @@ thumbprint) plus whatever the theme's `IThemeModule.ConfigureServices` adds (`IM
 - **Every head's primary source is a site's content API, `/api/content/...` (`ContentApi`)**: the
   web client on its own origin, native builds at the flavor site's address. A site may serve those
   routes itself or redirect them to wherever the content is stored, so storage can move without an
-  app update. Keep new content routes under `ContentApi.BasePath`.
+  app update. Keep new content routes under `ContentApi.BasePath`. On Static Web Apps that API is
+  `Masterwork.App.Web.Api`'s redirect Function (`ContentRedirect`, into the site's own `/content/`).
+- **Both WebAssembly heads register services through `BrowserHost`** (Shared); register a new browser
+  service there, not in either head's `Program.cs`.
+- **The static head's host page and manifest are generated at build time.** A static site can't render
+  per request the way `Masterwork.App.Web` does, so `Masterwork.App.Web.StaticPages` (built for the
+  same flavor) fills `index.template.html` and writes `wwwroot/index.html` and `manifest.json`
+  (gitignored) from `WebAppPages`. The ASP.NET host serves the same manifest and splash (`WebSplash`)
+  from the same code, so the two can't drift — but the template's other markup mirrors `App.razor` by
+  hand.
 - **The web server's content API upstream defaults to the flavor's own source**; a `Content` section in
   appsettings overrides only the values it sets. Startup fails if the result isn't an absolute
   http(s) URL, and logs the upstream it settled on.

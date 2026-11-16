@@ -149,8 +149,8 @@
         }
         else if (!_splashHidden && OperatingSystem.IsBrowser())
         {
-            // Web only (mws-splash/window.mwsHideSplash only exist in Masterwork.App.Web's
-            // App.razor) — this is the *second* time this method runs, i.e. the render right after
+            // Web only (mws-splash/window.mwsHideSplash only exist in the web heads' host pages,
+            // see Chrome/WebSplash.razor) — this is the *second* time this method runs, i.e. the render right after
             // the StateHasChanged() above actually committed, so real (correctly-cultured) content
             // is genuinely on screen now. Tying splash removal to this instead of Blazor.start()'s
             // own promise is deliberate: that promise was found to resolve before the app's first

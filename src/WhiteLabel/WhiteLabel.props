@@ -1,7 +1,8 @@
 <Project>
 
   <!-- Selects the white-label flavor a host is built as. Imported by every head (Masterwork.App,
-       Masterwork.App.Web.Client, Masterwork.App.Web) after its own properties, so a flavor's MAUI
+       Masterwork.App.Web.Client, Masterwork.App.Web, Masterwork.App.Web.Static, and the static
+       head's page tool Masterwork.App.Web.StaticPages) after its own properties, so a flavor's MAUI
        identity can depend on UseMaui.
 
        Pick one with -p:WhiteLabelFlavor=<Name>; with none, the build is the repo's

@@ -1,0 +1,29 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/_framework/*", "/_content/*", "/content/*", "/api/*", "*.{css,js,json,wasm,dat,png,jpg,svg,ico,ogg,mp3,mwm,sig}"]
+  },
+  "routes": [
+    { "route": "/index.html", "headers": { "cache-control": "no-cache" } },
+    { "route": "/manifest.json", "headers": { "cache-control": "no-cache" } },
+    { "route": "/service-worker.js", "headers": { "cache-control": "no-cache" } },
+    { "route": "/content/catalog.json*", "headers": { "cache-control": "no-cache" } },
+    { "route": "/content/thumbnails/*", "headers": { "cache-control": "public, max-age=3600" } },
+    { "route": "/content/packages/*", "headers": { "cache-control": "public, max-age=86400" } }
+  ],
+  "mimeTypes": {
+    ".wasm": "application/wasm",
+    ".dat": "application/octet-stream",
+    ".mwm": "application/octet-stream",
+    ".sig": "application/octet-stream",
+    ".ogg": "audio/ogg"
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": "frame-ancestors 'none'"
+  },
+  "platform": {
+    "apiRuntime": "dotnet-isolated:10.0"
+  }
+}

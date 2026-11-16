@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!-- The web app as plain static files, for hosting on Azure Static Web Apps. The same client as
+       Masterwork.App.Web.Client (both use BrowserHost), minus the ASP.NET host: what that host
+       renders per request (the host page, the manifest) is written at build time instead, by
+       Masterwork.App.Web.StaticPages, for the flavor this head is built as. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
+    <!-- Fills index.html's #[.{fingerprint}] and import map placeholders with the built asset names. -->
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!-- The StaticPages reference is a build-time tool run with dotnet, not something shipped. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.9" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
+    <!-- Built first and run by GenerateFlavorPages below; nothing of it is referenced or shipped. -->
+    <ProjectReference Include="..\Masterwork.App.Web.StaticPages\Masterwork.App.Web.StaticPages.csproj"
+                      ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <!-- The service worker is the ASP.NET host's own, so both web heads cache the same way. -->
+  <ItemGroup>
+    <Content Include="..\Masterwork.App.Web\wwwroot\service-worker.js" Link="wwwroot\service-worker.js" />
+  </ItemGroup>
+
+  <Import Project="..\WhiteLabel\WhiteLabel.props" />
+
+  <!-- Writes wwwroot/index.html and wwwroot/manifest.json (both gitignored) from index.template.html
+       and the flavor's WhiteLabelConfig, then adds them as content so they're discovered as static
+       web assets like any other wwwroot file. -->
+  <PropertyGroup>
+    <_FlavorPagesTemplate>$(MSBuildProjectDirectory)\index.template.html</_FlavorPagesTemplate>
+    <_FlavorPagesOutput>$(MSBuildProjectDirectory)\wwwroot</_FlavorPagesOutput>
+  </PropertyGroup>
+
+  <Target Name="GenerateFlavorPages" BeforeTargets="ResolveProjectStaticWebAssets" DependsOnTargets="ResolveProjectReferences" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="..\Masterwork.App.Web.StaticPages\Masterwork.App.Web.StaticPages.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" PropertyName="_FlavorPagesTool" />
+    </MSBuild>
+
+    <Exec Command="dotnet &quot;$(_FlavorPagesTool)&quot; &quot;$(_FlavorPagesTemplate)&quot; &quot;$(_FlavorPagesOutput)&quot;" />
+
+    <ItemGroup>
+      <Content Remove="wwwroot\index.html;wwwroot\manifest.json" />
+      <Content Include="wwwroot\index.html;wwwroot\manifest.json" />
+      <FileWrites Include="$(_FlavorPagesOutput)\index.html;$(_FlavorPagesOutput)\manifest.json" />
+    </ItemGroup>
+  </Target>
+
+</Project>

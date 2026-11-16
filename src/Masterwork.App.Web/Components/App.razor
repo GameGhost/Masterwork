@@ -1,5 +1,4 @@
-﻿@using Masterwork.App.Shared.Resources
-@using Masterwork.App.Shared.Services
+﻿@using Masterwork.App.Shared.Services
 @inject WhiteLabelConfig WhiteLabel
 <!DOCTYPE html>
 <html lang="en">
@@ -27,14 +26,7 @@
          once real, correctly-cultured content has actually rendered. Not tied to Blazor.start()'s
          own promise: that resolves before the app's first real render, which left a blank white gap
          between the splash disappearing and content appearing. -->
-    <div id="mws-splash" class="mws-splash">
-        <h1 class="mws-visually-hidden">@WhiteLabel.AppName</h1>
-        <div class="mws-splash-logo" role="img" aria-label="@WhiteLabel.GameName"></div>
-        <p class="mws-splash-tagline">@((MarkupString)string.Format(AppStrings.MainMenu_Tagline, System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName)))</p>
-        <p class="mws-visually-hidden">Loading…</p>
-        <div class="mws-spinner" aria-hidden="true"></div>
-        <Masterwork.App.Shared.Chrome.AppCredit />
-    </div>
+    <Masterwork.App.Shared.Chrome.WebSplash />
     <Routes @rendermode="new InteractiveWebAssemblyRenderMode(prerender: false)" />
     <script src="@Assets["_framework/blazor.web.js"]" autostart="false"></script>
     <script>

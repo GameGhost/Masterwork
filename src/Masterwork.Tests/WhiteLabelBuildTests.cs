@@ -47,9 +47,14 @@ public class WhiteLabelBuildTests
     public static TheoryData<string> AllHosts() => new(Hosts());
 
     // The MAUI head only has a target framework to evaluate on Windows once Android is skipped.
+    // StaticPages isn't shipped, but it writes the static head's pages from its own flavor, so it must
+    // carry the same one.
     private static IEnumerable<string> Hosts() => OperatingSystem.IsWindows()
-        ? ["Masterwork.App", "Masterwork.App.Web.Client", "Masterwork.App.Web"]
-        : ["Masterwork.App.Web.Client", "Masterwork.App.Web"];
+        ? ["Masterwork.App", .. WebHosts]
+        : WebHosts;
+
+    private static readonly string[] WebHosts =
+        ["Masterwork.App.Web.Client", "Masterwork.App.Web", "Masterwork.App.Web.Static", "Masterwork.App.Web.StaticPages"];
 
     [Theory]
     [MemberData(nameof(HostsAndFlavors))]

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- The static head's host page. Masterwork.App.Web.StaticPages fills the {{...}} tokens for the
+     flavor being built and writes the result to wwwroot/index.html; the SDK then fills the
+     #[.{fingerprint}] and import map placeholders. Keep it in step with Masterwork.App.Web's
+     App.razor, which is the same page rendered per request. -->
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{AppName}}</title>
+    <meta name="description" content="{{Description}}" />
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="icon" href="_content/theme/logo.png" />
+    <link rel="stylesheet" href="_content/Masterwork.App.Shared/app.css" />
+    <link rel="stylesheet" href="_content/theme/theme.css" />
+    <link rel="stylesheet" href="Masterwork.App.Web.Static#[.{fingerprint}].styles.css" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="{{ThemeColor}}" />
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <!-- Shown while the WebAssembly bundle downloads; MainLayout removes it (window.mwsHideSplash)
+         once real content has rendered in the player's language. -->
+    {{Splash}}
+    <div id="app"></div>
+    <script>
+        window.mwsHideSplash = function () {
+            document.getElementById('mws-splash')?.remove();
+        };
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('/service-worker.js'));
+        }
+    </script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>

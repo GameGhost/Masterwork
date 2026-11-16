@@ -29,6 +29,7 @@
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
     <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
     <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
+    <ProjectReference Include="..\Masterwork.App.Web.Api\Masterwork.App.Web.Api.csproj" />
     <!-- The bare flavor, never the shipping one: tests that need a WhiteLabelConfig or a theme
          module get one with no real content source and no pinned publisher. -->
     <ProjectReference Include="..\Masterwork.App.Theme.Test\Masterwork.App.Theme.Test.csproj" />
