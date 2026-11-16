@@ -12,6 +12,7 @@ public sealed class TestTheme : IThemeModule
         AppName = "Test Flavor",
         ShortName = "Test Flavor",
         GameName = "Test Game",
+        GamePublisher = "Test Publisher",
         ThemeColor = "#202020",
         // .invalid never resolves, so a test-flavor build can't reach real content by accident.
         CatalogUrl = "https://content.example.invalid/catalog.json",

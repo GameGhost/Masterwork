@@ -28,6 +28,12 @@ public sealed record WhiteLabelConfig
     /// </summary>
     public required string GameName { get; init; }
 
+    /// <summary>
+    /// Who publishes <see cref="GameName"/>, for the app's statement that it is unofficial and not
+    /// affiliated with them.
+    /// </summary>
+    public required string GamePublisher { get; init; }
+
     /// <summary>Browser/PWA chrome colour (<c>theme-color</c>, manifest background), as a CSS colour.</summary>
     public required string ThemeColor { get; init; }
 

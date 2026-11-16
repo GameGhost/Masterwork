@@ -95,6 +95,10 @@
   <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Stepping back lets you review what happened without changing it — links and inputs disable while you're looking at the past. "Resume from here" discards anything after the point you're viewing; "Return to present" just brings you back without discarding it.</value></data>
   <data name="Help_Saves_Title" xml:space="preserve"><value>Saves</value></data>
   <data name="Help_Saves_Body" xml:space="preserve"><value>Each module keeps one autosave that updates as you play. Quitting from the in-game Options menu offers to save your progress under a name of your choosing before returning to the Continue list.</value></data>
+  <data name="Help_Topic_About" xml:space="preserve"><value>About</value></data>
+  <data name="Help_About_Title" xml:space="preserve"><value>About</value></data>
+  <data name="Help_About_Body" xml:space="preserve"><value>This is a free, unofficial community companion app for &lt;em&gt;{0}&lt;/em&gt;, powered by Masterwork. It isn't affiliated with or endorsed by {1}.</value></data>
+  <data name="Help_About_Site" xml:space="preserve"><value>Help, feedback and the privacy policy are at {0}.</value></data>
 
   <data name="Achievements_PageTitle" xml:space="preserve"><value>Masterwork — Achievements</value></data>
   <data name="Achievements_Tab_Achievements" xml:space="preserve"><value>Achievements</value></data>

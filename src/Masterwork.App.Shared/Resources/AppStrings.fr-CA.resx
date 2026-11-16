@@ -95,6 +95,10 @@
   <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Reculer dans le temps vous permet de revoir ce qui s'est passé sans rien changer — les liens et les champs de saisie sont désactivés pendant que vous consultez le passé. « Reprendre à partir d'ici » supprime tout ce qui suit le point que vous consultez; « Retour au présent » vous ramène simplement sans rien supprimer.</value></data>
   <data name="Help_Saves_Title" xml:space="preserve"><value>Sauvegardes</value></data>
   <data name="Help_Saves_Body" xml:space="preserve"><value>Chaque module conserve une sauvegarde automatique qui se met à jour au fil du jeu. Quitter depuis le menu Options en cours de partie propose d'enregistrer votre progression sous un nom de votre choix avant de revenir à la liste Continuer.</value></data>
+  <data name="Help_Topic_About" xml:space="preserve"><value>À propos</value></data>
+  <data name="Help_About_Title" xml:space="preserve"><value>À propos</value></data>
+  <data name="Help_About_Body" xml:space="preserve"><value>Cette application est un compagnon communautaire gratuit et non officiel pour &lt;em&gt;{0}&lt;/em&gt;, propulsé par Masterwork. Elle n'est ni affiliée à {1}, ni approuvée par {1}.</value></data>
+  <data name="Help_About_Site" xml:space="preserve"><value>Aide, commentaires et politique de confidentialité : {0}.</value></data>
 
   <data name="Achievements_PageTitle" xml:space="preserve"><value>Masterwork — Réussites</value></data>
   <data name="Achievements_Tab_Achievements" xml:space="preserve"><value>Réussites</value></data>

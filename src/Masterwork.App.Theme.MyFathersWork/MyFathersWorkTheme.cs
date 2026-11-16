@@ -17,6 +17,7 @@ public sealed class MyFathersWorkTheme : IThemeModule
         AppName = "My Father's Work",
         ShortName = "My Father's Work",
         GameName = "My Father's Work",
+        GamePublisher = "Renegade Game Studios",
         ThemeColor = "#0d1420",
         CatalogUrl = Content.CatalogUrl,
         // Entry paths start with the release tag (v0.4.0/cost-of-disease.mwm), so one catalog can
