@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cloud backup and device-to-device transfer on Android 12 and later
+     (android:dataExtractionRules). Cloud backup leaves out modules and asset packs for the same
+     reason as backup_rules.xml; a device transfer has no size limit, so it moves everything. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="modules/" />
+        <exclude domain="file" path="asset-packs/" />
+    </cloud-backup>
+</data-extraction-rules>

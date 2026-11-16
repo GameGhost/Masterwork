@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup on Android 11 and earlier (android:fullBackupContent). Installed modules and asset
+     packs are left out: they're re-downloadable, and with them the app is over Auto Backup's 25 MB
+     limit, which skips the whole backup. Saves and settings are what's worth keeping. Keep in step
+     with data_extraction_rules.xml. -->
+<full-backup-content>
+    <exclude domain="file" path="modules/" />
+    <exclude domain="file" path="asset-packs/" />
+</full-backup-content>
