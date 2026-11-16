@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
 
   <!-- Machine-local overrides (JDK/Android SDK paths, etc.) — not committed. See Directory.Build.local.props.example. -->
   <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
@@ -7,7 +7,7 @@
        from App.Shared's) and used as the MAUI head's ApplicationDisplayVersion. Numeric only — Windows
        package versions can't carry a pre-release suffix. -->
   <PropertyGroup>
-    <VersionPrefix>0.3.2</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix>
   </PropertyGroup>
 
   <!-- The white-label flavor a build gets when none is named (see src/WhiteLabel/WhiteLabel.props). -->
@@ -16,12 +16,18 @@
   </PropertyGroup>
 
   <!-- Any other flavor builds into its own bin/obj, so switching flavors never overwrites the default
-       build or leaves one flavor's theme assembly in another's output. Set here because the output
-       paths must be fixed before the SDK reads them; the excludes keep the default build's own
-       generated sources out of this one's compile globs. -->
-  <PropertyGroup Condition="'$(WhiteLabelFlavor)' != '' and '$(WhiteLabelFlavor)' != '$(WhiteLabelDefaultFlavor)'">
-    <BaseOutputPath>bin\$(WhiteLabelFlavor)\</BaseOutputPath>
-    <BaseIntermediateOutputPath>obj\$(WhiteLabelFlavor)\</BaseIntermediateOutputPath>
+       build or leaves one flavor's theme assembly in another's output. A Microsoft Store build
+       (-p:StorePackage=true) does the same under Store\, because its Windows package identity is
+       cached in obj and must never reach the portable build. Set here because the output paths must
+       be fixed before the SDK reads them; the excludes keep the default build's own generated sources
+       out of this one's compile globs. -->
+  <PropertyGroup>
+    <_OutputSubfolder Condition="'$(WhiteLabelFlavor)' != '' and '$(WhiteLabelFlavor)' != '$(WhiteLabelDefaultFlavor)'">$(WhiteLabelFlavor)\</_OutputSubfolder>
+    <_OutputSubfolder Condition="'$(StorePackage)' == 'true'">$(_OutputSubfolder)Store\</_OutputSubfolder>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_OutputSubfolder)' != ''">
+    <BaseOutputPath>bin\$(_OutputSubfolder)</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(_OutputSubfolder)</BaseIntermediateOutputPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**</DefaultItemExcludes>
   </PropertyGroup>
 

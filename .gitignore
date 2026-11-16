@@ -82,3 +82,6 @@ Directory.Build.local.props
 *.zip
 *.apk
 *.aab
+
+# Release script output (scripts/release.ps1)
+artifacts/

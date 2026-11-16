@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <!-- Required for `dotnet publish -p:RuntimeIdentifierOverride=win-x64` (unpackaged Windows
        publish) to work at all — works around a Windows App SDK bug where the implicit RID picked
@@ -52,16 +52,24 @@
          Android build, even between the same display version — Android treats versionCode as the sole
          update/downgrade signal. -->
     <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
-    <ApplicationVersion>7</ApplicationVersion>
+    <ApplicationVersion>8</ApplicationVersion>
 
-    <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
-    <WindowsPackageType>None</WindowsPackageType>
+    <!-- Unpackaged (the portable zip) unless this is a Microsoft Store build; see below. -->
+    <WindowsPackageType Condition="'$(StorePackage)' != 'true'">None</WindowsPackageType>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+
+  <!-- R8 optimization, shrinking and private-member obfuscation of the Java bytecode. Google Play
+       expects at least 25% of each from apps with more than 10 MB of DEX (this app has about 15 MB).
+       Needs .NET for Android 36.1.118 or later; .NET 10 leaves obfuscation off unless set. -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release'">
+    <AndroidLinkTool>r8</AndroidLinkTool>
+    <AndroidR8ObfuscationMode>private-members</AndroidR8ObfuscationMode>
   </PropertyGroup>
 
   <ItemGroup>
@@ -86,5 +94,39 @@
   </ItemGroup>
 
   <Import Project="..\WhiteLabel\WhiteLabel.props" />
+
+  <!-- Microsoft Store build: -p:StorePackage=true, one publish per Windows architecture, bundled by
+       scripts/release.ps1. Produces an unsigned MSIX under bin\Store\AppPackages\; Partner Center
+       signs what it distributes. Builds into bin\Store\ and obj\Store\ (Directory.Build.props). -->
+  <PropertyGroup Condition="'$(StorePackage)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxBundle>Never</AppxBundle>
+    <AppxPackageDir>$(MSBuildProjectDirectory)\$(BaseOutputPath)AppPackages\</AppxPackageDir>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+
+  <!-- Stamps the flavor's Partner Center identity and reserved store name onto the manifest MAUI
+       generates, after it fills its placeholders and before anything reads the result. The version's
+       fourth part must be 0: the Store reserves it. -->
+  <Target Name="ApplyStorePackageIdentity"
+          AfterTargets="MauiGeneratePackageAppxManifest"
+          BeforeTargets="_MauiGetAssemblyAttributesFromAppxManifest"
+          Condition="'$(StorePackage)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
+    <Error Condition="'$(StoreIdentityName)' == '' or '$(StorePublisher)' == '' or '$(StorePublisherDisplayName)' == '' or '$(StoreDisplayName)' == ''"
+           Text="The $(WhiteLabelFlavor) flavor has no Microsoft Store identity. Set StoreIdentityName, StorePublisher, StorePublisherDisplayName and StoreDisplayName in src/WhiteLabel/$(WhiteLabelFlavor).props from Partner Center's Product identity page." />
+
+    <PropertyGroup>
+      <_StoreManifest>$(_MauiIntermediateManifest)Package.appxmanifest</_StoreManifest>
+      <_StoreManifestNamespaces>&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;</_StoreManifestNamespaces>
+    </PropertyGroup>
+
+    <XmlPoke XmlInputPath="$(_StoreManifest)" Namespaces="$(_StoreManifestNamespaces)" Query="/ns:Package/ns:Identity/@Name" Value="$(StoreIdentityName)" />
+    <XmlPoke XmlInputPath="$(_StoreManifest)" Namespaces="$(_StoreManifestNamespaces)" Query="/ns:Package/ns:Identity/@Publisher" Value="$(StorePublisher)" />
+    <XmlPoke XmlInputPath="$(_StoreManifest)" Namespaces="$(_StoreManifestNamespaces)" Query="/ns:Package/ns:Identity/@Version" Value="$(VersionPrefix).0" />
+    <XmlPoke XmlInputPath="$(_StoreManifest)" Namespaces="$(_StoreManifestNamespaces)" Query="/ns:Package/ns:Properties/ns:DisplayName" Value="$(StoreDisplayName)" />
+    <XmlPoke XmlInputPath="$(_StoreManifest)" Namespaces="$(_StoreManifestNamespaces)" Query="/ns:Package/ns:Properties/ns:PublisherDisplayName" Value="$(StorePublisherDisplayName)" />
+  </Target>
 
 </Project>

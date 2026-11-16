@@ -72,7 +72,8 @@ real filesystem:
 
 | Host | Log location |
 |---|---|
-| `Masterwork.App` (MAUI — Windows) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
+| `Masterwork.App` (MAUI — Windows, portable) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log`, i.e. `%LOCALAPPDATA%\Masterwork\{ApplicationId}\Data\logs\` |
+| `Masterwork.App` (MAUI — Windows, Microsoft Store) | The same path under the package's own folder: `%LOCALAPPDATA%\Packages\{package family name}\LocalState\logs\` |
 | `Masterwork.App` (MAUI — Android) | `Android/data/com.masterworkapp.myfatherswork/files/logs/masterwork-{yyyy-MM-dd}.log` on the device's external storage (`Context.GetExternalFilesDir(null)`, not `FileSystem.AppDataDirectory`'s private internal storage) — needs no special permission for the app's own files and is reachable via USB/MTP from a PC, unlike internal storage which needs `adb shell run-as` even to list. Falls back to `FileSystem.AppDataDirectory` only if external storage genuinely isn't mounted. |
 | `Masterwork.App.Web` (ASP.NET Core host) | `{ContentRootPath}/logs/masterwork-{yyyy-MM-dd}.log` (next to the project when run via `dotnet run`) |
 | `Masterwork.App.Web.Client` / `Masterwork.App.Web.Static` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
@@ -211,6 +212,13 @@ thumbprint) plus whatever the theme's `IThemeModule.ConfigureServices` adds (`IM
   another's output. The default flavor — named or not — keeps plain `bin\`/`obj\`, which is what
   release commands publish from. The flavor folders stay behind after use; clean up with
   `Remove-Item src\*\bin\Test, src\*\obj\Test -Recurse -Force`.
+- **A Microsoft Store build (`-p:StorePackage=true`) builds into a further `Store\` folder** for the same
+  reason: it's an MSIX whose package identity is cached in `obj`, and that identity must never reach
+  the portable, unpackaged build. The identity and reserved store name are the flavor props'
+  `StoreIdentityName`/`StorePublisher`/`StorePublisherDisplayName`/`StoreDisplayName` (from Partner
+  Center), stamped onto MAUI's generated manifest by `ApplyStorePackageIdentity` in
+  `Masterwork.App.csproj`; Start and tiles keep `ApplicationTitle`. `scripts/release.ps1` builds every
+  release artifact; `docs/release.md` is the runbook and `docs/store-listing.md` the store answers.
 - **The app version is `VersionPrefix` in the root `Directory.Build.props`**, shared by every head and
   flavor; the MAUI head's `ApplicationDisplayVersion` and the in-app credit (`AppVersion`) both read it.
 - **`-p:WhiteLabelFlavor=Test`** builds the bare `Masterwork.App.Theme.Test` flavor. It's the proof that
