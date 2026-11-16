@@ -30,6 +30,10 @@ src/Masterwork.slnx
 
 All twelve projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
 
+Outside the solution, `site/` is the `masterworkapp.com` information site (static HTML/CSS, its own
+README) and holds the privacy policy both app stores link to — update it whenever what the app stores
+or sends changes.
+
 ## Build and Test
 
 ```powershell
