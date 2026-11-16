@@ -1,0 +1,92 @@
+name: Deploy web app
+
+# Builds the static web head and its /api Function for one flavor, stages that flavor's published
+# content beside it under /content, and deploys the lot to the flavor's Azure Static Web App.
+
+on:
+  push:
+    branches: [main, phase6]
+    paths:
+      - "src/**"
+      - "!src/Masterwork.App/**"
+      - "!src/Masterwork.Editor/**"
+      - "!src/Masterwork.Extractor/**"
+      - "!src/Masterwork.ModulePacker/**"
+      - "!src/Masterwork.Tests/**"
+      - "Directory.Build.props"
+      - ".github/workflows/web.yml"
+      - ".github/scripts/StageContent.cs"
+  workflow_dispatch:
+  # Lets Masterwork-Modules redeploy the site after publishing a new catalog.
+  repository_dispatch:
+    types: [content-published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-deploy-myfatherswork
+  cancel-in-progress: false
+
+env:
+  FLAVOR: MyFathersWork
+  CONTENT_REPO: GameGhost/Masterwork-Modules
+  # Where the published catalog lives. Switch to main when Masterwork-Modules merges it there.
+  CONTENT_REF: phase6
+  # Azure Static Web Apps Free plan's per-environment limit.
+  SIZE_LIMIT_BYTES: "262144000"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the published catalog
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CONTENT_REPO }}
+          ref: ${{ env.CONTENT_REF }}
+          path: modules
+          sparse-checkout: .catalog
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish the static web head
+        run: dotnet publish src/Masterwork.App.Web.Static/Masterwork.App.Web.Static.csproj -c Release -p:WhiteLabelFlavor=$FLAVOR -o out/app
+
+      - name: Publish the API
+        run: dotnet publish src/Masterwork.App.Web.Api/Masterwork.App.Web.Api.csproj -c Release -o out/api
+
+      - name: Stage the content
+        run: >
+          dotnet run .github/scripts/StageContent.cs --
+          modules/.catalog
+          https://github.com/$CONTENT_REPO/releases/download
+          out/app/wwwroot/content
+
+      - name: Check the deployment size
+        run: |
+          app=$(du -sb out/app/wwwroot | cut -f1)
+          content=$(du -sb out/app/wwwroot/content | cut -f1)
+          api=$(du -sb out/api | cut -f1)
+          total=$((app + api))
+          mb() { awk "BEGIN { printf \"%.1f MB\", $1 / 1048576 }"; }
+          echo "App $(mb $((app - content))), content $(mb $content), API $(mb $api): total $(mb $total) of $(mb $SIZE_LIMIT_BYTES)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$total" -gt "$SIZE_LIMIT_BYTES" ]; then
+            echo "::error::The deployment is over the Static Web Apps size limit."
+            exit 1
+          fi
+
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_TOKEN_MFW }}
+          action: upload
+          app_location: out/app/wwwroot
+          api_location: out/api
+          skip_app_build: true
+          skip_api_build: true

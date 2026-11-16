@@ -1,7 +1,7 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/_framework/*", "/_content/*", "/content/*", "/api/*", "*.{css,js,json,wasm,dat,png,jpg,svg,ico,ogg,mp3,mwm,sig}"]
+    "exclude": ["/_framework/*", "/_content/*", "/content/*", "/api/*", "*.{css,js,json,wasm,dat,png,jpg,svg,ico,ogg,mp3,mwm,mwassets,sig}"]
   },
   "routes": [
     { "route": "/index.html", "headers": { "cache-control": "no-cache" } },
@@ -15,6 +15,7 @@
     ".wasm": "application/wasm",
     ".dat": "application/octet-stream",
     ".mwm": "application/octet-stream",
+    ".mwassets": "application/octet-stream",
     ".sig": "application/octet-stream",
     ".ogg": "audio/ogg"
   },
