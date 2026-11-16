@@ -76,6 +76,11 @@ local `Test` build can't leave its theme assembly in the folder published above.
 behind after a flavor build; remove them with
 `Remove-Item src\*\bin\Test, src\*\obj\Test -Recurse -Force`.
 
+**After a flavor's `ApplicationId` changes, delete `src\Masterwork.App\obj` before building.** The
+Windows package identity, and with it the local data folder, is generated into a cached
+`Package.appxmanifest`. An incremental build doesn't regenerate it, because that step only reruns
+when the manifest file itself changes. Delete the `obj` folder rather than relying on `dotnet clean`.
+
 `PublishSingleFile=true` does **not** work for MAUI Windows apps — don't try to add it. The
 `RuntimeIdentifierOverride`-conditional `PropertyGroup` already in `Masterwork.App.csproj` is a
 required workaround for [WindowsAppSDK#3337](https://github.com/microsoft/WindowsAppSDK/issues/3337);
@@ -117,7 +122,7 @@ Remove-Item env:\MwSigningPass
   `AndroidSigningKeyPass`/`AndroidSigningStorePass` feature (same source as above) — not generic
   MSBuild property syntax, so it won't work on unrelated `-p:` properties, only these two. Not
   supported when `AndroidPackageFormats` is `aab` (use `file:` instead there).
-- Output APK: `src\Masterwork.App\bin\Release\net10.0-android\...\ca.digitalghost.masterwork.app-Signed.apk`.
+- Output APK: `src\Masterwork.App\bin\Release\net10.0-android\...\com.masterworkapp.myfatherswork-Signed.apk`.
 - **If a rebuild produces a file with an unchanged timestamp**, the signing/packaging target didn't
   actually re-run (a stale incremental build bug seen during the v0.1.0 release — the output file
   looked signed but wasn't). Delete `src\Masterwork.App\bin\Release\net10.0-android` and

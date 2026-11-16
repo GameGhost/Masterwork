@@ -13,7 +13,7 @@
   <PropertyGroup Condition="'$(UseMaui)' == 'true'">
     <!-- Must match the theme's WhiteLabelConfig.AppName (MyFathersWorkTheme.cs). -->
     <ApplicationTitle>My Father's Work</ApplicationTitle>
-    <ApplicationId>ca.digitalghost.masterwork.app</ApplicationId>
+    <ApplicationId>com.masterworkapp.myfatherswork</ApplicationId>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseMaui)' == 'true'">

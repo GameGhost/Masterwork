@@ -66,7 +66,7 @@ real filesystem:
 | Host | Log location |
 |---|---|
 | `Masterwork.App` (MAUI — Windows) | `{FileSystem.AppDataDirectory}/logs/masterwork-{yyyy-MM-dd}.log` |
-| `Masterwork.App` (MAUI — Android) | `Android/data/ca.digitalghost.masterwork.app/files/logs/masterwork-{yyyy-MM-dd}.log` on the device's external storage (`Context.GetExternalFilesDir(null)`, not `FileSystem.AppDataDirectory`'s private internal storage) — needs no special permission for the app's own files and is reachable via USB/MTP from a PC, unlike internal storage which needs `adb shell run-as` even to list. Falls back to `FileSystem.AppDataDirectory` only if external storage genuinely isn't mounted. |
+| `Masterwork.App` (MAUI — Android) | `Android/data/com.masterworkapp.myfatherswork/files/logs/masterwork-{yyyy-MM-dd}.log` on the device's external storage (`Context.GetExternalFilesDir(null)`, not `FileSystem.AppDataDirectory`'s private internal storage) — needs no special permission for the app's own files and is reachable via USB/MTP from a PC, unlike internal storage which needs `adb shell run-as` even to list. Falls back to `FileSystem.AppDataDirectory` only if external storage genuinely isn't mounted. |
 | `Masterwork.App.Web` (ASP.NET Core host) | `{ContentRootPath}/logs/masterwork-{yyyy-MM-dd}.log` (next to the project when run via `dotnet run`) |
 | `Masterwork.App.Web.Client` (WASM, runs in the browser) | **No file log** — no filesystem in the browser sandbox. The browser devtools console is the log; unhandled errors also show the `blazor-error-ui` banner. |
 

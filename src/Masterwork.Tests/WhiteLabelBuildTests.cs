@@ -27,8 +27,8 @@ public class WhiteLabelBuildTests
     // referenced by this project, so its row is the one place the two values are written side by side.
     private static readonly Dictionary<string, (string ThemeProject, string ModuleType, string ApplicationId, string ApplicationTitle)> Flavors = new()
     {
-        ["MyFathersWork"] = ("Masterwork.App.Theme.MyFathersWork", "Masterwork.App.Theme.MyFathersWork.MyFathersWorkTheme", "ca.digitalghost.masterwork.app", "My Father's Work"),
-        ["Test"] = ("Masterwork.App.Theme.Test", "Masterwork.App.Theme.Test.TestTheme", "ca.digitalghost.masterwork.testflavor", "Test Flavor"),
+        ["MyFathersWork"] = ("Masterwork.App.Theme.MyFathersWork", "Masterwork.App.Theme.MyFathersWork.MyFathersWorkTheme", "com.masterworkapp.myfatherswork", "My Father's Work"),
+        ["Test"] = ("Masterwork.App.Theme.Test", "Masterwork.App.Theme.Test.TestTheme", "com.masterworkapp.testflavor", "Test Flavor"),
     };
 
     public static TheoryData<string, string> HostsAndFlavors()
