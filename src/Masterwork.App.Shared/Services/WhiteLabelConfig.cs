@@ -32,18 +32,16 @@ public sealed record WhiteLabelConfig
     public required string ThemeColor { get; init; }
 
     /// <summary>
-    /// Upstream catalog URL. For a GitHub-hosted catalog, the one on the default branch is the
-    /// current one: a release is published first (tag plus assets), then the regenerated
-    /// <c>catalog.json</c> and its signature are committed, so the catalog never names an asset that
-    /// isn't there yet.
+    /// Upstream catalog URL — normally the flavor site's <see cref="ContentApi"/> route
+    /// (<see cref="ContentApi.ForSite"/>), so where the content is stored can change without an app
+    /// update.
     /// </summary>
     public required string CatalogUrl { get; init; }
 
     /// <summary>
     /// Upstream base that every catalog entry's relative path resolves against. May be a different
-    /// host from <see cref="CatalogUrl"/> (GitHub serves repository files and release assets
-    /// separately); that split is safe precisely because both values are compiled in rather than
-    /// read out of the catalog.
+    /// host from <see cref="CatalogUrl"/>; that split is safe precisely because both values are
+    /// compiled in rather than read out of the catalog.
     /// </summary>
     public required string PackageBaseUrl { get; init; }
 

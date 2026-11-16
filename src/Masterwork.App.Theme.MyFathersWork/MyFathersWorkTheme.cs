@@ -6,6 +6,11 @@ namespace Masterwork.App.Theme.MyFathersWork;
 /// <summary>The "My Father's Work" flavor.</summary>
 public sealed class MyFathersWorkTheme : IThemeModule
 {
+    /// <summary>The flavor's site, whose content API serves the catalog, thumbnails and packages.</summary>
+    public const string SiteUrl = "https://myfatherswork.masterworkapp.com";
+
+    private static readonly ContentSource Content = ContentApi.ForSite(SiteUrl);
+
     public WhiteLabelConfig Config { get; } = new()
     {
         // Must match ApplicationTitle in WhiteLabel/MyFathersWork.props.
@@ -13,10 +18,10 @@ public sealed class MyFathersWorkTheme : IThemeModule
         ShortName = "My Father's Work",
         GameName = "My Father's Work",
         ThemeColor = "#0d1420",
-        CatalogUrl = "https://raw.githubusercontent.com/GameGhost/Masterwork-Modules/main/.catalog/catalog.json",
+        CatalogUrl = Content.CatalogUrl,
         // Entry paths start with the release tag (v0.4.0/cost-of-disease.mwm), so one catalog can
         // point at packages from several releases — an unchanged module keeps its older tag.
-        PackageBaseUrl = "https://github.com/GameGhost/Masterwork-Modules/releases/download",
+        PackageBaseUrl = Content.PackageBaseUrl,
         // The Masterwork content-signing certificate that Masterwork-Modules signs its releases with.
         PublisherThumbprint = "15B0433E3B600F11CB5A8F3B6222C9F907CF140F7024839A3703A783C3327C59",
     };

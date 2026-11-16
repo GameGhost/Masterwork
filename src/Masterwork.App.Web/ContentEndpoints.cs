@@ -7,16 +7,16 @@ public enum ContentDeliveryMode
 {
     /// <summary>
     /// Stream the upstream response through this origin. Works with any upstream, including one
-    /// that sends no CORS headers — which is why it's the default over GitHub Releases. Costs this
-    /// site the bandwidth of every download.
+    /// that sends no CORS headers (GitHub Releases, or a Static Web App's own files), which is why
+    /// it's the default. Costs this site the bandwidth of every download.
     /// </summary>
     Proxy,
 
     /// <summary>
     /// Redirect the browser to the upstream URL.
     /// <b>Only valid when the upstream sends its own <c>Access-Control-Allow-Origin</c></b> — a
-    /// redirect doesn't exempt the final response from CORS, so pointing this at GitHub Releases
-    /// would simply fail in the browser. This is the mode to switch to once a CDN fronts the
+    /// redirect doesn't exempt the final response from CORS, so pointing this at an upstream without
+    /// one would simply fail in the browser. This is the mode to switch to once a CDN fronts the
     /// content.
     /// </summary>
     Redirect,
@@ -119,9 +119,9 @@ public static class ContentEndpoints
             ILoggerFactory loggers,
             CancellationToken ct) => ServeAsync(options.Value.CatalogUrl + ".sig", forceProxy: true, options.Value, context, factory, loggers, ct));
 
-        // Thumbnails live beside the catalog upstream, not in a release, so they resolve against the
-        // catalog's directory rather than the package base. Always proxied for the same reason the
-        // catalog is: they come from the repo host, which is not what a CDN would be fronting.
+        // Thumbnails live beside the catalog upstream, not with the packages, so they resolve against
+        // the catalog's directory rather than the package base. Always proxied, like the catalog:
+        // they're small, and only packages are what a CDN would be fronting.
         api.MapGet("/thumbnails/{**path}", async (
             string path,
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,

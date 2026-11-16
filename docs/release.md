@@ -266,10 +266,19 @@ names) and written to `.catalog/thumbnails/` — entries reference them by a pat
 catalog's own directory, so they must be committed along with it. Asset packs get none: they're never
 browsed or installed directly, only pulled in as a module's dependency.
 
+**Pushing the catalog publishes it.** Players never read it from GitHub: each flavor's site serves its
+content from a copy deployed beside it (`https://myfatherswork.masterworkapp.com/api/content/...`).
+The push runs Masterwork-Modules' `content-published` workflow, which sends a repository dispatch
+that runs this repo's `Deploy web app` workflow. That stages the catalog, its signature, the
+thumbnails and every package the catalog lists (downloaded from the releases and checked against the
+catalog's hashes), and deploys. Allow a few minutes. The deploy fails, and the site keeps its previous
+content, if a package is missing, doesn't match, or the total exceeds the Static Web Apps size limit;
+check that run.
+
 > **`.catalog/thumbnails/` is deliberately excluded from Git LFS** (see the modules repo's
-> `.gitattributes`). `raw.githubusercontent.com` serves an LFS *pointer file* rather than the object,
-> so an LFS-tracked thumbnail would reach the app as ~130 bytes of text instead of an image. Don't
-> add these patterns back to LFS. Every other `*.png` in that repo stays on LFS as before.
+> `.gitattributes`). The deploy reads them from a plain checkout, which holds an LFS *pointer file*
+> rather than the object, so an LFS-tracked thumbnail would fail its hash check. Don't add these
+> patterns back to LFS. Every other `*.png` in that repo stays on LFS as before.
 
 Each entry also carries a `thumbnail_sha256`. The app caches thumbnails by that hash, so a catalog
 refresh that doesn't change the art re-downloads nothing — which matters, since the thumbnails are
@@ -292,11 +301,9 @@ Two properties worth knowing:
   bundle (as above) is the simple case; a partial release means listing only what changed and
   carrying the unchanged entries forward.
 - **Rolling back is reverting the catalog commit.** The releases themselves stay put, so a rollback
-  never removes content anyone already installed — it just stops offering the newer version.
-
-`raw.githubusercontent.com` caches for five minutes, so a freshly pushed catalog isn't visible to the
-app immediately. Immaterial against the app's own refresh cadence, but it looks like nothing happened
-if you check straight away.
+  never removes content anyone already installed — it just stops offering the newer version. The
+  revert's push redeploys the site like any other catalog push.
+- **To redeploy without a catalog change**, run `Deploy web app` by hand from this repo's Actions tab.
 
 ## 7. Post-release checklist
 
@@ -307,7 +314,8 @@ if you check straight away.
   `Valid` and the pinned thumbprint. An unsigned or wrong-signer bundle isn't broken, but it makes
   every player acknowledge a prompt to install it.
 - Verify the published catalog (step 6) — `ModulePacker verifyfile .catalog\catalog.json` must report `Valid`,
-  and the raw URL must actually serve it (allow five minutes for the cache).
+  the `Deploy web app` run it triggered must succeed, and
+  `https://myfatherswork.masterworkapp.com/api/content/catalog.json` must serve the new catalog.
 - If the release fixes a bug reported by a specific user, follow up with them once the real
   (non-debug, non-test-build) release artifact is out.
 - Check `README.md` and any other docs for hardcoded version numbers or stale "latest release"
