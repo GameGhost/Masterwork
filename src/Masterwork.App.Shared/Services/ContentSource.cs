@@ -46,9 +46,8 @@ public sealed record ContentSource(string CatalogUrl, string PackageBaseUrl)
 
     /// <summary>
     /// Resolves an entry's thumbnail against the catalog's own directory — thumbnails are published
-    /// beside the catalog, not inside a release, so this base is derived rather than configured. On
-    /// the web head that lands on this origin's own <c>/content/</c> routes for free, since its
-    /// catalog URL already points there.
+    /// beside the catalog, not inside a release, so this base is derived rather than configured. For
+    /// a <see cref="ContentApi"/> source that lands on the API's own <c>thumbnails/</c> route.
     /// </summary>
     /// <exception cref="ArgumentException"><paramref name="relativePath"/> isn't a safe relative path.</exception>
     public string ResolveThumbnailUrl(string relativePath)

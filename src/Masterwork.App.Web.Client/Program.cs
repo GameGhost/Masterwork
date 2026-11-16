@@ -36,15 +36,11 @@ builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
 // services.
 builder.Services.AddThemeModule(typeof(Program).Assembly);
 
-// This head's primary source is always this origin's own /content routes — it never names an
-// upstream host, and the browser never has to reach one. Where those routes point is the serving
-// site's configuration (ContentEndpoints in Masterwork.App.Web), mirroring what a native build
-// compiles in. A source the player adds later is fetched directly and must serve its own CORS.
-builder.Services.AddScoped(sp =>
-{
-    var origin = sp.GetRequiredService<NavigationManager>().BaseUri.TrimEnd('/');
-    return new ContentSource($"{origin}/content/catalog.json", $"{origin}/content/packages");
-});
+// This head's primary source is always this origin's own content API — it never names an upstream
+// host. Where that API's content actually lives is the serving site's business (ContentEndpoints in
+// Masterwork.App.Web, or the static site's redirect function). A source the player adds later is
+// fetched directly and must serve its own CORS.
+builder.Services.AddScoped(sp => ContentApi.ForSite(sp.GetRequiredService<NavigationManager>().BaseUri));
 builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
 builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
 builder.Services.AddScoped<BrowserCrypto>();

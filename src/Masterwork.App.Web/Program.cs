@@ -23,8 +23,8 @@ builder.Logging.AddMasterworkFileLogger(Path.Combine(builder.Environment.Content
 // Only its WhiteLabelConfig is used here — the theme's own services back client-side UI.
 builder.Services.AddSingleton(ThemeModules.Load(typeof(Program).Assembly).Config);
 
-// The fixed /content routes this site's WebAssembly client fetches its primary catalog and packages
-// from. Where they point upstream is configuration, defaulting to the flavor's own source; the
+// The content API (ContentApi.BasePath) this site's WebAssembly client fetches its primary catalog
+// and packages from. Where they point upstream is configuration, defaulting to the flavor's own source; the
 // client never says. See ContentEndpoints.
 builder.Services.AddContentEndpoints(builder.Configuration);
 

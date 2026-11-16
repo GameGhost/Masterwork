@@ -52,7 +52,9 @@ self.addEventListener("fetch", (event) => {
     // permanently for no benefit. The catalog is deliberately excluded too: CatalogService keeps its
     // own cache with its own refresh policy and re-verifies the signature on every read, and a
     // second, invisible cache layer underneath it only makes "why is this stale" harder to answer.
-    if (new URL(event.request.url).pathname.startsWith("/content/")) {
+    // The content API may redirect to /content/ on the same origin, so both are skipped.
+    const path = new URL(event.request.url).pathname;
+    if (path.startsWith("/api/") || path.startsWith("/content/")) {
         return;
     }
 

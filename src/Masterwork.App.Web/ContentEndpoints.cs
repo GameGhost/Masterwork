@@ -47,11 +47,11 @@ public sealed class ContentOptions
 /// <summary>
 /// This site's own content endpoints, and the only content route its WebAssembly client knows.
 ///
-/// The client asks this origin for <c>/content/catalog.json</c> and
-/// <c>/content/packages/{path}</c> and nothing else — no upstream URL is ever passed in, by query
-/// string or otherwise, so there is no way to make this site fetch an arbitrary address. Where those
-/// two routes actually point is this site's configuration (<see cref="ContentOptions"/>), matching
-/// what a native build compiles in.
+/// The client asks this origin for the <see cref="ContentApi"/> routes (the catalog, its signature,
+/// thumbnails and packages under <c>/api/content</c>) and nothing else — no upstream URL is ever passed
+/// in, by query string or otherwise, so there is no way to make this site fetch an arbitrary address.
+/// Where these routes actually point is this site's configuration (<see cref="ContentOptions"/>),
+/// matching what a native build compiles in.
 ///
 /// The client only comes here for its *primary* source. A source the player adds themselves is
 /// fetched by the browser directly, which means that source has to serve its own CORS headers —
@@ -92,7 +92,7 @@ public static class ContentEndpoints
         return services;
     }
 
-    /// <summary>Maps the fixed content routes, logging the upstream they serve from.</summary>
+    /// <summary>Maps the content API routes, logging the upstream they serve from.</summary>
     public static void MapContentEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var configured = endpoints.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ContentOptions>>().Value;
@@ -100,17 +100,19 @@ public static class ContentEndpoints
             "Content upstream: catalog {CatalogUrl}, packages {PackageBaseUrl}, mode {Mode}",
             configured.CatalogUrl, configured.PackageBaseUrl, configured.Mode);
 
+        var api = endpoints.MapGroup(ContentApi.BasePath);
+
         // The catalog is always streamed, never redirected, regardless of Mode: it's small, it's
         // re-fetched far more often than packages, and the client must read its exact bytes to
         // check the detached signature over them.
-        endpoints.MapGet("/content/catalog.json", (
+        api.MapGet("/catalog.json", (
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,
             HttpContext context,
             IHttpClientFactory factory,
             ILoggerFactory loggers,
             CancellationToken ct) => ServeAsync(options.Value.CatalogUrl, forceProxy: true, options.Value, context, factory, loggers, ct));
 
-        endpoints.MapGet("/content/catalog.json.sig", (
+        api.MapGet("/catalog.json.sig", (
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,
             HttpContext context,
             IHttpClientFactory factory,
@@ -120,7 +122,7 @@ public static class ContentEndpoints
         // Thumbnails live beside the catalog upstream, not in a release, so they resolve against the
         // catalog's directory rather than the package base. Always proxied for the same reason the
         // catalog is: they come from the repo host, which is not what a CDN would be fronting.
-        endpoints.MapGet("/content/thumbnails/{**path}", async (
+        api.MapGet("/thumbnails/{**path}", async (
             string path,
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,
             HttpContext context,
@@ -140,7 +142,7 @@ public static class ContentEndpoints
             return await ServeAsync(catalogDirectory + "thumbnails/" + path, forceProxy: true, options.Value, context, factory, loggers, ct);
         });
 
-        endpoints.MapGet("/content/packages/{**path}", async (
+        api.MapGet("/packages/{**path}", async (
             string path,
             Microsoft.Extensions.Options.IOptions<ContentOptions> options,
             HttpContext context,

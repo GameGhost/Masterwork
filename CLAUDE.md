@@ -182,7 +182,11 @@ thumbprint) plus whatever the theme's `IThemeModule.ConfigureServices` adds (`IM
   from the flavor's `ApplicationId`, and an unpackaged Windows app's data folder
   (`%LOCALAPPDATA%\Masterwork\{ApplicationId}`) is derived from it — a literal id there made every
   flavor share one flavor's settings, saves and modules.
-- **The web server's `/content` upstream defaults to the flavor's own source**; a `Content` section in
+- **Every head's primary source is a site's content API, `/api/content/...` (`ContentApi`)**: the
+  web client on its own origin, native builds at the flavor site's address. A site may serve those
+  routes itself or redirect them to wherever the content is stored, so storage can move without an
+  app update. Keep new content routes under `ContentApi.BasePath`.
+- **The web server's content API upstream defaults to the flavor's own source**; a `Content` section in
   appsettings overrides only the values it sets. Startup fails if the result isn't an absolute
   http(s) URL, and logs the upstream it settled on.
 - **A non-default flavor builds into `bin\{Flavor}\` and `obj\{Flavor}\`** (root `Directory.Build.props`),

@@ -33,9 +33,20 @@ public class ContentSourceTests
     [Fact]
     public void ResolvePackageUrl_OnTheWebHead_StaysOnTheAppsOwnOrigin()
     {
-        var web = new ContentSource("https://play.example.com/content/catalog.json", "https://play.example.com/content/packages");
+        var web = ContentApi.ForSite("https://play.example.com/");
 
-        Assert.StartsWith("https://play.example.com/content/packages/", web.ResolvePackageUrl("v1/x.mwm"));
+        Assert.StartsWith("https://play.example.com/api/content/packages/", web.ResolvePackageUrl("v1/x.mwm"));
+    }
+
+    [Fact]
+    public void ContentApi_PutsEveryRouteUnderTheApiBasePath()
+    {
+        var site = ContentApi.ForSite("https://play.example.com");
+
+        Assert.Equal("https://play.example.com/api/content/catalog.json", site.CatalogUrl);
+        Assert.Equal("https://play.example.com/api/content/catalog.json.sig", site.SignatureUrl);
+        Assert.Equal("https://play.example.com/api/content/thumbnails/x.png", site.ResolveThumbnailUrl("thumbnails/x.png"));
+        Assert.Equal("https://play.example.com/api/content/packages/v1/x.mwm", site.ResolvePackageUrl("v1/x.mwm"));
     }
 
     // The base comes from the build, so even a catalog that somehow carried a host-shaped path can't
