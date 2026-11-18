@@ -24,6 +24,12 @@ Two layers, cleanly separated:
 Passage-scoped `let` variables belong to neither layer — evaluated fresh on every render from the
 PRNG sequence and the live variable store, discarded immediately after.
 
+Because of that convention, landing on an entry — stepping through the timeline, or resuming a save
+with `GameSession.Restore` — restores its variables and then **re-renders** its passage, so the live
+store also holds that passage's own assigns. Restoring the variables alone leaves them out, and a
+later decision that reads them goes wrong without anything looking amiss on screen. Checkpoint
+entries are the exception: they capture mid-passage state, so their cached render is reused instead.
+
 ### What creates a snapshot
 
 A `link`/`popup` close creates a new timeline entry when `state_affecting`/`snapshot` resolves
