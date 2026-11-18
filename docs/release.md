@@ -340,21 +340,53 @@ Google's identity and device verification must finish before anything can be pub
 
 1. **Create the app** in Play Console, titled `Masterwork: My Father's Work` (the listing title is a
    Console field; the installed name stays `ApplicationTitle`).
-2. **Enroll in Play App Signing with the existing release key**, so Play installs and side-loaded
-   installs share one signature. On the first release, choose to use your own key, export it with
-   the PEPK tool Play Console offers, and upload the result. Then register the upload key's
-   certificate:
+2. **Make the release key Play's app signing key**, so Play installs and side-loaded APKs carry the
+   same signature and can update each other. Play has two keys:
+
+   | Play Console name | Our key | SHA-256 fingerprint starts |
+   |---|---|---|
+   | App signing key (Google signs what it delivers with it) | `masterwork-release.keystore` | `E3:72:CA:28` |
+   | Upload key (signs the AAB you upload) | `masterwork-upload.keystore` | `0C:FF:88:69` |
+
+   Open **Protected with Play › Play Store protection › Manage Play app signing** (named "App
+   signing" in older Console layouts). The page always shows an app signing key certificate: if no
+   key was chosen, Play generated one. Compare its SHA-256 with the table:
+
+   - **It matches `E3:72:CA:28`**: already done.
+   - **It doesn't**: Play generated its own key. That can be changed until a release reaches open
+     testing or production; closed testing doesn't lock it. Choose **Change key**, then the option to
+     use your own key from a Java keystore. Download the `pepk.jar` and
+     `encryption_public_key.pem` the dialog offers, then run this in your own terminal from the
+     repository root (it asks for the release keystore's password, then the key's password, which
+     is usually the same):
+
+     ```powershell
+     [xml] $local = Get-Content Directory.Build.local.props
+     $java = Join-Path $local.Project.PropertyGroup.JavaSdkDirectory 'bin\java.exe'
+     $downloads = "$env:USERPROFILE\Downloads"
+     & $java -jar "$downloads\pepk.jar" --keystore=masterwork-release.keystore --alias=masterwork --output=release-key-export.zip --include-cert --rsa-aes-encryption --encryption-key-path="$downloads\encryption_public_key.pem"
+     ```
+
+     Upload `release-key-export.zip` in the same dialog, then delete it: it's the release key,
+     encrypted so only Google can read it. **Register the upload key's certificate in that same
+     dialog** (exported below). If you don't, Play makes the release key the upload key too.
+
+   Then check the **Upload key certificate** on the same page. It must start `0C:FF:88:69`. If it
+   shows the release key's `E3:72:CA:28` instead, choose **Request upload key reset** there and
+   attach the upload certificate. Until the reset takes effect, Play accepts only bundles signed with
+   the release key, which the script can produce:
+   `./scripts/release.ps1 -Targets Aab -SkipTests -UploadKeyStore masterwork-release.keystore -UploadKeyAlias masterwork`.
+
+   To export the upload certificate (it asks for the upload keystore's password):
 
    ```powershell
-   # Your own terminal: both commands ask for keystore passwords.
-   java -jar pepk.jar --keystore=masterwork-release.keystore --alias=masterwork `
-     --output=release-key-export.zip --include-cert --rsa-aes-encryption `
-     --encryption-key-path=<encryption_public_key.pem from Play Console>
-   & "<JavaSdkDirectory>\bin\keytool.exe" -export -rfc -keystore masterwork-upload.keystore `
-     -alias upload -file upload_certificate.pem
+   [xml] $local = Get-Content Directory.Build.local.props
+   $keytool = Join-Path $local.Project.PropertyGroup.JavaSdkDirectory 'bin\keytool.exe'
+   & $keytool -export -rfc -keystore masterwork-upload.keystore -alias upload -file upload_certificate.pem
    ```
 
-   Delete `release-key-export.zip` after uploading it: it's the release key, encrypted to Google.
+   To read a fingerprint from a signed file without any password:
+   `& $keytool -printcert -jarfile artifacts\<VERSION>\Masterwork-<VERSION>-android.apk` (or `.aab`).
 3. **App content**: privacy policy URL, no ads, all functionality available without an account, the
    content rating questionnaire, target audience, and the Data safety form, all from
    `docs/store-listing.md`.
