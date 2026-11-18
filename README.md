@@ -33,10 +33,17 @@ Playable modules (converted scenarios) live in the separate
 
 ## Getting the app
 
-Download the latest build from [Releases](../../releases) — Windows (self-contained zip) and
-Android (sideload APK). Then grab a module from
-[Masterwork-Modules releases](https://github.com/GameGhost/Masterwork-Modules/releases) and upload
-it from the app's Start New Game screen.
+- **Web:** play *My Father's Work* at <https://myfatherswork.masterworkapp.com>, nothing to install.
+- **Windows and Android:** download the latest build from [Releases](../../releases): a portable
+  Windows zip and an Android APK for side-loading. Microsoft Store and Google Play listings are on
+  the way.
+
+The app lists the available scenarios and installs them itself. To install a scenario by hand
+instead, download its `.mwm` file from
+[Masterwork-Modules releases](https://github.com/GameGhost/Masterwork-Modules/releases) and add it
+from the app's Start New Game screen.
+
+More about the project, help, and the privacy policy: <https://masterworkapp.com>.
 
 ## Building from source
 

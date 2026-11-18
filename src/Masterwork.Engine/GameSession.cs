@@ -170,9 +170,11 @@ public sealed class GameSession
             _cachedRenders.Add(RenderChainFrom(snapshot.PassageId));
         }
 
+        // A snapshot holds the state from before its passage rendered, so the current one is
+        // re-rendered to leave the live store as the player last saw it, including that passage's
+        // own assigns.
         HistoryIndex = save.HistoryIndex;
-        _store.RestoreSession(_timeline[HistoryIndex].Variables);
-        _prng.RestoreOccurrences(_timeline[HistoryIndex].SeedOccurrences);
+        RestoreAndRerenderCurrent();
 
         // Active state pending at save time only means anything if it was taken at the live edge
         // (see ActiveState's remarks) — restore it the same way RenderInPlace originally produced

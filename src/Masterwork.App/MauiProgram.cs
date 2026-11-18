@@ -38,6 +38,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IAssetResolver, AssetResolver>();
         builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
         builder.Services.AddScoped<IModuleStore, FileModuleStore>();
+        builder.Services.AddScoped<IAssetPackStore, FileAssetPackStore>();
         builder.Services.AddScoped<GameSessionState>();
         builder.Services.AddScoped<AppNavigationHistory>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
@@ -46,19 +47,26 @@ public static class MauiProgram
         builder.Services.AddScoped<AudioCoordinator>();
         builder.Services.AddScoped<AudioSettingsState>();
         builder.Services.AddScoped<IModuleStyleInjector, JsModuleStyleInjector>();
+
+        // The flavor this build was compiled as (WhiteLabelFlavor): registers its WhiteLabelConfig
+        // and theme services. Native heads fetch its upstream source directly — no browser, so no
+        // CORS to satisfy — and the locations are compiled in rather than read from the catalog, so
+        // a tampered catalog can't reroute a download.
+        var theme = builder.Services.AddThemeModule(typeof(MauiProgram).Assembly);
+        builder.Services.AddSingleton(theme.Config.PrimarySource);
+        builder.Services.AddHttpClient(HttpContentDownloader.HttpClientName);
+        builder.Services.AddScoped<IContentDownloader, HttpContentDownloader>();
+        builder.Services.AddScoped<BrowserCrypto>();
+        builder.Services.AddScoped<SignatureVerifier>();
+        builder.Services.AddScoped<CatalogService>();
+        builder.Services.AddScoped<CatalogInstallService>();
+        builder.Services.AddScoped<ThumbnailCache>();
+        builder.Services.AddScoped<ModuleLibrary>();
+        builder.Services.AddScoped<CatalogSubscriptions>();
         // Overrides Shared's NullNativeFilePicker default — see INativeFilePicker's own remarks for
         // why the MAUI head can't use the plain InputFile element Web/WASM use for module upload /
         // save import.
         builder.Services.AddScoped<INativeFilePicker, MauiNativeFilePicker>();
-        // The active theme — swapping themes is a build-time decision (this line), not a runtime
-        // one; see IMainMenuTheme's own remarks for why this wiring lives in each host rather than
-        // the theme project registering itself.
-        builder.Services.AddSingleton<IMainMenuTheme>(new MainMenuTheme(
-            typeof(Masterwork.App.Theme.MyFathersWork.MainMenuScene),
-            musicUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/main-menu-theme.ogg",
-            transitionSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/shell-transition.ogg",
-            clickSfxUrl: "_content/Masterwork.App.Theme.MyFathersWork/audio/click.ogg"));
-
         // Always on, not just DEBUG — a file trail is what would have told us why the first upload
         // attempt crashed with no on-screen error. See CLAUDE.md for the exact log location.
         //

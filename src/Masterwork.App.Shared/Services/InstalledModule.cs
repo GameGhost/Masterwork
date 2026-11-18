@@ -1,3 +1,5 @@
+using Masterwork.ModuleFormat;
+
 namespace Masterwork.App.Shared.Services;
 
 /// <summary>
@@ -18,6 +20,14 @@ namespace Masterwork.App.Shared.Services;
 /// chrome is theme-owned CSS, not sourced from the module, so only the raw thumbnail art travels
 /// through here — see <c>ModuleThumbnail.BorderInactive</c>/<c>BorderActive</c>'s own remarks.
 /// </param>
+/// <param name="Dependencies">
+/// The module's declared asset-pack dependencies (manifest <c>dependencies:</c>), exact id+version
+/// pairs — see <see cref="IAssetPackStore"/>'s own remarks for how these get resolved at load time
+/// and enforced at asset-pack delete time. Defaults to empty — including for an index entry
+/// persisted (as JSON, on the MAUI heads) before this field existed, since
+/// <see cref="System.Text.Json"/> leaves a missing property at its default rather than failing to
+/// deserialize.
+/// </param>
 public sealed record InstalledModule(
     string ModuleId,
     string Version,
@@ -25,5 +35,10 @@ public sealed record InstalledModule(
     string Description,
     IReadOnlyList<string> AvailableLanguages,
     string Sha256,
-    string? ThumbnailImageUrl = null
-);
+    string? ThumbnailImageUrl = null,
+    IReadOnlyList<ModuleDependency> Dependencies = null!
+)
+{
+    /// <summary>Ensures <see cref="Dependencies"/> is never null even after JSON deserialization of an older, field-less record.</summary>
+    public IReadOnlyList<ModuleDependency> Dependencies { get; init; } = Dependencies ?? [];
+}

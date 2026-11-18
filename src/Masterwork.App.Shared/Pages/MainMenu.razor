@@ -5,9 +5,10 @@
 
 @inject NavigationManager Nav
 @inject IMainMenuTheme? Theme
+@inject WhiteLabelConfig WhiteLabel
 
 @{ AppSettingsApplier.ReassertCulture(); }
-<PageTitle>Masterwork - My Father's Work</PageTitle>
+<PageTitle>@WhiteLabel.AppName</PageTitle>
 
 <div class="mws-main-menu">
     @* The background scene's whole structure (not just its images) is theme-provided — see
@@ -23,15 +24,15 @@
     </div>
     <div class="mws-main-menu-border" aria-hidden="true"></div>
 
-    <h1 class="mws-visually-hidden">Masterwork - My Father's Work</h1>
+    <h1 class="mws-visually-hidden">@WhiteLabel.AppName</h1>
 
     <ChromeButton class="mws-main-menu-help" OnClick='() => Nav.NavigateTo("/help")'>
         <span class="mws-visually-hidden">@AppStrings.MainMenu_Help</span>
     </ChromeButton>
 
     <div class="mws-main-menu-content">
-        <div class="mws-main-menu-logo" role="img" aria-label="My Father's Work"></div>
-        <p class="mws-main-menu-tagline">@((MarkupString)AppStrings.MainMenu_Tagline)</p>
+        <div class="mws-main-menu-logo" role="img" aria-label="@WhiteLabel.GameName"></div>
+        <p class="mws-main-menu-tagline">@((MarkupString)string.Format(AppStrings.MainMenu_Tagline, System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName)))</p>
 
         <nav class="mws-main-menu-buttons">
             <ChromeButton OnClick='() => Nav.NavigateTo("/new-game")'>@AppStrings.MainMenu_StartNewGame</ChromeButton>
@@ -40,13 +41,14 @@
             <ChromeButton disabled title="@AppStrings.Common_ComingSoon" OnClick='() => Nav.NavigateTo("/achievements")'>@AppStrings.MainMenu_Achievements</ChromeButton>
         </nav>
     </div>
+
+    <AppCredit />
 </div>
 
 @if (_showOptions)
 {
     <OptionsDialog DialogContext="OptionsDialogContext.MainMenu"
-                   OnClose="() => _showOptions = false"
-                   OnManageModules='() => Nav.NavigateTo("/modules/manage")' />
+                   OnClose="() => _showOptions = false" />
 }
 
 @code {

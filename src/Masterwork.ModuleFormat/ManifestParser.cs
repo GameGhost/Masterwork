@@ -116,12 +116,19 @@ public sealed class ManifestParser : IManifestParser
             audioMap.WarnUnmatchedFields(ctx, "audio", "music", "sfx");
         }
 
+        var format = root.GetString("format", ctx);
+        if (format is not null && format != MwsFormatVersion.Current)
+        {
+            ctx.Warn("unexpected_format_version", $"manifest declares format '{format}', expected '{MwsFormatVersion.Current}' — may be stale output from an older extractor/hand-authored file");
+        }
+
         var manifest = new ModuleManifest
         {
             Id = root.GetRequiredString("id", ctx),
             Title = GetRequiredLocalizedString(root, "title", ctx, preferredLocale, defaultLocale),
             Version = root.GetRequiredString("version", ctx),
-            ModuleType = root.GetString("type", ctx) ?? "original_scenario",
+            ModuleType = root.GetString("type", ctx) ?? "module",
+            Format = format,
             Description = GetOptionalLocalizedString(root, "description", ctx, preferredLocale, defaultLocale),
             Dependencies = dependencies,
             Languages = root.GetStringList("languages", ctx),
@@ -136,7 +143,7 @@ public sealed class ManifestParser : IManifestParser
         };
 
         root.WarnUnmatchedFields(ctx, "manifest.yaml",
-            "id", "title", "version", "type", "description", "dependencies",
+            "type", "format", "id", "title", "version", "description", "dependencies",
             "languages", "thumbnail", "info", "audio", "entry", "passages", "passages_override", "style",
             "default_locale");
 

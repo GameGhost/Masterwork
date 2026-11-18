@@ -1,4 +1,5 @@
 using Masterwork.App.Shared.Services;
+using Masterwork.App.Web;
 using Masterwork.App.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,15 @@ builder.Services.AddRazorComponents()
 // filesystem to log to; its errors surface via the browser console and the blazor-error-ui banner
 // instead. See CLAUDE.md for the exact log location.
 builder.Logging.AddMasterworkFileLogger(Path.Combine(builder.Environment.ContentRootPath, "logs"));
+
+// The flavor this site was built as (WhiteLabelFlavor), the same one its WebAssembly client carries.
+// Only its WhiteLabelConfig is used here — the theme's own services back client-side UI.
+builder.Services.AddSingleton(ThemeModules.Load(typeof(Program).Assembly).Config);
+
+// The content API (ContentApi.BasePath) this site's WebAssembly client fetches its primary catalog
+// and packages from. Where they point upstream is configuration, defaulting to the flavor's own source; the
+// client never says. See ContentEndpoints.
+builder.Services.AddContentEndpoints(builder.Configuration);
 
 var app = builder.Build();
 
@@ -37,6 +47,10 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+app.MapContentEndpoints();
+
+app.MapWebAppManifest();
 
 app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()

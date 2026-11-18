@@ -60,7 +60,7 @@ public readonly record struct ModulePackageEntry(ModulePackageEntryKind Kind, st
 /// <see cref="ModulePackageContents.RestextOverridesByLocale"/> for the same add/override-by-key
 /// merge <see cref="IModuleLoader.LoadFromSources"/> applies to passage overrides.
 /// </summary>
-public static class ModulePackage
+public static partial class ModulePackage
 {
     /// <summary>Reads a <c>.mwm</c> package's contents from raw zip bytes.</summary>
     public static ModulePackageContents ReadFromBytes(byte[] zipBytes)
@@ -220,6 +220,142 @@ public static class ModulePackage
                relativeName.Equals("README.md", StringComparison.OrdinalIgnoreCase) ||
                relativeName.Equals("VIEW-REQUIREMENTS.md", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Builds a "standalone" <c>.mwm</c>: the module's own content (as <see cref="WriteToBytes"/>)
+    /// plus every declared asset-pack dependency's own <c>layouts/</c>, <c>assets/</c>,
+    /// <c>_variables.yaml</c>, and <c>{locale}.restext</c> content merged directly in, with
+    /// <c>dependencies:</c> blanked out in the packaged <c>manifest.yaml</c> — so the result loads
+    /// correctly with no asset pack installed separately. A module-owned file always wins on an
+    /// exact relative-path collision; an asset pack's <c>_variables.yaml</c> is merged in as a
+    /// synthetic <c>variables/__assetpack_{id}.yaml</c> file (the module's own <c>_variables.yaml</c>
+    /// slot is extractor-owned and must not be touched); a locale a module already ships is left
+    /// alone rather than key-merged. Used for manual-install testing of a module without also
+    /// installing its dependencies separately — not the format modules ship in for real.
+    /// </summary>
+    public static byte[] WriteStandaloneToBytes(string moduleSourceDirectory, IReadOnlyList<string> assetPackSourceDirectories)
+    {
+        var manifestPath = Path.Combine(moduleSourceDirectory, "manifest.yaml");
+        var manifestYaml = File.Exists(manifestPath) ? File.ReadAllText(manifestPath) : null;
+        var manifestModuleLocales = manifestYaml is null
+            ? []
+            : ReadRestextLocalesOnDisk(moduleSourceDirectory);
+
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in Directory.EnumerateFiles(moduleSourceDirectory, "*", SearchOption.AllDirectories))
+            {
+                var relativeName = Path.GetRelativePath(moduleSourceDirectory, file).Replace('\\', '/');
+                if (IsExcludedFromPackage(relativeName))
+                {
+                    continue;
+                }
+
+                if (relativeName.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase) && manifestYaml is not null)
+                {
+                    var entry = archive.CreateEntry(relativeName);
+                    using var entryStream = entry.Open();
+                    using var writer = new StreamWriter(entryStream, Encoding.UTF8);
+                    writer.Write(StripDependencies(manifestYaml));
+                }
+                else
+                {
+                    archive.CreateEntryFromFile(file, relativeName);
+                }
+
+                writtenPaths.Add(relativeName);
+            }
+
+            foreach (var assetPackDir in assetPackSourceDirectories)
+            {
+                var assetPackId = SanitizeForFileName(ReadAssetPackId(assetPackDir) ?? Path.GetFileName(assetPackDir));
+
+                foreach (var subfolder in new[] { "layouts", "assets" })
+                {
+                    var sourceDir = Path.Combine(assetPackDir, subfolder);
+                    if (!Directory.Exists(sourceDir))
+                    {
+                        continue;
+                    }
+
+                    foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
+                    {
+                        var relativeName = $"{subfolder}/{Path.GetRelativePath(sourceDir, file).Replace('\\', '/')}";
+                        if (!writtenPaths.Add(relativeName))
+                        {
+                            continue; // the module's own file at this path wins
+                        }
+
+                        archive.CreateEntryFromFile(file, relativeName);
+                    }
+                }
+
+                var variablesPath = Path.Combine(assetPackDir, "_variables.yaml");
+                if (File.Exists(variablesPath))
+                {
+                    var relativeName = $"variables/__assetpack_{assetPackId}.yaml";
+                    if (writtenPaths.Add(relativeName))
+                    {
+                        archive.CreateEntryFromFile(variablesPath, relativeName);
+                    }
+                }
+
+                foreach (var restextFile in Directory.EnumerateFiles(assetPackDir, "*.restext", SearchOption.TopDirectoryOnly))
+                {
+                    var locale = Path.GetFileNameWithoutExtension(restextFile);
+                    if (manifestModuleLocales.Contains(locale))
+                    {
+                        continue; // the module already ships this locale — its own file wins
+                    }
+
+                    var relativeName = Path.GetFileName(restextFile);
+                    if (writtenPaths.Add(relativeName))
+                    {
+                        archive.CreateEntryFromFile(restextFile, relativeName);
+                    }
+                }
+            }
+        }
+
+        return stream.ToArray();
+    }
+
+    private static HashSet<string> ReadRestextLocalesOnDisk(string moduleSourceDirectory) =>
+        [.. Directory.EnumerateFiles(moduleSourceDirectory, "*.restext", SearchOption.TopDirectoryOnly)
+            .Select(f => Path.GetFileName(f))
+            .Select(f => f.EndsWith(".overrides.restext", StringComparison.OrdinalIgnoreCase)
+                ? f[..^".overrides.restext".Length]
+                : f[..^".restext".Length])];
+
+    private static string? ReadAssetPackId(string assetPackDir)
+    {
+        var manifestPath = Path.Combine(assetPackDir, "manifest.yaml");
+        if (!File.Exists(manifestPath))
+        {
+            return null;
+        }
+
+        var match = IdFieldPattern().Match(File.ReadAllText(manifestPath));
+        return match.Success ? match.Groups["id"].Value : null;
+    }
+
+    private static string SanitizeForFileName(string value) =>
+        new([.. value.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_')]);
+
+    // Blanks a manifest.yaml's `dependencies:` block (and any comment lines directly above it) to
+    // `dependencies: []` — every dependency this standalone package declared has just been merged in
+    // directly, so nothing should be left for the loader to warn about as missing.
+    private static string StripDependencies(string manifestYaml) =>
+        DependenciesBlockPattern().Replace(manifestYaml, "dependencies: []\n");
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^id:\s*['""](?<id>[^'""]+)['""]", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex IdFieldPattern();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?:^#.*\r?\n)*^dependencies:[ \t]*\r?\n(?:^-.*\r?\n(?:^[ \t]+.*\r?\n)*)*", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex DependenciesBlockPattern();
 
     private readonly record struct ClassifiedPath(ModulePackageEntryKind Kind, string? Locale);
 

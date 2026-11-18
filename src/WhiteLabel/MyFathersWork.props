@@ -1,0 +1,53 @@
+<Project>
+
+  <!-- My Father's Work. See WhiteLabel.props. -->
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.MyFathersWork\Masterwork.App.Theme.MyFathersWork.csproj" />
+    <AssemblyAttribute Include="Masterwork.App.Shared.Services.ThemeModuleAttribute">
+      <_Parameter1>typeof(Masterwork.App.Theme.MyFathersWork.MyFathersWorkTheme)</_Parameter1>
+      <_Parameter1_IsLiteral>true</_Parameter1_IsLiteral>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(UseMaui)' == 'true'">
+    <!-- Must match the theme's WhiteLabelConfig.AppName (MyFathersWorkTheme.cs). -->
+    <ApplicationTitle>My Father's Work</ApplicationTitle>
+    <ApplicationId>com.masterworkapp.myfatherswork</ApplicationId>
+
+    <!-- Microsoft Store package identity (-p:StorePackage=true builds only), from Partner Center's
+         Product identity page. StoreDisplayName is the reserved store name; Start and tiles keep
+         ApplicationTitle. The Play listing title is set in Play Console, not here. -->
+    <StoreDisplayName>Masterwork: My Father's Work</StoreDisplayName>
+    <StoreIdentityName>DigitalGhostProductions.MasterworkMyFathersWork</StoreIdentityName>
+    <StorePublisher>CN=36C1298D-114F-4662-A4BD-B4E4C9B753BE</StorePublisher>
+    <StorePublisherDisplayName>Digital Ghost Productions</StorePublisherDisplayName>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseMaui)' == 'true'">
+    <!-- App Icon — standard MauiIcon shape: `Include`/`BackgroundFile` is background only (a flat
+         #1B1D21 fill, generated, not hand-authored). `ForegroundFile` is the logo alone, generated
+         from the theme's wwwroot/images/myfatherswork-logo-1024x1024.png (the official wordmark,
+         transparent background; see the theme's NOTICE.md for provenance), scaled to ~68% of its own
+         canvas with transparent padding — confirmed empirically that Resizetizer does *not* apply
+         its own extra inset for Android's adaptive icon, so the raw logo's own built-in gutter (~95%
+         width / ~77% height of its canvas) isn't enough margin on its own; without this, Android's
+         circular/squircle/rounded-square launcher mask crops the logo's own edges. This same file is
+         used for every platform (Windows/iOS/legacy-Android/round icon all get it full-size, just
+         with a bit more background margin than a full-bleed mark would have — a deliberate
+         simplification over maintaining a separate per-platform source). Resizetizer composites
+         foreground over background itself — earlier attempts pre-baked the logo into `Include` *and*
+         separately passed a full `ForegroundFile`, which Resizetizer composited a second time on
+         top, producing a visible double-exposed logo. -->
+    <MauiIcon Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.MyFathersWork\AppIcon\appicon-background.png"
+              ForegroundFile="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.MyFathersWork\AppIcon\appicon-foreground.png"
+              Link="Resources\AppIcon\appicon.png" />
+
+    <!-- Splash Screen — the same properly-centered square logo the app icon derives from (not the
+         wide 1024x512 lockup, whose large dead space on one side was scaling/centering oddly here),
+         on the same #1B1D21 background as the icon for a consistent brand mark. -->
+    <MauiSplashScreen Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.MyFathersWork\wwwroot\images\myfatherswork-logo-1024x1024.png"
+                      Link="Resources\Splash\splash.png" Color="#1B1D21" BaseSize="512,512" />
+  </ItemGroup>
+
+</Project>

@@ -2725,6 +2725,57 @@ public class GameSessionTests
     }
 
     [Fact]
+    public async Task Restore_KeepsTheCurrentPassagesOwnAssigns()
+    {
+        // A snapshot holds the state from before its passage rendered, so resuming must leave the
+        // live store as it was after that render. Fear of the Unknown's Mania hub sets round = 1;
+        // resuming there used to drop it, and a later link keyed on round skipped to the last hub.
+        var module = new ModuleLoader().LoadFromSources(
+        [
+            """
+            format: 'mws/0.4'
+            passage_id: 'Start'
+            tags:
+            - 'Begins-Here'
+            layout: 'narration'
+            nodes:
+            - type: 'link'
+              label: 'Go'
+              target: 'Hub'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Hub'
+            layout: 'narration'
+            nodes:
+            - type: 'assign'
+              var: 'round'
+              expr: '1'
+            - type: 'link'
+              label: 'Next'
+              target: 'Next'
+              snapshot: true
+            """,
+            """
+            format: 'mws/0.4'
+            passage_id: 'Next'
+            layout: 'narration'
+            nodes:
+            - type: 'text'
+              value: 'Round {round}'
+            """,
+        ]);
+        var session = new GameSession(module, masterSeed: 1);
+        await session.FollowLinkAsync(session.CurrentRender.Actions.OfType<RenderedLink>().Single().Id);
+
+        var restored = GameSession.Restore(module, session.Serialize());
+        await restored.FollowLinkAsync(restored.CurrentRender.Actions.OfType<RenderedLink>().Single().Id);
+
+        Assert.Equal(1L, restored.Current.Variables["round"].AsInt());
+    }
+
+    [Fact]
     public async Task FollowLinkAsync_TargetPassageRenderThrows_SessionStaysUsable()
     {
         // Regression: PushAndRender used to commit the new Timeline entry and advance HistoryIndex

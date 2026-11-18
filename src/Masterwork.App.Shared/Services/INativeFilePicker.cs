@@ -7,7 +7,7 @@ namespace Masterwork.App.Shared.Services;
 /// </summary>
 public enum NativeFileKind
 {
-    /// <summary>A <c>.mwm</c> module package — see <c>StartNewGame.razor</c>'s upload flow.</summary>
+    /// <summary>A <c>.mwm</c> module or <c>.mwassets</c> asset-pack package — see <c>StartNewGame.razor</c>'s combined upload flow.</summary>
     ModulePackage,
 
     /// <summary>An exported <c>.mwsave</c> save file — see <c>ContinueList.razor</c>'s import flow.</summary>

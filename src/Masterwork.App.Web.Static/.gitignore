@@ -1,0 +1,3 @@
+# Written at build time by Masterwork.App.Web.StaticPages, for the flavor being built.
+wwwroot/index.html
+wwwroot/manifest.json

@@ -1,0 +1,16 @@
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
+@inject WhiteLabelConfig WhiteLabel
+
+@* The web heads' loading splash, shown in the host page while the WebAssembly bundle downloads and
+   removed by MainLayout (window.mwsHideSplash) once real content has rendered. Rendered into the
+   host page itself, never by the running app: by the ASP.NET host's App.razor, and at build time
+   into the static head's index.html (WebAppPages). *@
+<div id="mws-splash" class="mws-splash">
+    <h1 class="mws-visually-hidden">@WhiteLabel.AppName</h1>
+    <div class="mws-splash-logo" role="img" aria-label="@WhiteLabel.GameName"></div>
+    <p class="mws-splash-tagline">@((MarkupString)string.Format(AppStrings.MainMenu_Tagline, System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName)))</p>
+    <p class="mws-visually-hidden">Loading…</p>
+    <div class="mws-spinner" aria-hidden="true"></div>
+    <AppCredit />
+</div>

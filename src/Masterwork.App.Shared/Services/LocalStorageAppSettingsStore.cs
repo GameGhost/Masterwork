@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.JSInterop;
 
 namespace Masterwork.App.Shared.Services;
@@ -13,10 +12,10 @@ public sealed class LocalStorageAppSettingsStore(IJSRuntime js) : IAppSettingsSt
     public async Task<AppSettings> LoadAsync()
     {
         var json = await js.InvokeAsync<string?>("localStorage.getItem", Key);
-        return json is null ? AppSettings.Default : JsonSerializer.Deserialize<AppSettings>(json) ?? AppSettings.Default;
+        return AppSettingsJson.Deserialize(json);
     }
 
     /// <inheritdoc/>
     public async Task SaveAsync(AppSettings settings) =>
-        await js.InvokeVoidAsync("localStorage.setItem", Key, JsonSerializer.Serialize(settings));
+        await js.InvokeVoidAsync("localStorage.setItem", Key, AppSettingsJson.Serialize(settings));
 }

@@ -73,6 +73,58 @@ public class LoadedModuleContentTests
     }
 
     [Fact]
+    public async Task BuildAsync_NoModuleStyleButDependencyHasIt_FallsBackToDependencyStyleCss()
+    {
+        // Real-world case: a module's own style.css moved into a shared asset pack (e.g.
+        // mwf-common-assets) — the module's own bundle no longer has it at all.
+        var dir = MakeSourceDirectory(includeStyle: false);
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+            var dependency = new DictionaryModuleAssetSource(new Dictionary<string, byte[]>
+            {
+                ["assets/style.css"] = System.Text.Encoding.UTF8.GetBytes(".layout-hub { color: blue; }"),
+            });
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets, [dependency]);
+
+            Assert.Equal(".layout-hub { color: blue; }", loaded.StyleCss);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BuildAsync_ModuleOwnStyleTakesPrecedenceOverDependency()
+    {
+        var dir = MakeSourceDirectory(includeStyle: true);
+        try
+        {
+            var bytes = ModulePackage.WriteToBytes(dir);
+            var contents = ModulePackage.ReadFromBytes(bytes);
+            var module = new ModuleLoader().LoadFromSources(contents.PassageYamls, contents.VariablesYaml);
+            var assets = new DictionaryModuleAssetSource(contents.Assets);
+            var dependency = new DictionaryModuleAssetSource(new Dictionary<string, byte[]>
+            {
+                ["assets/style.css"] = System.Text.Encoding.UTF8.GetBytes(".layout-hub { color: blue; }"),
+            });
+
+            var loaded = await LoadedModuleContent.BuildAsync(module, contents.ManifestYaml, assets, [dependency]);
+
+            Assert.Equal(".layout-hub { color: red; }", loaded.StyleCss);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task BuildAsync_NoStyleFile_StyleCssIsNull()
     {
         var dir = MakeSourceDirectory(includeStyle: false);

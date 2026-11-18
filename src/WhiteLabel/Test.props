@@ -1,0 +1,24 @@
+<Project>
+
+  <!-- The bare test flavor. See WhiteLabel.props, and Masterwork.App.Theme.Test for why it exists. -->
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.Test\Masterwork.App.Theme.Test.csproj" />
+    <AssemblyAttribute Include="Masterwork.App.Shared.Services.ThemeModuleAttribute">
+      <_Parameter1>typeof(Masterwork.App.Theme.Test.TestTheme)</_Parameter1>
+      <_Parameter1_IsLiteral>true</_Parameter1_IsLiteral>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(UseMaui)' == 'true'">
+    <!-- Must match the theme's WhiteLabelConfig.AppName (TestTheme.cs). -->
+    <ApplicationTitle>Test Flavor</ApplicationTitle>
+    <ApplicationId>com.masterworkapp.testflavor</ApplicationId>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseMaui)' == 'true'">
+    <MauiIcon Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.Test\AppIcon\appicon.svg" Link="Resources\AppIcon\appicon.svg" Color="#202020" />
+    <MauiSplashScreen Include="$(MSBuildThisFileDirectory)..\Masterwork.App.Theme.Test\AppIcon\splash.svg" Link="Resources\Splash\splash.svg" Color="#202020" BaseSize="256,256" />
+  </ItemGroup>
+
+</Project>

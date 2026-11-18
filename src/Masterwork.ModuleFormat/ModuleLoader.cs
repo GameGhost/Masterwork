@@ -124,7 +124,8 @@ public sealed class ModuleLoader : IModuleLoader
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
         IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null,
-        string? defaultRestextText = null, string? defaultRestextOverrideText = null)
+        string? defaultRestextText = null, string? defaultRestextOverrideText = null,
+        IEnumerable<DependencyRestext>? dependencyRestexts = null)
     {
         var warnings = new ModuleWarnings();
 
@@ -191,6 +192,49 @@ public sealed class ModuleLoader : IModuleLoader
             }
 
             locale = defaultLocale;
+        }
+
+        // Dependency asset-pack restext fallback: sits underneath the module's own restext
+        // ("locale" at this point is already the module's own default+preferred merge) — a key the
+        // module has always wins; only a key missing from the module's own restext falls through to
+        // the dependencies. Runs in two passes (every dependency's default-locale tier first, then
+        // every dependency's selected-locale tier on top) rather than one dependency at a time, so a
+        // later dependency that only shares the module's default locale can't outrank an earlier
+        // dependency that actually has the player's selected locale for the same key. Within each
+        // pass, later dependencies win over earlier ones on a shared key.
+        if (dependencyRestexts is not null)
+        {
+            var dependencyList = dependencyRestexts as IReadOnlyList<DependencyRestext> ?? [.. dependencyRestexts];
+            var dependencyLocale = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var dependency in dependencyList)
+            {
+                if (dependency.DefaultRestextText is not null)
+                {
+                    foreach (var (key, value) in _restextFile.Parse(dependency.DefaultRestextText))
+                    {
+                        dependencyLocale[key] = value;
+                    }
+                }
+            }
+
+            foreach (var dependency in dependencyList)
+            {
+                if (dependency.RestextText is not null)
+                {
+                    foreach (var (key, value) in _restextFile.Parse(dependency.RestextText))
+                    {
+                        dependencyLocale[key] = value;
+                    }
+                }
+            }
+
+            foreach (var (key, value) in locale)
+            {
+                dependencyLocale[key] = value;
+            }
+
+            locale = dependencyLocale;
         }
 
         var passages = new Dictionary<string, MwsPassageDoc>();
@@ -290,42 +334,6 @@ public sealed class ModuleLoader : IModuleLoader
                 : null;
 
         return (Get("passages"), Get("passages_override"));
-    }
-
-    /// <inheritdoc/>
-    public LoadedModule MergeDependency(LoadedModule module, LoadedModule dependency)
-    {
-        var passages = new Dictionary<string, MwsPassageDoc>(dependency.Passages);
-        foreach (var (id, passage) in module.Passages)
-        {
-            passages[id] = passage; // module's own passages win on collision
-        }
-
-        var variables = new Dictionary<string, VarDef>(dependency.Variables);
-        foreach (var (name, def) in module.Variables)
-        {
-            variables[name] = def; // module's own declarations win on collision
-        }
-
-        var layoutChrome = new Dictionary<string, LayoutChromeDoc>(dependency.LayoutChrome);
-        foreach (var (id, chrome) in module.LayoutChrome)
-        {
-            layoutChrome[id] = chrome; // module's own chrome wins on collision
-        }
-
-        _logger.LogDebug(
-            "Merged dependency into module: {DependencyPassageCount} dependency passages, {DependencyVarCount} dependency variables",
-            dependency.Passages.Count, dependency.Variables.Count);
-
-        return new LoadedModule
-        {
-            Passages = passages,
-            Variables = variables,
-            Locale = module.Locale,
-            Warnings = module.Warnings,
-            StartPassageId = module.StartPassageId,
-            LayoutChrome = layoutChrome,
-        };
     }
 
     // Verifies that every statically-known navigation/goto/include_passage target resolves to a

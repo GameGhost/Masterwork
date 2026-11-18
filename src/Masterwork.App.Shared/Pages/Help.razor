@@ -3,6 +3,7 @@
 @using Masterwork.App.Shared.Resources
 @using Masterwork.App.Shared.Services
 @inject NavigationManager Nav
+@inject WhiteLabelConfig WhiteLabel
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.Help_PageTitle</PageTitle>
@@ -27,7 +28,7 @@
             {
                 case HelpTopic.HowToUse:
                     <h3 class="mws-help-content-title">@AppStrings.Help_HowToUse_Title</h3>
-                    <div class="mws-help-content-body"><p>@((MarkupString)AppStrings.Help_HowToUse_Body)</p></div>
+                    <div class="mws-help-content-body"><p>@((MarkupString)string.Format(AppStrings.Help_HowToUse_Body, System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName)))</p></div>
                     break;
                 case HelpTopic.TimelineAndRewind:
                     <h3 class="mws-help-content-title">@AppStrings.Help_TimelineRewind_Title</h3>
@@ -37,15 +38,31 @@
                     <h3 class="mws-help-content-title">@AppStrings.Help_Saves_Title</h3>
                     <div class="mws-help-content-body"><p>@AppStrings.Help_Saves_Body</p></div>
                     break;
+                case HelpTopic.About:
+                    <h3 class="mws-help-content-title">@AppStrings.Help_About_Title</h3>
+                    <div class="mws-help-content-body">
+                        <p>@((MarkupString)string.Format(AppStrings.Help_About_Body,
+                            System.Net.WebUtility.HtmlEncode(WhiteLabel.GameName),
+                            System.Net.WebUtility.HtmlEncode(WhiteLabel.GamePublisher)))</p>
+                        <p>@((MarkupString)string.Format(AppStrings.Help_About_Site,
+                            $"<a href=\"{SiteUrl}\" target=\"_blank\" rel=\"noopener\">{SiteHost}</a>"))</p>
+                    </div>
+                    break;
             }
         </div>
     </div>
+
+    <AppCredit />
 </div>
 
 @code {
-    private enum HelpTopic { HowToUse, TimelineAndRewind, Saves }
+    private enum HelpTopic { HowToUse, TimelineAndRewind, Saves, About }
 
-    private static readonly HelpTopic[] Topics = [HelpTopic.HowToUse, HelpTopic.TimelineAndRewind, HelpTopic.Saves];
+    private static readonly HelpTopic[] Topics = [HelpTopic.HowToUse, HelpTopic.TimelineAndRewind, HelpTopic.Saves, HelpTopic.About];
+
+    // The Masterwork project's site, the same for every flavor: help, feedback and the privacy policy.
+    private const string SiteUrl = "https://masterworkapp.com";
+    private const string SiteHost = "masterworkapp.com";
     private HelpTopic _selected = Topics[0];
 
     // Stable internal keys (HelpTopic) drive selection/dispatch; only the displayed label is
@@ -55,6 +72,7 @@
         HelpTopic.HowToUse => AppStrings.Help_Topic_HowToUse,
         HelpTopic.TimelineAndRewind => AppStrings.Help_Topic_TimelineAndRewind,
         HelpTopic.Saves => AppStrings.Help_Topic_Saves,
+        HelpTopic.About => AppStrings.Help_Topic_About,
         _ => throw new ArgumentOutOfRangeException(nameof(topic)),
     };
 }

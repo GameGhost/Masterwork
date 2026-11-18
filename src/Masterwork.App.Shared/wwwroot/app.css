@@ -666,6 +666,18 @@ body {
     color: #666;
 }
 
+/* Signer identity shown in the unrecognized-publisher prompt. The thumbprint is a 64-character hex
+   string with no natural break points, so it needs an explicit wrap rule or it overflows the
+   dialog; monospace makes it practical to compare against an expected value character by character. */
+.mws-signer-details {
+    font-size: 0.85em;
+}
+
+.mws-thumbprint {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
 .mws-save-language {
     font-size: 0.75em;
     color: #999;
@@ -800,6 +812,29 @@ body {
     text-align: center;
 }
 
+/* Version and "Powered by Masterwork" (AppCredit.razor): small, quiet, bottom-right — centred where
+   the screen is too narrow to tuck it in a corner. Its z-index keeps it above a theme's frame. */
+.mws-app-credit {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1;
+    opacity: 0.6;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+@media (max-width: 45.99rem) and (min-height: 30.01rem) {
+    .mws-app-credit {
+        left: 0;
+        right: 0;
+        text-align: center;
+    }
+}
+
 .mws-spinner {
     width: 2rem;
     height: 2rem;
@@ -834,5 +869,98 @@ body {
 @keyframes mws-spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+/* Catalog source view and New Game catalog tiles — structural only; the theme owns the look. */
+.mws-catalog-thumb {
+    flex: 0 0 auto;
+    width: 4rem;
+    height: 4rem;
+    margin-right: 0.75rem;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.mws-catalog-description {
+    margin: 0.25rem 0 0;
+    font-size: 0.9em;
+}
+
+.mws-source-url {
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+/* A source panel stacks its header and listings vertically, where an ordinary .mws-module-row lays
+   its info and button out side by side. */
+.mws-module-row.mws-source-panel {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.mws-source-header,
+.mws-source-listing {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.mws-source-divider {
+    width: 100%;
+    margin: 0.5rem 0;
+    border: none;
+    border-top: 1px solid currentColor;
+}
+
+/* A hidden listing stays readable — it's a state to toggle back, not an error. */
+.mws-source-listing.hidden-listing {
+    opacity: 0.55;
+}
+
+/* Marks a tile the player can download or update rather than play. */
+.mws-tile-badge {
+    position: absolute;
+    top: 0.25rem;
+    left: 0.25rem;
+    padding: 0 0.35rem;
+    font-size: 0.75em;
+}
+
+.mws-module-detail-actions {
+    margin-top: 0.5rem;
+}
+
+/* A page title with a toolbar on the same row. Three columns with the outer two equal keeps the
+   title truly centred however wide the toolbar is — centring it within whatever space the toolbar
+   leaves would shift it off-centre as buttons are added. */
+.mws-screen-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    flex: none;
+}
+
+.mws-screen-header > .mws-screen-title {
+    grid-column: 2;
+}
+
+.mws-screen-header > .mws-module-toolbar {
+    grid-column: 3;
+    justify-self: end;
+}
+
+/* Too narrow for three columns: title over toolbar. */
+@media (max-width: 45.99rem) {
+    .mws-screen-header {
+        grid-template-columns: 1fr;
+    }
+
+    .mws-screen-header > .mws-screen-title,
+    .mws-screen-header > .mws-module-toolbar {
+        grid-column: 1;
+        justify-self: center;
     }
 }

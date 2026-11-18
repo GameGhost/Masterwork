@@ -63,8 +63,20 @@ public sealed record ModuleManifest
     /// <summary>Semver-ish version string.</summary>
     public required string Version { get; init; }
 
-    /// <summary>One of the module types (<c>original_scenario</c>, <c>asset_pack</c>, etc.). Defaults to <c>original_scenario</c>.</summary>
-    public string ModuleType { get; init; } = "original_scenario";
+    /// <summary>
+    /// <c>"module"</c> or <c>"assets"</c> — lets a caller tell which manifest type to parse a
+    /// <c>manifest.yaml</c> as (<see cref="ManifestParser"/> vs <see cref="AssetPackManifestParser"/>)
+    /// before committing to either one. Defaults to <c>"module"</c> when the field is absent.
+    /// </summary>
+    public string ModuleType { get; init; } = "module";
+
+    /// <summary>
+    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.5"</c>), if
+    /// present — optional, unlike the same field on a passage/layout-chrome file
+    /// (<see cref="PassageYamlParser"/>), since every existing manifest predates this field. A value
+    /// that doesn't match <see cref="MwsFormatVersion.Current"/> logs a warning, same as those files.
+    /// </summary>
+    public string? Format { get; init; }
 
     /// <summary>Human-readable description, resolved to the requested/default locale, shown in the Start New Game module detail panel. <c>description:</c> may be a plain string or a localized list, same as <see cref="Title"/>.</summary>
     public string? Description { get; init; }

@@ -71,19 +71,18 @@ public interface IModuleLoader
     /// <paramref name="defaultRestextText"/>'s entries the same way <paramref name="restextOverrideText"/>
     /// merges into <paramref name="restextText"/>'s, before that dictionary is used as the fallback.
     /// </param>
+    /// <param name="dependencyRestexts">
+    /// One entry per dependency asset pack this module declares, in the same order as the module's
+    /// own <c>dependencies:</c> list — see <see cref="DependencyRestext"/> for how key collisions
+    /// between dependencies resolve. Sits <em>underneath</em> everything
+    /// <paramref name="restextText"/>/<paramref name="defaultRestextText"/> already resolve to: a
+    /// key the module's own restext already has always wins; only a key genuinely absent from it
+    /// falls through to a dependency.
+    /// </param>
     LoadedModule LoadFromSources(
         IEnumerable<string> passageYamls, string? variablesYaml = null, string? restextText = null,
         IEnumerable<string>? overridePassageYamls = null, string? restextOverrideText = null,
         IEnumerable<string>? layoutChromeYamls = null, IEnumerable<string>? additionalVariableYamls = null,
-        string? defaultRestextText = null, string? defaultRestextOverrideText = null);
-
-    /// <summary>
-    /// Merges a dependency (typically an asset pack) into <paramref name="module"/> — its passages
-    /// (e.g. a shared onboarding flow, reachable via the <c>module::entrypoint</c> dynamic target)
-    /// and declared variables become part of the result. Entries already present on
-    /// <paramref name="module"/> take precedence over the dependency's on id collision — a module
-    /// can always override a dependency's passage or variable declaration by declaring its own with
-    /// the same name.
-    /// </summary>
-    LoadedModule MergeDependency(LoadedModule module, LoadedModule dependency);
+        string? defaultRestextText = null, string? defaultRestextOverrideText = null,
+        IEnumerable<DependencyRestext>? dependencyRestexts = null);
 }

@@ -26,8 +26,20 @@ public static class ModuleHasher
     /// this is just a (0, total) / (total, total) pair bracketing the single native call, since
     /// crypto.subtle.digest has no intermediate progress of its own to report.
     /// </summary>
-    public static async Task<string> ComputeHashAsync(byte[] bytes, IProgress<(int Done, int Total)>? progress = null, IJSRuntime? js = null)
+    public static async Task<string> ComputeHashAsync(
+        byte[] bytes,
+        IProgress<(int Done, int Total)>? progress = null,
+        IJSRuntime? js = null,
+        BrowserCrypto? crypto = null)
     {
+        if (crypto is not null)
+        {
+            progress?.Report((0, bytes.Length));
+            var hex = await crypto.Sha256HexAsync(bytes);
+            progress?.Report((bytes.Length, bytes.Length));
+            return hex;
+        }
+
         if (js is not null)
         {
             try

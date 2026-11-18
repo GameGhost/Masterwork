@@ -1,0 +1,6 @@
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
+
+@* Version and "Powered by Masterwork", pinned to the bottom of the screen. app.css places it
+   (bottom-right, centred on narrow screens), above any theme frame. *@
+<p class="mws-app-credit">@string.Format(AppStrings.EffectiveCulture, AppStrings.App_Credit, AppVersion.Display)</p>

@@ -6,12 +6,15 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
 
-  <Identity Name="ca.digitalghost.masterwork.app" Publisher="CN=Masterwork" Version="0.0.1.0" />
+  <!-- The placeholder is filled from the flavor's ApplicationId at build time. It must stay a
+       placeholder: MAUI derives an unpackaged app's data folder from this name, so a literal id here
+       would make every flavor share one flavor's settings, saves and modules. -->
+  <Identity Name="maui-package-name-placeholder" Publisher="CN=Masterwork" Version="0.0.1.0" />
 
   <mp:PhoneIdentity PhoneProductId="4418B6C2-5FE0-4FFB-AB40-72876A4EADC4" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>Masterwork</DisplayName>
+    <DisplayName>$placeholder$</DisplayName>
     <PublisherDisplayName>Masterwork</PublisherDisplayName>
     <Logo>$placeholder$.png</Logo>
   </Properties>

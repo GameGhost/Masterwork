@@ -10,9 +10,10 @@
 @inject IModuleStyleInjector StyleInjector
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
+@inject WhiteLabelConfig WhiteLabel
 
 @{ AppSettingsApplier.ReassertCulture(); }
-<PageTitle>Masterwork - My Father's Work</PageTitle>
+<PageTitle>@WhiteLabel.AppName</PageTitle>
 
 @if (State.Session is null)
 {

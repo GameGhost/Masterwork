@@ -27,17 +27,6 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
     private readonly Dictionary<string, string?> _cache = new(StringComparer.Ordinal);
     private IModuleAssetSource? _cachedForAssets;
 
-    // Stand-in for the MFW_Common_Assets dependency pack, which doesn't exist until real asset-pack
-    // support is built. These are small hand-authored placeholder SVGs
-    // (wwwroot/assets/test-pack/), not derived from any copyrighted source — real assets are a
-    // drop-in replacement, same slugs. icon:// only; image:// has no placeholder pack.
-    private static readonly IReadOnlyDictionary<string, string> TestAssetPack = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["village"] = "_content/Masterwork.App.Shared/assets/test-pack/village.svg",
-        ["hospital"] = "_content/Masterwork.App.Shared/assets/test-pack/hospital.svg",
-        ["creepy"] = "_content/Masterwork.App.Shared/assets/test-pack/creepy.svg",
-    };
-
     private const string FallbackIcon = "_content/Masterwork.App.Shared/assets/fallback-icon.svg";
 
     // Checked in order against "assets/{folder}/{slug}{ext}" — modules ship images as plain files
@@ -132,15 +121,21 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         // (populated by IModuleStore.LoadAsync — see LoadedModuleContent). Each IModuleAssetSource
         // resolves directly to whatever URI form suits its own platform (a data: URI on MAUI, a
         // blob: object URL on web) — this resolver doesn't need to know or care which.
-        if (await TryResolveBundleLocalAsync(folder, slug, extensions) is { } url)
+        if (await TryResolveFromSourceAsync(sessionState.Assets, folder, slug, extensions) is { } url)
         {
             return url;
         }
 
-        // Tier 2 (dependency pack) — icon:// only; image:// and font:// have no placeholder pack yet.
-        if (scheme == IconScheme && TestAssetPack.TryGetValue(slug, out var packUrl))
+        // Tier 2 (dependency pack): each declared asset-pack dependency's own assets, in
+        // declaration order — first match wins, same as bundle-local above. This is how a module
+        // that no longer ships its own style/icons/images (moved into a shared pack, e.g.
+        // mwf-common-assets) still resolves them.
+        foreach (var dependency in sessionState.DependencyAssets)
         {
-            return packUrl;
+            if (await TryResolveFromSourceAsync(dependency, folder, slug, extensions) is { } dependencyUrl)
+            {
+                return dependencyUrl;
+            }
         }
 
         // Tier 3 (engine fallback) — icon:// only; an unresolved image:// or font:// yields null
@@ -149,11 +144,11 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         return scheme == IconScheme ? FallbackIcon : null;
     }
 
-    private async Task<string?> TryResolveBundleLocalAsync(string folder, string slug, (string Ext, string MimeType)[] extensions)
+    private static async Task<string?> TryResolveFromSourceAsync(IModuleAssetSource source, string folder, string slug, (string Ext, string MimeType)[] extensions)
     {
         foreach (var (ext, mime) in extensions)
         {
-            var url = await sessionState.Assets.GetAssetUrlAsync($"assets/{folder}/{slug}{ext}", mime);
+            var url = await source.GetAssetUrlAsync($"assets/{folder}/{slug}{ext}", mime);
             if (url is not null)
             {
                 return url;
@@ -163,8 +158,8 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         return null;
     }
 
-    // audio:// resolves through bundle-local only — no dependency-pack placeholder (nothing
-    // sensible stands in for real audio the way TestAssetPack's SVGs do for icons) and no
+    // audio:// tries bundle-local, then each dependency pack in turn (bgm/sfx typically live there
+    // now, e.g. mwf-common-assets — VO stays module-local, since it's scenario-specific) — no
     // engine-fallback tier (unlike icon://'s generic fallback icon, there's no equivalent to "a
     // generic placeholder sound" that wouldn't be actively strange to hear); unresolved means
     // silence, matching image://'s/font://'s own no-fallback behavior.
@@ -177,11 +172,36 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
     // the default" marker beyond its own naming.
     private async Task<string?> TryResolveAudioAsync(string slug)
     {
+        if (await TryResolveAudioFromSourceAsync(sessionState.Assets, slug) is { } bundleLocal)
+        {
+            return bundleLocal;
+        }
+
+        foreach (var dependency in sessionState.DependencyAssets)
+        {
+            if (await TryResolveAudioFromSourceAsync(dependency, slug) is { } dependencyUrl)
+            {
+                return dependencyUrl;
+            }
+        }
+
+        // The one deliberately-missing case this covers today: The Cost of Disease's
+        // GloomyWolvesIntro has no real female VO take — its audio_track still references
+        // audio://vo/gloomywolvesintro_f so the gap is visible and diagnosable, rather than
+        // silently omitting the node. Callers (RenderedAudioTrackView) already degrade
+        // gracefully on a null resolution — disabled controls, 0:00/0:00 — this warning is
+        // purely for anyone reading the log to understand why.
+        _logger.LogWarning("Could not resolve audio asset 'audio://{Slug}' — no matching file in the loaded module's or any dependency asset pack's assets/audio/", slug);
+        return null;
+    }
+
+    private async Task<string?> TryResolveAudioFromSourceAsync(IModuleAssetSource source, string slug)
+    {
         if (sessionState.Language is { } culture)
         {
             foreach (var (ext, mime) in AudioExtensions)
             {
-                var url = await sessionState.Assets.GetAssetUrlAsync($"assets/audio/{slug}.{culture}{ext}", mime);
+                var url = await source.GetAssetUrlAsync($"assets/audio/{slug}.{culture}{ext}", mime);
                 if (url is not null)
                 {
                     return url;
@@ -189,18 +209,6 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
             }
         }
 
-        var bundleLocal = await TryResolveBundleLocalAsync("audio", slug, AudioExtensions);
-        if (bundleLocal is null)
-        {
-            // The one deliberately-missing case this covers today: The Cost of Disease's
-            // GloomyWolvesIntro has no real female VO take — its audio_track still references
-            // audio://vo/gloomywolvesintro_f so the gap is visible and diagnosable, rather than
-            // silently omitting the node. Callers (RenderedAudioTrackView) already degrade
-            // gracefully on a null resolution — disabled controls, 0:00/0:00 — this warning is
-            // purely for anyone reading the log to understand why.
-            _logger.LogWarning("Could not resolve audio asset 'audio://{Slug}' — no matching file in the loaded module's assets/audio/", slug);
-        }
-
-        return bundleLocal;
+        return await TryResolveFromSourceAsync(source, "audio", slug, AudioExtensions);
     }
 }

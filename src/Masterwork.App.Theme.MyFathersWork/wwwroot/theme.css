@@ -191,7 +191,7 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-512x512.png');
+    background-image: url('logo.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -421,7 +421,7 @@ body {
 .mws-splash-logo {
     width: min(60vw, 16rem);
     aspect-ratio: 1;
-    background-image: url('images/myfatherswork-logo-512x512.png');
+    background-image: url('logo.png');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -436,6 +436,13 @@ body {
 .mws-splash-tagline em {
     font-style: normal;
     color: #f2b17b;
+}
+
+/* -- Version / "Powered by" credit (AppCredit.razor) -------------------------------------------------
+ * Keeps app.css's edge placement, which sits on the frame's outer band; the shadow keeps it legible
+ * over the frame art. */
+.mws-app-credit {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .mws-spinner {
@@ -748,13 +755,6 @@ body {
     outline: none;
 }
 
-/* Manage Modules -- longer label than the standard button width was tuned for ("Apply"/"Cancel"/
-   the main menu's own words), so it gets its own wider size rather than wrapping/overflowing.
-   Centered via the footer's own text-align, not a per-button margin. */
-.mws-manage-modules-button.style-btn-brown {
-    width: 10em;
-}
-
 .mws-dialog-footer {
     text-align: center;
     border-top-color: rgba(232, 201, 160, 0.25);
@@ -942,7 +942,8 @@ body {
 }
 
 .mws-module-toolbar .style-btn-brown,
-.mws-upload-button.style-btn-brown {
+.mws-upload-button.style-btn-brown,
+.mws-upload-button.style-btn-green {
     width: 7em;
     font-size: 1.2em;
 }
@@ -1233,7 +1234,8 @@ body {
  * centerElement() landing cleanly on a slot boundary. */
 @media (max-width: 45.99rem) and (min-height: 30.01rem) {
     .mws-module-toolbar .style-btn-brown,
-    .mws-upload-button.style-btn-brown {
+    .mws-upload-button.style-btn-brown,
+    .mws-upload-button.style-btn-green {
         font-size: 1em;
     }
 
@@ -1391,6 +1393,33 @@ body {
     color: #e5e0d8;
 }
 
+/* Rules between a source's listings pick up the silver of the panel's own hub-section border,
+   dimmed so they separate entries without competing with the frame around them. */
+.mws-source-divider {
+    border-top-color: rgba(192, 192, 192, 0.35);
+}
+
+/* The source URL field wears the same input_large art as the setup inputs inside modules
+   (mwf-common-assets' .style-setup-input), so typing an address here looks like typing a town
+   name during setup rather than like a bare browser control. */
+.mws-source-url {
+    padding: 0.6em 0.9em;
+    box-sizing: border-box;
+    background-image: url('images/ui/input_large.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    outline: none;
+    color: #F2B781;
+    font-family: 'Averia Libre', serif;
+    font-size: 1.1em;
+}
+
+.mws-source-url::placeholder {
+    color: rgba(242, 183, 129, 0.45);
+}
+
 .mws-save-actions {
     flex-direction: column;
     align-items: flex-end;
@@ -1443,6 +1472,14 @@ body {
         left: calc(50px + 3.25rem + 1rem);
         right: calc(50px + 8.9rem + 1rem);
         margin: 0;
+    }
+
+    /* A title inside .mws-screen-header already shares its row with the toolbar through that grid,
+       so it stays in flow. Lifting it out as above would size its clearance for Continue's single
+       Import Save button, and a wider toolbar would run under it. */
+    .mws-scenario-screen:has(.mws-module-toolbar) .mws-screen-header > .mws-screen-title {
+        position: static;
+        margin: 0 1rem;
     }
 }
 

@@ -24,9 +24,6 @@ public class ModuleLoaderTests
             - type: 'text'
               value: 'Welcome to the real story.'
             """,
-        ]);
-
-        var onboarding = loader.LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'Onboarding'
@@ -39,8 +36,7 @@ public class ModuleLoaderTests
             """,
         ]);
 
-        var merged = loader.MergeDependency(module, onboarding);
-        var session = new GameSession(merged, masterSeed: 1, startPassageIdOverride: "Onboarding");
+        var session = new GameSession(module, masterSeed: 1, startPassageIdOverride: "Onboarding");
 
         var nav = session.CurrentRender.Actions.OfType<RenderedLink>().Single();
         var result = await session.FollowLinkAsync(nav.Id);
@@ -64,9 +60,6 @@ public class ModuleLoaderTests
             - type: 'text'
               value: 'Welcome to the real story.'
             """,
-        ]);
-
-        var onboarding = loader.LoadFromSources([
             """
             format: 'mws/0.3'
             passage_id: 'Onboarding'
@@ -77,85 +70,9 @@ public class ModuleLoaderTests
             """,
         ]);
 
-        var merged = loader.MergeDependency(module, onboarding);
-        var session = new GameSession(merged, masterSeed: 1, startPassageIdOverride: "Onboarding");
+        var session = new GameSession(module, masterSeed: 1, startPassageIdOverride: "Onboarding");
 
         Assert.Equal("ModuleStart", session.CurrentRender.PassageId);
-    }
-
-    [Fact]
-    public void MergeDependency_AddsDependencyPassagesAndVariables()
-    {
-        var loader = new ModuleLoader();
-
-        var module = loader.LoadFromSources([
-            """
-            format: 'mws/0.3'
-            passage_id: 'ModuleStart'
-            tags:
-            - 'Begins-Here'
-            layout: 'hub'
-            nodes: []
-            """,
-        ]);
-
-        var dependency = loader.LoadFromSources([
-            """
-            format: 'mws/0.3'
-            passage_id: 'Onboarding'
-            layout: 'narration'
-            nodes: []
-            """,
-        ], """
-            standard_variables: []
-            variables:
-              townname:
-                type: 'string'
-                default: 'Sampleton'
-            """);
-
-        var merged = loader.MergeDependency(module, dependency);
-
-        Assert.True(merged.Passages.ContainsKey("ModuleStart"));
-        Assert.True(merged.Passages.ContainsKey("Onboarding"));
-        Assert.True(merged.Variables.ContainsKey("townname"));
-        Assert.Equal("ModuleStart", merged.StartPassageId);
-    }
-
-    [Fact]
-    public void MergeDependency_ModuleOwnDeclarationsWinOnCollision()
-    {
-        var loader = new ModuleLoader();
-
-        var module = loader.LoadFromSources([
-            """
-            format: 'mws/0.3'
-            passage_id: 'Shared'
-            tags:
-            - 'Begins-Here'
-            layout: 'hub'
-            nodes:
-            - type: 'text'
-              value: 'Module version'
-            """,
-        ]);
-
-        var dependency = loader.LoadFromSources([
-            """
-            format: 'mws/0.3'
-            passage_id: 'Shared'
-            layout: 'narration'
-            nodes:
-            - type: 'text'
-              value: 'Dependency version'
-            """,
-        ]);
-
-        var merged = loader.MergeDependency(module, dependency);
-
-        var shared = merged.Passages["Shared"];
-        var text = Assert.IsType<TextNode>(shared.Nodes.Single());
-        Assert.Equal("Module version", text.Value);
     }
 
     // ── app::gameover reserved target ───────────────────────────────────────
@@ -710,6 +627,259 @@ public class ModuleLoaderTests
         Assert.Equal("restext://Missing", text.Value);
     }
 
+    // ── dependency (asset-pack) restext fallback, underneath the module's own ───
+
+    [Fact]
+    public void LoadFromSources_ModuleOwnPreferredKeyWinsOverDependency()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            restextText: "Shared_001=Module's own text\n",
+            dependencyRestexts: [new DependencyRestext("Shared_001=Asset pack text\n", null)]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Module's own text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_ModuleOwnDefaultKeyWinsOverDependencySelected()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            defaultRestextText: "Greeting=Hello\nShared_001=Module's default text\n",
+            dependencyRestexts: [new DependencyRestext("Shared_001=Asset pack selected-locale text\n", null)]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Module's default text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_KeyOnlyInDependencySelectedLocale_ResolvesFromDependency()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            dependencyRestexts: [new DependencyRestext(
+                "Shared_001=Asset pack selected-locale text\n",
+                "Shared_001=Asset pack default-locale text\n")]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Asset pack selected-locale text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_KeyMissingFromDependencySelectedLocale_FallsBackToDependencyDefault()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            // RestextText is null — the asset pack doesn't ship this locale at all, per
+            // "an asset pack may support more locales than the module, but not vice versa": this
+            // is the mirror case, an asset pack missing a locale the module resolved to.
+            dependencyRestexts: [new DependencyRestext(null, "Shared_001=Asset pack default-locale text\n")]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Asset pack default-locale text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_KeyMissingEverywhere_StillWarnsAndLeavesRawUri()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Missing'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            dependencyRestexts: [new DependencyRestext(
+                "Shared_001=Asset pack text\n", "Shared_001=Asset pack default text\n")]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("restext://Missing", text.Value);
+        Assert.Contains(module.Warnings.Items, w => w.Message.Contains("Missing"));
+    }
+
+    [Fact]
+    public void LoadFromSources_TwoDependencies_BothContributeDistinctKeys()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://FromPackOne'
+                - type: 'break'
+                - type: 'text'
+                  value: 'restext://FromPackTwo'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n",
+            dependencyRestexts:
+            [
+                new DependencyRestext("FromPackOne=Pack one's text\n", null),
+                new DependencyRestext("FromPackTwo=Pack two's text\n", null),
+            ]);
+
+        var texts = module.Passages["Start"].Nodes.OfType<TextNode>().ToList();
+        Assert.Equal("Pack one's text", texts[0].Value);
+        Assert.Equal("Pack two's text", texts[1].Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_TwoDependencies_LaterDependencyWinsOnSharedKey()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            dependencyRestexts:
+            [
+                new DependencyRestext("Shared_001=First pack's text\n", null),
+                new DependencyRestext("Shared_001=Second pack's text\n", null),
+            ]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Second pack's text", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_TwoDependencies_EarlierDependencySelectedLocaleOutranksLaterDependencyDefaultLocale()
+    {
+        // Pins the two-pass merge order: pack two only has this key in ITS OWN default locale
+        // (e.g. the player's selected locale isn't one it ships), while pack one genuinely has it
+        // in the player's selected locale. Pack one's real translation must win even though pack
+        // two is declared later — a naive one-dependency-at-a-time merge would get this backwards,
+        // since pack two's default-locale write would land after pack one's selected-locale write.
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Shared_001'
+                """,
+            ],
+            dependencyRestexts:
+            [
+                new DependencyRestext("Shared_001=Pack one's real translation\n", "Shared_001=Pack one's default\n"),
+                new DependencyRestext(null, "Shared_001=Pack two's default (wrong language)\n"),
+            ]);
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("Pack one's real translation", text.Value);
+    }
+
+    [Fact]
+    public void LoadFromSources_NoDependencyRestextGiven_PreservesOldBehavior_RawUriForMissingKey()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            [
+                """
+                format: 'mws/0.5'
+                passage_id: 'Start'
+                tags:
+                - 'Begins-Here'
+                layout: 'hub'
+                nodes:
+                - type: 'text'
+                  value: 'restext://Missing'
+                """,
+            ],
+            restextText: "Greeting=Bonjour\n");
+
+        var text = Assert.IsType<TextNode>(module.Passages["Start"].Nodes.Single());
+        Assert.Equal("restext://Missing", text.Value);
+    }
+
     [Fact]
     public void LoadFromDirectory_RestextOverrideFile_MergedByConvention()
     {
@@ -797,6 +967,51 @@ public class ModuleLoaderTests
 
         var text = Assert.IsType<TextNode>(module.LayoutChrome["hub_early"].Header.Single());
         Assert.Equal("Resolved chrome text", text.Value);
+    }
+
+    // A dependency asset pack's layout chrome needs no new LoadFromSources parameter — the caller
+    // just concatenates dependency-then-module layout YAML into one list, relying on the existing
+    // "later entry wins on matching layout_id" dictionary assignment: the module overrides a
+    // matching id, and a dependency-only id passes through untouched.
+    [Fact]
+    public void LoadFromSources_DependencyThenModuleLayoutChromeConcatenated_ModuleWinsOnCollision()
+    {
+        var loader = new ModuleLoader();
+
+        var module = loader.LoadFromSources(
+            passageYamls: [],
+            layoutChromeYamls:
+            [
+                // Dependency (asset pack) layout chrome, listed first.
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_shared'
+                header:
+                - type: 'text'
+                  value: 'Asset pack chrome'
+                """,
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_asset_only'
+                header:
+                - type: 'text'
+                  value: 'Only the asset pack defines this one'
+                """,
+                // Module's own layout chrome, listed second — wins on a matching layout_id.
+                """
+                format: 'mws/0.4'
+                layout_id: 'hub_shared'
+                header:
+                - type: 'text'
+                  value: 'Module chrome'
+                """,
+            ]);
+
+        Assert.Equal(2, module.LayoutChrome.Count);
+        var overridden = Assert.IsType<TextNode>(module.LayoutChrome["hub_shared"].Header.Single());
+        Assert.Equal("Module chrome", overridden.Value);
+        var dependencyOnly = Assert.IsType<TextNode>(module.LayoutChrome["hub_asset_only"].Header.Single());
+        Assert.Equal("Only the asset pack defines this one", dependencyOnly.Value);
     }
 
     [Fact]

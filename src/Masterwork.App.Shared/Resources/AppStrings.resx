@@ -75,7 +75,9 @@
   <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
   <data name="Common_No" xml:space="preserve"><value>No</value></data>
 
-  <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;My Father's Work&lt;/em&gt;.</value></data>
+  <data name="App_Description" xml:space="preserve"><value>A community companion app for {0}, powered by Masterwork.</value></data>
+  <data name="MainMenu_Tagline" xml:space="preserve"><value>A community companion app for &lt;em&gt;{0}&lt;/em&gt;.</value></data>
+  <data name="App_Credit" xml:space="preserve"><value>v{0} · Powered by Masterwork</value></data>
   <data name="MainMenu_Help" xml:space="preserve"><value>Help</value></data>
   <data name="MainMenu_Achievements" xml:space="preserve"><value>Endings</value></data>
   <data name="MainMenu_Options" xml:space="preserve"><value>Settings</value></data>
@@ -88,11 +90,15 @@
   <data name="Help_Topic_TimelineAndRewind" xml:space="preserve"><value>Timeline and rewind</value></data>
   <data name="Help_Topic_Saves" xml:space="preserve"><value>Saves</value></data>
   <data name="Help_HowToUse_Title" xml:space="preserve"><value>How to Use Masterwork</value></data>
-  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork plays community-authored scenarios for &lt;em&gt;My Father's Work&lt;/em&gt;. Start a module from "Start New Game," follow the passages as they're presented, and use the timeline scrubber to review — not undo — anything you've already decided.</value></data>
+  <data name="Help_HowToUse_Body" xml:space="preserve"><value>Masterwork plays community-authored scenarios for &lt;em&gt;{0}&lt;/em&gt;. Start a module from "Start New Game," follow the passages as they're presented, and use the timeline scrubber to review — not undo — anything you've already decided.</value></data>
   <data name="Help_TimelineRewind_Title" xml:space="preserve"><value>Timeline and Rewind</value></data>
   <data name="Help_TimelineRewind_Body" xml:space="preserve"><value>Stepping back lets you review what happened without changing it — links and inputs disable while you're looking at the past. "Resume from here" discards anything after the point you're viewing; "Return to present" just brings you back without discarding it.</value></data>
   <data name="Help_Saves_Title" xml:space="preserve"><value>Saves</value></data>
   <data name="Help_Saves_Body" xml:space="preserve"><value>Each module keeps one autosave that updates as you play. Quitting from the in-game Options menu offers to save your progress under a name of your choosing before returning to the Continue list.</value></data>
+  <data name="Help_Topic_About" xml:space="preserve"><value>About</value></data>
+  <data name="Help_About_Title" xml:space="preserve"><value>About</value></data>
+  <data name="Help_About_Body" xml:space="preserve"><value>This is a free, unofficial community companion app for &lt;em&gt;{0}&lt;/em&gt;, powered by Masterwork. It isn't affiliated with or endorsed by {1}.</value></data>
+  <data name="Help_About_Site" xml:space="preserve"><value>Help, feedback and the privacy policy are at {0}.</value></data>
 
   <data name="Achievements_PageTitle" xml:space="preserve"><value>Masterwork — Achievements</value></data>
   <data name="Achievements_Tab_Achievements" xml:space="preserve"><value>Achievements</value></data>
@@ -102,11 +108,60 @@
   <data name="Achievements_NoMemories" xml:space="preserve"><value>No completed sessions yet. Reaching an ending records a Memory here.</value></data>
 
   <data name="ManageModules_PageTitle" xml:space="preserve"><value>Masterwork — Manage Modules</value></data>
-  <data name="ManageModules_Heading" xml:space="preserve"><value>Manage Modules</value></data>
+  <data name="ManageModules_Heading" xml:space="preserve"><value>Installed</value></data>
+  <data name="ManageModules_AssetPackLabel" xml:space="preserve"><value>Asset pack</value></data>
+
+  <data name="CatalogSources_PageTitle" xml:space="preserve"><value>Masterwork — Module Sources</value></data>
+  <data name="CatalogSources_Heading" xml:space="preserve"><value>Sources</value></data>
+  <data name="CatalogSources_Manage" xml:space="preserve"><value>Sources</value></data>
+  <data name="CatalogSources_Add" xml:space="preserve"><value>Add source</value></data>
+  <data name="CatalogSources_Remove" xml:space="preserve"><value>Remove source</value></data>
+  <data name="CatalogSources_AddFailedTitle" xml:space="preserve"><value>Couldn't add source</value></data>
+  <data name="CatalogSources_UrlPlaceholder" xml:space="preserve"><value>https://example.com/catalog.json</value></data>
+  <data name="CatalogSources_BuiltIn" xml:space="preserve"><value>Built in</value></data>
+  <data name="CatalogSources_Hide" xml:space="preserve"><value>Hide</value></data>
+  <data name="CatalogSources_Show" xml:space="preserve"><value>Show</value></data>
+  <data name="CatalogSources_SupersededHere" xml:space="preserve"><value>Another source supplies this</value></data>
+  <data name="CatalogSources_UnreachableTitle" xml:space="preserve"><value>Unavailable source</value></data>
+  <data name="CatalogSources_Unreachable" xml:space="preserve"><value>Couldn't be reached. Its modules aren't listed until it responds again.</value></data>
+  <data name="CatalogSources_NotTrusted" xml:space="preserve"><value>Not from a trusted publisher — nothing here can be installed.</value></data>
+  <data name="CatalogSources_ErrorNotAUrl" xml:space="preserve"><value>That isn't a valid https address.</value></data>
+  <data name="CatalogSources_ErrorAlreadyAdded" xml:space="preserve"><value>That source is already in the list.</value></data>
+  <data name="CatalogSources_ErrorUnreachable" xml:space="preserve"><value>Nothing answered at that address.</value></data>
+  <data name="CatalogSources_ErrorBlockedByBrowser" xml:space="preserve"><value>Your browser couldn't load that source. Its host has to allow browser access; the same address may work in the desktop or mobile app.</value></data>
+  <data name="CatalogSources_ErrorNotACatalog" xml:space="preserve"><value>That address didn't return a module list this app understands.</value></data>
+  <data name="CatalogSources_ErrorNotTrusted" xml:space="preserve"><value>That source isn't signed by a publisher this app trusts, so nothing could be installed from it.</value></data>
+
+  <data name="CatalogSources_Empty" xml:space="preserve"><value>This source doesn't publish any modules yet.</value></data>
+  <data name="CatalogInstall_Downloading" xml:space="preserve"><value>Downloading '{0}'… {1}%</value></data>
+  <data name="CatalogInstall_Verifying" xml:space="preserve"><value>Verifying '{0}'… {1}%</value></data>
+  <data name="CatalogInstall_Installing" xml:space="preserve"><value>Installing '{0}'… {1}%</value></data>
   <data name="ManageModules_ConfirmTitle" xml:space="preserve"><value>Delete this module?</value></data>
   <data name="ManageModules_ConfirmBody" xml:space="preserve"><value>Also delete this module's saves?</value></data>
   <data name="ManageModules_DeleteWithSaves" xml:space="preserve"><value>Delete module + saves</value></data>
   <data name="ManageModules_DeleteModuleOnly" xml:space="preserve"><value>Delete module only</value></data>
+
+  <data name="ManageModules_UploadAssetPack" xml:space="preserve"><value>Add</value></data>
+  <data name="ManageModules_AssetPackSource_Auto" xml:space="preserve"><value>Automatic</value></data>
+  <data name="ManageModules_AssetPackSource_Manual" xml:space="preserve"><value>Manual</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmTitle" xml:space="preserve"><value>Delete this asset pack?</value></data>
+  <data name="ManageModules_AssetPackDeleteConfirmBody" xml:space="preserve"><value>No installed module depends on this asset pack.</value></data>
+  <data name="ManageModules_AssetPackHashMismatchTitle" xml:space="preserve"><value>Replace installed asset pack?</value></data>
+  <data name="ManageModules_AssetPackHashMismatchBody" xml:space="preserve"><value>A different file is already installed under this same id and version. Replacing it may affect modules that depend on it.</value></data>
+  <data name="ManageModules_InstallAnyway" xml:space="preserve"><value>Install anyway</value></data>
+  <data name="ManageModules_AssetPackUploadError_NoManifest" xml:space="preserve"><value>This file has no manifest.yaml and can't be installed.</value></data>
+  <data name="ManageModules_AssetPackUploadError_Generic" xml:space="preserve"><value>Couldn't install that asset pack: {0}</value></data>
+  <data name="ManageModules_UnsignedTitleModule" xml:space="preserve"><value>Unsigned module</value></data>
+  <data name="ManageModules_UnsignedTitleAssetPack" xml:space="preserve"><value>Unsigned asset pack</value></data>
+  <data name="ManageModules_UnsignedBody" xml:space="preserve"><value>'{0}' isn't signed. Unable to verify content integrity or publisher. Install at your own risk.</value></data>
+  <data name="ManageModules_UnrecognizedSignerTitle" xml:space="preserve"><value>Unrecognized publisher</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyModule" xml:space="preserve"><value>This module was created by '{0}'. Install if you trust the publisher.</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyAssetPack" xml:space="preserve"><value>This asset pack was created by '{0}'. Install if you trust the publisher.</value></data>
+  <data name="ManageModules_ThumbprintLabel" xml:space="preserve"><value>Thumbprint</value></data>
+  <data name="ManageModules_InstallOnce" xml:space="preserve"><value>Install once</value></data>
+  <data name="ManageModules_TrustAndInstall" xml:space="preserve"><value>Trust publisher &amp; install</value></data>
+  <data name="ManageModules_SignatureBlockedTitle" xml:space="preserve"><value>Signature check failed</value></data>
+  <data name="ManageModules_SignatureBlockedBody" xml:space="preserve"><value>This package's signature doesn't match its contents — it may have been modified or damaged after it was signed. It can't be installed. Try downloading it again from its original source.</value></data>
 
   <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continue</value></data>
   <data name="ContinueList_Heading" xml:space="preserve"><value>Continue</value></data>
@@ -132,11 +187,14 @@
   <data name="ContinueList_ImportError_Generic" xml:space="preserve"><value>Couldn't import that save: {0}</value></data>
 
   <data name="StartNewGame_PageTitle" xml:space="preserve"><value>Masterwork — Start New Game</value></data>
-  <data name="StartNewGame_DownloadModules" xml:space="preserve"><value>Download</value></data>
-  <data name="StartNewGame_DownloadModulesHint" xml:space="preserve"><value>Coming soon — needs a hosted module registry (Phase 6)</value></data>
   <data name="StartNewGame_UploadModule" xml:space="preserve"><value>Add</value></data>
   <data name="StartNewGame_SelectPrompt" xml:space="preserve"><value>Select a module to get started.</value></data>
   <data name="StartNewGame_Play" xml:space="preserve"><value>Play</value></data>
+  <data name="StartNewGame_AvailableBadge" xml:space="preserve"><value>Available</value></data>
+  <data name="StartNewGame_UpdateBadge" xml:space="preserve"><value>Update</value></data>
+  <data name="StartNewGame_Download" xml:space="preserve"><value>Download</value></data>
+  <data name="StartNewGame_UpdateTo" xml:space="preserve"><value>Update to v{0}</value></data>
+  <data name="StartNewGame_SourceNotTrusted" xml:space="preserve"><value>This module's source isn't trusted, so it can't be installed.</value></data>
   <data name="StartNewGame_ConflictTitle" xml:space="preserve"><value>Resume in-progress session?</value></data>
   <data name="StartNewGame_ConflictBody" xml:space="preserve"><value>{0} already has a session in progress.</value></data>
   <data name="StartNewGame_DiscardPrevious" xml:space="preserve"><value>Restart</value></data>
@@ -157,6 +215,8 @@
   <data name="StartNewGame_ErrorFallback" xml:space="preserve"><value>Something went wrong loading this screen. Please try again.</value></data>
   <data name="StartNewGame_UploadError_NoManifest" xml:space="preserve"><value>This file has no manifest.yaml and can't be installed.</value></data>
   <data name="StartNewGame_UploadError_Generic" xml:space="preserve"><value>Couldn't install that module: {0}</value></data>
+  <data name="StartNewGame_UploadError_MissingAssetPack" xml:space="preserve"><value>Asset pack '{0}' v{1} must be uploaded first.</value></data>
+  <data name="StartNewGame_MissingAssetPackTitle" xml:space="preserve"><value>Asset Pack Required</value></data>
   <data name="StartNewGame_Installing" xml:space="preserve"><value>Installing…</value></data>
   <data name="StartNewGame_InstallingPercent" xml:space="preserve"><value>Installing… {0}%</value></data>
   <data name="StartNewGame_Verifying" xml:space="preserve"><value>Verifying…</value></data>
@@ -172,7 +232,7 @@
   <data name="OptionsDialog_PreferredModuleLanguage" xml:space="preserve"><value>Preferred Module Language</value></data>
   <data name="OptionsDialog_NoPreference" xml:space="preserve"><value>No preference</value></data>
   <data name="OptionsDialog_ModuleLanguageHint" xml:space="preserve"><value>Only applies if the module you're playing supports this language — otherwise it falls back to the module's own default.</value></data>
-  <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Manage Modules</value></data>
+  <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Manage</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quit</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quit?</value></data>
   <data name="OptionsDialog_QuitConfirmBody" xml:space="preserve"><value>Do you want to end your game now?</value></data>
