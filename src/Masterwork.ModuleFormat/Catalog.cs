@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Masterwork.ModuleFormat;
 
 /// <summary>Player-count range for a catalog entry, mirroring <see cref="ModuleInfo"/>'s own fields.</summary>
@@ -108,6 +110,7 @@ public sealed record CatalogDocument
     /// resolved and installed alongside it — they're never browsed or installed on their own, so
     /// anything listing content for a player wants this rather than <see cref="Entries"/>.
     /// </summary>
+    [JsonIgnore]
     public IEnumerable<CatalogEntry> Modules => Entries.Where(e => e.Type == "module");
 }
 

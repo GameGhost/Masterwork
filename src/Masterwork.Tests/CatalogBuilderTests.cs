@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Masterwork.ModuleFormat;
 
 namespace Masterwork.Tests;
@@ -216,6 +217,22 @@ public class CatalogBuilderTests
 
         // Normalized to UTC with whole seconds, not the writer's own offset or tick precision.
         Assert.Contains("\"updated\": \"2026-09-15T12:30:00Z\"", json);
+    }
+
+    [Fact]
+    public void Write_ListsEachEntryOnce()
+    {
+        var built = CatalogBuilder.Build("Test Source",
+        [
+            new CatalogBuilder.PackageInput("v1.2.3/test.mwm", Package(ModuleManifestYaml)),
+            new CatalogBuilder.PackageInput("v0.1.0/test.mwassets", Package(AssetPackManifestYaml)),
+        ]);
+
+        using var json = JsonDocument.Parse(CatalogParser.Write(built.Catalog));
+
+        // CatalogDocument.Modules is a filtered view of entries, not part of the format.
+        Assert.Equal(["format", "title", "updated", "entries"],
+            json.RootElement.EnumerateObject().Select(p => p.Name));
     }
 
     [Fact]
