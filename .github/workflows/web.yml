@@ -5,7 +5,7 @@ name: Deploy web app
 
 on:
   push:
-    branches: [main, phase6]
+    branches: [main]
     paths:
       - "src/**"
       - "!src/Masterwork.App/**"
@@ -31,8 +31,8 @@ concurrency:
 env:
   FLAVOR: MyFathersWork
   CONTENT_REPO: GameGhost/Masterwork-Modules
-  # Where the published catalog lives. Switch to main when Masterwork-Modules merges it there.
-  CONTENT_REF: phase6
+  # Where the published catalog lives.
+  CONTENT_REF: main
   # Azure Static Web Apps Free plan's per-environment limit.
   SIZE_LIMIT_BYTES: "262144000"
   DOTNET_NOLOGO: "true"

@@ -2,7 +2,7 @@ name: Deploy information site
 
 on:
   push:
-    branches: [main, phase6]
+    branches: [main]
     paths: ["site/**", ".github/workflows/site.yml"]
   workflow_dispatch:
 
