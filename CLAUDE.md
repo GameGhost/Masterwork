@@ -25,7 +25,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Web.Static/             Standalone Blazor WebAssembly head — the same client as plain static files, for Azure Static Web Apps (production)
 ├── src/MasterWork.App.Web.StaticPages/        Build-time tool: writes Web.Static's per-flavor index.html and manifest.json (never shipped)
 ├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
-├── src/MasterWork.Editor/                     WPF module designer (Phase 8 placeholder — no real work started; see masterwork-plan-rev23.md §3)
+├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs)
 ├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
 └── src/MasterWork.Tests/                      xUnit test suite
@@ -183,7 +183,7 @@ thumbprint) plus whatever the theme's `IThemeModule.ConfigureServices` adds (`IM
   credit (`Chrome/AppCredit.razor`) on the main menu, help screen and web splash — placed at the screen edge by
   `app.css`, above any theme frame. A **store listing title** is a separate
   thing that does carry "Masterwork", to tell the app apart from other offerings for the same game —
-  see the Phase 6 design's store-readiness section; don't fold it into `AppName`.
+  see `docs/store-listing.md`; don't fold it into `AppName`.
 - **Flavor-specific text lives in `WhiteLabelConfig`**, not in markup or resx. Resx strings that
   mention the game take it as `{0}` (HTML-encode it first when the string is rendered as markup).
   The web head's PWA manifest is served from config (`WebAppManifest.cs`), not a static file.
@@ -330,4 +330,21 @@ Keep these files updated as the project evolves:
 - `docs/mws-format-latest.md` — format spec (see versioning protocol above)
 - `docs/extractor.md` — extractor usage and pipeline description
 - `docs/engine.md` — session/timeline model, seeded randomness, and the popup sandbox-transaction mechanism (GameSession/VariableStore/SessionPrng)
+- `docs/adr/` — architecture decision records; add one when a hard-to-reverse, non-obvious trade-off is made
 - `CLAUDE.md` — this file; update when architecture decisions change
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in this repo, via `gh`. Work that spans Masterwork and Masterwork-Modules gets a parent issue in `GameGhost/Masterwork` with a child issue per repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
