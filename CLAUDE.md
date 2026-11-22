@@ -331,3 +331,19 @@ Keep these files updated as the project evolves:
 - `docs/extractor.md` — extractor usage and pipeline description
 - `docs/engine.md` — session/timeline model, seeded randomness, and the popup sandbox-transaction mechanism (GameSession/VariableStore/SessionPrng)
 - `CLAUDE.md` — this file; update when architecture decisions change
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues in this repo, via `gh`. Work that spans Masterwork and Masterwork-Modules gets a parent issue in `GameGhost/Masterwork` with a child issue per repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
