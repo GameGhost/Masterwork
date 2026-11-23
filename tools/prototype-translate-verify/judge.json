@@ -1,0 +1,282 @@
+[
+  {
+    "id": "NobodyFigures_004",
+    "verdict": "pass",
+    "reason": "Angry Mob 'Marker' is rendered 'jeton' while Suspicion stays 'marqueur'; official wording, same component, kept."
+  },
+  {
+    "id": "Town_Paradox",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "WhoopsUtopian_002",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Heading_KnowledgeBonus",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ATOW_End8_004",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "FinalBattleTime_002",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TriggerParadox_003",
+    "verdict": "fail: typo",
+    "reason": "Official text misspells 'exaltation' as 'exalatation'.",
+    "fix": "Libre des pressions du quotidien et savourant l'exaltation des connaissances des rouages internes de l'univers, j'allais à nouveau de l'avant!"
+  },
+  {
+    "id": "Narrative_SpiritedGroupCitizens",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "RumorD2_001",
+    "verdict": "pass",
+    "reason": "Official paraphrase shifts 'silenced awe' to worry ('l'inquiéter') and drops 'frilly'; narration in the verify bucket, so kept."
+  },
+  {
+    "id": "TriggerParadox_004",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "SecretParadoxBonus_003",
+    "verdict": "fail: integrity",
+    "reason": "Spaces lost after {icon:s3_paradoxtoken} and after **4 PV**, which the English has.",
+    "fix": "Le ou les joueurs avec le plus de jetons {icon:s3_paradoxtoken} sur leurs Expériences gagnent **4 PV** et peuvent immédiatement faire progresser gratuitement d'une case leur piste du Journal qui a le moins progressé (_s'il y en a plusieurs, ils peuvent choisir_)."
+  },
+  {
+    "id": "ResolutionofEvent_003",
+    "verdict": "fail: integrity",
+    "reason": "Space lost after {playtxt} (English has '{playtxt} aristocratic'), so the placeholder runs into 'financiers'.",
+    "fix": "Se pouvait-il que j'aie sous-estimé toute l'étendue de leur ignorance? Comment se faisait-il que même avec la pression des {playtxt} financiers de l'aristocratie, ils soient restés aussi craintifs et défiants?"
+  },
+  {
+    "id": "Reign7_007",
+    "verdict": "fail: integrity",
+    "reason": "Stray space just inside the opening italic marker and a lost space after {crownR} (English has '{crownR} Choose').",
+    "fix": "_Cela aura pour effet de : {crownR} Choisissez-vous un titre qui complètera votre nom pour le reste de la partie._"
+  },
+  {
+    "id": "Blame1c_003",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Warning2_030",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ATOW_End5_019",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ATOW_End4_002",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "MilitaryYes_007",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ATOW_End7_011",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ReignHUB_005",
+    "verdict": "pass",
+    "reason": "Infinitive matches the official hub option list; icon corrected to creepy_icon per English."
+  },
+  {
+    "id": "AdvancedWeaponryIntro_006",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "RumorIngredient_003",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ParadoxExReminder_004",
+    "verdict": "pass",
+    "reason": "'Ces jetons' works after the icon that precedes this key; the official's 'jetons {icon}' order can't be kept."
+  },
+  {
+    "id": "AfternoonTeaResolutionNAY_005",
+    "verdict": "pass",
+    "reason": "YAY matches the English source; 'Armement avancé' for Advanced Weaponry still needs confirming against the rulebook."
+  },
+  {
+    "id": "Martial1_007",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Blame1b_007",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "WarningIntro_001",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TimeTravelintro1_001",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Directive_MustFlipToSeparatist",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Heading_BigBrother",
+    "verdict": "pass",
+    "reason": "'Still English' is correct: Big Brother is the established French form of the Orwell reference."
+  },
+  {
+    "id": "DuelRules1_008",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Round_EndOfRoundActions_Rule",
+    "verdict": "pass",
+    "reason": "'actions de fin de manche' drops the article of the termbase's 'fin de la manche' but keeps the mandated 'manche'; natural in a compound."
+  },
+  {
+    "id": "Reign7c_006",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TimeTravel_011",
+    "verdict": "pass",
+    "reason": "Same 'actions de fin de manche' compound as Round_EndOfRoundActions_Rule; the rest follows the termbase example exactly."
+  },
+  {
+    "id": "NameEntryC_001",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ParadoxTimeRandom_029",
+    "verdict": "pass",
+    "reason": "'ne… que' adds a slight 'only', which fits the downplaying tone; nothing of substance changes."
+  },
+  {
+    "id": "ResistEnd2_005",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TimeEnd2_001",
+    "verdict": "pass",
+    "reason": "Feminine 'réparée' correctly agrees with the Time Machine (la machine) from context."
+  },
+  {
+    "id": "RumorD1_006",
+    "verdict": "pass",
+    "reason": "'caserne' for Barracks still needs checking against the rulebook's board-space name."
+  },
+  {
+    "id": "ATimeofWarIntro_002",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Setup_TownName_Title",
+    "verdict": "fail: typo",
+    "reason": "French titles capitalize only the first word, so the English title case 'Village' should be lowercase (no proper noun here).",
+    "fix": "Le village"
+  },
+  {
+    "id": "Setup_TownName_Intro",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Setup_PlayerCount_Four",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Setup_NameEntry_LabelC",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Setup_Greeting_2",
+    "verdict": "pass",
+    "reason": "The in-story letter names the game, so the termbase French title applies (the app name rule doesn't)."
+  },
+  {
+    "id": "Common_Resume",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "CatalogSources_ErrorUnreachable",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ManageModules_UnsignedBody",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ManageModules_UnrecognizedSignerBodyModule",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TimelineScrubber_CurrentLabel",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ContinueList_ResumeAnyway",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "Help_Topic_TimelineAndRewind",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "TimelineScrubber_ResumeConfirmTitle",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ContinueList_ModuleMissing",
+    "verdict": "pass",
+    "reason": ""
+  },
+  {
+    "id": "ContinueList_ModuleMissingTitle",
+    "verdict": "pass",
+    "reason": ""
+  }
+]

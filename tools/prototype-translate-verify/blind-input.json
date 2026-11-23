@@ -1,0 +1,332 @@
+[
+  {
+    "id": "NobodyFigures_004",
+    "surface": "a-time-of-war",
+    "passage": "NobodyFigures",
+    "fr": "Retirez le marqueur Suspicion et le jeton {icon:angrymob_icon} de la piste {icon:creepy_icon}. Prenez le jeton {figure} et placez-le sur la case **{accolade}** de la piste {icon:creepy_icon}."
+  },
+  {
+    "id": "Town_Paradox",
+    "surface": "a-time-of-war",
+    "passage": "TimeEnd1",
+    "fr": "Paradoxe"
+  },
+  {
+    "id": "WhoopsUtopian_002",
+    "surface": "a-time-of-war",
+    "passage": "WhoopsUtopian",
+    "fr": "Bien que la découverte du journal de mes parents ait été en soi quelque chose d'extraordinaire, je ne me doutais pas que la véritable révélation se produirait quelques semaines plus tard alors que je parcourais ces pages qui m'avaient été léguées. En lisant ces lignes, vous imaginez sans doute que ma mémoire me jouait des tours ou que je n'avais pas fait preuve d'une rigueur suffisante en étudiant ces pages brunies enfermées dans le laboratoire de la cave, mais je vous jure sur mon sang que c'est vrai."
+  },
+  {
+    "id": "Heading_KnowledgeBonus",
+    "surface": "a-time-of-war",
+    "passage": "TakeSides2",
+    "fr": "**Bonus de Connaissances**"
+  },
+  {
+    "id": "ATOW_End8_004",
+    "surface": "a-time-of-war",
+    "passage": "ATOW-End8",
+    "fr": "Bien qu'en théorie commode, j'admets volontiers que la transformation des soldats ennemis en biens consommables était une pratique bien regrettable qui peut potentiellement en révulser plus d'un et leur faire rejeter cet ouvrage."
+  },
+  {
+    "id": "FinalBattleTime_002",
+    "surface": "a-time-of-war",
+    "passage": "FinalBattleTime",
+    "fr": "Malgré notre technologie d'armement supérieure et une réinterprétation avant-gardiste de l'éthique des conflits, certains pays voisins refusaient encore de se soumettre. Les généraux avaient préparé une ultime offensive qui allait déterminer l'issue de la guerre et si ce glorieux empire allait régner sur la création."
+  },
+  {
+    "id": "TriggerParadox_003",
+    "surface": "a-time-of-war",
+    "passage": "TriggerParadox",
+    "fr": "Libre des pressions du quotidien et savourant l'exalatation des connaissances des rouages internes de l'univers, j'allais à nouveau de l'avant!"
+  },
+  {
+    "id": "Narrative_SpiritedGroupCitizens",
+    "surface": "a-time-of-war",
+    "passage": "RumorD",
+    "fr": "Un groupe de citoyens animés et impliqués."
+  },
+  {
+    "id": "RumorD2_001",
+    "surface": "a-time-of-war",
+    "passage": "RumorD2",
+    "fr": "J'avais beau essayer d'engager la conversation, l'aristocrate m'ignorait. Qu'est-ce qui pouvait à ce point l'inquiéter dans ce lieu officiel miteux? Avec un certain trouble, j'ai récupéré mon pardessus pour me préparer à partir. "
+  },
+  {
+    "id": "TriggerParadox_004",
+    "surface": "a-time-of-war",
+    "passage": "TriggerParadox",
+    "fr": "Gagnez **{_rnd_TriggerParadox_0} PV** et un cube Connaissances de votre choix."
+  },
+  {
+    "id": "SecretParadoxBonus_003",
+    "surface": "a-time-of-war",
+    "passage": "SecretParadoxBonus",
+    "fr": "Le ou les joueurs avec le plus de jetons {icon:s3_paradoxtoken}sur leurs Expériences gagnent **4 PV**et peuvent immédiatement faire progresser gratuitement d'une case leur piste du Journal qui a le moins progressé (_s'il y en a plusieurs, ils peuvent choisir_)."
+  },
+  {
+    "id": "ResolutionofEvent_003",
+    "surface": "a-time-of-war",
+    "passage": "ResolutionofEvent",
+    "fr": "Se pouvait-il que j'aie sous-estimé toute l'étendue de leur ignorance? Comment se faisait-il que même avec la pression des {playtxt}financiers de l'aristocratie, ils soient restés aussi craintifs et défiants?"
+  },
+  {
+    "id": "Reign7_007",
+    "surface": "a-time-of-war",
+    "passage": "Reign7",
+    "fr": "_ Cela aura pour effet de : {crownR}Choisissez-vous un titre qui complètera votre nom pour le reste de la partie._"
+  },
+  {
+    "id": "Blame1c_003",
+    "surface": "a-time-of-war",
+    "passage": "Blame1c",
+    "fr": "J'ai été frappé d'une **soudaine épiphanie!**"
+  },
+  {
+    "id": "Warning2_030",
+    "surface": "a-time-of-war",
+    "passage": "Warning2",
+    "fr": "Soudain, se réverbérant sur les murs de pierre, un bruit de tonnerre a brisé le silence. Au loin, nous avons aperçu des bêtes immenses de l'ère mésozoïque parcourir les plaines poussiéreuses. Le tyrannosaure traquait ses proies, sa tête scintillant comme une statue de bronze. Quelques instants plus tard, un rayon laser aveuglant a jailli d'une de ses orbites, isolant un brachiosaure solitaire du reste du troupeau avant de le couper en deux. Tandis que la menace biomécanique mastiquait son repas fraîchement calciné, nous nous sommes accordés sur le fait que cet environnement serait probablement un peu trop hostile pour continuer nos expériences."
+  },
+  {
+    "id": "ATOW_End5_019",
+    "surface": "a-time-of-war",
+    "passage": "ATOW-End5",
+    "fr": "J'ai aujourd'hui une passion d'un autre genre et ce chapitre au sujet de nos rivalités est clos. Et il était temps; c'est l'heure du thé."
+  },
+  {
+    "id": "ATOW_End4_002",
+    "surface": "a-time-of-war",
+    "passage": "ATOW-End4",
+    "fr": "Les mots se dispersent et se reforment au fur et à mesure que je déplace mon stylo sur la page. Comme des feuilles rouillées transformées en scarabées, ils décampent vers les marges. L'encre se regroupe sur la pointe de ma plume et rentre à l'intérieur. La ficelle reliant les pages et la colle de la reliure se défont et se reconstituent encore et encore. Tout cela voltige à travers la réalité comme avec un zoopraxiscope, la projection d'images de lignes temporelles altérées par des changements mineurs."
+  },
+  {
+    "id": "MilitaryYes_007",
+    "surface": "a-time-of-war",
+    "passage": "MilitaryYes",
+    "fr": "_Si vous n'avez aucun jeton {icon:s3_paradoxtoken}, gagnez un jeton {icon:s3_paradoxtoken}, puis défaussez-le._"
+  },
+  {
+    "id": "ATOW_End7_011",
+    "surface": "a-time-of-war",
+    "passage": "ATOW-End7",
+    "fr": "**5.** Quelle est la **seule** et la plus grande nation du monde?"
+  },
+  {
+    "id": "ReignHUB_005",
+    "surface": "a-time-of-war",
+    "passage": "ReignHUB",
+    "fr": "Perdre 2 {icon:creepy_icon} ."
+  },
+  {
+    "id": "AdvancedWeaponryIntro_006",
+    "surface": "a-time-of-war",
+    "passage": "AdvancedWeaponryIntro",
+    "fr": "vous pouvez gagner un Domestique de l'Asile et perdre 1 {icon:creepy_icon} ."
+  },
+  {
+    "id": "RumorIngredient_003",
+    "surface": "a-time-of-war",
+    "passage": "RumorIngredient",
+    "fr": "**Gagnez 1 Ingrédient de votre choix.** _Si c'est un_ {icon:bodies_icon}_, gagnez 1_ {icon:creepy_icon}_._"
+  },
+  {
+    "id": "ParadoxExReminder_004",
+    "surface": "a-time-of-war",
+    "passage": "ParadoxExReminder",
+    "fr": " _Ces jetons ne sont pas limités. Dans le rare cas où vous n'en auriez pas assez, utilisez d'autres marqueurs comme substituts jusqu'à ce qu'il vous en reste suffisamment._"
+  },
+  {
+    "id": "AfternoonTeaResolutionNAY_005",
+    "surface": "a-time-of-war",
+    "passage": "AfternoonTeaResolutionNAY",
+    "fr": "Tous les joueurs ayant voté **YAY** **gagnent 1** {icon:creepy_icon} et peuvent piocher une carte **Armement avancé**."
+  },
+  {
+    "id": "Martial1_007",
+    "surface": "a-time-of-war",
+    "passage": "Martial1",
+    "fr": "**gagnez 2 $ de la réserve** "
+  },
+  {
+    "id": "Blame1b_007",
+    "surface": "a-time-of-war",
+    "passage": "Blame1b",
+    "fr": "Désolé. Je me vois au regret de décliner."
+  },
+  {
+    "id": "WarningIntro_001",
+    "surface": "a-time-of-war",
+    "passage": "WarningIntro",
+    "fr": "Conséquences futures"
+  },
+  {
+    "id": "TimeTravelintro1_001",
+    "surface": "a-time-of-war",
+    "passage": "TimeTravelintro1",
+    "fr": "Retour à la dévastation"
+  },
+  {
+    "id": "Directive_MustFlipToSeparatist",
+    "surface": "a-time-of-war",
+    "passage": "BarracksSimple1",
+    "fr": "**doivent** retourner leur jeton Drapeau pour révéler la face **Séparatistes** et perdre **1 PV**. La Monarchie n'a pas apprécié."
+  },
+  {
+    "id": "Heading_BigBrother",
+    "surface": "a-time-of-war",
+    "passage": "Warning2",
+    "fr": "**Big Brother**"
+  },
+  {
+    "id": "DuelRules1_008",
+    "surface": "a-time-of-war",
+    "passage": "DuelRules1",
+    "fr": "pistolets"
+  },
+  {
+    "id": "Round_EndOfRoundActions_Rule",
+    "surface": "a-time-of-war",
+    "passage": "TimeTravel3",
+    "fr": "Effectuez les actions de fin de manche avant de continuer."
+  },
+  {
+    "id": "Reign7c_006",
+    "surface": "a-time-of-war",
+    "passage": "Reign7c",
+    "fr": "{title} {nameE}"
+  },
+  {
+    "id": "TimeTravel_011",
+    "surface": "a-time-of-war",
+    "passage": "TimeTravel",
+    "fr": "Le Début de cycle de la deuxième Génération est terminé. Effectuez toutes les actions de fin de manche."
+  },
+  {
+    "id": "NameEntryC_001",
+    "surface": "a-time-of-war",
+    "passage": "NameEntryC",
+    "fr": "{nameC}."
+  },
+  {
+    "id": "ParadoxTimeRandom_029",
+    "surface": "a-time-of-war",
+    "passage": "ParadoxTimeRandom",
+    "fr": "Ce ne fut qu'un revers mineur."
+  },
+  {
+    "id": "ResistEnd2_005",
+    "surface": "a-time-of-war",
+    "passage": "ResistEnd2",
+    "fr": "Les {warwinner}"
+  },
+  {
+    "id": "TimeEnd2_001",
+    "surface": "a-time-of-war",
+    "passage": "TimeEnd2",
+    "fr": "Entièrement réparée"
+  },
+  {
+    "id": "RumorD1_006",
+    "surface": "a-time-of-war",
+    "passage": "RumorD1",
+    "fr": "« Je pense que vos craintes sont infondées. Les {warwinner} prévoient de construire une caserne dans les années à venir. Cela signifie stabilité, prospérité et _opportunités._ »"
+  },
+  {
+    "id": "ATimeofWarIntro_002",
+    "surface": "a-time-of-war",
+    "passage": "ATimeofWarIntro",
+    "fr": "GÉNÉRATION I"
+  },
+  {
+    "id": "Setup_TownName_Title",
+    "surface": "a-time-of-war",
+    "passage": "_Setup_07_TownNameEntry",
+    "fr": "Le Village"
+  },
+  {
+    "id": "Setup_TownName_Intro",
+    "surface": "a-time-of-war",
+    "passage": "_Setup_07_TownNameEntry",
+    "fr": "Maintenant que nos prénoms sont établis, il nous faut aussi chercher dans nos souvenirs le nom du village que surplombent nos vastes domaines. Vu la myriade de petites bourgades de la campagne hongroise, il serait d'une impertinence injustifiable de ne pas laisser au groupe l'occasion de nommer ensemble l'endroit qu'il habitera désormais."
+  },
+  {
+    "id": "Setup_PlayerCount_Four",
+    "surface": "a-time-of-war",
+    "passage": "_Setup_01_PlayerCountSelect",
+    "fr": "4 joueurs"
+  },
+  {
+    "id": "Setup_NameEntry_LabelC",
+    "surface": "a-time-of-war",
+    "passage": "_Setup_05_PlayerNameC",
+    "fr": "Joueur C - Veuillez saisir votre prénom :"
+  },
+  {
+    "id": "Setup_Greeting_2",
+    "surface": "a-time-of-war",
+    "passage": "_Setup_03_PlayerNameA",
+    "fr": "Salutations et bienvenue dans Le Secret de mon père,"
+  },
+  {
+    "id": "Common_Resume",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Reprendre"
+  },
+  {
+    "id": "CatalogSources_ErrorUnreachable",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Rien n'a répondu à cette adresse."
+  },
+  {
+    "id": "ManageModules_UnsignedBody",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "« {0} » n'est pas signé. Impossible de vérifier l'intégrité du contenu ni l'identité de l'éditeur. Installez-le à vos risques."
+  },
+  {
+    "id": "ManageModules_UnrecognizedSignerBodyModule",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Ce module a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur."
+  },
+  {
+    "id": "TimelineScrubber_CurrentLabel",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Actuel"
+  },
+  {
+    "id": "ContinueList_ResumeAnyway",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Reprendre quand même"
+  },
+  {
+    "id": "Help_Topic_TimelineAndRewind",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Chronologie et retour en arrière"
+  },
+  {
+    "id": "TimelineScrubber_ResumeConfirmTitle",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Reprendre à partir de « {0} »?"
+  },
+  {
+    "id": "ContinueList_ModuleMissing",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Le module de cette sauvegarde n'est plus installé."
+  },
+  {
+    "id": "ContinueList_ModuleMissingTitle",
+    "surface": "app-ui",
+    "passage": null,
+    "fr": "Le module de cette sauvegarde n'est plus installé"
+  }
+]

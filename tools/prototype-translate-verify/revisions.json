@@ -1,0 +1,32 @@
+[
+  {
+    "id": "TriggerParadox_003",
+    "fr": "Libre des pressions du quotidien et savourant l'exaltation des connaissances des rouages internes de l'univers, j'allais à nouveau de l'avant!",
+    "verdict": "pass (re-checked: deterministic only)",
+    "backtranslation": null
+  },
+  {
+    "id": "SecretParadoxBonus_003",
+    "fr": "Le ou les joueurs avec le plus de jetons {icon:s3_paradoxtoken} sur leurs Expériences gagnent **4 PV** et peuvent immédiatement faire progresser gratuitement d'une case leur piste du Journal qui a le moins progressé (_s'il y en a plusieurs, ils peuvent choisir_).",
+    "verdict": "pass (re-checked: deterministic only)",
+    "backtranslation": null
+  },
+  {
+    "id": "ResolutionofEvent_003",
+    "fr": "Se pouvait-il que j'aie sous-estimé toute l'étendue de leur ignorance? Comment se faisait-il que même avec la pression des {playtxt} financiers de l'aristocratie, ils soient restés aussi craintifs et défiants?",
+    "verdict": "pass (re-checked: deterministic only)",
+    "backtranslation": null
+  },
+  {
+    "id": "Reign7_007",
+    "fr": "_Cela aura pour effet de : {crownR} Choisissez-vous un titre qui complètera votre nom pour le reste de la partie._",
+    "verdict": "pass (re-checked: deterministic only)",
+    "backtranslation": null
+  },
+  {
+    "id": "Setup_TownName_Title",
+    "fr": "Le village",
+    "verdict": "pass (re-checked: deterministic only)",
+    "backtranslation": null
+  }
+]

@@ -1,0 +1,3105 @@
+[
+  {
+    "id": "NobodyFigures_004",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "Remove the Suspicion Marker and {icon:angrymob_icon} Marker from the {icon:creepy_icon} Track. Retrieve the {figure} token and place it on space **{accolade}** of the {icon:creepy_icon} Track.",
+    "fr": "Retirez le marqueur Suspicion et le jeton {icon:angrymob_icon} de la piste {icon:creepy_icon}. Prenez le jeton {figure} et placez-le sur la case **{accolade}** de la piste {icon:creepy_icon}.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "NobodyFigures",
+    "context": [
+      {
+        "key": "NobodyFigures_001",
+        "en": "Accolades for Exploration"
+      },
+      {
+        "key": "NobodyFigures_002",
+        "en": "I soon discovered that the sneers I sometimes received when I offered hints of my secret work weren't sneers of derision, merely appropriate disgust at the necessary, but sometimes graphic lengths to which my experimentation perched upon the bleeding edge of innovation. To my surprise, as I began to hold a grotesque exhibition of some of my family's preserved works, the academic response was one of motivation."
+      },
+      {
+        "key": "NobodyFigures_003",
+        "en": "While the masses could never fully appreciate the breadth of study required in order to create such exquisite revelations, I could see no reason to invite their animosity. When the townsfolk began to offer assistance as my work teetered on the brink of ethicality, I vowed to press onward further than ever before and embrace the fervor that would surround it."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "NobodyFigures_004",
+        "en": "Remove the Suspicion Marker and {icon:angrymob_icon} Marker from the {icon:creepy_icon} Track. Retrieve the {figure} token and place it on space **{accolade}** of the {icon:creepy_icon} Track."
+      },
+      {
+        "key": "Directive_FirstTimeReachesFigureToken_Fragment",
+        "en": "The first time a player's marker ever reaches or exceeds the **{figure}** token, "
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      },
+      {
+        "key": "Reward_MayBuildVanityEstateUpgrade",
+        "en": "**they may immediately build a Vanity Estate Upgrade of their choice**"
+      },
+      {
+        "key": "Reward_MayTakePerformExperimentAction",
+        "en": "**they may immediately take a Perform Experiment action**"
+      }
+    ]
+  },
+  {
+    "id": "Town_Paradox",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "Paradox",
+    "fr": "Paradoxe",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TimeEnd1",
+    "context": [
+      {
+        "key": "Town_Paradox",
+        "en": "Paradox"
+      },
+      {
+        "key": "UIButton_Confirm",
+        "en": "Confirm"
+      },
+      {
+        "key": "Directive_EndGeneration_ReturnMasterworkParadoxToQuarters",
+        "en": "Remove all player pieces from the board and perform the End of a Generation. Return your Masterwork face-up once again. Any {icon:s3_paradoxtoken} tokens remaining on your Experiments are moved into your Quarters."
+      },
+      {
+        "key": "TimeEnd1_003",
+        "en": "Time continued on as normal. However, I was unclear as to whether meddling with divine absolutes had altered the reality that I once knew."
+      },
+      {
+        "key": "TimeEnd1_004",
+        "en": "**Count the total number of {icon:s3_paradoxtoken} markers left on all players' Experiments:** "
+      },
+      {
+        "key": "TimeEnd1_005",
+        "en": "If the number is **{dox}** or more, there is a chance that the timeline has been altered. "
+      },
+      {
+        "key": "TimeEnd1_006",
+        "en": "Click here to continue"
+      },
+      {
+        "key": "TimeEnd1_007",
+        "en": "If the number of {icon:s3_paradoxtoken} tokens remaining is fewer, the timeline appears normal. "
+      },
+      {
+        "key": "Click_ContinueEllipsis_B",
+        "en": "Click here to continue..."
+      }
+    ]
+  },
+  {
+    "id": "WhoopsUtopian_002",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "While the journal of my parents was an astonishing discovery in itself, I did not realize that the true revelation would arrive several weeks later when I rifled through the pages willed to me. I suspect that you may assume that my memory had slipped or that I had not been thorough in my studies of those browning pages locked within the cellar laboratory, but I swear by my blood to be true.",
+    "fr": "Bien que la découverte du journal de mes parents ait été en soi quelque chose d'extraordinaire, je ne me doutais pas que la véritable révélation se produirait quelques semaines plus tard alors que je parcourais ces pages qui m'avaient été léguées. En lisant ces lignes, vous imaginez sans doute que ma mémoire me jouait des tours ou que je n'avais pas fait preuve d'une rigueur suffisante en étudiant ces pages brunies enfermées dans le laboratoire de la cave, mais je vous jure sur mon sang que c'est vrai.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "WhoopsUtopian",
+    "context": [
+      {
+        "key": "WhoopsUtopian_001",
+        "en": "The Future is NOW"
+      },
+      {
+        "key": "WhoopsUtopian_002",
+        "en": "While the journal of my parents was an astonishing discovery in itself, I did not realize that the true revelation would arrive several weeks later when I rifled through the pages willed to me. I suspect that you may assume that my memory had slipped or that I had not been thorough in my studies of those browning pages locked within the cellar laboratory, but I swear by my blood to be true."
+      },
+      {
+        "key": "WhoopsUtopian_003",
+        "en": "I had read over the myriad notes and journal entries so many times that I had memorized their contents, yet one afternoon when I turned to a central page, several pristine and folded pieces of parchment fell to the floor. A faint and acrid scent of burnt oil wafted from the papers, which each detailed a new, amazing schematic for devices far more advanced than any I had ever perceived possible."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "WhoopsUtopian_004",
+        "en": "Return the **Time Machine Repairs** cards to the Scenario box."
+      },
+      {
+        "key": "WhoopsUtopian_005",
+        "en": "Retrieve the **Utopian Experiments** from the box. Shuffle them face-down and place them nearby to form a deck. "
+      },
+      {
+        "key": "Directive_DrawUtopianExperiment",
+        "en": "Each player then **draws 1 Utopian Experiment** and adds it to their hand."
+      }
+    ]
+  },
+  {
+    "id": "Heading_KnowledgeBonus",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "**Knowledge Bonus**",
+    "fr": "**Bonus de Connaissances**",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TakeSides2",
+    "context": [
+      {
+        "key": "Title_TakingSidesCaps",
+        "en": "TAKING SIDES"
+      },
+      {
+        "key": "Title_MiddleYears",
+        "en": "Middle Years"
+      },
+      {
+        "key": "Heading_StorybookToken_TownHallPoliticalRumblings",
+        "en": "{icon:storybooktoken} **Town Hall - Political Rumblings**"
+      },
+      {
+        "key": "Directive_VisitTownHallTradeKnowledgeCube",
+        "en": "When you visit the Town Hall, you may trade a Knowledge cube you have in your Quarters for any other Knowledge cube from the supply. You may perform this trade as many times as you like. _There is no additional cost to visit the Town Hall if a token is already on that location._"
+      },
+      {
+        "key": "Directive_SpeakPeoplePoliticalClimate_Fragment",
+        "en": "In addition, you will speak with the people to more fully understand the political climate. "
+      },
+      {
+        "key": "Click_WheneverVisitTownHall",
+        "en": "Click here whenever you visit the Town Hall."
+      },
+      {
+        "key": "Heading_SecondRoundPledgeOfSupport",
+        "en": "**Second Round - Pledge of Support**"
+      },
+      {
+        "key": "TakeSides2_002",
+        "en": "The village is at a crossroads in this emerging conflict and will need to make a decision. At the end of this round there will be a special event. "
+      },
+      {
+        "key": "Heading_KnowledgeBonus",
+        "en": "**Knowledge Bonus**"
+      },
+      {
+        "key": "TakeSides2_004",
+        "en": "At the end of the Generation, the player(s) with the most Knowledge cubes in their possession will receive a gift."
+      },
+      {
+        "key": "Heading_IngredientBonus",
+        "en": "**Ingredient Bonus**"
+      },
+      {
+        "key": "TakeSides2_006",
+        "en": "At the end of the Generation, the player(s) with the most Ingredients in their possession will receive a gift."
+      },
+      {
+        "key": "Heading_WealthBonus",
+        "en": "**Wealth Bonus**"
+      },
+      {
+        "key": "TakeSides2_008",
+        "en": "At the end of the Generation, the player(s) with the most money in their possession will receive a gift."
+      },
+      {
+        "key": "TakeSides2_009",
+        "en": "Click here at the end of the round for a special event."
+      },
+      {
+        "key": "UIButton_EndOfRound",
+        "en": "End of Round"
+      },
+      {
+        "key": "TakeSides2_010",
+        "en": "The Middle Years of the First Generation has ended. Perform all End of Round actions."
+      },
+      {
+        "key": "Round_StartLateYears_Rule",
+        "en": "Then, perform all Start of Round actions for the Late Years before continuing."
+      }
+    ]
+  },
+  {
+    "id": "ATOW_End8_004",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "While practical in theory, I recognize that the processing of enemy soldiers into consumable goods was an unfortunate practice that potentially renders this work unreadable to some.",
+    "fr": "Bien qu'en théorie commode, j'admets volontiers que la transformation des soldats ennemis en biens consommables était une pratique bien regrettable qui peut potentiellement en révulser plus d'un et leur faire rejeter cet ouvrage.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ATOW-End8",
+    "context": [
+      {
+        "key": "ATOW_End8_001",
+        "en": "Local Legend"
+      },
+      {
+        "key": "ATOW_End8_002",
+        "en": "I submit this post-script as the fourth generation to take on the {winner} name. The printing costs have already mounted to a sum which I find difficult to manage after the **collapse of the war effort** and the subsequent reparation policies levied against this country to weaken its ability to muster new troops. "
+      },
+      {
+        "key": "ATOW_End8_003",
+        "en": "With the inability for leaders to **make the difficult and needed decisions** to press the war effort forward, the conflict was lost even before it began. "
+      },
+      {
+        "key": "ATOW_End8_005",
+        "en": "I can only hope those lost in the tragic biochemical release will find some solace in the revelation herein of the true source of the attack."
+      },
+      {
+        "key": "ATOW_End8_004",
+        "en": "While practical in theory, I recognize that the processing of enemy soldiers into consumable goods was an unfortunate practice that potentially renders this work unreadable to some."
+      },
+      {
+        "key": "ATOW_End8_006",
+        "en": "I am aware of what my lineage represents to the international community, and while I wish to distance myself from the whole affair, I also could not in good conscience allow the manuscripts I unearthed be destroyed. With its release, I hope to show - in all its graphic detail - that not all intentions were negative and that the science still holds true even to this day."
+      },
+      {
+        "key": "ATOW_End8_007",
+        "en": "With righteous conviction and humility in my heart, I am forever your servant. - Dr. {winner}"
+      },
+      {
+        "key": "Heading_TheEndQuestion",
+        "en": "THE END?"
+      },
+      {
+        "key": "Common_YouHaveUnlockedEnding",
+        "en": "You have unlocked **{ending_text}** ending."
+      }
+    ]
+  },
+  {
+    "id": "FinalBattleTime_002",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "Despite our superior weapon technology and a pioneering reinterpretation of ethics in conflict, some of the neighboring countries still refused to be subjugated. The generals were prepared for a final push which would determine the outcome of the conflict and if this glorious empire would reign above all else.",
+    "fr": "Malgré notre technologie d'armement supérieure et une réinterprétation avant-gardiste de l'éthique des conflits, certains pays voisins refusaient encore de se soumettre. Les généraux avaient préparé une ultime offensive qui allait déterminer l'issue de la guerre et si ce glorieux empire allait régner sur la création.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "FinalBattleTime",
+    "context": [
+      {
+        "key": "FinalBattleTime_001",
+        "en": "FINAL BATTLE"
+      },
+      {
+        "key": "FinalBattleTime_002",
+        "en": "Despite our superior weapon technology and a pioneering reinterpretation of ethics in conflict, some of the neighboring countries still refused to be subjugated. The generals were prepared for a final push which would determine the outcome of the conflict and if this glorious empire would reign above all else."
+      },
+      {
+        "key": "FinalBattleTime_003",
+        "en": "**Battle Reminder**"
+      },
+      {
+        "key": "Directive_AllPlayersWeaponTokensBattle",
+        "en": "All players take all their {icon:s3_weapontoken} tokens into their hands. For each battle, starting with the upper-most territory (marked by the Occult cube), players secretly decide how many tokens to place into their right hand and extend their fist to the center of the table. Once all players have decided, all players reveal their tokens."
+      },
+      {
+        "key": "FinalBattleTime_004",
+        "en": "The player(s) who revealed the most tokens receives the VP listed. If more than one player played the same amount, all players that revealed the most tokens receive all points. _ALL revealed tokens are placed into the supply, no matter the outcome._"
+      },
+      {
+        "key": "Directive_RepeatOccultCubeNextSquare",
+        "en": "This process is then repeated by moving the Occult cube to the next square, until all battles have been resolved."
+      },
+      {
+        "key": "Directive_RevealAtLeast1TokenForPoints",
+        "en": "_You must reveal at least 1 token to receive points. If no player reveals a token, then no players score VP and the next battle begins._"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "FinalBattleTime_006",
+        "en": "The Battle card remains with the current side up _(and is NOT turned to the Final Battle side.)_"
+      },
+      {
+        "key": "FinalBattleTime_005",
+        "en": "Turn the Battle card to the opposite **Final Battle** side. For this battle, **each territory is worth additional points.**"
+      }
+    ]
+  },
+  {
+    "id": "TriggerParadox_003",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "Unfettered by the pressures of the mundane and reinvigorated by knowledge of the universe's complex inner workings, I surged forward anew!",
+    "fr": "Libre des pressions du quotidien et savourant l'exalatation des connaissances des rouages internes de l'univers, j'allais à nouveau de l'avant !",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TriggerParadox",
+    "context": [
+      {
+        "key": "TriggerParadox_001",
+        "en": "Ease of Anxiety"
+      },
+      {
+        "key": "TriggerParadox_002",
+        "en": "The feeling was unlike any I had experienced previously. It was as if I was unknowingly swaddled by the air itself and a cosmic force tore the fabric at the seams, allowing me to burst free. I could feel the timestream mending like the tingle of blood returning to a strangled capillary."
+      },
+      {
+        "key": "TriggerParadox_003",
+        "en": "Unfettered by the pressures of the mundane and reinvigorated by knowledge of the universe's complex inner workings, I surged forward anew!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "TriggerParadox_004",
+        "en": "Gain **{_rnd_TriggerParadox_0}VP** and a Knowledge cube of your choice."
+      }
+    ]
+  },
+  {
+    "id": "Narrative_SpiritedGroupCitizens",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "A spirited group of concerned citizens.",
+    "fr": "Un groupe de citoyens animés et impliqués.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "RumorD",
+    "context": [
+      {
+        "key": "RumorD_001",
+        "en": "Visit the Town Hall"
+      },
+      {
+        "key": "RumorD_002",
+        "en": "For such a small, rural village, the atmosphere was always busy with at least one boisterous argument erupting after the charged words of a townsperson. This lively arrangement intrigued me, and I decided to investigate further."
+      },
+      {
+        "key": "RumorD_003",
+        "en": "While the sights - and smells - of the local civic establishment were certainly an interesting diversion, I could not allow myself to be distracted. I was here to gain insight on the political factions, as I was well-aware that this knowledge could be swung to my advantage."
+      },
+      {
+        "key": "RumorD_004",
+        "en": "I was never quite fond of my visits to this place. However, it was ever my duty to make an appearance and my spouse insisted that I would do well to 'mingle' amongst the folk here. So, I made do within the strained situation and struck up a conversation with the first individual that intrigued me."
+      },
+      {
+        "key": "RumorD_005",
+        "en": "These spirited events - possible more entertaining to observe than to engage with - took place as the sun set and then sprawled late into the evening. I found myself much more accepted in this environment as the night wore on and inevitably the spirits of all in attendance were roused by the spirits from a local distillery. On this peculiar evening, a few persons caught my eye."
+      },
+      {
+        "key": "RumorD_006",
+        "en": "I decided to attend one of several scheduled city council meetings at the Town Hall. {_rnd_RumorD_0}"
+      },
+      {
+        "key": "RumorD_007",
+        "en": "**I chose to converse with:**"
+      },
+      {
+        "key": "Narrative_GuardMilitaryRegalia",
+        "en": "A guard dressed in military regalia near the front door."
+      },
+      {
+        "key": "Narrative_DistinguishedGentlemanStage",
+        "en": "A distinguished gentleman near the stage; his whiskers well-waxed."
+      },
+      {
+        "key": "Narrative_SomberElderlyWoman",
+        "en": "A somber elderly woman sitting amongst the crowd."
+      },
+      {
+        "key": "Narrative_SpiritedGroupCitizens",
+        "en": "A spirited group of concerned citizens."
+      },
+      {
+        "key": "Narrative_HunchedFigureBrokenTooth",
+        "en": "A hunched figure with a broken front-tooth, observing with mirth from the shadows."
+      },
+      {
+        "key": "Narrative_ConservativelyDressedWoman",
+        "en": "A conservatively dressed woman shuffling papers in her lap."
+      }
+    ]
+  },
+  {
+    "id": "RumorD2_001",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "No matter how I attempted to engage conversation, the frilly aristocrat ignored me. What sight in this dingy statehouse could possibly provoke him into silenced awe? Flustered, I secured my overcoat and made to leave. ",
+    "fr": "J'avais beau essayer d'engager la conversation, l'aristocrate m'ignorait. Qu'est-ce qui pouvait à ce point l'inquiéter dans ce lieu officiel miteux ? Avec un certain trouble, j'ai récupéré mon pardessus pour me préparer à partir. ",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "RumorD2",
+    "context": [
+      {
+        "key": "Storybook_PickUpDevicePrivate",
+        "en": "**Carefully pick up this Storybook device and do not allow any other players to see the screen.**"
+      },
+      {
+        "key": "Click_RevealSecretConversation",
+        "en": "Once you are ready, click here to reveal your secret conversation."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "RumorD2_001",
+        "en": "No matter how I attempted to engage conversation, the frilly aristocrat ignored me. What sight in this dingy statehouse could possibly provoke him into silenced awe? Flustered, I secured my overcoat and made to leave. "
+      },
+      {
+        "key": "RumorD2_002",
+        "en": "However, the moment I pivoted to make my exit, the gentleman turned towards me. Without words, I was handed a small metal figure in the shape of a {figure}."
+      },
+      {
+        "key": "RumorD2_003",
+        "en": "\"Resist.\" He stated with firm conviction, and then exited before me, his frilly coat flapping in the wind."
+      },
+      {
+        "key": "Click_FinishedReadingContinue",
+        "en": "When you have finished reading, click here to continue..."
+      },
+      {
+        "key": "RumorD2_005",
+        "en": "Gain the {figure} token."
+      }
+    ]
+  },
+  {
+    "id": "TriggerParadox_004",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "official",
+    "en": "Gain **{_rnd_TriggerParadox_0}VP** and a Knowledge cube of your choice.",
+    "fr": "Gagnez **{_rnd_TriggerParadox_0} PV** et un cube Connaissances de votre choix.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TriggerParadox",
+    "context": [
+      {
+        "key": "TriggerParadox_001",
+        "en": "Ease of Anxiety"
+      },
+      {
+        "key": "TriggerParadox_002",
+        "en": "The feeling was unlike any I had experienced previously. It was as if I was unknowingly swaddled by the air itself and a cosmic force tore the fabric at the seams, allowing me to burst free. I could feel the timestream mending like the tingle of blood returning to a strangled capillary."
+      },
+      {
+        "key": "TriggerParadox_003",
+        "en": "Unfettered by the pressures of the mundane and reinvigorated by knowledge of the universe's complex inner workings, I surged forward anew!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "TriggerParadox_004",
+        "en": "Gain **{_rnd_TriggerParadox_0}VP** and a Knowledge cube of your choice."
+      }
+    ]
+  },
+  {
+    "id": "SecretParadoxBonus_003",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "spacing",
+    "en": "The player(s) with the most {icon:s3_paradoxtoken} tokens remaining on their Experiments gains **4VP** and may immediately advance their lowest Journal Track 1 space at no cost (_if multiple tracks are lowest, they may choose_).",
+    "fr": "Le ou les joueurs avec le plus de jetons {icon:s3_paradoxtoken}sur leurs Expériences gagnent **4 PV**et peuvent immédiatement faire progresser gratuitement d'une case leur piste du Journal qui a le moins progressé (_s'il y en a plusieurs, ils peuvent choisir_).",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "SecretParadoxBonus",
+    "context": [
+      {
+        "key": "SecretParadoxBonus_001",
+        "en": "Chaos Theory"
+      },
+      {
+        "key": "SecretParadoxBonus_002",
+        "en": "Sometimes, resistance carried with it hidden rewards. By studying the effects of rifts in time, I unlocked a new understanding of fourth-dimensional forces that others would never dare to discover. Only the boldest and brightest flames survive the winds of chaos, and I would blaze forward until my last breath!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "SecretParadoxBonus_003",
+        "en": "The player(s) with the most {icon:s3_paradoxtoken} tokens remaining on their Experiments gains **4VP** and may immediately advance their lowest Journal Track 1 space at no cost (_if multiple tracks are lowest, they may choose_)."
+      },
+      {
+        "key": "SecretParadoxBonus_004",
+        "en": "You must have at least 1 {icon:s3_paradoxtoken} token to gain this bonus."
+      }
+    ]
+  },
+  {
+    "id": "ResolutionofEvent_003",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "spacing",
+    "en": "Could it be that I had underestimated the scope of their ignorance? How was it that even under pressure from {playtxt} aristocratic financiers they remained apprehensive and defiant?",
+    "fr": "Se pouvait-il que j'aie sous-estimé toute l'étendue de leur ignorance? Comment se faisait-il que même avec la pression des {playtxt}financiers de l'aristocratie, ils soient restés aussi craintifs et défiants?",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ResolutionofEvent",
+    "context": [
+      {
+        "key": "ResolutionofEvent_001",
+        "en": "The Town's Reaction"
+      },
+      {
+        "key": "ResolutionofEvent_004",
+        "en": "I was quite convinced that strengthening our relationship with the dominant faction and encouraging a route towards inevitable conflict would ensure a fresh demand for my experiments. If that sentiment aligned with the bedraggled populace, then so be it."
+      },
+      {
+        "key": "ResolutionofEvent_002",
+        "en": "For reasons which I cannot fathom, our collective referendum was received with mild acceptance. While it stifled the construction temporarily, the town's allegiance remained unwavering."
+      },
+      {
+        "key": "ResolutionofEvent_003",
+        "en": "Could it be that I had underestimated the scope of their ignorance? How was it that even under pressure from {playtxt} aristocratic financiers they remained apprehensive and defiant?"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "ResolutionofEvent_005",
+        "en": "All players who voted to build the Barracks receive a Flag token and flip it {warwinner} side up"
+      },
+      {
+        "key": "ResolutionofEvent_006",
+        "en": " and **gain 2VP**"
+      },
+      {
+        "key": "ResolutionofEvent_007",
+        "en": " and **gain 2 Resources of their choice**"
+      },
+      {
+        "key": "ResolutionofEvent_008",
+        "en": "All players who voted against building the Barracks receive a Flag token and flip it {warloser} side up"
+      }
+    ]
+  },
+  {
+    "id": "Reign7_007",
+    "surface": "a-time-of-war",
+    "bucket": "verify",
+    "reason": "spacing",
+    "en": "_This will result in: {crownR} Choose your own title that will display with your name for the rest of the story._",
+    "fr": "_ Cela aura pour effet de : {crownR}Choisissez-vous un titre qui complètera votre nom pour le reste de la partie._",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "Reign7",
+    "context": [
+      {
+        "key": "Storybook_HandToReigntemp_ReadAloud",
+        "en": "**Carefully hand the Storybook to {reigntemp}. This passage is then read aloud to all players.**"
+      },
+      {
+        "key": "Reign7_001",
+        "en": "**The Choice of Recognition**"
+      },
+      {
+        "key": "Reign7_002",
+        "en": "As fortune would have it, my esteemed companion, the royal advisor had quickly imbibed the majority of bottle of absinthe and promptly passed out upon the floor amongst his own evening's meal. Still lain fresh upon the dinner table was a contract with a royal seal."
+      },
+      {
+        "key": "Reign7_003",
+        "en": "Now, I would not stoop to signing banker's cheques that were not my own, but considering the paper did require advisement as to whom should receive said goods or title, I was intrigued by the possibility and took up the authority. I could sign my name to the document, thereby granting myself any title or I could procure a little extra business in the region. It would be somewhat selfish to simply take the title, but it was alluring nonetheless."
+      },
+      {
+        "key": "Heading_ChoiceWasClear_IChose",
+        "en": "**The choice was clear to me. I chose:**"
+      },
+      {
+        "key": "Reign7_004",
+        "en": "A little for myself."
+      },
+      {
+        "key": "Reign7_005",
+        "en": "_This will result in: {crownL} {ch1}_"
+      },
+      {
+        "key": "Reign7_006",
+        "en": "Glory to ME."
+      },
+      {
+        "key": "Reign7_007",
+        "en": "_This will result in: {crownR} Choose your own title that will display with your name for the rest of the story._"
+      }
+    ]
+  },
+  {
+    "id": "Blame1c_003",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "I was struck by a **sudden epiphany!**",
+    "fr": "**Rappel : ne laissez pas les autres joueurs voir l'écran.** **Jeter le blâme** Les soldats ont pris le temps de m'informer de la véritable raison de leur intrusion inopportune. Les habitants de la ville avaient entendu parler d'événements étranges dans les collines surplombant la vallée et des rumeurs d'activités félonnes avaient éveillé les soupçons des forces des {warwinner}. Ils voulaient savoir si j'avais la moindre information à ce sujet. J'ai été frappé d'une **soudaine épiphanie !** Si, avec les autres membres de ma famille, nous pouvions désigner l'un de nous comme la cible de leur courroux, peut-être pourrions-nous modifier l'histoire un peu plus et éviter la destruction du domaine au cours des années à venir. Je savais que celui qui serait choisi souffrirait - il **défausserait immédiatement 1 Aménagement de Domaine et gagnerait 2** {icon:creepy_icon}**.** Nous serions punis s'il n'y avait pas un vainqueur clairement défini. Mais qu'est-ce qu'une vie sacrifiée si cela permet de rectifier l'Histoire ? J'ai décidé de :",
+    "alternatives": [],
+    "splitGroup": [
+      "Directive_ReminderDoNotAllowOthersSeeScreen",
+      "Blame1c_002",
+      "Blame1c_003",
+      "Blame1c_004",
+      "Blame1c_005",
+      "Blame1c_006"
+    ],
+    "passage": "Blame1c",
+    "context": [
+      {
+        "key": "Blame1c_001",
+        "en": "Passing the Blame"
+      },
+      {
+        "key": "Directive_ReminderDoNotAllowOthersSeeScreen",
+        "en": "**Reminder: Do not allow any other players to see this screen.**"
+      },
+      {
+        "key": "Blame1c_002",
+        "en": "The soldiers took a moment to inform me of the true reason for their untimely intrusion. The townsfolk had heard of some strange occurrences in the hills surrounding the valley, and whispers of traitorous activities had the {warwinner} forces suspicious. They asked me if I had any information on the subject."
+      },
+      {
+        "key": "Blame1c_003",
+        "en": "I was struck by a **sudden epiphany!**"
+      },
+      {
+        "key": "Blame1c_004",
+        "en": "If my cousins and I could vote one of us as a target of their ire, perhaps this would further sway history and avoid the destruction of the estate in the coming years."
+      },
+      {
+        "key": "Blame1c_005",
+        "en": "I knew that whoever was chosen would suffer - and **immediately discard 1 Estate Upgrade from their Estate and gain 2** {icon:creepy_icon}**.** We'd be punished if there wasn't a clear winner. But, what was one life sacrificed to rectify the entirety of all history?"
+      },
+      {
+        "key": "Blame1c_006",
+        "en": "I decided:"
+      },
+      {
+        "key": "Blame1c_007",
+        "en": "To stay silent."
+      },
+      {
+        "key": "Blame1c_008",
+        "en": "To blame {nameB}."
+      },
+      {
+        "key": "Blame1c_009",
+        "en": "To blame {nameC}."
+      },
+      {
+        "key": "Blame1c_010",
+        "en": "To blame {nameD}."
+      },
+      {
+        "key": "Blame1c_011",
+        "en": "To blame {nameE}."
+      },
+      {
+        "key": "Blame1c_012",
+        "en": "To blame {nameA}."
+      }
+    ]
+  },
+  {
+    "id": "Warning2_030",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "Suddenly, a thunderous noise erupted, reverberating against the stone walls. In the distance, we watched as towering beasts of the Mesozoic Era roamed across the dusty plains. The tyrannosaurus stalked its prey, its face glimmering brightly like a bronze statue. Moments later, a bright laser burst from its eye-socket, singling out a lone brachiosaurus from the herd and cutting it in twain. As the biomechanical menace masticated it's freshly charred meal, we determined that this may be a rather difficult environment in which to continue our experiments.",
+    "fr": "Nous avons immédiatement perçu une odeur de cuir moisi qui a assailli nos narines comme le soufre incandescent d'une allumette. L'atmosphère était chaude, toute la ville était abandonnée comme si elle n'avait jamais existé. Nous avons eu la surprise de retrouver nos domaines à peu près intacts bien que des palmiers et des lianes recouvraient les jardins extérieurs.Soudain, se réverbérant sur les murs de pierre, un bruit de tonnerre a brisé le silence. Au loin, nous avons aperçu des bêtes immenses de l'air mésozoïque parcourir les plaines poussiéreuses. Le tyrannosaure traquait ses proies, sa tête scintillant comme une statue de bronze. Quelques instants plus tard, un rayon laser aveuglant a jailli d'une de ses orbites, isolant un brachiosaure solitaire du reste du troupeau avant de le couper en deux.Tandis que la menace biomécanique mastiquait son repas fraîchement calciné, nous nous sommes accordés sur le fait que cet environnement serait probablement un peu trop hostile pour continuer nos expériences.",
+    "alternatives": [],
+    "splitGroup": [
+      "Narrative_MoldyLeatheryStenchTown",
+      "Warning2_030"
+    ],
+    "passage": "Warning2",
+    "context": [
+      {
+        "key": "Title_NotAgain",
+        "en": "Not Again"
+      },
+      {
+        "key": "Title_MiddleYears",
+        "en": "Middle Years"
+      },
+      {
+        "key": "UIButton_Accept",
+        "en": "Accept"
+      },
+      {
+        "key": "Warning2_002",
+        "en": "Turn to page **{cont}** of the Village Chronicle. "
+      },
+      {
+        "key": "Heading_PeacefulGreen",
+        "en": "**Peaceful Green**"
+      },
+      {
+        "key": "Narrative_VillageRuinMossyFloor",
+        "en": "While some of the village lay in ruin, a deep green moss covered most of it, giving the stone a calming natural quality. In fact, the entire town seemed to be seething with this growing mossy floor while the townspeople seemed eerily serene. Patches of moss grew on the skin of passersby, and it all seemed to emanate from a golden statue at the center of the **Park**."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitThePark",
+        "en": "{icon:storybooktoken} **Visit the Park**"
+      },
+      {
+        "key": "Heading_ActionAtParkLocation",
+        "en": "When a player completes an action at the **Park** location:"
+      },
+      {
+        "key": "Click_ToChangeTheWorld",
+        "en": "Click here to change the world..."
+      },
+      {
+        "key": "Heading_BreakingThe4thWall",
+        "en": "**Breaking the 4th Wall**"
+      },
+      {
+        "key": "Narrative_WorldChangedUnfinishedPage",
+        "en": "The world has changed again and we get the impression that the author of this game hasn't written the description for this part and probably never will. In fact, he specifically requested the page be intentionally unfinished a full year before writing anything here. If you've flipped through the pages of the Village Chronicle, you were probably confused by this page already."
+      },
+      {
+        "key": "Narrative_UnfinishedPage_GameDesignerWeight",
+        "en": "We feel the emotional weight of six years of developing this game and writing it all by hand resting on our shoulders. 'They better like it.' A voice whispers. It is the game designer again, self-inserting, which is kind of a hack move."
+      },
+      {
+        "key": "Narrative_UnfinishedPage_EmptyPageVoid",
+        "en": "I think an empty page is exactly what we need right now. Maybe this is a chance to recognize that we're all aimlessly trudging forward through the void. Maybe there's a deeper meaning to it all and we should take a moment to discuss it. Board games just aren't what they used to be. Why do they need electronic apps? Perhaps it's best if we visit the bank and get out of here before the game designer starts acting even more like a hipster."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBank",
+        "en": "{icon:storybooktoken} **Visit the Bank**"
+      },
+      {
+        "key": "Heading_ActionAtBank",
+        "en": "When a player completes an action at the **Bank** location:"
+      },
+      {
+        "key": "Heading_TooPerfect",
+        "en": "**Too Perfect**"
+      },
+      {
+        "key": "Warning2_015",
+        "en": "There was an eerily serene quality to this world. The air was dense here, like a warm blanket against the skin yet still room temperature. Green grass framed the clean roads and idyllic town setting where newspapers printed the news of the day - \"Nothing to Report. Peace and Prosperity Continue.\" Something about it was so comforting and surreal that it was difficult to keep my eyes open. I wondered if this was what contentment feels like?"
+      },
+      {
+        "key": "Heading_ScienceIsStressful",
+        "en": "**Science is Stressful**"
+      },
+      {
+        "key": "Warning2_017",
+        "en": "We felt a deep lethargy overtake us anytime we attempted experimentation in such a perfect environment. You must assign **2** legal pieces in order to take the **Perform Experiment** action."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheChurch",
+        "en": "{icon:storybooktoken} **Visit the Church**"
+      },
+      {
+        "key": "Heading_ActionAtChurchLocation",
+        "en": "When a player completes an action at the **Church** location:"
+      },
+      {
+        "key": "Heading_BigBrother",
+        "en": "**Big Brother**"
+      },
+      {
+        "key": "Narrative_TownJovialModernSociety",
+        "en": "Everyone in the town was extremely jovial and greeted us with wide-eyed enthusiasm. The modern society stunned us with its glass buildings, bronze fixtures, and steel architecture. However, the hissing whirr of a steam-powered device suddenly broke the illusion. Along every street corner was a mechanical contraption that swiveled, seemingly following our every move. We felt a unique tension in the air, as if our every move was being watched and criticized."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheTownHall",
+        "en": "{icon:storybooktoken} **Visit the Town Hall**"
+      },
+      {
+        "key": "Heading_ActionAtTownHallLocation",
+        "en": "When a player completes an action at the **Town Hall** location:"
+      },
+      {
+        "key": "Heading_Amphibious",
+        "en": "**Amphibious**"
+      },
+      {
+        "key": "Narrative_UnderwaterVillageInsects",
+        "en": "We arrived at an astonishing underwater village. The sturdy glass fixtures surrounding the village created a pressurized chamber that kept the floating phosphorescent sea creatures from entering. We marveled at the engineering required to create such a brilliant enclosure and even considered staying until we realized that all the townsfolk were eating insects by flinging their sticky tongues into the air."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBlacksmith",
+        "en": "{icon:storybooktoken} **Visit the Blacksmith**"
+      },
+      {
+        "key": "Heading_ActionAtBlacksmith",
+        "en": "When a player completes an action at the **Blacksmith** location:"
+      },
+      {
+        "key": "Heading_AgeOfTheDinosaurs",
+        "en": "**Age of the Dinosaurs**"
+      },
+      {
+        "key": "Narrative_MoldyLeatheryStenchTown",
+        "en": "We were immediately accosted by a moldy leathery stench that festered in our nostrils like burning sulfur from the tip of a match. The air was hot, the entire town deserted as if it had never existed. We were surprised to find our estates left relatively untouched, though palm trees and jungle vines now covered the exterior gardens."
+      },
+      {
+        "key": "Warning2_030",
+        "en": "Suddenly, a thunderous noise erupted, reverberating against the stone walls. In the distance, we watched as towering beasts of the Mesozoic Era roamed across the dusty plains. The tyrannosaurus stalked its prey, its face glimmering brightly like a bronze statue. Moments later, a bright laser burst from its eye-socket, singling out a lone brachiosaurus from the herd and cutting it in twain. As the biomechanical menace masticated it's freshly charred meal, we determined that this may be a rather difficult environment in which to continue our experiments."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBunker",
+        "en": "{icon:storybooktoken} **Visit the Bunker**"
+      },
+      {
+        "key": "Heading_ActionAtBunker",
+        "en": "When a player completes an action at the **Bunker** location:"
+      },
+      {
+        "key": "Heading_UtopianExperiments",
+        "en": "**Utopian Experiments**"
+      },
+      {
+        "key": "Directive_NewExperimentsAvailable_An",
+        "en": "A new set of Experiments are available for players to complete. They may be drawn whenever an action would allow a player to draw new Experiments."
+      },
+      {
+        "key": "Warning2_034",
+        "en": "When the the round is complete, "
+      },
+      {
+        "key": "Warning2_035",
+        "en": "click here to move to the next round..."
+      },
+      {
+        "key": "UIButton_EndOfRound",
+        "en": "End of Round"
+      },
+      {
+        "key": "Round_GenerationIII_MiddleEnded",
+        "en": "The Middle Years of the Third Generation has ended. Perform all End of Round actions."
+      },
+      {
+        "key": "Round_StartLateYears_Rule",
+        "en": "Then, perform all Start of Round actions for the Late Years before continuing."
+      }
+    ]
+  },
+  {
+    "id": "ATOW_End5_019",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "I now have a passion of a different sort and this competitive chapter is complete. And not a moment too soon; it is time for tea.",
+    "fr": " Trois générations de service, de dévouement d'influence. Vais-je continuer leur œuvre ? Je ne ressens pas encore le besoin de suivre les traces de mes chers géniteurs. Avec mon nouveau titre de Conseiller royal {winner} quatrième du nom, et bras droit de la couronne, j'ai très peu de temps pour m'adonner à des loisirs. Peut-être qu'un jour je manipulerai une pipette ; il est si difficile de prévoir l'avenir. J'ai aujourd'hui une passion d'un autre genre et ce chapitre au sujet de nos rivalités est clos. Et il était temps ; c'est l'heure du thé. LA FIN ? _Traduction du scénario : Philippe Tessier_",
+    "alternatives": [],
+    "splitGroup": [
+      "ATOW_End5_017",
+      "ATOW_End5_018",
+      "ATOW_End5_019",
+      "Heading_TheEndQuestion"
+    ],
+    "passage": "ATOW-End5",
+    "context": [
+      {
+        "key": "ATOW_End5_001",
+        "en": "Royal Praise"
+      },
+      {
+        "key": "ATOW_End5_002",
+        "en": "After the passing of my beloved parents, who were never able to see what their influence had accomplished, I was able to compile this extended memoir which I have no doubt will be received equitably with my abridgements."
+      },
+      {
+        "key": "ATOW_End5_003",
+        "en": "The royalty were pleased with the successes brought about in part by my family. They appreciated the tenacity displayed when they "
+      },
+      {
+        "key": "ATOW_End5_007",
+        "en": "supported the establishment of an initial barracks and armed stronghold within the region."
+      },
+      {
+        "key": "ATOW_End5_006",
+        "en": "supported the building of a barracks for the royal government."
+      },
+      {
+        "key": "ATOW_End5_005",
+        "en": "could not in good conscience create a barracks for the wrong side of the conflict."
+      },
+      {
+        "key": "ATOW_End5_004",
+        "en": "were against the move to establish a costly barracks in a region when the prevailing opinions were so strong."
+      },
+      {
+        "key": "ATOW_End5_008",
+        "en": "They remained loyal from generation to generation and helped "
+      },
+      {
+        "key": "ATOW_End5_010",
+        "en": "inspire a successful rebellion."
+      },
+      {
+        "key": "ATOW_End5_009",
+        "en": "retain power with no compromises."
+      },
+      {
+        "key": "ATOW_End5_011",
+        "en": " And when the situation required persuasive tactics, they "
+      },
+      {
+        "key": "ATOW_End5_014",
+        "en": "used destructive tools to orchestrate a sabotage even when it hurt this fair village of {townname}."
+      },
+      {
+        "key": "ATOW_End5_013",
+        "en": "negotiated a peaceful transition without the need to destroy portions of the village."
+      },
+      {
+        "key": "ATOW_End5_012",
+        "en": "never faltered. Their outspoken fealty deftly retaining power for all these generations."
+      },
+      {
+        "key": "ATOW_End5_016",
+        "en": "Their suggestions pressed a positive agenda for the people of the realm. While demonstrably out of character, it allowed for an easy return to power."
+      },
+      {
+        "key": "ATOW_End5_015",
+        "en": "Their suggestions pressed glory for the crown and crown alone, even when it inconvenienced the people."
+      },
+      {
+        "key": "ATOW_End5_017",
+        "en": " Three generations of service, dedication, and influence."
+      },
+      {
+        "key": "ATOW_End5_018",
+        "en": "My own continued story? Why, as of yet I haven't felt the same inclination to follow in my dear progenitors' footsteps. My service, as newly appointed royal advisor, {winner} IV, right-hand to the crown, leaves me dreadfully little time for hobbies. Maybe someday I shall lift a pipette; it is so difficult to know the future."
+      },
+      {
+        "key": "ATOW_End5_019",
+        "en": "I now have a passion of a different sort and this competitive chapter is complete. And not a moment too soon; it is time for tea."
+      },
+      {
+        "key": "Heading_TheEndQuestion",
+        "en": "THE END?"
+      },
+      {
+        "key": "Common_YouHaveUnlockedEnding",
+        "en": "You have unlocked **{ending_text}** ending."
+      }
+    ]
+  },
+  {
+    "id": "ATOW_End4_002",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "The words scatter and reform as I move my pen about the page. Like rusted leaves turned to beetles, they skitter towards the margins. The ink flows to the nub and surges back inside. The twine that binds the pages, the glue that grips the spine, bound and unbound again, it all flits by reality like a zoopraxiscope, projected images of distorted timelines with minor changes.",
+    "fr": "Les mots se dispersent et se reforment au fur et à mesure que je déplace mon stylo sur la page. Comme des feuilles rouillées transformées en scarabées, elles décampent vers les marges. L'encre se regroupe sur la pointe de ma plume et rentre à l'intérieur. La ficelle reliant les pages et la colle de la reliure se défont et se reconstituent encore et encore. Tout cela voltige à travers la réalité comme avec un zoopraxiscope, la projection d'images de lignes temporelles altérées par des changements mineurs. Je suis incapable de savoir si ce mémoire est complet. J'ignore si quelqu'un pourra lire ces mots. Les veines de mes doigts changent de couleur. Les {warwinner} ont gagné la guerre. Je ne sais pas si j'existe ou si je suis une simple projection. La ficelle reliant les pages et la colle de la reliure ... Est-ce que je me répète ? Pouvez-vous lire ceci ? Pouvez-vous lire ces mots ? N'y a-t-il aucune réponse ? Qui pourrait répondre à part moi-même ? Pouvez-vous lire ceci ? J'ignore si quelqu'un pourra lire ces mots. Comme des scarabées rouillés, des feuilles qui décampent vers les marges déliées Pouvez-vous page au sujet stylo déplace je comme reforme et mots dispersés le Pouvez-vous lire ceci ? LA FIN ? _Traduction du scénario : Philippe Tessier_",
+    "alternatives": [],
+    "splitGroup": [
+      "ATOW_End4_002",
+      "ATOW_End4_003",
+      "ATOW_End4_004",
+      "ATOW_End4_005",
+      "ATOW_End4_006",
+      "ATOW_End4_004",
+      "ATOW_End4_007",
+      "ATOW_End4_008",
+      "ATOW_End4_004",
+      "Heading_TheEndQuestion"
+    ],
+    "passage": "ATOW-End4",
+    "context": [
+      {
+        "key": "ATOW_End4_001",
+        "en": "A Timeline Unbound"
+      },
+      {
+        "key": "ATOW_End4_002",
+        "en": "The words scatter and reform as I move my pen about the page. Like rusted leaves turned to beetles, they skitter towards the margins. The ink flows to the nub and surges back inside. The twine that binds the pages, the glue that grips the spine, bound and unbound again, it all flits by reality like a zoopraxiscope, projected images of distorted timelines with minor changes."
+      },
+      {
+        "key": "ATOW_End4_003",
+        "en": "I cannot know if this memoir is complete. I cannot know if anyone will see these words. The veins on my fingers change color. The {warwinner} won the war. I cannot tell if I am real or a projection. The twine that binds the pages, the glue that grips the spine... Am I repeating myself?"
+      },
+      {
+        "key": "ATOW_End4_004",
+        "en": "Can you read this?"
+      },
+      {
+        "key": "ATOW_End4_005",
+        "en": "Can you read these words?"
+      },
+      {
+        "key": "ATOW_End4_006",
+        "en": "Is there no response? Who do I presume would respond but myself?"
+      },
+      {
+        "key": "ATOW_End4_007",
+        "en": "I cannot know if anyone will see these words. Like rusted beetles, leaves that skitter margins unbound"
+      },
+      {
+        "key": "ATOW_End4_008",
+        "en": "Can you page the about pen my move I as reform and scatter words the "
+      },
+      {
+        "key": "Heading_TheEndQuestion",
+        "en": "THE END?"
+      },
+      {
+        "key": "Common_YouHaveUnlockedEnding",
+        "en": "You have unlocked **{ending_text}** ending."
+      }
+    ]
+  },
+  {
+    "id": "MilitaryYes_007",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "_If you have no {icon:s3_paradoxtoken} tokens, gain a {icon:s3_paradoxtoken} token and then discard it._",
+    "fr": "**Défaussez une Expérience avec un jeton {icon:s3_paradoxtoken} dessus (défaussez aussi le jeton).** Remettez le jeton {crest} dans la boîte du scénario.",
+    "alternatives": [],
+    "splitGroup": [
+      "MilitaryYes_006",
+      "MilitaryYes_007",
+      "Directive_ReturnCrestTokenToBox"
+    ],
+    "passage": "MilitaryYes",
+    "context": [
+      {
+        "key": "MilitaryYes_001",
+        "en": "Paradox Averted"
+      },
+      {
+        "key": "MilitaryYes_002",
+        "en": "Intrigued by his forwardness and familiarity, I followed him a few blocks to his home. Upon arrival, he opened the door and pointed to a {crest} figure. When I reached into my pocket, the same figure was there. "
+      },
+      {
+        "key": "MilitaryYes_003",
+        "en": "Though my reflexes are exceedingly well-trained, I was caught unprepared when, spying the figure, the man's demeanor suddenly became fiery and with otherworldly speed he snatched it from my hands. As if compelled by an unseen force, he extended the {crest} towards the identical second figure. I witnessed his gloved hand, like a ghostly apparition, transition through it. Suddenly, the two identical pieces merged into one another seamlessly."
+      },
+      {
+        "key": "MilitaryYes_004",
+        "en": "The man attempted to pull his fingers away, his entire frame beginning to shake and oscillate with a vicious intensity. I could sense a wave of heat radiating outward from the frightened indvidual, and scarcely shielded my eyes before the skin began to melt from his face like wax from a candle. Seconds later, his entire head exploded, the contents of which forcefully ejected themselves in a thick red ring across the walls of the room."
+      },
+      {
+        "key": "MilitaryYes_005",
+        "en": "Certainly a great experiment on time paradoxes had been conducted today - though to what aim it served, I was not exactly certain."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "MilitaryYes_006",
+        "en": "**Discard an Experiment with a {icon:s3_paradoxtoken} token on it (also discard the token).** "
+      },
+      {
+        "key": "MilitaryYes_007",
+        "en": "_If you have no {icon:s3_paradoxtoken} tokens, gain a {icon:s3_paradoxtoken} token and then discard it._"
+      },
+      {
+        "key": "Directive_ReturnCrestTokenToBox",
+        "en": "Return the {crest} token to the scenario box."
+      }
+    ]
+  },
+  {
+    "id": "ATOW_End7_011",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "needs-split",
+    "en": "**5.** What nation is the greatest and **only** nation in the world?",
+    "fr": "**4.** Quelle a été l'importance décisive de l'invention connue sous le nom de **{_rnd_ATOW_End7_0}** ? Justifiez votre réponse. **5.** Quelle est la **seule** et la plus grande nation du monde ? LA FIN ? _Traduction du scénario : Philippe Tessier_",
+    "alternatives": [],
+    "splitGroup": [
+      "ATOW_End7_010",
+      "ATOW_End7_011",
+      "Heading_TheEndQuestion"
+    ],
+    "passage": "ATOW-End7",
+    "context": [
+      {
+        "key": "ATOW_End7_001",
+        "en": "History of Applied Sciences"
+      },
+      {
+        "key": "ATOW_End7_002",
+        "en": "The 11th Edition of this coursebook has been provided by the glorious nation of Hungary, sponsored by the {townname} region, as a required companion to the Applied Sciences curriculum. It has been recently revised under the guidance of the author, Dr. {winner}."
+      },
+      {
+        "key": "ATOW_End7_003",
+        "en": "_Instructors:_ Once reading has been completed, offer appropriate time for discussion. Individually, students should then answer the questions below."
+      },
+      {
+        "key": "ATOW_End7_004",
+        "en": "**REVIEW QUESTIONS**"
+      },
+      {
+        "key": "ATOW_End7_005",
+        "en": "**1.** Who is **{winner}**?"
+      },
+      {
+        "key": "ATOW_End7_006",
+        "en": "**2.** In what year was **{newmeat}**"
+      },
+      {
+        "key": "ATOW_End7_007",
+        "en": "introduced? How did {newmeat}"
+      },
+      {
+        "key": "ATOW_End7_008",
+        "en": "affect the great war effort?"
+      },
+      {
+        "key": "ATOW_End7_009",
+        "en": "**3.** {winner} was born on the outskirts of {townname}. What is the name of the famous outpost that supplied the civil war efforts in the 1890's?"
+      },
+      {
+        "key": "Title_TigerLauncher",
+        "en": "Tiger Launcher"
+      },
+      {
+        "key": "Title_PsychicMindbomb",
+        "en": "Psychic Mindbomb"
+      },
+      {
+        "key": "Title_IrresistibleAphrodisiac",
+        "en": "Irresistible Aphrodisiac"
+      },
+      {
+        "key": "Title_HelmetMountedFlamethrower",
+        "en": "Helmet-Mounted Flamethrower"
+      },
+      {
+        "key": "Title_SteamGrenade",
+        "en": "Steam Grenade"
+      },
+      {
+        "key": "Title_RemoteControlledPlagueRatSwarm",
+        "en": "Remote Controlled Plague Rat Swarm"
+      },
+      {
+        "key": "Title_FlamingPitchfork",
+        "en": "Flaming Pitchfork"
+      },
+      {
+        "key": "Title_MechanizedHumanArmorSuit",
+        "en": "Mechanized Human Armor Suit"
+      },
+      {
+        "key": "Title_DreamStealer",
+        "en": "Dream Stealer"
+      },
+      {
+        "key": "ATOW_End7_010",
+        "en": "**4.** What was the critical importance of the **{_rnd_ATOW_End7_0}**? Illustrate."
+      },
+      {
+        "key": "ATOW_End7_011",
+        "en": "**5.** What nation is the greatest and **only** nation in the world?"
+      },
+      {
+        "key": "Heading_TheEndQuestion",
+        "en": "THE END?"
+      },
+      {
+        "key": "Common_YouHaveUnlockedEnding",
+        "en": "You have unlocked **{ending_text}** ending."
+      }
+    ]
+  },
+  {
+    "id": "ReignHUB_005",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "placeholders",
+    "en": "Lose 2 {icon:creepy_icon} .",
+    "fr": "Perdre 2 {icon:insanity_icon} .",
+    "alternatives": [
+      "Perdre 2 {icon:creepy_icon} ."
+    ],
+    "splitGroup": [],
+    "passage": "ReignHUB",
+    "context": [
+      {
+        "key": "ReignHUB_001",
+        "en": "Gain $3"
+      },
+      {
+        "key": "ReignHUB_002",
+        "en": "Search the Experiment deck of your choice and gain 1 card."
+      },
+      {
+        "key": "ReignHUB_003",
+        "en": "Gain 2 Ingredients."
+      },
+      {
+        "key": "ReignHUB_004",
+        "en": "Gain 2 Compulsion cards."
+      },
+      {
+        "key": "ReignHUB_005",
+        "en": "Lose 2 {icon:creepy_icon} ."
+      },
+      {
+        "key": "ReignHUB_006",
+        "en": "Lose 2 {icon:insanity_icon} ."
+      },
+      {
+        "key": "ReignHUB_007",
+        "en": "Gain 1 Knowledge of your choice."
+      },
+      {
+        "key": "ReignHUB_008",
+        "en": "Gain 2 Knowledge of your choice."
+      },
+      {
+        "key": "ReignHUB_009",
+        "en": "Gain an Estate Upgrade for -$2 cost."
+      },
+      {
+        "key": "ReignHUB_010",
+        "en": "Immediately take a Record Knowledge action (you must still pay all costs)."
+      },
+      {
+        "key": "ReignHUB_011",
+        "en": "Gain $1 and Gain 1 Ingredient."
+      },
+      {
+        "key": "ReignHUB_012",
+        "en": "Gain $1 and Gain 1 Knowledge of your choice."
+      },
+      {
+        "key": "ReignHUB_013",
+        "en": "Gain 3VP."
+      },
+      {
+        "key": "ReignHUB_014",
+        "en": "Immediately take a Perform Experiment action (you must still play all costs)."
+      },
+      {
+        "key": "ReignHUB_015",
+        "en": "Move the Crown token \"1 space to the left\"."
+      },
+      {
+        "key": "ReignHUB_016",
+        "en": "Move the Crown token \"1 space to the right\"."
+      }
+    ]
+  },
+  {
+    "id": "AdvancedWeaponryIntro_006",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "placeholders",
+    "en": "you may gain 1 Servant from Lost and lose 1 {icon:creepy_icon} .",
+    "fr": "vous pouvez gagner un Domestique de l'Asile et perdre 1 Malepeur.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "AdvancedWeaponryIntro",
+    "context": [
+      {
+        "key": "AdvancedWeaponryIntro_001",
+        "en": "A Few Improvements"
+      },
+      {
+        "key": "AdvancedWeaponryIntro_002",
+        "en": "I was quick to suggest a few \"enhancements\" to their battery and presented several **advanced weaponry** schematics which could prove instrumental to victory."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_003",
+        "en": "While the rumors of my parent's eccentricities made them hesitant, the promise of support from my lucrative estate proved too much to resist. If I could demonstrate to them the visceral efficacy of my proposal, they promised further investment. An easy task."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "AdvancedWeaponryIntro_004",
+        "en": "Retrieve the **Advanced Weaponry** Experiment cards. Shuffle these cards and place them face-down nearby to form their own deck."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_005",
+        "en": "Each player then draws an **Advanced Weaponry** card."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_006",
+        "en": "you may gain 1 Servant from Lost and lose 1 {icon:creepy_icon} ."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_007",
+        "en": "you may gain 1 Servant from Lost and gain 1VP."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_008",
+        "en": "you may gain 1 Servant from Lost and 1 Knowledge of your choice."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_009",
+        "en": "you may pay $1 to gain 1 Caretaker from Lost."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_010",
+        "en": "you may gain 1 Caretaker from Lost."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_011",
+        "en": "you may gain 1 Knowledge of your choice and 1VP."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_012",
+        "en": "no bonus."
+      },
+      {
+        "key": "AdvancedWeaponryIntro_013",
+        "en": "$1 for your efforts."
+      }
+    ]
+  },
+  {
+    "id": "RumorIngredient_003",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "placeholders",
+    "en": "**Gain 1 Ingredient of your choice.** _If it is a_ {icon:bodies_icon}_, gain 1_ {icon:creepy_icon}_._",
+    "fr": "**Gagnez 1 Ingrédient de votre choix.** _Si c'est un_ {icon:bodyresource}_, gagnez 1_ {icon:creepy_icon}_._",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "RumorIngredient",
+    "context": [
+      {
+        "key": "RumorIngredient_001",
+        "en": "Procurement of Ingredients"
+      },
+      {
+        "key": "RumorIngredient_002",
+        "en": "A local farmer had observed my conversation, and after determining an agreeable moment to greet me, we engaged in a cordial chat about the local economy. The earthy individual even suggested a visit to his plantation, which turned out to be most advantageous."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "RumorIngredient_003",
+        "en": "**Gain 1 Ingredient of your choice.** _If it is a_ {icon:bodies_icon}_, gain 1_ {icon:creepy_icon}_._"
+      }
+    ]
+  },
+  {
+    "id": "ParadoxExReminder_004",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "placeholders",
+    "en": " _tokens are meant to be infinite. In the rare case that you do not have enough tokens, use another marker as a substitute until there are enough remaining._",
+    "fr": "_Les jetons {icon:s3_paradoxtoken} ne sont pas limités. Dans le rare cas où vous n'en auriez pas assez, utilisez d'autres marqueurs comme substituts jusqu'à ce qu'il vous en reste suffisamment._",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ParadoxExReminder",
+    "context": [
+      {
+        "key": "ParadoxExReminder_001",
+        "en": "Removing Paradox"
+      },
+      {
+        "key": "ParadoxExReminder_002",
+        "en": "Experiments that have Paradox tokens {icon:s3_paradoxtoken} are considered incomplete Experiments. When you **Perform an Experiment**, you may instead complete an Experiment with a {icon:s3_paradoxtoken} token in your play area as if it were played from your hand. "
+      },
+      {
+        "key": "ParadoxExReminder_003",
+        "en": "Pay all applicable costs, return the {icon:s3_paradoxtoken} token to the Scenario box, and receive **all rewards as normal**. The completed Experiment remains face-up in front of you and counts as the type (A, B, or C) listed."
+      },
+      {
+        "key": "ParadoxExReminder_004",
+        "en": " _tokens are meant to be infinite. In the rare case that you do not have enough tokens, use another marker as a substitute until there are enough remaining._"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      }
+    ]
+  },
+  {
+    "id": "AfternoonTeaResolutionNAY_005",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "length",
+    "en": "All players who voted **YAY** **gain 1** {icon:creepy_icon} and may draw an **Advanced Weaponry** card.",
+    "fr": "Ma nature altruiste ne m'autorisait pas à chercher à me venger d'un incident aussi trivial alors que mon travail fondamental était destiné à changer le monde. Naturellement, j'ai tenté de dissuader mon parent de commettre un acte aussi irréfléchi, mais en vain. Comme on pouvait s'y attendre, ses manières douteuses et ses projets manifestes n'ont pas été appréciés par les responsables locaux. Il était heureux que notre illustre grand-parent ne soit plus là pour assister à ce spectacle pathétique. J'ai l'intime conviction qu'il doit encore être en train de fulminer dans son cercueil !",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "AfternoonTeaResolutionNAY",
+    "context": [
+      {
+        "key": "AfternoonTeaResolutionNAY_001",
+        "en": "Conspiracy Failed"
+      },
+      {
+        "key": "AfternoonTeaResolutionNAY_003",
+        "en": "I could not fault my cousins for their decision. It is sometimes a struggle for those with unfortunately low intellect to execute on a scheme. The afternoon tea incident would forever remain unavenged."
+      },
+      {
+        "key": "AfternoonTeaResolutionNAY_002",
+        "en": "My altruistic nature would not allow me to seek revenge on such trivial matters when my great work was primed to change the world. Of course, I attempted to dissuade my dear cousin from this rash course of action, but I was unsuccessful. Expectedly, their dubious manners and overt schemes were not well-received by the local officials. It was fortunate that our illustrious grandfather were not here to see this pathetic display. I am sure he is seething in his coffin over it even now!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "AfternoonTeaResolutionNAY_005",
+        "en": "All players who voted **YAY** **gain 1** {icon:creepy_icon} and may draw an **Advanced Weaponry** card."
+      },
+      {
+        "key": "AfternoonTeaResolutionNAY_004",
+        "en": "The player who did not win the bid **gains 2** {icon:creepy_icon} and may draw an **Advanced Weaponry** card."
+      }
+    ]
+  },
+  {
+    "id": "Martial1_007",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "length",
+    "en": "**gain $2 from the supply** ",
+    "fr": "**2 $ de la réserve**",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "Martial1",
+    "context": [
+      {
+        "key": "Title_MartialLaw",
+        "en": "Martial Law"
+      },
+      {
+        "key": "Title_EarlyYears",
+        "en": "Early Years"
+      },
+      {
+        "key": "UIButton_Accept",
+        "en": "Accept"
+      },
+      {
+        "key": "Martial1_002",
+        "en": "Turn to page **4** of the Village Chronicle. Retrieve the **Temporary Housing** Estate Upgrades."
+      },
+      {
+        "key": "Directive_PlaceSuspicionMarker_Lead",
+        "en": "Place the Suspicion Marker on space "
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      },
+      {
+        "key": "Directive_TrackerAndMobMarkerLeft",
+        "en": "**{tracker}** and the {icon:angrymob_icon} Marker one space to the left."
+      },
+      {
+        "key": "Directive_3Player_PassMarker_A",
+        "en": "Then, since this is a 3 player game, pass the starting player marker clockwise 1 additional time."
+      },
+      {
+        "key": "Heading_TurnTheTide",
+        "en": "**Turn the Tide**"
+      },
+      {
+        "key": "Martial1_006",
+        "en": "The {warloser} are desperate for assistance in the failing war effort. You may draw a card from the **Advanced Weaponry** deck when taking any action that allows you to draw Experiments. When you complete the Experiment you will receive {icon:s3_weapontoken} tokens equal to the amount listed at the bottom of the card, and also "
+      },
+      {
+        "key": "Title_Separatists",
+        "en": "Separatists"
+      },
+      {
+        "key": "Martial1_008",
+        "en": "**gain a Knowledge of your choice from the supply** "
+      },
+      {
+        "key": "Martial1_007",
+        "en": "**gain $2 from the supply** "
+      },
+      {
+        "key": "Martial1_009",
+        "en": "as a gift from the {warloser}."
+      },
+      {
+        "key": "Heading_StorybookToken_WeaponsBonus",
+        "en": "{icon:storybooktoken} **Weapons Bonus**"
+      },
+      {
+        "key": "Directive_FirstPlayerComplete2AdvancedWeaponry_Fragment",
+        "en": "The first player to complete **2 Advanced Weaponry** Experiments "
+      },
+      {
+        "key": "Click_ClicksHereSpecialBonus_Typo",
+        "en": "clicks here for a special bonus."
+      },
+      {
+        "key": "Heading_MilitaryDemandsBarracks",
+        "en": "**Military Demands - Barracks**"
+      },
+      {
+        "key": "Directive_MonarchyDemandsServiceBarracksPenalty",
+        "en": "The Monarchy demands a commitment of service from their citizenry. At the end of each round, if a player has not placed a piece on the Barracks, a penalty will be enacted upon them. This penalty will be determined by the Monarchy at the end of each round."
+      },
+      {
+        "key": "Directive_PlaceOnBarracksNoBonus",
+        "en": "When placing a piece on the Barracks, you receive **no bonus**."
+      },
+      {
+        "key": "Heading_MilitaryIncentiveBarracks",
+        "en": "**Military Incentive - Barracks**"
+      },
+      {
+        "key": "Directive_SeparatistsUrgeRallyReward",
+        "en": "The Separatists urge citizens to rally to their cause. They do not require a player to offer their service, but will incentivize this dedication to the cause with a reward each round."
+      },
+      {
+        "key": "Martial1_018",
+        "en": "When placing a piece on the Barracks, **{sepinc1}**"
+      },
+      {
+        "key": "Heading_OutpostBold",
+        "en": "**Outpost**"
+      },
+      {
+        "key": "Directive_OutpostOpenForTrading_Fragment",
+        "en": "An Outpost is open in town for trading {icon:s3_weapontoken} tokens for goods. "
+      },
+      {
+        "key": "Click_HereForOutpostExplanation",
+        "en": "Click here for an explanation of the Outpost."
+      },
+      {
+        "key": "Click_EndRound_NextRound",
+        "en": "Click here at the end of the round to move to the next round..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "Title_SpecialSetup",
+        "en": "Special Setup"
+      },
+      {
+        "key": "Directive_DoNotPerformEndOfRoundYet",
+        "en": "Do NOT perform the End of Round actions at this time. You will be instructed to do so once a few events have been completed."
+      }
+    ]
+  },
+  {
+    "id": "Blame1b_007",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "length",
+    "en": "Sorry. I must sadly decline.",
+    "fr": "Désolé. Je me vois au regret de devoir décliner cette offre.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "Blame1b",
+    "context": [
+      {
+        "key": "Blame1b_001",
+        "en": "Offer"
+      },
+      {
+        "key": "Directive_ReminderDoNotAllowOthersSeeScreen",
+        "en": "**Reminder: Do not allow any other players to see this screen.**"
+      },
+      {
+        "key": "Blame1b_003",
+        "en": "The riflemen conferred for a moment, their mustaches quivering with their whispers. One of the soldiers then smiled congenially."
+      },
+      {
+        "key": "Blame1b_004",
+        "en": "\"We are always looking for generous benefactors. For a sum of **$2**, we will kindly sell you a new flag. A flag of the proud {warwinner}. And we will be willing to overlook this error in judgement.\""
+      },
+      {
+        "key": "Blame1b_005",
+        "en": "Do you accept the offer of **$2** to purchase a {warwinner} Flag token?"
+      },
+      {
+        "key": "Blame1b_006",
+        "en": "Yes, I accept."
+      },
+      {
+        "key": "Blame1b_007",
+        "en": "Sorry. I must sadly decline."
+      }
+    ]
+  },
+  {
+    "id": "WarningIntro_001",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "conflict",
+    "en": "Future Consequences",
+    "fr": "GÉNÉRATION III : Conséquences futures",
+    "alternatives": [
+      "Future Consequences"
+    ],
+    "splitGroup": [],
+    "passage": "WarningIntro",
+    "context": [
+      {
+        "key": "WarningIntro_001",
+        "en": "Future Consequences"
+      },
+      {
+        "key": "Title_GenerationIII",
+        "en": "GENERATION III"
+      },
+      {
+        "key": "WarningIntro_002",
+        "en": "**A Modern Future**"
+      },
+      {
+        "key": "Narrative_DiscoveryFamilyExperimentsJournals",
+        "en": "While the discovery of my family's experiments and journals would cement my scientific ambitions for years to come, I had never actually met them. I was too young to remember the disappearance of my brilliant progenitor. To lose a parent and then another to the subsequent dementia that followed was more folly than one child should ever have to bear. I was shielded from this reality, rushed away to Vienna, where I was consumed by my studies until my twenty-first year. It was only at my partner's insistence that I decided to settle my inheritance."
+      },
+      {
+        "key": "WarningIntro_003",
+        "en": "I remember being stunned as I arrived by train on a mid-summer's evening. I do not know what I expected from the anecdotes my nanny had relayed to me, but it was not the bustling cityscape that greeted me. As the sun dipped into the forest, the glimmer of modern steel light fixtures amplified the urban luminescence. My delighted spouse and I enjoyed a quiet ride in our steamer car which offered us a chance to observe the idyllic community and decidedly pleasant folk enjoying the convenience of electricity and steam turbine technology."
+      },
+      {
+        "key": "Narrative_EstateUntouchedVacancyCaretaker",
+        "en": "The estate appeared untouched by years of vacancy; recently pruned brambles and ivy adorned the iron gate and the expansive grounds were immaculate. A caretaker of great age and a small housekeeping staff greeted us. Although updating the grounds to the more modern standard of the nearby town would prove a daunting task, the servants’ warm reception allayed our remaining anxieties. Upon discovery of my family's laboratory, what had been planned as a mere visit received an indefinite extension."
+      },
+      {
+        "key": "WarningIntro_004",
+        "en": "However, when I spoke of my family's history of experimentation, I was rarely met with indifference but more often firm words of encouragement. It appeared that this region, so rife with abnormal progress, viewed my theories as rudimentary but delightfully avant-garde. Even when I expounded upon dark rituals and the grotesque, they encouraged further exploration and referred me to the newly constructed University."
+      },
+      {
+        "key": "Narrative_SevereConsternationScientificEnlightenment",
+        "en": "This caused me severe consternation. Was this not what I wanted — a clear path towards scientific enlightenment and support of my family's landmark ideas? Why did their lack of friction vex me so? Did they view my illustrious work as trivial? "
+      },
+      {
+        "key": "Narrative_GrimRealizationStrengthenedWill",
+        "en": "It was this grim realization that strengthened my will. If these craven modernists wanted more, then so be it! I would push the limits of science further than ever before and damn the consequences!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "Common_VersionOnePointZero",
+        "en": "v1.0"
+      }
+    ]
+  },
+  {
+    "id": "TimeTravelintro1_001",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "conflict",
+    "en": "A Return to Devastation",
+    "fr": "GÉNÉRATION II : Retour à la dévastation",
+    "alternatives": [
+      "A Return to Devastation"
+    ],
+    "splitGroup": [],
+    "passage": "TimeTravelintro1",
+    "context": [
+      {
+        "key": "TimeTravelintro1_001",
+        "en": "A Return to Devastation"
+      },
+      {
+        "key": "Title_GenerationII",
+        "en": "GENERATION II"
+      },
+      {
+        "key": "TimeTravelintro1_003",
+        "en": "I hope you will indulge my brief melancholic digression, for even my stern disposition was reduced to sobbing when I discovered the grim remnants of what was once a burgeoning village. I knew of the tragedy, having received several letters urging me to delay my visit until the conflict had been resolved. However, I felt compelled to see the destruction with my own eyes, and even braved the last vestiges of war to do so. If only I had taken heed of their warning..."
+      },
+      {
+        "key": "TimeTravelintro1_004",
+        "en": "The all-encompassing destruction had blackened the fields, leaving the land ashen and emaciated. The once-grand estate was now in shambles; a dilapidated husk of its former intimidating presence. I wept for what seemed like hours amongst the dust and rubble. While I was still heir to a considerable fortune with diverse business interests, I was struck by the sentimental weight of such a loss."
+      },
+      {
+        "key": "TimeTravelintro1_005",
+        "en": "However, fortune would soon shine its myriad gaze upon me."
+      },
+      {
+        "key": "TimeTravelintro1_006",
+        "en": "I was joined by my cousins and we shared our grief at a hotel in Budapest for several days. It was there that an unexpected messenger arrived with a small brown package. Inside, the executor of our parents’ affairs had included the remaining articles of interest salvaged from the mansion. As if preserved for this moment, there was a leather journal seemingly untouched by the flames. Upon opening the tome, a weathered sheet of parchment fell to the table. "
+      },
+      {
+        "key": "TimeTravelintro1_007",
+        "en": "It was a map!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "Title_Separatists",
+        "en": "Separatists"
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      }
+    ]
+  },
+  {
+    "id": "Directive_MustFlipToSeparatist",
+    "surface": "a-time-of-war",
+    "bucket": "draft",
+    "reason": "conflict",
+    "en": "**must** flip their Flag token to the **Separatist** side and lose **1VP**. The Monarchy is not pleased.",
+    "fr": "**doivent**retourner leur jeton Drapeau pour révéler la face **Séparatistes**et perdre **1 PV**. La Monarchie n'a pas apprécié.",
+    "alternatives": [
+      "**doivent** retourner leur jeton Drapeau pour révéler la face **Séparatistes** et perdre **1 PV**. La Monarchie n'a pas apprécié."
+    ],
+    "splitGroup": [],
+    "passage": "BarracksSimple1",
+    "context": [
+      {
+        "key": "Title_ServiceRequired",
+        "en": "Service Required"
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      },
+      {
+        "key": "Narrative_DistressedMonarchyMilitaryService",
+        "en": "I was admittedly distressed by the Monarchy's insistence upon military service to help quell the uprising. But, as a citizen eager to support my country in any regrettable fashion it required, I willingly offered service, or in the unfortunate case that my affairs elsewise required my attentions, submitted my penalty in full."
+      },
+      {
+        "key": "Click_ContinueEllipsis_B",
+        "en": "Click here to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "Directive_DidNotPlaceOnBarracks_Fragment",
+        "en": "Any player who did not place a piece on the Barracks this round "
+      },
+      {
+        "key": "BarracksSimple1_005",
+        "en": "gains **{_rnd_BarracksSimple1_0}**{icon:creepy_icon}."
+      },
+      {
+        "key": "Directive_Receives1LessIncome",
+        "en": "receives **$1 less** income this round."
+      },
+      {
+        "key": "BarracksSimple1_007",
+        "en": "**must** immediately lose **{_rnd_BarracksSimple1_1}VP**."
+      },
+      {
+        "key": "Directive_MustFlipToSeparatist",
+        "en": "**must** flip their Flag token to the **Separatist** side and lose **1VP**. The Monarchy is not pleased."
+      },
+      {
+        "key": "Directive_FortunateMonarchyNoPenalty",
+        "en": "is fortunate as the Monarchy has decided not to penalize them this round."
+      }
+    ]
+  },
+  {
+    "id": "Heading_BigBrother",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "**Big Brother**",
+    "fr": "**Big Brother**",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "Warning2",
+    "context": [
+      {
+        "key": "Title_NotAgain",
+        "en": "Not Again"
+      },
+      {
+        "key": "Title_MiddleYears",
+        "en": "Middle Years"
+      },
+      {
+        "key": "UIButton_Accept",
+        "en": "Accept"
+      },
+      {
+        "key": "Warning2_002",
+        "en": "Turn to page **{cont}** of the Village Chronicle. "
+      },
+      {
+        "key": "Heading_PeacefulGreen",
+        "en": "**Peaceful Green**"
+      },
+      {
+        "key": "Narrative_VillageRuinMossyFloor",
+        "en": "While some of the village lay in ruin, a deep green moss covered most of it, giving the stone a calming natural quality. In fact, the entire town seemed to be seething with this growing mossy floor while the townspeople seemed eerily serene. Patches of moss grew on the skin of passersby, and it all seemed to emanate from a golden statue at the center of the **Park**."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitThePark",
+        "en": "{icon:storybooktoken} **Visit the Park**"
+      },
+      {
+        "key": "Heading_ActionAtParkLocation",
+        "en": "When a player completes an action at the **Park** location:"
+      },
+      {
+        "key": "Click_ToChangeTheWorld",
+        "en": "Click here to change the world..."
+      },
+      {
+        "key": "Heading_BreakingThe4thWall",
+        "en": "**Breaking the 4th Wall**"
+      },
+      {
+        "key": "Narrative_WorldChangedUnfinishedPage",
+        "en": "The world has changed again and we get the impression that the author of this game hasn't written the description for this part and probably never will. In fact, he specifically requested the page be intentionally unfinished a full year before writing anything here. If you've flipped through the pages of the Village Chronicle, you were probably confused by this page already."
+      },
+      {
+        "key": "Narrative_UnfinishedPage_GameDesignerWeight",
+        "en": "We feel the emotional weight of six years of developing this game and writing it all by hand resting on our shoulders. 'They better like it.' A voice whispers. It is the game designer again, self-inserting, which is kind of a hack move."
+      },
+      {
+        "key": "Narrative_UnfinishedPage_EmptyPageVoid",
+        "en": "I think an empty page is exactly what we need right now. Maybe this is a chance to recognize that we're all aimlessly trudging forward through the void. Maybe there's a deeper meaning to it all and we should take a moment to discuss it. Board games just aren't what they used to be. Why do they need electronic apps? Perhaps it's best if we visit the bank and get out of here before the game designer starts acting even more like a hipster."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBank",
+        "en": "{icon:storybooktoken} **Visit the Bank**"
+      },
+      {
+        "key": "Heading_ActionAtBank",
+        "en": "When a player completes an action at the **Bank** location:"
+      },
+      {
+        "key": "Heading_TooPerfect",
+        "en": "**Too Perfect**"
+      },
+      {
+        "key": "Warning2_015",
+        "en": "There was an eerily serene quality to this world. The air was dense here, like a warm blanket against the skin yet still room temperature. Green grass framed the clean roads and idyllic town setting where newspapers printed the news of the day - \"Nothing to Report. Peace and Prosperity Continue.\" Something about it was so comforting and surreal that it was difficult to keep my eyes open. I wondered if this was what contentment feels like?"
+      },
+      {
+        "key": "Heading_ScienceIsStressful",
+        "en": "**Science is Stressful**"
+      },
+      {
+        "key": "Warning2_017",
+        "en": "We felt a deep lethargy overtake us anytime we attempted experimentation in such a perfect environment. You must assign **2** legal pieces in order to take the **Perform Experiment** action."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheChurch",
+        "en": "{icon:storybooktoken} **Visit the Church**"
+      },
+      {
+        "key": "Heading_ActionAtChurchLocation",
+        "en": "When a player completes an action at the **Church** location:"
+      },
+      {
+        "key": "Heading_BigBrother",
+        "en": "**Big Brother**"
+      },
+      {
+        "key": "Narrative_TownJovialModernSociety",
+        "en": "Everyone in the town was extremely jovial and greeted us with wide-eyed enthusiasm. The modern society stunned us with its glass buildings, bronze fixtures, and steel architecture. However, the hissing whirr of a steam-powered device suddenly broke the illusion. Along every street corner was a mechanical contraption that swiveled, seemingly following our every move. We felt a unique tension in the air, as if our every move was being watched and criticized."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheTownHall",
+        "en": "{icon:storybooktoken} **Visit the Town Hall**"
+      },
+      {
+        "key": "Heading_ActionAtTownHallLocation",
+        "en": "When a player completes an action at the **Town Hall** location:"
+      },
+      {
+        "key": "Heading_Amphibious",
+        "en": "**Amphibious**"
+      },
+      {
+        "key": "Narrative_UnderwaterVillageInsects",
+        "en": "We arrived at an astonishing underwater village. The sturdy glass fixtures surrounding the village created a pressurized chamber that kept the floating phosphorescent sea creatures from entering. We marveled at the engineering required to create such a brilliant enclosure and even considered staying until we realized that all the townsfolk were eating insects by flinging their sticky tongues into the air."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBlacksmith",
+        "en": "{icon:storybooktoken} **Visit the Blacksmith**"
+      },
+      {
+        "key": "Heading_ActionAtBlacksmith",
+        "en": "When a player completes an action at the **Blacksmith** location:"
+      },
+      {
+        "key": "Heading_AgeOfTheDinosaurs",
+        "en": "**Age of the Dinosaurs**"
+      },
+      {
+        "key": "Narrative_MoldyLeatheryStenchTown",
+        "en": "We were immediately accosted by a moldy leathery stench that festered in our nostrils like burning sulfur from the tip of a match. The air was hot, the entire town deserted as if it had never existed. We were surprised to find our estates left relatively untouched, though palm trees and jungle vines now covered the exterior gardens."
+      },
+      {
+        "key": "Warning2_030",
+        "en": "Suddenly, a thunderous noise erupted, reverberating against the stone walls. In the distance, we watched as towering beasts of the Mesozoic Era roamed across the dusty plains. The tyrannosaurus stalked its prey, its face glimmering brightly like a bronze statue. Moments later, a bright laser burst from its eye-socket, singling out a lone brachiosaurus from the herd and cutting it in twain. As the biomechanical menace masticated it's freshly charred meal, we determined that this may be a rather difficult environment in which to continue our experiments."
+      },
+      {
+        "key": "Heading_StorybookToken_VisitTheBunker",
+        "en": "{icon:storybooktoken} **Visit the Bunker**"
+      },
+      {
+        "key": "Heading_ActionAtBunker",
+        "en": "When a player completes an action at the **Bunker** location:"
+      },
+      {
+        "key": "Heading_UtopianExperiments",
+        "en": "**Utopian Experiments**"
+      },
+      {
+        "key": "Directive_NewExperimentsAvailable_An",
+        "en": "A new set of Experiments are available for players to complete. They may be drawn whenever an action would allow a player to draw new Experiments."
+      },
+      {
+        "key": "Warning2_034",
+        "en": "When the the round is complete, "
+      },
+      {
+        "key": "Warning2_035",
+        "en": "click here to move to the next round..."
+      },
+      {
+        "key": "UIButton_EndOfRound",
+        "en": "End of Round"
+      },
+      {
+        "key": "Round_GenerationIII_MiddleEnded",
+        "en": "The Middle Years of the Third Generation has ended. Perform all End of Round actions."
+      },
+      {
+        "key": "Round_StartLateYears_Rule",
+        "en": "Then, perform all Start of Round actions for the Late Years before continuing."
+      }
+    ]
+  },
+  {
+    "id": "DuelRules1_008",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "pistols",
+    "fr": "pistols",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "DuelRules1",
+    "context": [
+      {
+        "key": "DuelRules1_001",
+        "en": "Rules of the Duel"
+      },
+      {
+        "key": "DuelRules1_002",
+        "en": "Over the next few days, I formalized the rules of engagement for a duel that would take place as soon as all parties were able. I knew that I could choose a duel of **scientific prowess** or **pistols** at twenty paces."
+      },
+      {
+        "key": "DuelRules1_003",
+        "en": "A scientific duel would be a duel where we would compare our research and skill levels in one of four scientific fields to be determined randomly. By adding our total Journal Track levels to our completed Experiments of that type, we would determine the victor! "
+      },
+      {
+        "key": "DuelRules1_004",
+        "en": "A duel with pistols would be a duel where the victor was determined through sheer chance."
+      },
+      {
+        "key": "Heading_DecisionWasClear",
+        "en": "**The decision was clear to me:**"
+      },
+      {
+        "key": "DuelRules1_005",
+        "en": "I chose a battle of wits."
+      },
+      {
+        "key": "Choice_Science",
+        "en": "science"
+      },
+      {
+        "key": "DuelRules1_007",
+        "en": "I chose pistols at dawn."
+      },
+      {
+        "key": "DuelRules1_008",
+        "en": "pistols"
+      },
+      {
+        "key": "DuelRules1_009",
+        "en": "Or perhaps, I chose to retract and "
+      },
+      {
+        "key": "DuelRules1_010",
+        "en": "send them a strongly-worded letter."
+      }
+    ]
+  },
+  {
+    "id": "Round_EndOfRoundActions_Rule",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "Perform any End of Round actions before continuing.",
+    "fr": "Perform any End of Round actions before continuing.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TimeTravel3",
+    "context": [
+      {
+        "key": "Title_TidesOfWar2",
+        "en": "Tides of War 2"
+      },
+      {
+        "key": "Title_LateYears",
+        "en": "Late Years"
+      },
+      {
+        "key": "UIButton_Accept",
+        "en": "Accept"
+      },
+      {
+        "key": "TimeTravel3_001",
+        "en": "Turn to page **14** of the Village Chronicle."
+      },
+      {
+        "key": "Heading_MilitaryDemands",
+        "en": "**Military Demands**"
+      },
+      {
+        "key": "TimeTravel3_002",
+        "en": "Before the end of the Generation, all players must take an action at the Barracks to aide in the war effort. You receive **no** benefit for this placement."
+      },
+      {
+        "key": "TimeTravel3_003",
+        "en": "If you do not have a piece of your color on the Barracks at the End of the Generation, you will **lose 5VP**."
+      },
+      {
+        "key": "Heading_StorybookToken_RepairTimeMachine",
+        "en": "{icon:storybooktoken} **Repair the Time Machine**"
+      },
+      {
+        "key": "Directive_PerformExperimentTimeMachineRepairs",
+        "en": "When taking the **Perform Experiment** action, a player may instead complete the requirements for a **Time Machine Repairs** Experiment. They gain the VP and bonus listed and then flip the card face-down. "
+      },
+      {
+        "key": "Directive_AllThreeRepairsCompleted_Fragment",
+        "en": "Once all **three** Repairs are completed, "
+      },
+      {
+        "key": "Click_HereForSpecialMessage_Exclaim",
+        "en": "click here for a special message!"
+      },
+      {
+        "key": "Heading_StorybookToken_ParadoxExplanation",
+        "en": "{icon:storybooktoken} **Paradox Explanation**"
+      },
+      {
+        "key": "Directive_ParadoxTokenRulesExplanation_Fragment",
+        "en": "For more detailed rules on Experiments with Paradox tokens {icon:s3_paradoxtoken} and how to complete them, "
+      },
+      {
+        "key": "Click_Here_Period",
+        "en": "click here."
+      },
+      {
+        "key": "Heading_StorybookToken_ParadoxicalMendingReward",
+        "en": "{icon:storybooktoken} **Paradoxical Mending Reward**"
+      },
+      {
+        "key": "Directive_FixTimestreamZeroParadox_Fragment",
+        "en": "Fixing the timestream has its rewards. The first player with **zero** Paradox tokens {icon:s3_paradoxtoken} on their Experiments must immediately "
+      },
+      {
+        "key": "Click_ToReceiveSpecialBonus",
+        "en": "click here to receive a special bonus."
+      },
+      {
+        "key": "Directive_RemoveParadoxTokenForBonus",
+        "en": "_You must remove at least 1 {icon:s3_paradoxtoken} token to gain this bonus._"
+      },
+      {
+        "key": "Click_ToDetermineFateOfTown",
+        "en": "Click here to determine the Fate of the Town."
+      },
+      {
+        "key": "UIButton_EndOfRound",
+        "en": "End of Round"
+      },
+      {
+        "key": "Round_GenerationII_LateEnded",
+        "en": "The Late Years of the Second Generation has ended."
+      },
+      {
+        "key": "Round_EndOfRoundActions_Rule",
+        "en": "Perform any End of Round actions before continuing."
+      }
+    ]
+  },
+  {
+    "id": "Reign7c_006",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "{title} {nameE}",
+    "fr": "{title} {nameE}",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "Reign7c",
+    "context": [
+      {
+        "key": "Reign7c_001",
+        "en": "Please enter your brand new Regal title."
+      },
+      {
+        "key": "UIButton_Continue",
+        "en": "Continue"
+      },
+      {
+        "key": "Reign7c_002",
+        "en": "{title} {nameA}"
+      },
+      {
+        "key": "Reign7c_003",
+        "en": "{title} {nameB}"
+      },
+      {
+        "key": "Reign7c_004",
+        "en": "{title} {nameC}"
+      },
+      {
+        "key": "Reign7c_005",
+        "en": "{title} {nameD}"
+      },
+      {
+        "key": "Reign7c_006",
+        "en": "{title} {nameE}"
+      }
+    ]
+  },
+  {
+    "id": "TimeTravel_011",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "The Early Years of the Second Generation has ended. Perform all End of Round actions.",
+    "fr": "The Early Years of the Second Generation has ended. Perform all End of Round actions.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TimeTravel",
+    "context": [
+      {
+        "key": "Title_TidesOfWar2",
+        "en": "Tides of War 2"
+      },
+      {
+        "key": "Title_EarlyYears",
+        "en": "Early Years"
+      },
+      {
+        "key": "UIButton_Accept",
+        "en": "Accept"
+      },
+      {
+        "key": "TimeTravel_002",
+        "en": "Turn to page **13** of the Village Chronicle. Flip your Masterwork Experiment face-down; it cannot becompleted during this Generation. Return the{icon:angrymob_icon}token 1 space to the left of the Suspicion Marker."
+      },
+      {
+        "key": "Directive_3Player_PassMarker_A",
+        "en": "Then, since this is a 3 player game, pass the starting player marker clockwise 1 additional time."
+      },
+      {
+        "key": "TimeTravel_004",
+        "en": "**Each player retrieves their second Caretaker from Lost and places it in their Estate.** _This piece represents your parent working on Experiments in the lab._"
+      },
+      {
+        "key": "Heading_StorybookToken_ParadoxExplanation",
+        "en": "{icon:storybooktoken} **Paradox Explanation**"
+      },
+      {
+        "key": "Directive_ParadoxTokenRulesExplanation_Fragment",
+        "en": "For more detailed rules on Experiments with Paradox tokens {icon:s3_paradoxtoken} and how to complete them, "
+      },
+      {
+        "key": "Click_Here_Period",
+        "en": "click here."
+      },
+      {
+        "key": "Heading_StorybookToken_ParadoxicalMendingReward",
+        "en": "{icon:storybooktoken} **Paradoxical Mending Reward**"
+      },
+      {
+        "key": "Directive_FixTimestreamZeroParadox_Fragment",
+        "en": "Fixing the timestream has its rewards. The first player with **zero** Paradox tokens {icon:s3_paradoxtoken} on their Experiments must immediately "
+      },
+      {
+        "key": "Click_ToReceiveSpecialBonus",
+        "en": "click here to receive a special bonus."
+      },
+      {
+        "key": "Directive_RemoveParadoxTokenForBonus",
+        "en": "_You must remove at least 1 {icon:s3_paradoxtoken} token to gain this bonus._"
+      },
+      {
+        "key": "Click_EndRound_NextRound",
+        "en": "Click here at the end of the round to move to the next round..."
+      },
+      {
+        "key": "UIButton_EndOfRound",
+        "en": "End of Round"
+      },
+      {
+        "key": "TimeTravel_011",
+        "en": "The Early Years of the Second Generation has ended. Perform all End of Round actions."
+      },
+      {
+        "key": "Round_StartMiddleYears_Rule",
+        "en": "Then, perform all Start of Round actions for the Middle Years before continuing."
+      }
+    ]
+  },
+  {
+    "id": "NameEntryC_001",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "untranslated",
+    "en": "{nameC}.",
+    "fr": "{nameC}.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "NameEntryC",
+    "context": [
+      {
+        "key": "Narrative_WelcomeToMyFathersWork_Fragment",
+        "en": "Welcome to My Father's Work, "
+      },
+      {
+        "key": "NameEntryC_001",
+        "en": "{nameC}."
+      },
+      {
+        "key": "NameEntryC_002",
+        "en": "May your name live in infamy."
+      },
+      {
+        "key": "Click_ContinueEllipsis_Title",
+        "en": "Click to Continue..."
+      }
+    ]
+  },
+  {
+    "id": "ParadoxTimeRandom_029",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "unmatched",
+    "en": "This was a minor setback.",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ParadoxTimeRandom",
+    "context": [
+      {
+        "key": "ParadoxTimeRandom_001",
+        "en": "A Surge of Productivity"
+      },
+      {
+        "key": "ParadoxTimeRandom_002",
+        "en": "A Clarity of Purpose"
+      },
+      {
+        "key": "ParadoxTimeRandom_003",
+        "en": "None Left Behind"
+      },
+      {
+        "key": "ParadoxTimeRandom_004",
+        "en": "Future Notes"
+      },
+      {
+        "key": "ParadoxTimeRandom_005",
+        "en": "Trust and Benevolence"
+      },
+      {
+        "key": "ParadoxTimeRandom_006",
+        "en": "A Return to Suspicion"
+      },
+      {
+        "key": "ParadoxTimeRandom_007",
+        "en": "Targeted"
+      },
+      {
+        "key": "ParadoxTimeRandom_008",
+        "en": "Utter Catastrophe"
+      },
+      {
+        "key": "ParadoxTimeRandom_009",
+        "en": "The time device proved to be invaluable for productivity. While the general populace squabbled over self-interests, creating and destroying the countryside in equal measure with varying degrees of incalculable existential horror, I was generally left to my leisure in solitude with my spouse and servants."
+      },
+      {
+        "key": "ParadoxTimeRandom_010",
+        "en": "One flick of an electrical switch and the copper fixtures of the device sent me back to the moments before a failed experiment. I soon became acquainted with visitations from myself, even sharing tea with several versions of my person to talk over and revise a particularly difficult thesis. While the process aged me quicker than desired, the ingredients it saved and the excellent conversation proved well worth it."
+      },
+      {
+        "key": "ParadoxTimeRandom_011",
+        "en": "Technological advancement retrieved from the future, the stability offered by knowing you can change your past, the ability to travel backwards in time to guide one's self away from a rough day ahead; general access to a time machine could lift a near Utopia right to the edge of perfection!"
+      },
+      {
+        "key": "ParadoxTimeRandom_012",
+        "en": "While I was somewhat disappointed in the lack of chaos, I was ecstatic at the reaction of the university elite. Our decision had such a positive effect on the world, it made the academics positively seethe! Those furrowed brows and anxious worry lines grafted onto their imbecilic faces made the outcome of this rash decision a joy to behold. It wasn't long before this joy gave way to clarity of purpose. I felt reinvigorated, hoping each day that my next experiment would evoke the same horrific response."
+      },
+      {
+        "key": "ParadoxTimeRandom_013",
+        "en": "If I were to forgo humility for a moment and describe one of my most favorable traits, I am a creature of infinite patience. So, I watched as the first experiments in time alteration bore miniscule results and continued in my tasks without paying them much heed. Like all initial fascinations, the wave of interest in manipulating fate slowly gave way to other technological distractions and time machines became popular children's toys around the holidays."
+      },
+      {
+        "key": "ParadoxTimeRandom_014",
+        "en": "I cannot recollect the moment when I noticed it, perhaps it happened naturally, but as the timeline shifted ever so slowly, it appeared that the forces aligning the cosmos preferred stasis over the whims of chaos. With each passing season, the studious gap between myself and my cousins seemed to edge ever closer."
+      },
+      {
+        "key": "ParadoxTimeRandom_015",
+        "en": "And though I abhorred the thought of intervention from forces outside of my understanding, I cannot say that I did not relish my stoicism being rewarded."
+      },
+      {
+        "key": "ParadoxTimeRandom_016",
+        "en": "There are narrative consequences for unleashing a Time Machine into the wild, and the devastation is too far-reaching for one single paragraph in a mad scientist's memoir to detail. However, it has **no effect on gameplay** and therefore will be omitted. "
+      },
+      {
+        "key": "ParadoxTimeRandom_017",
+        "en": "It is better to write these words now in anticipation of the game, My Father's Work, which will see release in 2022 and detail the historical events of my family. I've played it a few times during my travels and while I wish it had a solo version, it's still very good. "
+      },
+      {
+        "key": "ParadoxTimeRandom_018",
+        "en": "Perhaps history will no longer align with the narrative presented in the game and this paragraph will seem oddly out of place. Ah, such is the confounding nature of time travel."
+      },
+      {
+        "key": "ParadoxTimeRandom_019",
+        "en": "The people have developed a sense of trust and acceptance for my work after the unmitigated success of the time altering apparatus. Trust and acceptance? I grapple with this concept with many of my waking hours. Even on the days where I feel emboldened to venture backwards into the timestream to undo this stomach-turning adoration, some peon in the village simply undoes my work."
+      },
+      {
+        "key": "ParadoxTimeRandom_020",
+        "en": "My beautifully macabre estate is now looked upon with exuberance by tourists to the region. Tourists! By god, this will make pushing the boundaries of ethical imagination nearly impossible! I must break through this irrational barrier of love and generosity before it stifles my work!"
+      },
+      {
+        "key": "ParadoxTimeRandom_021",
+        "en": "How could they accuse us of sedition? The Time Machine was my family's gift to all of humanity and yet they call it willfully negligent and unethical!"
+      },
+      {
+        "key": "ParadoxTimeRandom_022",
+        "en": "Do we blame Prometheus for every home burnt to the ground because of the invention of fire? Is the zoetrope responsible for every detestable piece of film created after it? Should we ban perfumes and colognes for their ability to more fervently entice couples into intimacy? It is only natural that the most important discoveries carry with them a modicum of insidious potential."
+      },
+      {
+        "key": "ParadoxTimeRandom_023",
+        "en": "It is absurd that a correlative effect is so readily pinned upon me. Yet, their superstitions have once again returned! "
+      },
+      {
+        "key": "ParadoxTimeRandom_024",
+        "en": "They discovered who did it. Hungarian government tracked it. "
+      },
+      {
+        "key": "ParadoxTimeRandom_025",
+        "en": "Perhaps it was easy to discern this information as every pamphlet, editorial, journal, and detailed blueprint was signed in bold ink. It was all for naught as well. The Hungarian government quietly tracked each copy down with the assistance of the scientific community, and secured this knowledge for themselves alone."
+      },
+      {
+        "key": "ParadoxTimeRandom_026",
+        "en": "My family's decision to disseminate this information had dire consequences for those that chose this path. Their Masterwork was rendered pointless to complete as it would be confiscated immediately by police force emboldened by access to the time stream. Fortunately, those that decided to remain silent could not be implicated merely by association and remained free to continue their work."
+      },
+      {
+        "key": "ParadoxTimeRandom_027",
+        "en": "There is always a cycle of destruction and renewal with every major epoch in the world's history, and this would probably be seen as a minor stumbling block in the overall chronology of events. With the ease of general access to a device that had the power to bend time and space around it, it was soon discovered that the average individual may have lacked the self-control and intelligence required to prevent the catastrophic destruction of nearly every living thing in Eastern Europe. "
+      },
+      {
+        "key": "ParadoxTimeRandom_028",
+        "en": "Owning an Estate made of stone, looming high above the valley, I was able to retain most of my possessions. Although the air was now tinged with a hint of sulfur and resources were a touch harder to procure."
+      },
+      {
+        "key": "ParadoxTimeRandom_029",
+        "en": "This was a minor setback."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "ParadoxTimeRandom_030",
+        "en": "All players **draw a C-level Experiment** and immediately place it into their **Stored Experiments**. Do not gain any VP, penalties, or rewards for this experiment. It counts as a Completed C-level Experiment."
+      },
+      {
+        "key": "ParadoxTimeRandom_031",
+        "en": "All players immediately move their {icon:insanity_icon} marker to the starting space. Then, all players gain 1 Compulsion."
+      },
+      {
+        "key": "ParadoxTimeRandom_032",
+        "en": "Each player immediately **gains 2VP for each other player token** ahead of them on the VP track."
+      },
+      {
+        "key": "ParadoxTimeRandom_033",
+        "en": "Nothing happens. However, the emotions the players feel at this lack of chaos affecting the game is very real, I'm sure."
+      },
+      {
+        "key": "ParadoxTimeRandom_034",
+        "en": "All players **lose** 1 {icon:creepy_icon} for each Estate upgrade with a {icon:creepy_icon} on it. _If this would cause a player to retreat to the left past the {figure} token, they must return a Vanity Estate Upgrade to the supply._"
+      },
+      {
+        "key": "ParadoxTimeRandom_035",
+        "en": "Retrieve the Angry Mob marker and place it on the space on the Creepy Track with the {figure} token. Then return the {figure} token to the scenario box. The original Angry Mob rules are in effect again. "
+      },
+      {
+        "key": "ParadoxTimeRandom_036",
+        "en": "_If any player has already reached or exceeded this space on the Angry Mob track, they must return a Vanity Estate Upgrade to the supply._"
+      },
+      {
+        "key": "ParadoxTimeRandom_037",
+        "en": "{nameA} must flip their Giant Masterwork face-down."
+      },
+      {
+        "key": "ParadoxTimeRandom_038",
+        "en": "{nameB} must flip their Giant Masterwork face-down."
+      },
+      {
+        "key": "ParadoxTimeRandom_039",
+        "en": "{nameC} must flip their Giant Masterwork face-down."
+      },
+      {
+        "key": "ParadoxTimeRandom_040",
+        "en": "{nameD} must flip their Giant Masterwork face-down."
+      },
+      {
+        "key": "ParadoxTimeRandom_041",
+        "en": "{nameE} must flip their Giant Masterwork face-down."
+      },
+      {
+        "key": "ParadoxTimeRandom_042",
+        "en": "Any player with a face-down Masterwork can no longer complete it this Generation. _If you have already completed it, immediately lose an amount of VP equal to the completion value on the front side and gain 3 Resources (ingredient, knowledge, or money) from the supply._"
+      },
+      {
+        "key": "ParadoxTimeRandom_043",
+        "en": "Turn to page **22** of the Village Chronicle."
+      },
+      {
+        "key": "ParadoxTimeRandom_044",
+        "en": "Return the **In Memoriam** upgrade tile to the scenario box. Return the **{figure} token** to the scenario box."
+      }
+    ]
+  },
+  {
+    "id": "ResistEnd2_005",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "unmatched",
+    "en": "The {warwinner}",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ResistEnd2",
+    "context": [
+      {
+        "key": "ResistEnd2_001",
+        "en": "Financial Defenses"
+      },
+      {
+        "key": "ResistEnd2_002",
+        "en": "Advanced weaponry may turn the tide of a battle, but if the army has no monetary support to build and supply their troops with said defenses, the war will eventually be lost. It is this pledge of allegiance that inevitably determined the outcome of the war."
+      },
+      {
+        "key": "ResistEnd2_003",
+        "en": "Count up how many {warwinner} Flag tokens total are face-up in all players' Estates. Then count up how many {warloser} Flag tokens total are face-up in all players' Estates. The army with the most Flag tokens wins the war. _(If there is a tie, the {warwinner} win the war.)_"
+      },
+      {
+        "key": "ResistEnd2_004",
+        "en": "Who won the war?"
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      },
+      {
+        "key": "ResistEnd2_005",
+        "en": "The {warwinner}"
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "Title_EndOfGeneration",
+        "en": "End of Generation"
+      },
+      {
+        "key": "Directive_EndGeneration_PlayersKeepWeaponTokens",
+        "en": "Remove all player pieces from the board and perform the End of the Generation. Players keep all {icon:s3_weapontoken} tokens they acquired."
+      },
+      {
+        "key": "ResistEnd2_006",
+        "en": "The {warloser}"
+      }
+    ]
+  },
+  {
+    "id": "TimeEnd2_001",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "unmatched",
+    "en": "Fully Repaired",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "TimeEnd2",
+    "context": [
+      {
+        "key": "TimeEnd2_001",
+        "en": "Fully Repaired"
+      },
+      {
+        "key": "TimeEnd2_002",
+        "en": "Rusty, But Worth a Try"
+      },
+      {
+        "key": "TimeEnd2_012",
+        "en": "I knew that I had completed the infernal **Time Machine** to the utmost of my ability, meticulously inspecting each individual part, many of which were far more advanced than anything the world had thus far envisioned."
+      },
+      {
+        "key": "TimeEnd2_013",
+        "en": "Though my years have advanced and my vigor has left me, it is my hope that this final act will ensure the lustrous future which war had wrenched from me so long ago. Once more I venture into this box so my eyes will witness what I have wrought. Whether it is my coffin or my ship to sail amongst the cosmos, I welcome what fate lies in store for me."
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "TimeEnd2_003",
+        "en": "Forced to confront the spectre of mortality in my final years, I knew that without swift, decisive action, I might never have the opportunity to see the results of my journey through time."
+      },
+      {
+        "key": "TimeEnd2_004",
+        "en": "I, for one, was ready to busk it. Though the machine that bore us was left incomplete, perhaps it was stout enough to risk a second voyage."
+      },
+      {
+        "key": "TimeEnd2_005",
+        "en": "**How many of the** _Time Machine Repairs_ **Experiments have you repaired in total?**"
+      },
+      {
+        "key": "TimeEnd2_006",
+        "en": "Zero."
+      },
+      {
+        "key": "Choice_ZeroPieces",
+        "en": "zero pieces"
+      },
+      {
+        "key": "TimeEnd2_008",
+        "en": "One."
+      },
+      {
+        "key": "TimeEnd2_009",
+        "en": "one piece"
+      },
+      {
+        "key": "TimeEnd2_010",
+        "en": "Two."
+      },
+      {
+        "key": "TimeEnd2_011",
+        "en": "two pieces"
+      },
+      {
+        "key": "UIButton_Confirm",
+        "en": "Confirm"
+      },
+      {
+        "key": "Directive_EndGeneration_ReturnMasterworkParadoxToQuarters",
+        "en": "Remove all player pieces from the board and perform the End of a Generation. Return your Masterwork face-up once again. Any {icon:s3_paradoxtoken} tokens remaining on your Experiments are moved into your Quarters."
+      }
+    ]
+  },
+  {
+    "id": "RumorD1_006",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "unmatched",
+    "en": "\"I think your fears are unfounded. The {warwinner} are planning on building a barracks in the coming years. That means stability, prosperity, and _opportunity._\"",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "RumorD1",
+    "context": [
+      {
+        "key": "Storybook_PickUpDevicePrivate",
+        "en": "**Carefully pick up this Storybook device and do not allow any other players to see the screen.**"
+      },
+      {
+        "key": "Click_RevealSecretConversation",
+        "en": "Once you are ready, click here to reveal your secret conversation."
+      },
+      {
+        "key": "UIButton_Close",
+        "en": "Close"
+      },
+      {
+        "key": "RumorD1_004",
+        "en": "The officer was initially hesitant to offer me any relevant information, but my apolitical line of inquiry intrigued him. When I relayed the possibility of significant financial investment in the village, "
+      },
+      {
+        "key": "RumorD1_010",
+        "en": "he tensed. I noticed his apprehension. \"I would possibly reconsider,\" he speaks. Then, with a hand cupped to his cheek, he whispered, \"This village sits in a key military position in the country. If I were you, I'd leave this place entirely. Unless, of course, you enjoy living in a devastated battlefield where a village once stood.\""
+      },
+      {
+        "key": "RumorD1_011",
+        "en": "He then entrusted to me a small metal figurine in the shape of a {crest}. I did not understand the significance of this gesture, but I suspected it would be revealed to me in the future."
+      },
+      {
+        "key": "Click_ContinueEllipsis_B",
+        "en": "Click here to continue..."
+      },
+      {
+        "key": "RumorD1_009",
+        "en": "**Gain the {crest} token.**"
+      },
+      {
+        "key": "RumorD1_005",
+        "en": "he smiled and put a finger to his lips. "
+      },
+      {
+        "key": "RumorD1_006",
+        "en": "\"I think your fears are unfounded. The {warwinner} are planning on building a barracks in the coming years. That means stability, prosperity, and _opportunity._\""
+      },
+      {
+        "key": "RumorD1_007",
+        "en": "The officer then cordially shook my hand. When I pulled away, in my palm there was a small silver figurine in the shape of a {crest}. \"This is for your _support_ in the matter. Keep it in your entryway. Someone will return later with a proposition.\""
+      }
+    ]
+  },
+  {
+    "id": "ATimeofWarIntro_002",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "unmatched",
+    "en": "GENERATION I",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "ATimeofWarIntro",
+    "context": [
+      {
+        "key": "ATimeofWarIntro_001",
+        "en": "Taking Sides"
+      },
+      {
+        "key": "ATimeofWarIntro_002",
+        "en": "GENERATION I"
+      },
+      {
+        "key": "ATimeofWarIntro_003",
+        "en": "My father was a genius! I state this now, not with the naïveté of my initial discovery of his journal, but as a time-tested statement of truth. It is why I pen these words today for posterity and to affirm with deep conviction what some may erroneously refer to as mad science."
+      },
+      {
+        "key": "ATimeofWarIntro_004",
+        "en": "When I first arrived at my father's manor, I carried the same skepticism any normal individual would. Weary as I was from the excursion across the Hungarian plains, the cold, gray walls of the villa with its oppressive iron gates chilled me to my marrow. When the disfigured caretaker — the only person privileged with the knowledge — revealed to me a false door and spiraling staircase that descended to a secret laboratory, the grim discovery did nothing to soothe my nerves. In fact, the sight of jars filled with preserved flesh and the astringent stench of chemicals aggravated my frail state, leaving me to take my suppers in the bedroom for several weeks. "
+      },
+      {
+        "key": "ATimeofWarIntro_005",
+        "en": "But, it was this same dark discovery that eventually roused me from my illness. For as I pored over the journal bequeathed to me and surveyed page after page of formulaic experimentation, my apprehensions melted. I felt trepidacious, yet unreservedly enthusiastic at the ethical implications of this great task!"
+      },
+      {
+        "key": "ATimeofWarIntro_006",
+        "en": "Yet even after the disquiet within my soul was relieved, the nearby village rattled my window panes with cacophonous revelry. At first, I kept my visits to the borough brief and infrequent. It seemed that whenever I turned my head I would lock eyes with a cautious observer, and I felt the entire town's steel gaze like daggers tickling the back of my skull. I could only speculate that my siblings endured the same sordid treatment."
+      },
+      {
+        "key": "ATimeofWarIntro_007",
+        "en": "It was my spouse, using my extended rest to become better acquainted with the village, who explained how spirited political discourse was the source of this commotion. Then I could discern the rally cry of their evening demonstrations as they spoke of disobedience, the end of monarchy, and civil war. "
+      },
+      {
+        "key": "ATimeofWarIntro_008",
+        "en": "I began to realize the potential boon that war could provide for my research. If the people shared a mere fraction of the passion that now stoked the fires of my heart, how easily they would embrace my scientific assistance! While my father's ambitions were strong, his solitary existence had doomed his ideas to obscurity. "
+      },
+      {
+        "key": "ATimeofWarIntro_009",
+        "en": "I would not repeat this error. I would brave the jeers of the populace to guide them in the art of warfare. My efforts would determine the course of this conflict. And when the time comes, it will be my science that will emerge from the flames of war as the true victor!"
+      },
+      {
+        "key": "Click_ContinueEllipsis_C",
+        "en": "Click to continue..."
+      },
+      {
+        "key": "Title_Separatists",
+        "en": "Separatists"
+      },
+      {
+        "key": "Title_UnifiedMonarchists",
+        "en": "Unified Monarchists"
+      },
+      {
+        "key": "ATimeofWarIntro_014",
+        "en": "Sickle"
+      },
+      {
+        "key": "ATimeofWarIntro_013",
+        "en": "Shield"
+      }
+    ]
+  },
+  {
+    "id": "Setup_TownName_Title",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "override-no-source",
+    "en": "The Village",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "_Setup_07_TownNameEntry",
+    "context": [
+      {
+        "key": "Setup_TownName_Title",
+        "en": "The Village"
+      },
+      {
+        "key": "Setup_TownName_Intro",
+        "en": "Now that our given names have been established, we must also search our recollection for the name of the village which our vast estates overlook. Considering the myriad of small towns in the Hungarian countryside, it would be unmeritably forward to not allow the group a chance to collectively name the place they will now inhabit."
+      },
+      {
+        "key": "Setup_TownName_InputLabel",
+        "en": "Please collectively enter the name of the town in which your inheritance resides."
+      },
+      {
+        "key": "Common_Continue",
+        "en": "Continue"
+      },
+      {
+        "key": "Setup_TownName_ConfirmBody1",
+        "en": "Thank you and please do excuse our forgetfulness."
+      },
+      {
+        "key": "Setup_TownName_ConfirmBody2",
+        "en": "Of course, {townname} is an appropriate and fitting moniker for a place to conduct important scientific research. In fact, history will remember this name, mark my words."
+      }
+    ]
+  },
+  {
+    "id": "Setup_TownName_Intro",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "override-no-source",
+    "en": "Now that our given names have been established, we must also search our recollection for the name of the village which our vast estates overlook. Considering the myriad of small towns in the Hungarian countryside, it would be unmeritably forward to not allow the group a chance to collectively name the place they will now inhabit.",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "_Setup_07_TownNameEntry",
+    "context": [
+      {
+        "key": "Setup_TownName_Title",
+        "en": "The Village"
+      },
+      {
+        "key": "Setup_TownName_Intro",
+        "en": "Now that our given names have been established, we must also search our recollection for the name of the village which our vast estates overlook. Considering the myriad of small towns in the Hungarian countryside, it would be unmeritably forward to not allow the group a chance to collectively name the place they will now inhabit."
+      },
+      {
+        "key": "Setup_TownName_InputLabel",
+        "en": "Please collectively enter the name of the town in which your inheritance resides."
+      },
+      {
+        "key": "Common_Continue",
+        "en": "Continue"
+      },
+      {
+        "key": "Setup_TownName_ConfirmBody1",
+        "en": "Thank you and please do excuse our forgetfulness."
+      },
+      {
+        "key": "Setup_TownName_ConfirmBody2",
+        "en": "Of course, {townname} is an appropriate and fitting moniker for a place to conduct important scientific research. In fact, history will remember this name, mark my words."
+      }
+    ]
+  },
+  {
+    "id": "Setup_PlayerCount_Four",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "override-no-source",
+    "en": "4 Players",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "_Setup_01_PlayerCountSelect",
+    "context": [
+      {
+        "key": "Setup_PlayerCount_Title",
+        "en": "Players"
+      },
+      {
+        "key": "Setup_PlayerCount_Prompt",
+        "en": "How many individuals will be sharing this experience today?"
+      },
+      {
+        "key": "Setup_PlayerCount_Two",
+        "en": "2 Players"
+      },
+      {
+        "key": "Setup_PlayerCount_Three",
+        "en": "3 Players"
+      },
+      {
+        "key": "Setup_PlayerCount_Four",
+        "en": "4 Players"
+      }
+    ]
+  },
+  {
+    "id": "Setup_NameEntry_LabelC",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "override-no-source",
+    "en": "Player C - Please enter your given name:",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "_Setup_05_PlayerNameC",
+    "context": [
+      {
+        "key": "Setup_PassBook_C",
+        "en": "Carefully pass the storybook to Player C"
+      },
+      {
+        "key": "Setup_NameEntry_LabelC",
+        "en": "Player C - Please enter your given name:"
+      },
+      {
+        "key": "Common_Continue",
+        "en": "Continue"
+      },
+      {
+        "key": "Setup_Greeting_1",
+        "en": "Welcome to My Father's Work,"
+      },
+      {
+        "key": "Setup_Greeting_2",
+        "en": "Greetings and welcome to My Father's Work,"
+      },
+      {
+        "key": "Setup_Greeting_3",
+        "en": "We are delighted to receive you,"
+      },
+      {
+        "key": "Setup_Greeting_4",
+        "en": "Welcome, dear sibling,"
+      },
+      {
+        "key": "Setup_WarmRegards",
+        "en": "Our warmest regards."
+      }
+    ]
+  },
+  {
+    "id": "Setup_Greeting_2",
+    "surface": "a-time-of-war",
+    "bucket": "translate",
+    "reason": "override-no-source",
+    "en": "Greetings and welcome to My Father's Work,",
+    "fr": null,
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": "_Setup_03_PlayerNameA",
+    "context": [
+      {
+        "key": "Setup_PassBook_A",
+        "en": "Carefully pass the storybook to Player A"
+      },
+      {
+        "key": "Setup_NameEntry_LabelA",
+        "en": "Player A - Please enter your given name:"
+      },
+      {
+        "key": "Common_Continue",
+        "en": "Continue"
+      },
+      {
+        "key": "Setup_Greeting_1",
+        "en": "Welcome to My Father's Work,"
+      },
+      {
+        "key": "Setup_Greeting_2",
+        "en": "Greetings and welcome to My Father's Work,"
+      },
+      {
+        "key": "Setup_Greeting_3",
+        "en": "We are delighted to receive you,"
+      },
+      {
+        "key": "Setup_Greeting_4",
+        "en": "Welcome, dear sibling,"
+      },
+      {
+        "key": "Setup_WarmRegards",
+        "en": "Our warmest regards."
+      }
+    ]
+  },
+  {
+    "id": "Common_Resume",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Resume",
+    "fr": "Reprendre",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "CatalogSources_ErrorUnreachable",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Nothing answered at that address.",
+    "fr": "Rien n'a répondu à cette adresse.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "ManageModules_UnsignedBody",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "'{0}' isn't signed. Unable to verify content integrity or publisher. Install at your own risk.",
+    "fr": "« {0} » n'est pas signé. Impossible de vérifier l'intégrité du contenu ni l'identité de l'éditeur. Installez-le à vos risques.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "ManageModules_UnrecognizedSignerBodyModule",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "This module was created by '{0}'. Install if you trust the publisher.",
+    "fr": "Ce module a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "TimelineScrubber_CurrentLabel",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Current",
+    "fr": "Actuel",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "ContinueList_ResumeAnyway",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Resume anyway",
+    "fr": "Reprendre quand même",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "Help_Topic_TimelineAndRewind",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Timeline and rewind",
+    "fr": "Chronologie et retour en arrière",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "TimelineScrubber_ResumeConfirmTitle",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "Resume from \"{0}\"?",
+    "fr": "Reprendre à partir de « {0} »?",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "ContinueList_ModuleMissing",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "This save's module isn't installed anymore.",
+    "fr": "Le module de cette sauvegarde n'est plus installé.",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  },
+  {
+    "id": "ContinueList_ModuleMissingTitle",
+    "surface": "app-ui",
+    "bucket": "verify",
+    "reason": "existing-fr-CA",
+    "en": "This save's module isn't installed anymore",
+    "fr": "Le module de cette sauvegarde n'est plus installé",
+    "alternatives": [],
+    "splitGroup": [],
+    "passage": null,
+    "context": []
+  }
+]
