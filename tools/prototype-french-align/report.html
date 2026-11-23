@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>French Key Matching</title>
+<style>
+:root { --bg:#fbfbfa; --fg:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd; --accent:#2f5d8a; --warn:#a15c00; --bad:#a4262c; --ok:#2e6b3a; --chip:#efeee9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#191918; --fg:#ecebe6; --muted:#9c9b95; --line:#33332f; --accent:#7fb0e0; --warn:#e0a24a; --bad:#ef7a7f; --ok:#79c288; --chip:#262624; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+main { max-width:1200px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 4px; } p.lead { color:var(--muted); margin:0 0 20px; max-width:80ch; }
+.stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.stat { border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; min-width:120px; }
+.stat.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+.stat b { display:block; font-size:20px; } .stat span { color:var(--muted); font-size:13px; }
+input[type=search] { width:100%; max-width:420px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); margin-bottom:12px; }
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+th, td { text-align:left; vertical-align:top; padding:8px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+td.key { font-family:ui-monospace, monospace; font-size:12px; width:18%; } td.cls { width:12%; font-size:13px; }
+.flag { display:inline-block; background:var(--chip); border-radius:4px; padding:0 6px; margin:2px 2px 0 0; font-size:12px; color:var(--warn); }
+.c-official { color:var(--ok); } .c-official-flagged, .c-needs-split { color:var(--warn); } .c-unmatched, .c-override-no-source { color:var(--bad); }
+.alt { color:var(--muted); font-size:13px; margin-top:4px; } .grp { color:var(--muted); font-size:12px; margin-top:4px; }
+.more { margin-top:12px; color:var(--muted); }
+@media (max-width:700px) { td.key, td.cls { width:auto; } table, tbody, tr, td { display:block; } thead { display:none; } tr { border-bottom:1px solid var(--line); padding:8px 0; } td { border:0; padding:2px 0; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Matching official French to the current English keys</h1>
+<p class="lead">PROTOTYPE. Each English key in the live module is paired with a string from the official French script. Passages are matched by ID, then by structure inside each passage. Click a box to filter by class.</p>
+<div class="stats" id="stats"></div>
+<input type="search" id="q" placeholder="Search key, English or French…">
+<table><thead><tr><th>Key</th><th>Class</th><th>English</th><th>Official French</th></tr></thead><tbody id="rows"></tbody></table>
+<div class="more" id="more"></div>
+</main>
+<script>
+const DATA = /*DATA*/null;
+const LABELS = { "official":"Official, 1:1", "official-flagged":"Official, flagged", "needs-split":"Official, needs split", "unmatched":"No match", "override-no-source":"App-authored (no Cradle source)" };
+let filter = null;
+const esc = s => (s ?? "").replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" })[c]);
+function render() {
+  const total = DATA.results.length;
+  document.getElementById("stats").innerHTML = Object.entries(DATA.summary).map(([c, n]) =>
+    `<div class="stat ${filter===c?"on":""}" data-c="${c}"><b>${n}</b><span>${LABELS[c]??c} · ${(100*n/total).toFixed(1)}%</span></div>`).join("");
+  document.querySelectorAll(".stat").forEach(e => e.onclick = () => { filter = filter===e.dataset.c ? null : e.dataset.c; render(); });
+  const q = document.getElementById("q").value.toLowerCase();
+  const rows = DATA.results.filter(r => (!filter || r.Class===filter) && (!q || (r.Key+r.En+(r.Fr??"")).toLowerCase().includes(q)));
+  document.getElementById("rows").innerHTML = rows.slice(0, 600).map(r => `<tr>
+    <td class="key">${esc(r.Key)}<div class="grp">${esc(r.Passages.slice(0,3).join(", "))}${r.Passages.length>3?"…":""}</div></td>
+    <td class="cls c-${r.Class}">${LABELS[r.Class]??r.Class}${r.Flags.map(f=>`<br><span class="flag">${esc(f)}</span>`).join("")}</td>
+    <td>${esc(r.En)}</td>
+    <td>${esc(r.Fr ?? "—")}${r.Alternatives.length?`<div class="alt">Also: ${r.Alternatives.map(esc).join(" | ")}</div>`:""}${r.SplitGroup.length>1?`<div class="grp">Shared with: ${esc(r.SplitGroup.join(", "))}</div>`:""}</td></tr>`).join("");
+  document.getElementById("more").textContent = rows.length > 600 ? `Showing 600 of ${rows.length}. Narrow with search.` : `${rows.length} keys`;
+}
+document.getElementById("q").oninput = render;
+render();
+</script>
+</body>
+</html>
