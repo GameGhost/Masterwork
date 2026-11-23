@@ -29,3 +29,13 @@ _Avoid_: audio pack, VO module, narration pack
 **Asset pack**:
 A package of shared content (styles, fonts, images, music, effects) that modules depend on by exact version.
 _Avoid_: common assets, shared module
+
+### Translation
+
+**Reconciliation**:
+The one-time import that pairs an official scenario's translated script with the current English keys and produces that language's starting text.
+_Avoid_: merge, re-extraction, sync
+
+**String origin**:
+Where a translated string came from: the official script (`official`), official text the agent corrected or rewrote (`official, revised`), Unity app text the agent revised (`unity, revised`), or the agent alone (`agent`).
+_Avoid_: source, provenance (that's licensing)
