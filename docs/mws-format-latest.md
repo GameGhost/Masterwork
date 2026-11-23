@@ -242,6 +242,36 @@ A key missing from both still resolves to the raw URI (and logs a load-time warn
 single-locale module today. This fallback only ever applies when the preferred locale isn't already
 the default — a module's default-locale file is expected to be complete.
 
+#### Comparing by key
+
+A value that comes from restext and feeds logic must be assigned and compared through the same
+`restext://Key`, never through its text written inline: `seedy == "restext://Choice_Yes_Lower"`, not
+`seedy == "yes"`. Inline text matches in one language only, so a translated module would silently
+take the wrong branch. Use one key per logic value, too. Two keys that share their default-locale
+text can be translated differently, and then a value stored through one no longer equals the other.
+Values that are never displayed (`'male'`/`'female'`) may stay literal.
+
+`Masterwork.ModulePacker` enforces this when packing a module (`module` and `standalone` modes). It
+reads the `expr`, `if`, `target` and `match` fields of every passage and layout the module loads,
+skipping base passages that `passages-override/` replaces, and fails the pack when either of these
+holds:
+
+1. A quoted literal in one of those fields, or a plain `target`/non-numeric `match` value, equals a
+   restext value of the module or its asset packs, in any locale.
+2. Two distinct keys referenced from those fields share a default-locale value and differ in another
+   locale.
+
+Legitimate hits, such as a free-input comparison (`townname == "Transylvania"`) or a passage id that
+happens to equal a restext value, are listed in `logic-lint.allowlist.yaml` at the module root. The
+packer never packages that file, and each failure message names the entry to add:
+
+```yaml
+literals:
+- 'Transylvania'
+shared_keys:
+- ['Number_Two_Lower', 'Setup_Number_Two']
+```
+
 ### Timestamps
 
 Any timestamp in a Masterwork manifest or catalog is **ISO 8601, UTC, whole seconds** —
