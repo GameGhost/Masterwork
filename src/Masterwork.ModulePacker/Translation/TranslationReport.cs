@@ -28,10 +28,6 @@ public sealed record TranslationReport(
     IReadOnlyList<FileProblem> FileProblems,
     IReadOnlyList<StringReport> Strings)
 {
-    // Pair-level findings, alongside the per-string ones in TranslationChecks.
-    public const string UnknownKey = "unknown-key";
-    public const string Untranslated = "untranslated";
-
     /// <summary>True when nothing failed hard. Flags don't count.</summary>
     public bool Passed => FileProblems.Count == 0 && Strings.All(s => s.Failures.Count == 0);
 

@@ -6,9 +6,8 @@ using System.Xml.Linq;
 namespace Masterwork.ModulePacker.Translation;
 
 /// <summary>
-/// Reads the string entries of a <c>.resx</c> file and rewrites their values in place. Works on the
-/// raw text rather than a parsed document so a rewrite leaves everything else byte-for-byte as it
-/// was: an XML round-trip would normalize the file's line endings and quoting.
+/// Reads the string entries of a <c>.resx</c> file and rewrites their values in place. A rewrite
+/// leaves everything outside the changed values byte-for-byte as it was, line endings included.
 /// </summary>
 public static partial class ResxStrings
 {
@@ -31,14 +30,14 @@ public static partial class ResxStrings
 
     /// <summary>Applies <paramref name="rewrite"/> to every string value, re-encoding only the ones it changes.</summary>
     /// <returns>The new file text and the names whose value changed.</returns>
-    public static (string Text, IReadOnlyList<string> Changed) Rewrite(string text, Func<string, string, string> rewrite)
+    public static (string Text, IReadOnlyList<string> Changed) Rewrite(string text, Func<string, string> rewrite)
     {
         var sb = new StringBuilder(text.Length);
         var changed = new List<string>();
         var last = 0;
         foreach (var entry in Entries(text))
         {
-            var updated = rewrite(entry.Name, entry.Value);
+            var updated = rewrite(entry.Value);
             if (updated == entry.Value)
             {
                 continue;

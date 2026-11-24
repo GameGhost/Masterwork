@@ -70,7 +70,11 @@ internal sealed partial class TranslationText
     /// <summary>Every HTML tag (resx only), in order.</summary>
     public IReadOnlyList<string> Tags { get; }
 
+    /// <summary>Emphasis markers. A run of two or more <c>_</c> is a fill-in blank, not markers.</summary>
     public IReadOnlyList<Marker> Markers { get; }
+
+    /// <summary>How many fill-in blanks (<c>___</c>) the text has.</summary>
+    public int Blanks { get; private set; }
 
     /// <summary>Where each placeholder, closing tag and closing marker ends, with its own text.</summary>
     public IReadOnlyList<(int End, string Text)> Closers { get; }
@@ -88,6 +92,17 @@ internal sealed partial class TranslationText
         {
             if (_protected[i])
             {
+                continue;
+            }
+
+            if (Value[i] == '_' && i + 1 < Value.Length && Value[i + 1] == '_' && !_protected[i + 1])
+            {
+                while (i + 1 < Value.Length && Value[i + 1] == '_' && !_protected[i + 1])
+                {
+                    i++;
+                }
+
+                Blanks++;
                 continue;
             }
 

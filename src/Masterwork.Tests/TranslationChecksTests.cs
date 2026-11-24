@@ -150,6 +150,20 @@ public sealed class TranslationChecksTests
     }
 
     [Fact]
+    public void FillInBlank_DoesNotShiftItalicPairing()
+    {
+        var verdict = Restext("Write ___ here: _note_ please", "Écrivez ___ ici : _note_et");
+
+        Assert.Contains(TranslationChecks.SpaceAfterCloser, FailureIds(verdict));
+    }
+
+    [Fact]
+    public void FillInBlankCountMismatch_Fails()
+    {
+        Assert.Contains(TranslationChecks.Markup, FailureIds(Restext("Age ___ or ___", "Âge ___ ou")));
+    }
+
+    [Fact]
     public void UnnormalizedTypography_Fails()
     {
         var failure = Assert.Single(Restext("Ready?", "Prêt ?").Failures);

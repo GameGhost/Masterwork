@@ -13,8 +13,9 @@ public sealed record TypographyResult(string Value, IReadOnlyList<string> Rules)
 /// <summary>
 /// Normalizes fr-CA punctuation spacing: no space before <c>?</c> <c>!</c> <c>;</c>, a non-breaking
 /// space before <c>:</c> and inside « ». Only spacing changes, so a fixed string keeps its origin.
-/// Placeholders and (in resx) HTML tags are left alone, and so are a URL's <c>://</c> and a
-/// digit-to-digit colon such as a time.
+/// Placeholders and (in resx) HTML tags are left alone, and so are a URL's <c>://</c> and a colon
+/// between digits or placeholders, such as a time. A space just inside « » is kept even before
+/// <c>?</c> or <c>!</c>, so a normalized string normalizes to itself.
 /// </summary>
 public static class FrenchTypography
 {
@@ -22,7 +23,7 @@ public static class FrenchTypography
     public const string NonBreakingSpaceBeforeColon = "non-breaking space before :";
     public const string NonBreakingSpaceInsideGuillemets = "non-breaking space inside « »";
 
-    private const char Nbsp = ' ';
+    private const char Nbsp = '\u00A0';
 
     public static TypographyResult Normalize(string value, TranslationFileKind kind)
     {
@@ -50,17 +51,17 @@ public static class FrenchTypography
                 var run = value[i..end];
                 var next = end < value.Length && !text.IsProtected(end) ? value[end] : '\0';
                 var afterGuillemet = i > 0 && !text.IsProtected(i - 1) && value[i - 1] == '«';
-                if (next is '?' or '!' or ';')
+                if (next == '»' || afterGuillemet)
+                {
+                    AppendNbsp(sb, run, rules, NonBreakingSpaceInsideGuillemets);
+                }
+                else if (next is '?' or '!' or ';')
                 {
                     rules.Add(NoSpaceBeforeHighPunctuation);
                 }
-                else if (next == ':' && IsSpacedColon(value, end))
+                else if (next == ':' && IsSpacedColon(text, end))
                 {
                     AppendNbsp(sb, run, rules, NonBreakingSpaceBeforeColon);
-                }
-                else if (next == '»' || afterGuillemet)
-                {
-                    AppendNbsp(sb, run, rules, NonBreakingSpaceInsideGuillemets);
                 }
                 else
                 {
@@ -73,12 +74,12 @@ public static class FrenchTypography
 
             // A space run before these was already handled above.
             var glued = i > 0 && !IsSpace(value[i - 1]);
-            if (c == ':' && glued && IsSpacedColon(value, i))
+            if (c == ':' && glued && IsSpacedColon(text, i))
             {
                 rules.Add(NonBreakingSpaceBeforeColon);
                 sb.Append(Nbsp);
             }
-            else if (c == '»' && glued)
+            else if (c == '»' && glued && value[i - 1] != '«')
             {
                 rules.Add(NonBreakingSpaceInsideGuillemets);
                 sb.Append(Nbsp);
@@ -96,25 +97,22 @@ public static class FrenchTypography
         return new TypographyResult(sb.ToString(), order.Where(rules.Contains).ToList());
     }
 
-    private static bool IsSpace(char c) => c is ' ' or Nbsp or ' ' or '\t';
+    private static bool IsSpace(char c) => c is ' ' or Nbsp or '\u202F' or '\t';
 
-    // A colon that French spaces: not a URL's "://", not a time or ratio ("12:30"), and not one
-    // that follows another colon or a slash.
-    private static bool IsSpacedColon(string value, int index)
+    // A colon that French spaces: not a URL's "://", not one after another colon, and not a time
+    // or ratio, where a digit or placeholder sits on both sides ("12:30", "{0}:{1}").
+    private static bool IsSpacedColon(TranslationText text, int index)
     {
-        if (string.CompareOrdinal(value, index + 1, "//", 0, 2) == 0)
+        var value = text.Value;
+        if (index == 0 || value[index - 1] == ':' || string.CompareOrdinal(value, index + 1, "//", 0, 2) == 0)
         {
             return false;
         }
 
-        var prev = index > 0 ? value[index - 1] : '\0';
-        var next = index + 1 < value.Length ? value[index + 1] : '\0';
-        if (prev is ':' or '/' || (char.IsDigit(prev) && char.IsDigit(next)))
-        {
-            return false;
-        }
-
-        return true;
+        var numberBefore = char.IsDigit(value[index - 1]) || (value[index - 1] == '}' && text.IsProtected(index - 1));
+        var numberAfter = index + 1 < value.Length
+            && (char.IsDigit(value[index + 1]) || (value[index + 1] == '{' && text.IsProtected(index + 1)));
+        return !(numberBefore && numberAfter);
     }
 
     private static void AppendNbsp(StringBuilder sb, string run, HashSet<string> rules, string rule)

@@ -24,21 +24,21 @@ Both files must be `.restext` or both `.resx`. Exit codes: **0** no hard failure
 ## Checks
 
 Placeholders are `{…}`, and in resx, HTML tags too. Both are skipped when the checks look at prose.
-Markers are `**`, `_` and `//`. Every `_` outside a placeholder is a marker, as in the renderer.
+Markers are `**`, `_` and `//`. Every `_` outside a placeholder is a marker, as in the renderer, except that a run of two or more (`___`) is a fill-in blank.
 
 **Hard failures.** The string can't ship.
 
 | Id | Fails when |
 |---|---|
 | `placeholders` | The French's placeholder multiset differs from the English's. Order may change. A repeat counts. |
-| `markup` | `**`, `_` or `//` appears a different number of times. |
+| `markup` | `**`, `_`, `//` or a `___` blank appears a different number of times. |
 | `html-tags` | The tag multiset differs (resx only). |
 | `multi-line` | The French has a line break. |
 | `backslash` | The French has a backslash. Neither format has escapes. |
 | `edge-whitespace` | Leading or trailing whitespace differs from the English. |
 | `space-after-closer` | More placeholders, closing markers or closing tags run straight into a letter than in the English (`{playtxt}financiers`, `**4 PV**et`). |
 | `space-inside-italic` | More `_` markers than in the English have whitespace just inside them. |
-| `typography` | The French isn't in fr-CA typography: no space before `?` `!` `;`, a non-breaking space before `:` and inside « ». `--fix` corrects it. A URL's `://` and a digit-to-digit colon (`12:30`) are left alone. |
+| `typography` | The French isn't in fr-CA typography: no space before `?` `!` `;`, a non-breaking space before `:` and inside « ». `--fix` corrects it. A URL's `://` and a colon between digits or placeholders (`12:30`, `{0}:{1}`) are left alone. A space just inside « » stays even before `?` or `!`. |
 | `forbidden-term` | The French matches a term base's `forbidden` pattern. |
 | `empty` | The French is empty and the English isn't. |
 | `unknown-key` | The key isn't in the English file, so the string is never shown. |

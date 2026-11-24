@@ -6,7 +6,7 @@ namespace Masterwork.Tests;
 
 public sealed class TranslationCheckCommandTests : IDisposable
 {
-    private const char Nbsp = ' ';
+    private const char Nbsp = '\u00A0';
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "mw-trcheck-test-" + Guid.NewGuid().ToString("n"));
 
@@ -91,9 +91,9 @@ public sealed class TranslationCheckCommandTests : IDisposable
         Assert.Empty(Checks(StringEntry(json, "Go"), "failures"));
         Assert.Equal([TranslationChecks.Placeholders], Checks(StringEntry(json, "Gain"), "failures"));
         Assert.Equal("Gagnez des jetons.", StringEntry(json, "Gain").GetProperty("french").GetString());
-        Assert.Equal([TranslationReport.Untranslated], Checks(StringEntry(json, "Missing"), "flags"));
+        Assert.Equal([TranslationChecks.Untranslated], Checks(StringEntry(json, "Missing"), "flags"));
         Assert.Equal(JsonValueKind.Null, StringEntry(json, "Missing").GetProperty("french").ValueKind);
-        Assert.Equal([TranslationReport.UnknownKey], Checks(StringEntry(json, "Stale"), "failures"));
+        Assert.Equal([TranslationChecks.UnknownKey], Checks(StringEntry(json, "Stale"), "failures"));
     }
 
     [Fact]

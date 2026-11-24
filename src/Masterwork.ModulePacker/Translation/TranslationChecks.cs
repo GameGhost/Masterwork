@@ -21,10 +21,16 @@ public static partial class TranslationChecks
     public const string Typography = "typography";
     public const string ForbiddenTerm = "forbidden-term";
 
+    /// <summary>A French key the English file doesn't have; checked per file pair.</summary>
+    public const string UnknownKey = "unknown-key";
+
     // Flags.
     public const string TermMissing = "term-missing";
     public const string IdenticalToEnglish = "identical-to-english";
     public const string LengthRatio = "length-ratio";
+
+    /// <summary>An English key the French file doesn't have; checked per file pair.</summary>
+    public const string Untranslated = "untranslated";
 
     /// <summary>Strings whose English text is at most this long skip the length-ratio flag.</summary>
     public const int LengthRatioMinEnglish = 20;
@@ -62,6 +68,11 @@ public static partial class TranslationChecks
             {
                 failures.Add(new(Markup, $"'{token}' appears {enCount} times in the English, {frCount} in the French."));
             }
+        }
+
+        if (en.Blanks != fr.Blanks)
+        {
+            failures.Add(new(Markup, $"The English has {en.Blanks} fill-in blanks ('___'), the French {fr.Blanks}."));
         }
 
         if (kind == TranslationFileKind.Resx)
@@ -176,7 +187,6 @@ public static partial class TranslationChecks
         return glued;
     }
 
-    // Compared with the English, which may write "___" as a fill-in blank.
     private static void CheckSpaceInsideItalic(List<TranslationFinding> failures, TranslationText en, TranslationText fr)
     {
         var frSpaced = SpacedItalics(fr);

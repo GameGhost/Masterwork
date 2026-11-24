@@ -11,18 +11,18 @@ public static class RestextLines
 {
     /// <summary>Applies <paramref name="rewrite"/> to every entry's value; comments and blank lines are untouched.</summary>
     /// <returns>The new file text and the keys whose value changed.</returns>
-    public static (string Text, IReadOnlyList<string> Changed) Rewrite(string text, Func<string, string, string> rewrite)
+    public static (string Text, IReadOnlyList<string> Changed) Rewrite(string text, Func<string, string> rewrite)
     {
         var sb = new StringBuilder(text.Length);
         var changed = new List<string>();
         foreach (var (line, ending) in Lines(text))
         {
             var eq = line.IndexOf('=');
-            if (IsEntry(line) && eq >= 0)
+            if (IsNotCommentOrBlank(line) && eq >= 0)
             {
                 var key = line[..eq];
                 var value = line[(eq + 1)..];
-                var updated = rewrite(key, value);
+                var updated = rewrite(value);
                 if (updated != value)
                 {
                     sb.Append(key).Append('=').Append(updated).Append(ending);
@@ -41,11 +41,11 @@ public static class RestextLines
     public static IReadOnlyList<int> MalformedLines(string text) =>
         Lines(text)
             .Select((l, i) => (l.Line, Number: i + 1))
-            .Where(l => IsEntry(l.Line) && !l.Line.Contains('='))
+            .Where(l => IsNotCommentOrBlank(l.Line) && !l.Line.Contains('='))
             .Select(l => l.Number)
             .ToList();
 
-    private static bool IsEntry(string line) => line.Length > 0 && !line.StartsWith('#');
+    private static bool IsNotCommentOrBlank(string line) => line.Length > 0 && !line.StartsWith('#');
 
     private static IEnumerable<(string Line, string Ending)> Lines(string text)
     {

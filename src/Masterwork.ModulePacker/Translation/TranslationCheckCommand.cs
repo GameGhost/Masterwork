@@ -68,7 +68,7 @@ public static class TranslationCheckCommand
         IReadOnlyList<string> fixedKeys = [];
         if (fix)
         {
-            string Normalize(string _, string value) => FrenchTypography.Normalize(value, kind).Value;
+            string Normalize(string value) => FrenchTypography.Normalize(value, kind).Value;
             (frenchText, fixedKeys) = kind == TranslationFileKind.Resx
                 ? ResxStrings.Rewrite(frenchText, Normalize)
                 : RestextLines.Rewrite(frenchText, Normalize);
@@ -91,7 +91,7 @@ public static class TranslationCheckCommand
         {
             if (!french.TryGetValue(key, out var fr))
             {
-                strings.Add(new StringReport(key, en, null, [], [new(TranslationReport.Untranslated, "The French file has no entry for this key.")], false));
+                strings.Add(new StringReport(key, en, null, [], [new(TranslationChecks.Untranslated, "The French file has no entry for this key.")], false));
                 continue;
             }
 
@@ -101,7 +101,7 @@ public static class TranslationCheckCommand
 
         foreach (var (key, fr) in french.Where(f => !english.ContainsKey(f.Key)))
         {
-            strings.Add(new StringReport(key, null, fr, [new(TranslationReport.UnknownKey, "The English file has no such key, so this string is never shown.")], [], fixedSet.Contains(key)));
+            strings.Add(new StringReport(key, null, fr, [new(TranslationChecks.UnknownKey, "The English file has no such key, so this string is never shown.")], [], fixedSet.Contains(key)));
         }
 
         return new TranslationReport(kind, englishPath, frenchPath, fileProblems, strings);
