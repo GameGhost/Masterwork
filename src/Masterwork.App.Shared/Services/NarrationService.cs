@@ -54,12 +54,12 @@ public sealed class NarrationService(
         await ReselectAsync();
     }
 
-    /// <summary>Re-reads the settings and selects the matching track. Returns whether the selection changed.</summary>
-    public async Task<bool> ReselectAsync()
+    /// <summary>Re-reads the settings and selects the matching track.</summary>
+    public async Task ReselectAsync()
     {
         if (state.ModuleId is not { } moduleId)
         {
-            return false;
+            return;
         }
 
         var settings = await settingsStore.LoadAsync();
@@ -71,9 +71,6 @@ public sealed class NarrationService(
         {
             _logger.LogInformation("Narration for {ModuleId}: {Voice}", moduleId,
                 track is null ? "none" : $"{track.Language}/{track.Id}");
-            return true;
         }
-
-        return false;
     }
 }

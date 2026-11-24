@@ -322,7 +322,14 @@ if (mode == "voices")
         return 1;
     }
 
-    var packManifest = new VoicePackManifestParser().Parse(File.ReadAllText(Path.Combine(sourceDir, "manifest.yaml")));
+    var packManifestPath = Path.Combine(sourceDir, "manifest.yaml");
+    if (!File.Exists(packManifestPath))
+    {
+        Console.Error.WriteLine($"No manifest.yaml in {sourceDir}.");
+        return 1;
+    }
+
+    var packManifest = new VoicePackManifestParser().Parse(File.ReadAllText(packManifestPath));
     var packFiles = VoiceCoverage.ListVoiceFiles(sourceDir);
     if (moduleDir is null)
     {

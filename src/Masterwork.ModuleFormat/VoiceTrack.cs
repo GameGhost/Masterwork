@@ -18,8 +18,11 @@ public sealed record VoiceTrack
     /// <summary>The track's display name by UI locale. Empty when the manifest gave none.</summary>
     public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>The package folder holding every voice track's folder, with a trailing slash.</summary>
+    public const string NarrationRoot = "assets/audio/vo/";
+
     /// <summary>The folder holding this track's files, without a trailing slash.</summary>
-    public string AssetFolder => $"assets/audio/vo/{Language}/{Id}";
+    public string AssetFolder => $"{NarrationRoot}{Language}/{Id}";
 
     /// <summary>
     /// The name to show for <paramref name="uiLocale"/>: that locale's name, else the name in the

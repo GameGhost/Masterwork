@@ -142,6 +142,7 @@ else
         }
 
         context.PreventNavigation();
+        Narration.PauseAll();
         _showQuitFromBackNav = true;
         StateHasChanged();
         return ValueTask.CompletedTask;

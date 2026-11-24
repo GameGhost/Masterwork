@@ -64,6 +64,12 @@ public class VoiceSelectionTests
     }
 
     [Fact]
+    public void VoiceLanguage_MatchesIgnoringCase_SpelledAsTheTracksSpellIt()
+    {
+        Assert.Equal("cs-CZ", VoiceSelection.SelectVoiceLanguage(preference: null, textLanguage: "CS-cz", EnglishAndCzech));
+    }
+
+    [Fact]
     public void VoiceLanguage_ExplicitNone_IsNone()
     {
         Assert.Null(VoiceSelection.SelectVoiceLanguage(preference: VoiceSelection.None, textLanguage: "en-US", EnglishAndCzech));

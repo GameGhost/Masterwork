@@ -27,7 +27,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
 ├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs); its `reconcile` subcommand imports official French into a module's starting fr-CA.restext
-├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, and the translation checks (`checktranslation`)
+├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, the translation checks (`checktranslation`), and narration-file warnings plus a voice pack's per-track coverage (`voices --module`)
 ├── src/MasterWork.Translation/                tooling library: comparing a translation with its source (placeholders, prose, closers, length ratio), the checks, per-locale typography and the term base; shared by `reconcile` and `checktranslation`, never shipped in the app
 └── src/MasterWork.Tests/                      xUnit test suite
 ```

@@ -66,7 +66,7 @@ public sealed record ModuleManifest
     /// <summary>
     /// <c>"module"</c>, <c>"assets"</c> or <c>"voices"</c> — lets a caller tell which manifest type to parse a
     /// <c>manifest.yaml</c> as (<see cref="ManifestParser"/>, <see cref="AssetPackManifestParser"/> or <see cref="VoicePackManifestParser"/>)
-    /// before committing to either one. Defaults to <c>"module"</c> when the field is absent.
+    /// before committing to one. Defaults to <c>"module"</c> when the field is absent.
     /// </summary>
     public string ModuleType { get; init; } = "module";
 

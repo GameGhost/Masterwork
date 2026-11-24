@@ -29,7 +29,6 @@ public sealed record TrackCoverage(VoiceTrack Track, int Covered, int Total, IRe
 /// </summary>
 public static partial class VoiceCoverage
 {
-    private const string VoFolder = "assets/audio/vo/";
 
     [GeneratedRegex(@"audio://vo/([A-Za-z0-9_\-./]+)")]
     private static partial Regex NarrationReference();
@@ -54,7 +53,7 @@ public static partial class VoiceCoverage
     /// <summary>Every file under <paramref name="packageDirectory"/>'s <c>assets/audio/vo/</c>.</summary>
     public static IReadOnlyList<VoiceFile> ListVoiceFiles(string packageDirectory)
     {
-        var voDirectory = Path.Combine(packageDirectory, "assets", "audio", "vo");
+        var voDirectory = Path.Combine(packageDirectory, VoiceTrack.NarrationRoot);
         if (!Directory.Exists(voDirectory))
         {
             return [];
@@ -83,7 +82,7 @@ public static partial class VoiceCoverage
         {
             if (file.Language is null || file.TrackId is null)
             {
-                warnings.Add($"{file.RelativePath} is not in a voice track folder ({VoFolder}<language>/<track>/), so nothing plays it.");
+                warnings.Add($"{file.RelativePath} is not in a voice track folder ({VoiceTrack.NarrationRoot}<language>/<track>/), so nothing plays it.");
             }
             else if (!declaredTracks.Any(t => t.Language == file.Language && t.Id == file.TrackId))
             {
@@ -116,7 +115,7 @@ public static partial class VoiceCoverage
 
     private static VoiceFile ToVoiceFile(string relativePath)
     {
-        var withinVo = relativePath[VoFolder.Length..];
+        var withinVo = relativePath[VoiceTrack.NarrationRoot.Length..];
         var withoutExtension = Path.ChangeExtension(withinVo, null).Replace('\\', '/');
         var parts = withoutExtension.Split('/', 3);
         return parts.Length == 3

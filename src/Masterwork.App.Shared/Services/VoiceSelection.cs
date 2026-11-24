@@ -37,6 +37,7 @@ public static class VoiceSelection
     /// The effective voice language, or <see langword="null"/> for None. An explicit
     /// <paramref name="preference"/> is used only if a track exists in it (else None); with no
     /// preference, <paramref name="textLanguage"/> is used only if a track exists in it (else None).
+    /// Matching ignores case; the result is spelled as the tracks spell it.
     /// </summary>
     public static string? SelectVoiceLanguage(string? preference, string? textLanguage, IEnumerable<VoiceTrack> tracks)
     {
@@ -46,7 +47,9 @@ public static class VoiceSelection
         }
 
         var wanted = preference ?? textLanguage;
-        return wanted is not null && tracks.Any(t => t.Language == wanted) ? wanted : null;
+        return wanted is null
+            ? null
+            : tracks.FirstOrDefault(t => string.Equals(t.Language, wanted, StringComparison.OrdinalIgnoreCase))?.Language;
     }
 
     /// <summary>The track to play in <paramref name="voiceLanguage"/>: <paramref name="preferredTrackId"/> if that language has it, else its first track. <see langword="null"/> under None.</summary>
@@ -104,7 +107,7 @@ public static class VoiceSelection
         {
             foreach (var track in tracks)
             {
-                if (!offered.Any(o => o.Track.Language == track.Language && o.Track.Id == track.Id))
+                if (!offered.Any(o => string.Equals(o.Track.Language, track.Language, StringComparison.OrdinalIgnoreCase) && o.Track.Id == track.Id))
                 {
                     offered.Add(new AvailableVoiceTrack(track, source));
                 }

@@ -174,6 +174,7 @@
 
     private string _saveName = "";
     private IReadOnlyList<string> _availableModuleLanguages = [];
+    private IReadOnlyList<string> _installedVoiceLanguages = [];
 
     // Guards Apply/ConfirmSaveAndQuit/AbandonGame against a double-click re-invoking them before
     // the first invocation's re-render disables the button — see RenderedLinkView's HandleClick for
@@ -201,16 +202,17 @@
         {
             var modules = await ModuleStore.ListAsync();
             _availableModuleLanguages = [.. modules.SelectMany(m => m.AvailableLanguages).Distinct().OrderBy(l => l, StringComparer.OrdinalIgnoreCase)];
+            _installedVoiceLanguages = [.. modules.SelectMany(m => m.VoiceLanguages)];
         }
     }
 
-    // In game, the voice languages this module offers; on the main menu, no module is loaded, so the
-    // installed modules' languages. The current choice is always kept listed.
+    // In game, the voice languages this module offers; on the main menu, those of the installed
+    // modules' own tracks. The current choice is always kept listed.
     private IEnumerable<string> VoiceLanguageChoices()
     {
         IEnumerable<string> languages = DialogContext == OptionsDialogContext.InGame
             ? Session.Voices.Select(v => v.Track.Language)
-            : _availableModuleLanguages;
+            : _installedVoiceLanguages;
         if (_draft.VoiceLanguage is { } chosen && chosen != VoiceSelection.None)
         {
             languages = languages.Append(chosen);

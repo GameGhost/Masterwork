@@ -37,9 +37,17 @@ public sealed record InstalledModule(
     string Sha256,
     string? ThumbnailImageUrl = null,
     IReadOnlyList<ModuleDependency> Dependencies = null!,
-    string DefaultLocale = ModuleLocales.Default
+    string DefaultLocale = ModuleLocales.Default,
+    IReadOnlyList<string> VoiceLanguages = null!
 )
 {
+    /// <summary>The voice languages of a module's own built-in tracks, in manifest order, for <see cref="VoiceLanguages"/>.</summary>
+    public static IReadOnlyList<string> VoiceLanguagesOf(ModuleManifest? manifest) =>
+        manifest is null ? [] : [.. manifest.Voices.Select(v => v.Language).Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>The voice languages the module's own built-in tracks offer. Voice packs aren't included. Empty for an index entry written before this field existed.</summary>
+    public IReadOnlyList<string> VoiceLanguages { get; init; } = VoiceLanguages ?? [];
+
     /// <summary>Ensures <see cref="Dependencies"/> is never null even after JSON deserialization of an older, field-less record.</summary>
     public IReadOnlyList<ModuleDependency> Dependencies { get; init; } = Dependencies ?? [];
 
