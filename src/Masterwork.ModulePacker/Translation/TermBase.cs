@@ -3,10 +3,10 @@ using YamlDotNet.RepresentationModel;
 
 namespace Masterwork.ModulePacker.Translation;
 
-/// <summary>An English term and the French the translation must use for it.</summary>
-/// <param name="English">Matches the term in the English text.</param>
-/// <param name="French">Matches any acceptable French rendering of it.</param>
-public sealed record TermRule(Regex English, Regex French);
+/// <summary>A source (English) term and the target-language rendering the translation must use for it.</summary>
+/// <param name="Source">Matches the term in the source text.</param>
+/// <param name="Target">Matches any acceptable rendering of it in the translation.</param>
+public sealed record TermRule(Regex Source, Regex Target);
 
 /// <summary>
 /// The terms the checks enforce, read from one or more term-base YAML files. Every pattern is a .NET
@@ -14,8 +14,8 @@ public sealed record TermRule(Regex English, Regex French);
 /// and tags. A plain word is a valid pattern.
 /// <code>
 /// terms:
-///   - en: '\bRounds?\b'
-///     fr: 'manche'
+///   - source: '\bRounds?\b'
+///     target: 'manche'
 ///     note: 'tour is a player turn'   # any other field is ignored
 /// forbidden:
 ///   - 'Chef-d.œuvre'
@@ -33,10 +33,10 @@ public sealed class TermBase
         Forbidden = forbidden;
     }
 
-    /// <summary>English terms whose French must appear (a soft check).</summary>
+    /// <summary>Source terms whose rendering must appear in the translation (a soft check).</summary>
     public IReadOnlyList<TermRule> Terms { get; }
 
-    /// <summary>French the translation must never contain (a hard check).</summary>
+    /// <summary>Text the translation must never contain (a hard check).</summary>
     public IReadOnlyList<Regex> Forbidden { get; }
 
     /// <summary>Combines several term bases, such as the shared game terms and one scenario's own list.</summary>
@@ -75,10 +75,10 @@ public sealed class TermBase
         {
             if (entry is not YamlMappingNode term)
             {
-                throw new FormatException($"Each entry under 'terms' must be a mapping with 'en' and 'fr' (line {entry.Start.Line}).");
+                throw new FormatException($"Each entry under 'terms' must be a mapping with 'source' and 'target' (line {entry.Start.Line}).");
             }
 
-            terms.Add(new TermRule(Pattern(term, "en"), Pattern(term, "fr")));
+            terms.Add(new TermRule(Pattern(term, "source"), Pattern(term, "target")));
         }
 
         var forbidden = Sequence(root, "forbidden")

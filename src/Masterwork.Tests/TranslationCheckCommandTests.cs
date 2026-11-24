@@ -46,7 +46,7 @@ public sealed class TranslationCheckCommandTests : IDisposable
         var (exit, output, _) = Run(en, fr);
 
         Assert.Equal(TranslationCheckCommand.ExitPassed, exit);
-        Assert.Contains("Checked 2 strings", output);
+        Assert.Contains("Checked 2 fr-CA strings", output);
         Assert.Contains("PASS", output);
     }
 
@@ -72,7 +72,7 @@ public sealed class TranslationCheckCommandTests : IDisposable
         var (exit, output, _) = Run(en, fr);
 
         Assert.Equal(TranslationCheckCommand.ExitPassed, exit);
-        Assert.Contains("Name: identical-to-english", output);
+        Assert.Contains("Name: identical-to-source", output);
     }
 
     [Fact]
@@ -90,10 +90,61 @@ public sealed class TranslationCheckCommandTests : IDisposable
         Assert.Equal(4, json.RootElement.GetProperty("counts").GetProperty("strings").GetInt32());
         Assert.Empty(Checks(StringEntry(json, "Go"), "failures"));
         Assert.Equal([TranslationChecks.Placeholders], Checks(StringEntry(json, "Gain"), "failures"));
-        Assert.Equal("Gagnez des jetons.", StringEntry(json, "Gain").GetProperty("french").GetString());
+        Assert.Equal("Gagnez des jetons.", StringEntry(json, "Gain").GetProperty("target").GetString());
         Assert.Equal([TranslationChecks.Untranslated], Checks(StringEntry(json, "Missing"), "flags"));
-        Assert.Equal(JsonValueKind.Null, StringEntry(json, "Missing").GetProperty("french").ValueKind);
+        Assert.Equal(JsonValueKind.Null, StringEntry(json, "Missing").GetProperty("target").ValueKind);
         Assert.Equal([TranslationChecks.UnknownKey], Checks(StringEntry(json, "Stale"), "failures"));
+    }
+
+    [Fact]
+    public void Json_NamesTheLocaleAndFiles()
+    {
+        var en = Write("en-US.restext", "Go=Continue\n");
+        var de = Write("de-DE.restext", "Go=Weiter\n");
+        var jsonPath = Path.Combine(_root, "report.json");
+
+        Run(en, de, "--json", jsonPath);
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        Assert.Equal("de-DE", json.RootElement.GetProperty("locale").GetString());
+        Assert.Equal(en, json.RootElement.GetProperty("sourceFile").GetString());
+        Assert.Equal(de, json.RootElement.GetProperty("targetFile").GetString());
+        Assert.Equal("Continue", StringEntry(json, "Go").GetProperty("source").GetString());
+        Assert.Equal("Weiter", StringEntry(json, "Go").GetProperty("target").GetString());
+    }
+
+    [Fact]
+    public void LocaleOption_OverridesTheFileName()
+    {
+        var en = Write("en-US.restext", "Ask=Ready?\n");
+        var target = Write("translation.restext", "Ask=Prêt ?\n");
+
+        Assert.Equal(TranslationCheckCommand.ExitPassed, Run(en, target, "--locale", "de-DE").Exit);
+        Assert.Equal(TranslationCheckCommand.ExitFailed, Run(en, target, "--locale", "fr-CA").Exit);
+    }
+
+    [Fact]
+    public void UnknownLocale_IsAUsageError()
+    {
+        var en = Write("en-US.restext", "A=a\n");
+        var target = Write("translation.restext", "A=a\n");
+
+        var (exit, _, err) = Run(en, target);
+
+        Assert.Equal(TranslationCheckCommand.ExitUsage, exit);
+        Assert.Contains("--locale", err);
+    }
+
+    [Fact]
+    public void Fix_ComposesDecomposedCharacters()
+    {
+        var en = Write("en-US.restext", "Title=Opera\n");
+        var de = Write("de-DE.restext", "Title=Ope\u0301ra\n");
+
+        var (exit, _, _) = Run(en, de, "--fix");
+
+        Assert.Equal(TranslationCheckCommand.ExitPassed, exit);
+        Assert.Equal("Title=Opéra\n", Read("de-DE.restext"));
     }
 
     [Fact]
@@ -119,7 +170,7 @@ public sealed class TranslationCheckCommandTests : IDisposable
 
         Assert.Equal(TranslationCheckCommand.ExitPassed, exit);
         Assert.Equal($"# origin: official\r\nAsk=Prêt?\r\n# origin: agent\r\nNote=Note{Nbsp}: lire\r\nGo=Continuer\r\n", Read("fr-CA.restext"));
-        Assert.Contains("Fixed typography in 2 strings", output);
+        Assert.Contains("Fixed 2 strings", output);
     }
 
     [Fact]
@@ -165,7 +216,7 @@ public sealed class TranslationCheckCommandTests : IDisposable
     {
         var en = Write("en-US.restext", "A=End of Round\nB=Your Masterwork\n");
         var fr = Write("fr-CA.restext", "A=Fin du tour\nB=Votre Chef-d'œuvre\n");
-        var shared = Write("terms.yaml", "terms:\n  - en: '\\bRounds?\\b'\n    fr: 'manche'\n    note: 'tour is a player turn'\n");
+        var shared = Write("terms.yaml", "terms:\n  - source: '\\bRounds?\\b'\n    target: 'manche'\n    note: 'tour is a player turn'\n");
         var scenario = Write("scenario-terms.yaml", "forbidden:\n  - 'Chef-d.œuvre'\n");
         var jsonPath = Path.Combine(_root, "report.json");
 

@@ -4,11 +4,13 @@ namespace Masterwork.Tests;
 
 public sealed class TranslationChecksTests
 {
+    private static readonly TranslationLocale FrCa = TranslationLocale.For("fr-CA");
+
     private static StringVerdict Restext(string en, string fr, TermBase? terms = null) =>
-        TranslationChecks.Check(en, fr, TranslationFileKind.Restext, terms);
+        TranslationChecks.Check(en, fr, TranslationFileKind.Restext, FrCa, terms);
 
     private static StringVerdict Resx(string en, string fr) =>
-        TranslationChecks.Check(en, fr, TranslationFileKind.Resx);
+        TranslationChecks.Check(en, fr, TranslationFileKind.Resx, FrCa);
 
     private static IEnumerable<string> FailureIds(StringVerdict v) => v.Failures.Select(f => f.Check);
 
@@ -152,7 +154,7 @@ public sealed class TranslationChecksTests
     [Fact]
     public void FillInBlank_DoesNotShiftItalicPairing()
     {
-        var verdict = Restext("Write ___ here: _note_ please", "Écrivez ___ ici : _note_et");
+        var verdict = Restext("Write ___ here: _note_ please", "Écrivez ___ ici\u00A0: _note_et");
 
         Assert.Contains(TranslationChecks.SpaceAfterCloser, FailureIds(verdict));
     }
@@ -194,7 +196,7 @@ public sealed class TranslationChecksTests
     [Fact]
     public void MissingTerm_IsAFlagNotAFailure()
     {
-        var terms = TermBase.Parse("terms:\n  - en: '\\bRounds?\\b'\n    fr: 'manche'\n");
+        var terms = TermBase.Parse("terms:\n  - source: '\\bRounds?\\b'\n    target: 'manche'\n");
 
         var verdict = Restext("End of Round", "Fin du tour", terms);
 
@@ -204,9 +206,9 @@ public sealed class TranslationChecksTests
     }
 
     [Fact]
-    public void IdenticalToEnglish_IsFlagged()
+    public void IdenticalToSource_IsFlagged()
     {
-        Assert.Equal([TranslationChecks.IdenticalToEnglish], FlagIds(Restext("Advanced Weaponry", "Advanced Weaponry")));
+        Assert.Equal([TranslationChecks.IdenticalToSource], FlagIds(Restext("Advanced Weaponry", "Advanced Weaponry")));
         Assert.Empty(Restext("OK", "OK").Flags);
     }
 

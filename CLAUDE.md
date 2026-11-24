@@ -330,7 +330,7 @@ Keep these files updated as the project evolves:
 - `docs/mws-format-latest.md` — format spec (see versioning protocol above)
 - `docs/extractor.md` — extractor usage and pipeline description
 - `docs/engine.md` — session/timeline model, seeded randomness, and the popup sandbox-transaction mechanism (GameSession/VariableStore/SessionPrng)
-- `docs/translation-checks.md` — the `checktranslation` command: every check id, the term-base format and the JSON report
+- `docs/translation-checks.md` — the `checktranslation` command: every check id, per-locale rules, the term-base format and the JSON report
 - `docs/adr/` — architecture decision records; add one when a hard-to-reverse, non-obvious trade-off is made
 - `CLAUDE.md` — this file; update when architecture decisions change
 

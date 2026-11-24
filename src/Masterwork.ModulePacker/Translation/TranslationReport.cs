@@ -6,25 +6,26 @@ using System.Text.Json.Serialization;
 namespace Masterwork.ModulePacker.Translation;
 
 /// <summary>The checks' result for one key of a translation pair.</summary>
-/// <param name="English">Null when the key exists only in the French file.</param>
-/// <param name="French">Null when the French file has no entry for the key.</param>
-/// <param name="Fixed">True when the typography fixer rewrote this string's spacing.</param>
+/// <param name="Source">Null when the key exists only in the target file.</param>
+/// <param name="Target">Null when the target file has no entry for the key.</param>
+/// <param name="Fixed">True when <c>--fix</c> rewrote this string (normalization or spacing only).</param>
 public sealed record StringReport(
     string Key,
-    string? English,
-    string? French,
+    string? Source,
+    string? Target,
     IReadOnlyList<TranslationFinding> Failures,
     IReadOnlyList<TranslationFinding> Flags,
     bool Fixed);
 
-/// <summary>A problem with the French file itself rather than one string, such as a value broken across lines.</summary>
+/// <summary>A problem with the target file itself rather than one string, such as a value broken across lines.</summary>
 public sealed record FileProblem(int Line, string Message);
 
-/// <summary>The checks' result for a whole English/French file pair.</summary>
+/// <summary>The checks' result for a whole source/target file pair.</summary>
 public sealed record TranslationReport(
     TranslationFileKind Kind,
-    string English,
-    string French,
+    string Locale,
+    string SourceFile,
+    string TargetFile,
     IReadOnlyList<FileProblem> FileProblems,
     IReadOnlyList<StringReport> Strings)
 {
@@ -43,8 +44,9 @@ public sealed record TranslationReport(
     public string ToJson() => JsonSerializer.Serialize(new
     {
         Kind,
-        English,
-        French,
+        Locale,
+        SourceFile,
+        TargetFile,
         Passed,
         Counts = new
         {
@@ -61,7 +63,7 @@ public sealed record TranslationReport(
     public string ToSummary()
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"Checked {Strings.Count} strings: {English} -> {French}");
+        sb.AppendLine($"Checked {Strings.Count} {Locale} strings: {SourceFile} -> {TargetFile}");
         foreach (var problem in FileProblems)
         {
             sb.AppendLine($"  line {problem.Line}: {problem.Message}");
@@ -70,7 +72,7 @@ public sealed record TranslationReport(
         var fixedCount = Strings.Count(s => s.Fixed);
         if (fixedCount > 0)
         {
-            sb.AppendLine($"Fixed typography in {fixedCount} strings.");
+            sb.AppendLine($"Fixed {fixedCount} strings.");
         }
 
         AppendSection(sb, "Failures", s => s.Failures);
