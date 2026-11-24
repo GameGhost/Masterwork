@@ -26,7 +26,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Web.StaticPages/        Build-time tool: writes Web.Static's per-flavor index.html and manifest.json (never shipped)
 ├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
 ├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
-├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs)
+├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs); its `reconcile` subcommand imports official French into a module's starting fr-CA.restext
 ├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
 └── src/MasterWork.Tests/                      xUnit test suite
 ```

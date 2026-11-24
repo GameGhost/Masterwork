@@ -395,6 +395,131 @@ Isolated passages are flagged but not excluded. Human review is needed to determ
 
 ---
 
+## Reconcile (`reconcile` subcommand)
+
+`reconcile` is the one-time import that gives an official scenario its starting French restext. It
+pairs the official French Cradle script's strings with the module's live English keys and writes
+`fr-CA.restext` plus a Markdown report. Afterwards each scenario's `fr-CA.restext` is maintained
+directly. Re-running is a deliberate diff, not a sync.
+
+```
+dotnet run --project src/Masterwork.Extractor -- reconcile <english-extract-dir> <french-extract-dir> <module-dir> [options]
+```
+
+| Argument / option | Description |
+|---|---|
+| `<english-extract-dir>` | A fresh English extraction of the module's `.source/*.cs`, with the module's usual options. It reproduces the live `en-US.restext` exactly, so its structure carries the live keys. |
+| `<french-extract-dir>` | The French script extracted with the same options. Its restext is still named `en-US.restext`. |
+| `<module-dir>` | The live module. Its `en-US.restext` and `en-US.overrides.restext` are the target keys. Only the outputs below are written into it. |
+| `--out <file>` | Restext output. Default: `<module-dir>/<locale>.restext`. |
+| `--report <file>` | Report output. Default: `<module-dir>/.source/_reconcile-report.<locale>.md`. `.source/` is never packaged. |
+| `--locale <culture>` | Default `fr-CA`. |
+| `--title <title>` | Report heading. Default: the module folder name. |
+| `--rename <fr>=<en>` | A further renamed passage. The five known Cradle French renames are always applied: `IntroMartial-Séparatistes`, `MartialPre2`, `FP10PV`, `FP10PVsignin`, `TCOD-NameEntryTownConfirm`. |
+
+Write both extractions to scratch, never into the module. For example, for A Time of War:
+
+```powershell
+$modules = "<Masterwork-Modules>"
+$french  = "<path to a local copy of the Unity project's Assets/Scripts/StoryScript/French/ATimeofWarFrench.cs>"
+$scratch = "<scratch dir>"
+$common  = @("--module-title", "A Time of War",
+             "--common-restext", "$modules\a-time-of-war\.source\en-US.common.restext",
+             "--progress-map", "$modules\progress-map.json", "--audio-map", "$modules\audio-map.json")
+
+# Copy each source into scratch first: the extractor writes _extraction-report.md next to its input.
+dotnet run --project src/Masterwork.Extractor -- "$scratch\src-en\ATimeofWar_Eng_v8.cs" "$scratch\en\passages" `
+  --variables-out "$scratch\en" --restext-out "$scratch\en" @common
+dotnet run --project src/Masterwork.Extractor -- "$scratch\src-fr\ATimeofWarFrench.cs" "$scratch\fr\passages" `
+  --variables-out "$scratch\fr" --restext-out "$scratch\fr" @common
+dotnet run --project src/Masterwork.Extractor -- reconcile "$scratch\en" "$scratch\fr" "$modules\a-time-of-war"
+```
+
+The Cost of Disease also needs its `--sprite-map` in both extractions.
+
+### Method
+
+1. **Passages** pair on `passage_id`, after the rename table.
+2. **Keys** pair by structure inside each passage. Each passage is flattened to a sequence of tokens:
+   one per run of text between logic nodes (split into lines at `break`s), and one per logic node,
+   whose signature is its type plus identity fields (`target`, `var`, `asset`, `passage`, `layout`,
+   `match`) with restext references masked. The two sequences are matched by longest common
+   subsequence. A switch case's `match` value is part of its identity and scopes its body, so cases
+   listed in a different order don't cross-pair.
+3. Inside a matched text run, lines pair in order. A line whose English and French have the same
+   number of fragments pairs key by key, and only those pairs can be official. A line with
+   different fragment counts is a split: every key in it gets the line's whole French as a draft.
+   Restext fields on matched logic nodes (`label`, `okay`, `title`, `if`, `match`, …) pair
+   field by field when the counts agree, and are a split when they don't.
+4. **Mechanical fixes** keep a string `official`. A space the French dropped after a placeholder or
+   closing bold (`{nameC}n'a`, `**15**des`) is restored wherever the English has one. A shared key
+   whose uses differ only in whitespace or capitalization takes the majority, and a tie goes to the
+   variant capitalized like the English. A use the script left in English isn't counted as a variant.
+5. **Dev-note passages** are left out of the output and the coverage: ids containing `note` or
+   `example`, the variable lists (`VariableList-ATOW`, `Variable List FnP`, …), `Extra Code`,
+   `DECREESLIST`, `OUTDATEDFirstPara` and `FixIt`, and any passage tagged `NOTE`. None is reachable
+   in play. A key is left out only when every passage using it is a dev note.
+
+### Buckets
+
+| Bucket | Written as | When |
+|---|---|---|
+| Official | `# origin: official` | One French string, no flags. |
+| Official after a mechanical fix | `# origin: official` | As above, after step 4. |
+| Draft: shared key worded differently | `# origin: draft` | A shared key's uses carry different French wording. The majority is written; the agent writes one string that fits every use. |
+| Draft: split or mismatch | `# origin: draft` | A split, a placeholder mismatch, a French/English length ratio outside 0.8–2.0 (English of 20+ characters), or a space still missing after a placeholder or bold. |
+| No French: English left in the French script | not written | The French is the English unchanged (ignoring placeholders). |
+| No French: unmatched | not written | No counterpart, or the passage has no French. |
+| No French: no Cradle source | not written | Keys only in `en-US.overrides.restext`. |
+
+Keys with no French are listed in the report and never written in English, so the app falls back
+to `en-US` for them. The origin vocabulary is in `docs/mws-format-latest.md` (§3, "String origin").
+The agent pass turns every `draft` into `official, revised`.
+
+The report gives the bucket counts, then every key that isn't plain official (English, French draft
+or candidates, reason, passages), then every French-only text (in matched passages, and whole
+French-only passages) with its passage, the English on either side and the French. French-only
+text is dropped, never made into keys.
+
+### Documented run: A Time of War
+
+Run on 2026-11-23 against the live module. It reproduces the prototype from
+[#22](https://github.com/GameGhost/Masterwork/issues/22) within noise:
+
+| Bucket | Prototype | `reconcile` |
+|---|---:|---:|
+| Official | 1216 | 1238 |
+| Official after a mechanical fix | 179 | 115 |
+| Draft: shared key worded differently | (counted as a fix) | 45 |
+| Draft: split or mismatch | 125 | 137 |
+| No French: English left in the French script | 47 | 36 |
+| No French: unmatched | 77 | 73 |
+| No French: no Cradle source | 49 | 49 |
+| **Total** (211 dev-note keys excluded) | **1693** | **1693** |
+
+The differences are deliberate:
+
+- The prototype took the majority for every shared-key conflict. `reconcile` does that only for
+  whitespace and capitalization, and sends wording conflicts to the agent: 115 + 45 = 160 against 179.
+- A use the script left in English no longer counts as a variant (`Choice_None`: *aucun* in most
+  uses, *none* in one), so those keys are plain official.
+- Placeholder-only strings that are identical in both languages (`{nameB}.`) are official, not
+  English left: 11 keys.
+- Case bodies are scoped to their `match` value. This removes cross-paired cases such as
+  `PeacetoRebuild_005`, where the prototype paired "zero buildings were sabotaged" with French about
+  one destroyed building, at the cost of a few keys left unmatched.
+- A restext field whose key count differs between the languages (a ternary `label` against a plain
+  one) is a draft. The prototype left those keys unmatched.
+
+Fear of the Unknown (2029 keys, 228 dev-note keys excluded) and The Cost of Disease (1969 keys, 243
+excluded) come out at 74% and 70% official, with 3.7% and 2.9% unmatched.
+
+**Known limit:** where the French restructured a passage, for example by moving a popup inside each
+switch case, a text run can still pair with the wrong run (A Time of War `SeedResolution_010`–`012`).
+This is why the agent pass verifies every official string too.
+
+---
+
 ## Current Extraction Results
 
 All three official scenarios are extracted and shipped (Masterwork-Modules v0.2.1 and earlier releases):
