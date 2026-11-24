@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using Masterwork.ModuleFormat;
+using Masterwork.ModulePacker.Translation;
 
 void PrintUsage()
 {
@@ -18,6 +19,7 @@ void PrintUsage()
     Console.Error.WriteLine("      Writes a detached <file>.sig beside it.");
     Console.Error.WriteLine("  Masterwork.ModulePacker verifyfile <file>");
     Console.Error.WriteLine("      Checks <file> against its <file>.sig sibling.");
+    Console.Error.WriteLine(TranslationCheckCommand.Usage);
 }
 
 if (args.Length < 1)
@@ -27,6 +29,11 @@ if (args.Length < 1)
 }
 
 var mode = args[0];
+
+if (mode == "checktranslation")
+{
+    return TranslationCheckCommand.Run(args[1..], Console.Out, Console.Error);
+}
 
 if (mode == "gencert")
 {

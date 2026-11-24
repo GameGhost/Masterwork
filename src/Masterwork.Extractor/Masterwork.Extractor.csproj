@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
+    <ProjectReference Include="..\Masterwork.Translation\Masterwork.Translation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

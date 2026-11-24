@@ -64,6 +64,57 @@ public sealed class ReconcilerTests : IDisposable
         Assert.Equal("Welcome to the hall.", key.English);
     }
 
+    [Theory]
+    [InlineData("Ceci fait trente caractères ok", KeyBucket.Official)]
+    [InlineData("Ceci fait vingt-six car.", KeyBucket.Draft)]
+    public void LengthRatio_MatchesTheTranslationChecksRange(string french, KeyBucket expected)
+    {
+        const string english = "This English sentence is forty chars ok.";
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"), $"Hall_001={english}\n", $"Hall_001={french}\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(expected, key.Bucket);
+    }
+
+    [Theory]
+    [InlineData("Twenty chars exactly", KeyBucket.Official)]
+    [InlineData("Twenty-one chars here", KeyBucket.Draft)]
+    public void LengthRatio_AppliesOnlyToEnglishOverTwentyCharacters(string english, KeyBucket expected)
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"), $"Hall_001={english}\n", "Hall_001=Court.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(expected, key.Bucket);
+    }
+
+    [Fact]
+    public void LengthRatio_IgnoresPlaceholders()
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"),
+            "Hall_001={icon:angrymob_icon} Move the marker left.\n",
+            "Hall_001={icon:angrymob_icon} Déplacez-le.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(KeyBucket.Draft, key.Bucket);
+        Assert.Contains("length ratio 0.59", key.Reason);
+    }
+
+    [Fact]
+    public void LostSpaceAfterItalic_IsRestored()
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"),
+            "Hall_001=Read _this_ now, please.\n",
+            "Hall_001=Lisez _ceci_maintenant, merci.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(KeyBucket.OfficialFixed, key.Bucket);
+        Assert.Equal("Lisez _ceci_ maintenant, merci.", key.French);
+    }
+
     [Fact]
     public void Restext_WritesOriginAboveEachKey_AndOmitsKeysWithoutFrench()
     {
