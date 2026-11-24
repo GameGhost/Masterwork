@@ -90,6 +90,32 @@ public sealed class ReconcilerTests : IDisposable
     }
 
     [Fact]
+    public void LengthRatio_IgnoresPlaceholders()
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"),
+            "Hall_001={icon:angrymob_icon} Move the marker left.\n",
+            "Hall_001={icon:angrymob_icon} Déplacez-le.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(KeyBucket.Draft, key.Bucket);
+        Assert.Contains("length ratio 0.59", key.Reason);
+    }
+
+    [Fact]
+    public void LostSpaceAfterItalic_IsRestored()
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"),
+            "Hall_001=Read _this_ now, please.\n",
+            "Hall_001=Lisez _ceci_maintenant, merci.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(KeyBucket.OfficialFixed, key.Bucket);
+        Assert.Equal("Lisez _ceci_ maintenant, merci.", key.French);
+    }
+
+    [Fact]
     public void Restext_WritesOriginAboveEachKey_AndOmitsKeysWithoutFrench()
     {
         Scenario("Hall",

@@ -452,7 +452,7 @@ The Cost of Disease also needs its `--sprite-map` in both extractions.
    Restext fields on matched logic nodes (`label`, `okay`, `title`, `if`, `match`, …) pair
    field by field when the counts agree, and are a split when they don't.
 4. **Mechanical fixes** keep a string `official`. A space the French dropped after a placeholder or
-   closing bold (`{nameC}n'a`, `**15**des`) is restored wherever the English has one. A shared key
+   closing marker (`{nameC}n'a`, `**15**des`, `_…_au`) is restored wherever the English has one. A shared key
    whose uses differ only in whitespace or capitalization takes the majority, and a tie goes to the
    variant capitalized like the English. A use the script left in English isn't counted as a variant.
 5. **Dev-note passages** are left out of the output and the coverage: ids containing `note` or
@@ -467,10 +467,14 @@ The Cost of Disease also needs its `--sprite-map` in both extractions.
 | Official | `# origin: official` | One French string, no flags. |
 | Official after a mechanical fix | `# origin: official` | As above, after step 4. |
 | Draft: shared key worded differently | `# origin: draft` | A shared key's uses carry different French wording. The majority is written; the agent writes one string that fits every use. |
-| Draft: split or mismatch | `# origin: draft` | A split, a placeholder mismatch, a French/English length ratio outside 0.7–2.0 when the English is over 20 characters (what the translation checks flag), or a space still missing after a placeholder or bold. |
-| No French: English left in the French script | not written | The French is the English unchanged (ignoring placeholders). |
+| Draft: split or mismatch | `# origin: draft` | A split, a placeholder mismatch, a French/English length ratio outside 0.7–2.0 when the English is over 20 characters, both measured without placeholders (what the translation checks flag), or a space still missing after a placeholder or closing marker. |
+| No French: English left in the French script | not written | The French prose is the English's unchanged (placeholders ignored) and has a word of three or more letters. A French cognate such as *duo* lands here too, and the agent writes it. |
 | No French: unmatched | not written | No counterpart, or the passage has no French. |
 | No French: no Cradle source | not written | Keys only in `en-US.overrides.restext`. |
+
+The placeholder, length-ratio, missing-space and English-left rules, and the space restoring, come
+from `TranslationComparison` in `Masterwork.Translation`. `checktranslation` uses the same code, so the
+two always agree.
 
 Keys with no French are listed in the report and never written in English, so the app falls back
 to `en-US` for them. The origin vocabulary is in `docs/mws-format-latest.md` (§3, "String origin").
@@ -489,8 +493,8 @@ Run on 2026-11-24 against the live module. It reproduces the prototype from
 
 | Bucket | Prototype | `reconcile` |
 |---|---:|---:|
-| Official | 1216 | 1250 |
-| Official after a mechanical fix | 179 | 115 |
+| Official | 1216 | 1249 |
+| Official after a mechanical fix | 179 | 116 |
 | Draft: shared key worded differently | (counted as a fix) | 47 |
 | Draft: split or mismatch | 125 | 123 |
 | No French: English left in the French script | 47 | 36 |
@@ -501,7 +505,7 @@ Run on 2026-11-24 against the live module. It reproduces the prototype from
 The differences are deliberate:
 
 - The prototype took the majority for every shared-key conflict. `reconcile` does that only for
-  whitespace and capitalization, and sends wording conflicts to the agent: 115 + 47 = 162 against 179.
+  whitespace and capitalization, and sends wording conflicts to the agent: 116 + 47 = 163 against 179.
 - A use the script left in English no longer counts as a variant (`Choice_None`: *aucun* in most
   uses, *none* in one), so those keys are plain official.
 - Placeholder-only strings that are identical in both languages (`{nameB}.`) are official, not
@@ -515,7 +519,7 @@ The differences are deliberate:
   prototype used 0.8–2.0.
 
 Fear of the Unknown (2029 keys, 228 dev-note keys excluded) and The Cost of Disease (1969 keys, 243
-excluded) come out at 74.9% and 69.5% official, with 3.7% and 2.9% unmatched.
+excluded) come out at 74.9% and 69.2% official, with 3.7% and 2.9% unmatched.
 
 **Known limit:** where the French restructured a passage, for example by moving a popup inside each
 switch case, a text run can still pair with the wrong run (A Time of War `SeedResolution_010`–`012`).

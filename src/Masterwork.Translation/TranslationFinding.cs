@@ -1,4 +1,4 @@
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>One check's finding on one string. <see cref="Check"/> is a stable id the runner can match on.</summary>
 public sealed record TranslationFinding(string Check, string Detail);

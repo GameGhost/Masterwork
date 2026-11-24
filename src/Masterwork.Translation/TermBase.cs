@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using YamlDotNet.RepresentationModel;
 
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>A source (English) term and the target-language rendering the translation must use for it.</summary>
 /// <param name="Source">Matches the term in the source text.</param>

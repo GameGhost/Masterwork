@@ -8,7 +8,9 @@ The checks don't judge meaning. The runner's back-translation and judge stages d
 
 A scenario's first input is usually the `fr-CA.restext` written by `Masterwork.Extractor reconcile`
 (`docs/extractor.md`). Its `draft` strings are expected to fail until the agent pass revises them,
-and `--fix` leaves their `# origin:` lines alone.
+and `--fix` leaves their `# origin:` lines alone. The checks live in `Masterwork.Translation`, and
+reconcile decides its drafts with the same comparisons (`TranslationComparison`), so a string's
+placeholders, prose, length ratio and missing spaces are judged the same way in both.
 
 ```powershell
 dotnet run --project src\Masterwork.ModulePacker -- checktranslation `

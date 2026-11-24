@@ -28,10 +28,11 @@ src/Masterwork.slnx
 ├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs); its `reconcile` subcommand imports official French into a module's starting fr-CA.restext
 ├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, and the translation checks (`checktranslation`)
+├── src/MasterWork.Translation/                tooling library: comparing a translation with its source (placeholders, prose, closers, length ratio), the checks, per-locale typography and the term base; shared by `reconcile` and `checktranslation`, never shipped in the app
 └── src/MasterWork.Tests/                      xUnit test suite
 ```
 
-All fifteen projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
+All sixteen projects (and the WhiteLabel props, as solution items) are registered in `Masterwork.slnx`.
 
 Outside the solution, `site/` is the `masterworkapp.com` information site (static HTML/CSS, its own
 README) and holds the privacy policy both app stores link to — update it whenever what the app stores

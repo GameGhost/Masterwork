@@ -1,4 +1,4 @@
-using Masterwork.ModulePacker.Translation;
+using Masterwork.Translation;
 
 namespace Masterwork.Tests;
 

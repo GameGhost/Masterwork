@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>An emphasis marker found in a string's text, outside placeholders and tags.</summary>
 /// <param name="Token">The marker as written: <c>**</c>, <c>_</c> or <c>//</c>.</param>

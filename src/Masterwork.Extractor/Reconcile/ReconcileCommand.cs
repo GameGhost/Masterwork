@@ -1,4 +1,5 @@
 using System.Text;
+using Masterwork.Translation;
 
 namespace Masterwork.Extractor.Reconcile;
 
@@ -61,7 +62,18 @@ internal static class ReconcileCommand
         reportPath ??= Path.Combine(moduleDir, ".source", $"_reconcile-report.{locale}.md");
         title ??= Path.GetFileName(Path.GetFullPath(moduleDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
 
-        var result = Reconciler.Run(englishDir, frenchDir, moduleDir, renames);
+        TranslationLocale targetLocale;
+        try
+        {
+            targetLocale = TranslationLocale.For(locale);
+        }
+        catch (FormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+
+        var result = Reconciler.Run(englishDir, frenchDir, moduleDir, renames, targetLocale);
 
         var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath))!);

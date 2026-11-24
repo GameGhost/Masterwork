@@ -1,5 +1,6 @@
 using System.Text;
 using Masterwork.ModuleFormat;
+using Masterwork.Translation;
 
 namespace Masterwork.ModulePacker.Translation;
 

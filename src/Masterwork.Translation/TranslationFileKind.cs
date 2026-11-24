@@ -1,4 +1,4 @@
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>Which kind of string file a translation pair is: module restext or app resx.</summary>
 public enum TranslationFileKind

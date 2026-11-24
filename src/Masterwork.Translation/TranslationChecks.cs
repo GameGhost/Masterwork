@@ -1,7 +1,6 @@
 using System.Text;
-using System.Text.RegularExpressions;
 
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>
 /// The deterministic checks on one translated string against its source (the canonical English).
@@ -9,7 +8,7 @@ namespace Masterwork.ModulePacker.Translation;
 /// (a proper name left in English, say). Language-dependent rules come from the target's
 /// <see cref="TranslationLocale"/>.
 /// </summary>
-public static partial class TranslationChecks
+public static class TranslationChecks
 {
     // Hard failures.
     public const string Empty = "empty";
@@ -36,12 +35,6 @@ public static partial class TranslationChecks
 
     /// <summary>A source key the target file doesn't have; checked per file pair.</summary>
     public const string Untranslated = "untranslated";
-
-    /// <summary>Strings whose source text is at most this long skip the length-ratio flag.</summary>
-    public const int LengthRatioMinSource = 20;
-
-    [GeneratedRegex("[A-Za-z]{3}")]
-    private static partial Regex SourceWordPattern();
 
     public static StringVerdict Check(string source, string target, TranslationFileKind kind, TranslationLocale locale, TermBase? termBase = null)
     {
@@ -70,7 +63,7 @@ public static partial class TranslationChecks
         var src = new TranslationText(source, kind);
         var tgt = new TranslationText(target, kind);
 
-        CompareMultiset(failures, Placeholders, "placeholders", src.Placeholders, tgt.Placeholders);
+        CompareMultiset(failures, Placeholders, "placeholders", TranslationComparison.Placeholders(src), TranslationComparison.Placeholders(tgt));
         foreach (var token in TranslationText.MarkerTokens)
         {
             var srcCount = src.Markers.Count(m => m.Token == token);
@@ -104,7 +97,11 @@ public static partial class TranslationChecks
         CheckEdgeWhitespace(failures, source, target);
         if (locale.SeparatesWords)
         {
-            CheckSpaceAfterClosers(failures, src, tgt);
+            var lost = TranslationComparison.LostSpacesAfterClosers(src, tgt);
+            if (lost.Count > 0)
+            {
+                failures.Add(new(SpaceAfterCloser, $"A space is missing after a placeholder or closing marker: {string.Join(", ", lost.Select(g => $"'{g}'"))}."));
+            }
         }
 
         CheckSpaceInsideItalic(failures, src, tgt);
@@ -133,7 +130,7 @@ public static partial class TranslationChecks
             }
         }
 
-        if (SourceWordPattern().IsMatch(src.Plain) && string.Equals(src.Plain, tgt.Plain, StringComparison.Ordinal))
+        if (TranslationComparison.IsSourceUnchanged(src, tgt))
         {
             flags.Add(new(IdenticalToSource, "The translation is the same as the source."));
         }
@@ -143,13 +140,9 @@ public static partial class TranslationChecks
             CheckScript(flags, tgt, locale);
         }
 
-        if (src.Plain.Length > LengthRatioMinSource)
+        if (TranslationComparison.LengthRatioOutOfRange(src, tgt, locale) is { } ratio)
         {
-            var ratio = (double)tgt.Plain.Length / src.Plain.Length;
-            if (ratio < locale.LengthRatioLow || ratio > locale.LengthRatioHigh)
-            {
-                flags.Add(new(LengthRatio, $"The translation is {ratio:0.00}× the source length (expected {locale.LengthRatioLow}–{locale.LengthRatioHigh} for {locale.Code})."));
-            }
+            flags.Add(new(LengthRatio, $"The translation is {ratio:0.00}× the source length (expected {locale.LengthRatioLow}–{locale.LengthRatioHigh} for {locale.Code})."));
         }
 
         return new StringVerdict(failures, flags);
@@ -185,33 +178,6 @@ public static partial class TranslationChecks
         {
             failures.Add(new(EdgeWhitespace, Trailing(source) ? "The source ends with whitespace; the translation doesn't." : "The translation ends with whitespace; the source doesn't."));
         }
-    }
-
-    // A placeholder, closing tag or closing marker running straight into a word, more often than the
-    // source does it: "{playtxt}financiers", "**4 PV**et".
-    private static void CheckSpaceAfterClosers(List<TranslationFinding> failures, TranslationText src, TranslationText tgt)
-    {
-        var srcGlued = Glued(src).Count;
-        var tgtGlued = Glued(tgt);
-        if (tgtGlued.Count > srcGlued)
-        {
-            failures.Add(new(SpaceAfterCloser, $"A space is missing after a placeholder or closing marker: {string.Join(", ", tgtGlued.Select(g => $"'{g}'"))}."));
-        }
-    }
-
-    private static List<string> Glued(TranslationText text)
-    {
-        var glued = new List<string>();
-        foreach (var (end, closer) in text.Closers)
-        {
-            if (end < text.Value.Length && char.IsLetter(text.Value[end]))
-            {
-                var word = new string(text.Value[end..].TakeWhile(char.IsLetter).ToArray());
-                glued.Add(closer + word);
-            }
-        }
-
-        return glued;
     }
 
     private static void CheckSpaceInsideItalic(List<TranslationFinding> failures, TranslationText src, TranslationText tgt)

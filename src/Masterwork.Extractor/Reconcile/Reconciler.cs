@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Masterwork.ModuleFormat;
+using Masterwork.Translation;
 
 namespace Masterwork.Extractor.Reconcile;
 
@@ -87,12 +88,7 @@ public static partial class Reconciler
 
     private const string ExtractionRestext = "en-US.restext";
     private const string OverridesRestext = "en-US.overrides.restext";
-
-    [GeneratedRegex(@"\{[^}]+\}")]
-    private static partial Regex Placeholder();
-
-    [GeneratedRegex(@"[A-Za-z]{4,}")]
-    private static partial Regex EnglishWord();
+    private const TranslationFileKind Kind = TranslationFileKind.Restext;
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
@@ -116,9 +112,10 @@ public static partial class Reconciler
     /// <param name="frenchExtractDir">The French extraction, same shape (its restext is named <c>en-US.restext</c> too).</param>
     /// <param name="moduleDir">The live module, whose <c>en-US.restext</c> and <c>en-US.overrides.restext</c> are the target keys.</param>
     /// <param name="renames">French passage id → English id; defaults to <see cref="CradleFrenchRenames"/>.</param>
-    public static Reconciliation Run(string englishExtractDir, string frenchExtractDir, string moduleDir, IReadOnlyDictionary<string, string>? renames = null)
+    public static Reconciliation Run(string englishExtractDir, string frenchExtractDir, string moduleDir, IReadOnlyDictionary<string, string>? renames = null, TranslationLocale? locale = null)
     {
         renames ??= CradleFrenchRenames;
+        locale ??= TranslationLocale.For("fr-CA");
         var noRenames = new Dictionary<string, string>();
         var enPassages = PassageAlignment.LoadPassages(Path.Combine(englishExtractDir, "passages"), noRenames);
         var frPassages = PassageAlignment.LoadPassages(Path.Combine(frenchExtractDir, "passages"), renames);
@@ -181,7 +178,7 @@ public static partial class Reconciler
                 continue;
             }
 
-            keys.Add(Classify(key, english, passages, enText, frText, pairsByKey.GetValueOrDefault(key) ?? [], frPassages));
+            keys.Add(Classify(key, english, passages, enText, frText, pairsByKey.GetValueOrDefault(key) ?? [], frPassages, locale));
         }
 
         return new Reconciliation(
@@ -239,7 +236,8 @@ public static partial class Reconciler
         Dictionary<string, string> enText,
         Dictionary<string, string> frText,
         List<KeyPair> pairs,
-        Dictionary<string, PassageTree> frPassages)
+        Dictionary<string, PassageTree> frPassages,
+        TranslationLocale locale)
     {
         ReconciledKey Result(KeyBucket bucket, string? french, string? reason, IReadOnlyList<string>? candidates = null) =>
             new(key, english, french, bucket, reason, candidates ?? [], passages);
@@ -265,7 +263,11 @@ public static partial class Reconciler
         }
 
         var fixes = new List<string>();
-        var fixedCandidates = singles.Select(p => frText.GetValueOrDefault(p.French[0], "")).Select(f => RestoreLostSpaces(f, english)).ToList();
+        var fixedCandidates = singles
+            .Select(p => frText.GetValueOrDefault(p.French[0], ""))
+            .Select(f => locale.SeparatesWords ? TranslationComparison.RestoreSpacesAfterClosers(f, english, Kind) : f)
+            .Zip(singles, (text, p) => (Text: text, Fixed: text != frText.GetValueOrDefault(p.French[0], "")))
+            .ToList();
 
         // A use the script left in English says nothing about the French wording of the others.
         if (fixedCandidates.Any(c => c.Text != english))
@@ -300,7 +302,7 @@ public static partial class Reconciler
             return Result(KeyBucket.Unmatched, null, "French is empty");
         }
 
-        if (french == english && EnglishWord().IsMatch(Placeholder().Replace(english, "")))
+        if (TranslationComparison.IsSourceUnchanged(english, french, Kind))
         {
             return Result(KeyBucket.EnglishInFrench, null, "English left in the French script");
         }
@@ -310,19 +312,19 @@ public static partial class Reconciler
             drafts.Add("English changed since extraction");
         }
 
-        if (!Placeholders(english).SequenceEqual(Placeholders(french)))
+        if (!TranslationComparison.Placeholders(english, Kind).SequenceEqual(TranslationComparison.Placeholders(french, Kind)))
         {
             drafts.Add("placeholders differ");
         }
 
-        if (english.Length > 20 && (french.Length < english.Length * 0.7 || french.Length > english.Length * 2.0))
+        if (TranslationComparison.LengthRatioOutOfRange(english, french, Kind, locale) is { } ratio)
         {
-            drafts.Add($"length ratio {(double)french.Length / english.Length:0.00}");
+            drafts.Add($"length ratio {ratio:0.00}");
         }
 
-        if (GluedBoundaries(french) > GluedBoundaries(english))
+        if (locale.SeparatesWords && TranslationComparison.LostSpacesAfterClosers(english, french, Kind).Count > 0)
         {
-            drafts.Add("missing space after a placeholder or bold");
+            drafts.Add("missing space after a placeholder or closing marker");
         }
 
         var listedVariants = variants.Count > 1 ? variants : null;
@@ -357,73 +359,8 @@ public static partial class Reconciler
 
     private static string NormalizeVariant(string s) => Whitespace().Replace(s.Trim(), " ").ToLowerInvariant();
 
-    private static List<string> Placeholders(string s) =>
-        Placeholder().Matches(s).Select(m => m.Value).Order(StringComparer.Ordinal).ToList();
-
     private static string JoinFrench(IEnumerable<string> keys, Dictionary<string, string> frText) =>
         string.Join(" ", keys.Select(k => frText.GetValueOrDefault(k, "")).Where(t => t.Length > 0));
-
-    /// <summary>
-    /// Puts back the space the French script dropped after a placeholder or closing bold marker
-    /// (<c>{nameC}n'a</c>, <c>**15**des</c>), wherever the English has a space there.
-    /// </summary>
-    internal static (string Text, bool Fixed) RestoreLostSpaces(string french, string english)
-    {
-        var result = french;
-        foreach (var p in Placeholder().Matches(english).Select(m => m.Value).Distinct())
-        {
-            // The n-th French use of a placeholder follows the n-th English use when the counts agree.
-            var enSpaced = Regex.Matches(english, Regex.Escape(p)).Select(m => m.Index + m.Length < english.Length && english[m.Index + m.Length] == ' ').ToList();
-            var frEnds = Regex.Matches(result, Regex.Escape(p)).Select(m => m.Index + m.Length).ToList();
-            for (var i = frEnds.Count - 1; i >= 0; i--)
-            {
-                var spaced = enSpaced.Count == frEnds.Count ? enSpaced[i] : enSpaced.All(s => s);
-                if (spaced && frEnds[i] < result.Length && char.IsLetter(result[frEnds[i]]))
-                {
-                    result = result.Insert(frEnds[i], " ");
-                }
-            }
-        }
-
-        var enClosing = ClosingBoldEnds(english);
-        var frClosing = ClosingBoldEnds(result);
-        if (enClosing.Count == frClosing.Count)
-        {
-            for (var i = frClosing.Count - 1; i >= 0; i--)
-            {
-                var at = frClosing[i];
-                var enAt = enClosing[i];
-                if (at < result.Length && char.IsLetter(result[at]) && enAt < english.Length && english[enAt] == ' ')
-                {
-                    result = result.Insert(at, " ");
-                }
-            }
-        }
-
-        return (result, result != french);
-    }
-
-    /// <summary>The index just past each closing <c>**</c> (the 2nd, 4th, … marker).</summary>
-    private static List<int> ClosingBoldEnds(string s)
-    {
-        var ends = new List<int>();
-        var count = 0;
-        for (var i = s.IndexOf("**", StringComparison.Ordinal); i >= 0; i = s.IndexOf("**", i + 2, StringComparison.Ordinal))
-        {
-            if (++count % 2 == 0)
-            {
-                ends.Add(i + 2);
-            }
-        }
-
-        return ends;
-    }
-
-    private static int GluedBoundaries(string s)
-    {
-        var n = Placeholder().Matches(s).Count(m => m.Index + m.Length < s.Length && char.IsLetter(s[m.Index + m.Length]));
-        return n + ClosingBoldEnds(s).Count(at => at < s.Length && char.IsLetter(s[at]));
-    }
 
     private static void CollectFrenchOnly(
         string passage,

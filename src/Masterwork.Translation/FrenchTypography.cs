@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>The result of normalizing one string's fr-CA typography.</summary>
 /// <param name="Value">The normalized string; equal to the input when nothing needed fixing.</param>

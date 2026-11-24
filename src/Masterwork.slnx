@@ -19,4 +19,5 @@
   <Project Path="Masterwork.ModuleFormat/Masterwork.ModuleFormat.csproj" />
   <Project Path="Masterwork.ModulePacker/Masterwork.ModulePacker.csproj" />
   <Project Path="Masterwork.Tests/Masterwork.Tests.csproj" />
+  <Project Path="Masterwork.Translation/Masterwork.Translation.csproj" />
 </Solution>

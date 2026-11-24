@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Masterwork.ModulePacker.Translation;
+namespace Masterwork.Translation;
 
 /// <summary>
 /// The language-dependent parts of the checks for one target locale. A locale with its own entry

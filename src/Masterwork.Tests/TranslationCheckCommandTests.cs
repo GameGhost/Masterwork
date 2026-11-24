@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Masterwork.ModulePacker.Translation;
+using Masterwork.Translation;
 
 namespace Masterwork.Tests;
 
