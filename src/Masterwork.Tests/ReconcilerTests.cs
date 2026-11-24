@@ -64,6 +64,19 @@ public sealed class ReconcilerTests : IDisposable
         Assert.Equal("Welcome to the hall.", key.English);
     }
 
+    [Theory]
+    [InlineData("Ceci fait trente caractères ok", KeyBucket.Official)]
+    [InlineData("Ceci fait vingt-six car.", KeyBucket.Draft)]
+    public void LengthRatio_MatchesTheTranslationChecksRange(string french, KeyBucket expected)
+    {
+        const string english = "This English sentence is forty chars ok.";
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"), $"Hall_001={english}\n", $"Hall_001={french}\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(expected, key.Bucket);
+    }
+
     [Fact]
     public void Restext_WritesOriginAboveEachKey_AndOmitsKeysWithoutFrench()
     {

@@ -467,7 +467,7 @@ The Cost of Disease also needs its `--sprite-map` in both extractions.
 | Official | `# origin: official` | One French string, no flags. |
 | Official after a mechanical fix | `# origin: official` | As above, after step 4. |
 | Draft: shared key worded differently | `# origin: draft` | A shared key's uses carry different French wording. The majority is written; the agent writes one string that fits every use. |
-| Draft: split or mismatch | `# origin: draft` | A split, a placeholder mismatch, a French/English length ratio outside 0.8–2.0 (English of 20+ characters), or a space still missing after a placeholder or bold. |
+| Draft: split or mismatch | `# origin: draft` | A split, a placeholder mismatch, a French/English length ratio outside 0.7–2.0 (English of 20+ characters), the range the translation checks flag, or a space still missing after a placeholder or bold. |
 | No French: English left in the French script | not written | The French is the English unchanged (ignoring placeholders). |
 | No French: unmatched | not written | No counterpart, or the passage has no French. |
 | No French: no Cradle source | not written | Keys only in `en-US.overrides.restext`. |
@@ -484,15 +484,15 @@ text is dropped, never made into keys.
 
 ### Documented run: A Time of War
 
-Run on 2026-11-23 against the live module. It reproduces the prototype from
+Run on 2026-11-24 against the live module. It reproduces the prototype from
 [#22](https://github.com/GameGhost/Masterwork/issues/22) within noise:
 
 | Bucket | Prototype | `reconcile` |
 |---|---:|---:|
-| Official | 1216 | 1238 |
+| Official | 1216 | 1249 |
 | Official after a mechanical fix | 179 | 115 |
-| Draft: shared key worded differently | (counted as a fix) | 45 |
-| Draft: split or mismatch | 125 | 137 |
+| Draft: shared key worded differently | (counted as a fix) | 47 |
+| Draft: split or mismatch | 125 | 124 |
 | No French: English left in the French script | 47 | 36 |
 | No French: unmatched | 77 | 73 |
 | No French: no Cradle source | 49 | 49 |
@@ -501,7 +501,7 @@ Run on 2026-11-23 against the live module. It reproduces the prototype from
 The differences are deliberate:
 
 - The prototype took the majority for every shared-key conflict. `reconcile` does that only for
-  whitespace and capitalization, and sends wording conflicts to the agent: 115 + 45 = 160 against 179.
+  whitespace and capitalization, and sends wording conflicts to the agent: 115 + 47 = 162 against 179.
 - A use the script left in English no longer counts as a variant (`Choice_None`: *aucun* in most
   uses, *none* in one), so those keys are plain official.
 - Placeholder-only strings that are identical in both languages (`{nameB}.`) are official, not
@@ -511,9 +511,11 @@ The differences are deliberate:
   one destroyed building, at the cost of a few keys left unmatched.
 - A restext field whose key count differs between the languages (a ternary `label` against a plain
   one) is a draft. The prototype left those keys unmatched.
+- The length ratio that makes a draft is 0.7–2.0, the range the translation checks flag. The
+  prototype used 0.8–2.0.
 
 Fear of the Unknown (2029 keys, 228 dev-note keys excluded) and The Cost of Disease (1969 keys, 243
-excluded) come out at 74% and 70% official, with 3.7% and 2.9% unmatched.
+excluded) come out at 74.8% and 69.4% official, with 3.7% and 2.9% unmatched.
 
 **Known limit:** where the French restructured a passage, for example by moving a popup inside each
 switch case, a text run can still pair with the wrong run (A Time of War `SeedResolution_010`–`012`).

@@ -315,7 +315,7 @@ public static partial class Reconciler
             drafts.Add("placeholders differ");
         }
 
-        if (english.Length >= 20 && (french.Length < english.Length * 0.8 || french.Length > english.Length * 2.0))
+        if (english.Length >= 20 && (french.Length < english.Length * 0.7 || french.Length > english.Length * 2.0))
         {
             drafts.Add($"length ratio {(double)french.Length / english.Length:0.00}");
         }
