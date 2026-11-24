@@ -294,7 +294,7 @@ public sealed class ModuleLoader : IModuleLoader
     // folder-name convention. If no "passages" subfolder exists at all, falls back further to the
     // legacy flat layout (passages directly at directoryPath), so older extractor output — which
     // has no passages/ subfolder — still loads unchanged.
-    private static (string PassagesDir, string? OverrideDir) ResolvePassageDirs(string directoryPath)
+    internal static (string PassagesDir, string? OverrideDir) ResolvePassageDirs(string directoryPath)
     {
         string? passagesField = null;
         string? overrideField = null;

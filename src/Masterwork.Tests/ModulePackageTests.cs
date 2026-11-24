@@ -189,6 +189,7 @@ public class ModulePackageTests
             File.WriteAllText(Path.Combine(dir, ".source", "en-US.common.restext"), "Common_001=Hello");
             File.WriteAllText(Path.Combine(dir, "README.md"), "# Module readme");
             File.WriteAllText(Path.Combine(dir, "VIEW-REQUIREMENTS.md"), "# View requirements");
+            File.WriteAllText(Path.Combine(dir, ModuleLogicLint.AllowlistFileName), "literals: []");
 
             var bytes = ModulePackage.WriteToBytes(dir);
 
@@ -197,6 +198,7 @@ public class ModulePackageTests
             Assert.DoesNotContain(archive.Entries, e => e.FullName.StartsWith(".source/", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(archive.Entries, e => e.FullName.Equals("README.md", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(archive.Entries, e => e.FullName.Equals("VIEW-REQUIREMENTS.md", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(archive.Entries, e => e.FullName.Equals(ModuleLogicLint.AllowlistFileName, StringComparison.OrdinalIgnoreCase));
             // Confirm the package isn't just empty — other root content still made it in.
             Assert.Contains(archive.Entries, e => e.FullName.Equals("manifest.yaml", StringComparison.OrdinalIgnoreCase));
         }

@@ -191,7 +191,7 @@ public static partial class ModulePackage
         }
     }
 
-    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes. Excludes <c>.source/</c> (a module's own copy of the CC BY-NC-SA Cradle source it was extracted from — never distributable), a root <c>README.md</c>, and a root <c>VIEW-REQUIREMENTS.md</c> — none belong in a distributable bundle.</summary>
+    /// <summary>Zips an extractor-output-shaped directory (passages + <c>_variables.yaml</c> + one or more <c>{locale}.restext</c> files at its root, plus <c>manifest.yaml</c> and an optional <c>assets/</c> folder) into <c>.mwm</c> bytes. Excludes <c>.source/</c> (a module's own copy of the CC BY-NC-SA Cradle source it was extracted from — never distributable), a root <c>README.md</c>, a root <c>VIEW-REQUIREMENTS.md</c>, and the module's <see cref="ModuleLogicLint.AllowlistFileName"/> — none belong in a distributable bundle.</summary>
     public static byte[] WriteToBytes(string sourceDirectory)
     {
         using var stream = new MemoryStream();
@@ -218,7 +218,8 @@ public static partial class ModulePackage
         var firstSegment = separatorIndex < 0 ? relativeName : relativeName[..separatorIndex];
         return firstSegment.Equals(".source", StringComparison.OrdinalIgnoreCase) ||
                relativeName.Equals("README.md", StringComparison.OrdinalIgnoreCase) ||
-               relativeName.Equals("VIEW-REQUIREMENTS.md", StringComparison.OrdinalIgnoreCase);
+               relativeName.Equals("VIEW-REQUIREMENTS.md", StringComparison.OrdinalIgnoreCase) ||
+               relativeName.Equals(ModuleLogicLint.AllowlistFileName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

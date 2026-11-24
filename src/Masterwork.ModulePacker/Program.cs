@@ -5,7 +5,8 @@ void PrintUsage()
 {
     Console.Error.WriteLine("Usage:");
     Console.Error.WriteLine("  Masterwork.ModulePacker asset <asset-pack-directory> <output.mwassets>");
-    Console.Error.WriteLine("  Masterwork.ModulePacker module <module-directory> <output.mwm>");
+    Console.Error.WriteLine("  Masterwork.ModulePacker module <module-directory> <output.mwm> [asset-pack-directory ...]");
+    Console.Error.WriteLine("      The asset-pack directories are read for the logic lint only; nothing from them is packed.");
     Console.Error.WriteLine("  Masterwork.ModulePacker standalone <module-directory> <output.mwm> <asset-pack-directory> [asset-pack-directory ...]");
     Console.Error.WriteLine("  Masterwork.ModulePacker gencert <common-name> <output.pfx> <password> [validity-years, default 1]");
     Console.Error.WriteLine("      <common-name> is a bare name (\"Masterwork Content Signing\"), not a \"CN=...\" string.");
@@ -254,6 +255,32 @@ if (!Directory.Exists(sourceDir))
     return 1;
 }
 
+var assetPackDirs = args[3..];
+if (mode is "module" or "standalone")
+{
+    foreach (var dir in assetPackDirs)
+    {
+        if (!Directory.Exists(dir))
+        {
+            Console.Error.WriteLine($"Asset pack directory not found: {dir}");
+            return 1;
+        }
+    }
+
+    var findings = ModuleLogicLint.Check(sourceDir, assetPackDirs);
+    if (findings.Count > 0)
+    {
+        Console.Error.WriteLine($"Not packed: {findings.Count} logic lint finding(s) in {sourceDir}.");
+        Console.Error.WriteLine("Logic must compare restext-sourced values by key, not by their text in one language.");
+        foreach (var finding in findings)
+        {
+            Console.Error.WriteLine($"  - {finding.Message}");
+        }
+
+        return 1;
+    }
+}
+
 byte[] bytes;
 switch (mode)
 {
@@ -266,20 +293,10 @@ switch (mode)
         break;
 
     case "standalone":
-        var assetPackDirs = args[3..];
         if (assetPackDirs.Length == 0)
         {
             Console.Error.WriteLine("standalone mode needs at least one asset-pack directory.");
             return 1;
-        }
-
-        foreach (var dir in assetPackDirs)
-        {
-            if (!Directory.Exists(dir))
-            {
-                Console.Error.WriteLine($"Asset pack directory not found: {dir}");
-                return 1;
-            }
         }
 
         bytes = ModulePackage.WriteStandaloneToBytes(sourceDir, assetPackDirs);
