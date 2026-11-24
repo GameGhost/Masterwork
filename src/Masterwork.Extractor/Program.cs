@@ -13,6 +13,11 @@ partial class Program
 {
     static int Main(string[] args)
     {
+        if (args is ["reconcile", ..])
+        {
+            return Reconcile.ReconcileCommand.Run(args[1..]);
+        }
+
         if (args.Length < 2 || args[0] == "--help" || args[0] == "-h")
         {
             PrintUsage();
@@ -813,8 +818,10 @@ partial class Program
     {
         Console.WriteLine("""
             mw-extract <input-dir> <passages-out-dir> [options]
+            mw-extract reconcile <english-extract-dir> <french-extract-dir> <module-dir> [options]
 
-            Converts Cradle C# scenario files to MWS YAML.
+            Converts Cradle C# scenario files to MWS YAML. "reconcile" pairs a French extraction
+            with a module's live English keys; see "mw-extract reconcile --help".
 
             Passages are always written to <passages-out-dir>. _variables.yaml and en-US.restext
             default to the same directory but can be redirected independently — e.g. to place

@@ -242,6 +242,26 @@ A key missing from both still resolves to the raw URI (and logs a load-time warn
 single-locale module today. This fallback only ever applies when the preferred locale isn't already
 the default — a module's default-locale file is expected to be complete.
 
+**String origin:** in a translated locale file, a comment directly above each key records where
+its string came from:
+
+```restext
+# origin: official
+Hall_001=Bienvenue dans la salle.
+```
+
+The value is one of `official | official, revised | unity, revised | agent`:
+
+- `official`: the official translated script's text, as-is or after a mechanical fix (a restored
+  space, a majority pick among whitespace or capitalization variants).
+- `official, revised`: official text the agent corrected or rewrote, including every draft.
+- `unity, revised`: Unity app text the agent revised.
+- `agent`: written by the agent with no official source.
+
+`draft` appears only between reconciliation (`Masterwork.Extractor reconcile`, see
+`docs/extractor.md`) and the agent pass. It marks official text the agent still has to revise. The
+loader ignores origin comments like any other comment. The default-locale file carries none.
+
 #### Comparing by key
 
 A value that comes from restext and feeds logic must be assigned and compared through the same
