@@ -77,6 +77,18 @@ public sealed class ReconcilerTests : IDisposable
         Assert.Equal(expected, key.Bucket);
     }
 
+    [Theory]
+    [InlineData("Twenty chars exactly", KeyBucket.Official)]
+    [InlineData("Twenty-one chars here", KeyBucket.Draft)]
+    public void LengthRatio_AppliesOnlyToEnglishOverTwentyCharacters(string english, KeyBucket expected)
+    {
+        Scenario("Hall", Text("Hall_001"), Text("Hall_001"), $"Hall_001={english}\n", "Hall_001=Court.\n");
+
+        var key = Key(Run(), "Hall_001");
+
+        Assert.Equal(expected, key.Bucket);
+    }
+
     [Fact]
     public void Restext_WritesOriginAboveEachKey_AndOmitsKeysWithoutFrench()
     {
