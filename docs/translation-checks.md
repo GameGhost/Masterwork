@@ -6,6 +6,10 @@ the translation was made: imported from an official script, written by an agent,
 person. The translate-verify runner, CI and a person running it by hand all get the same verdicts.
 The checks don't judge meaning. The runner's back-translation and judge stages do that.
 
+A scenario's first input is usually the `fr-CA.restext` written by `Masterwork.Extractor reconcile`
+(`docs/extractor.md`). Its `draft` strings are expected to fail until the agent pass revises them,
+and `--fix` leaves their `# origin:` lines alone.
+
 ```powershell
 dotnet run --project src\Masterwork.ModulePacker -- checktranslation `
   <module>\en-US.restext <module>\fr-CA.restext `

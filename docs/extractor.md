@@ -474,7 +474,8 @@ The Cost of Disease also needs its `--sprite-map` in both extractions.
 
 Keys with no French are listed in the report and never written in English, so the app falls back
 to `en-US` for them. The origin vocabulary is in `docs/mws-format-latest.md` (§3, "String origin").
-The agent pass turns every `draft` into `official, revised`.
+The agent pass turns every `draft` into `official, revised`. `Masterwork.ModulePacker checktranslation`
+runs the deterministic checks on the result (`docs/translation-checks.md`).
 
 The report gives the bucket counts, then every key that isn't plain official (English, French draft
 or candidates, reason, passages), then every French-only text (in matched passages, and whole
