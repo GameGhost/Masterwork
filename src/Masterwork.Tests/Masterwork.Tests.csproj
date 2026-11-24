@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Masterwork.Extractor\Masterwork.Extractor.csproj" />
     <ProjectReference Include="..\Masterwork.ModuleFormat\Masterwork.ModuleFormat.csproj" />
+    <ProjectReference Include="..\Masterwork.ModulePacker\Masterwork.ModulePacker.csproj" />
     <ProjectReference Include="..\Masterwork.Engine\Masterwork.Engine.csproj" />
     <ProjectReference Include="..\Masterwork.App.Shared\Masterwork.App.Shared.csproj" />
     <ProjectReference Include="..\Masterwork.App.Web.Api\Masterwork.App.Web.Api.csproj" />

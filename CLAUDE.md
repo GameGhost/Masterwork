@@ -27,7 +27,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
 ├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs); its `reconcile` subcommand imports official French into a module's starting fr-CA.restext
-├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle
+├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, and the translation checks (`checktranslation`)
 └── src/MasterWork.Tests/                      xUnit test suite
 ```
 
@@ -330,6 +330,7 @@ Keep these files updated as the project evolves:
 - `docs/mws-format-latest.md` — format spec (see versioning protocol above)
 - `docs/extractor.md` — extractor usage and pipeline description
 - `docs/engine.md` — session/timeline model, seeded randomness, and the popup sandbox-transaction mechanism (GameSession/VariableStore/SessionPrng)
+- `docs/translation-checks.md` — the `checktranslation` command: every check id, the term-base format and the JSON report
 - `docs/adr/` — architecture decision records; add one when a hard-to-reverse, non-obvious trade-off is made
 - `CLAUDE.md` — this file; update when architecture decisions change
 
