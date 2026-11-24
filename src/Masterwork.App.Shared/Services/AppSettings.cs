@@ -41,6 +41,16 @@ public sealed record AppSettings
     public string? PreferredModuleLanguage { get; init; }
 
     /// <summary>
+    /// The player's voice language for narration: <see langword="null"/> follows the text language,
+    /// <see cref="VoiceSelection.None"/> turns narration off, and any other value is a language code.
+    /// A module without a track in the chosen language plays no narration. See <see cref="VoiceSelection.SelectVoiceLanguage"/>.
+    /// </summary>
+    public string? VoiceLanguage { get; init; }
+
+    /// <summary>The voice track the player picked, per module and voice language. A module and language with no entry uses its first track.</summary>
+    public IReadOnlyList<VoiceTrackPreference> VoiceTrackPreferences { get; init; } = [];
+
+    /// <summary>
     /// SHA-256 thumbprints of content publishers the player chose to trust going forward, from the
     /// unrecognized-signer prompt during a manual install (see <see cref="PackageTrustEvaluator"/>).
     /// Per-device, like every other setting here — trusting a publisher on one device says nothing
@@ -85,6 +95,9 @@ public sealed record AppSettings
 /// </param>
 /// <param name="ModuleId">The module whose listing is hidden.</param>
 public sealed record HiddenCatalogListing(string SourceKey, string ModuleId);
+
+/// <summary>The voice track picked for one module in one voice language. See <see cref="AppSettings.VoiceTrackPreferences"/>.</summary>
+public sealed record VoiceTrackPreference(string ModuleId, string Language, string TrackId);
 
 /// <summary>How a catalog source is identified in stored settings.</summary>
 public static class CatalogSourceKeys

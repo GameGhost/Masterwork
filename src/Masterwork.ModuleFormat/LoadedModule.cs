@@ -38,4 +38,7 @@ public sealed record LoadedModule
     /// <c>entry:</c> — see <c>LoadedModuleContent.BuildAsync</c> (Masterwork.App.Shared).
     /// </summary>
     public ModuleAudioManifest? Audio { get; init; }
+
+    /// <summary>The manifest's built-in voice tracks (<c>voices:</c>), threaded through the same way as <see cref="Audio"/>. Installed voice packs add more at play time.</summary>
+    public IReadOnlyList<VoiceTrack> Voices { get; init; } = [];
 }

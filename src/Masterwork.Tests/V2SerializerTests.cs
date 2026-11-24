@@ -1507,7 +1507,7 @@ public class V2SerializerTests
     [Fact]
     public void AudioMap_MappedPassage_PrependsAudioTrackNode()
     {
-        var audioMapper = BuildAudioMapper(("Hospitalintro", "hospitalintro_m", "hospitalintro_f", "Thriving in Adversity"));
+        var audioMapper = BuildAudioMapper(("Hospitalintro", "hospitalintro", "Thriving in Adversity"));
         var passage = new MwsPassage
         {
             PassageId = "Hospitalintro",
@@ -1521,9 +1521,7 @@ public class V2SerializerTests
         Assert.Equal(2, nodes.Count);
         var track = nodes[0];
         Assert.Equal("audio_track", track["type"]);
-        Assert.Equal(
-            "${narrationVoice == \"female\" ? \"audio://vo/hospitalintro_f\" : \"audio://vo/hospitalintro_m\"}",
-            track["asset"]);
+        Assert.Equal("audio://vo/hospitalintro", track["asset"]);
         Assert.Equal("Thriving in Adversity", track["title"]);
         Assert.Equal(true, track["autoplay"]);
         Assert.Equal("pause", track["bgm_behavior"]);
@@ -1533,7 +1531,7 @@ public class V2SerializerTests
     [Fact]
     public void AudioMap_UnmappedPassage_NoAudioTrackNode()
     {
-        var audioMapper = BuildAudioMapper(("Hospitalintro", "hospitalintro_m", "hospitalintro_f", "Thriving in Adversity"));
+        var audioMapper = BuildAudioMapper(("Hospitalintro", "hospitalintro", "Thriving in Adversity"));
         var passage = new MwsPassage
         {
             PassageId = "SomeOtherPassage",
@@ -1566,15 +1564,32 @@ public class V2SerializerTests
     // Builds an AudioMapper from an in-memory JSON file rather than constructing one directly —
     // AudioMapper's entries are private, only reachable via FromJsonFile, matching how the real CLI
     // path builds one.
-    private static AudioMapper BuildAudioMapper(params (string PassageName, string Male, string Female, string Title)[] entries)
+    private static AudioMapper BuildAudioMapper(params (string PassageName, string Slug, string Title)[] entries)
     {
         var path = Path.GetTempFileName();
         try
         {
             var json = "{" + string.Join(",", entries.Select(e =>
-                $"\"{e.PassageName}\": {{\"male\": \"{e.Male}\", \"female\": \"{e.Female}\", \"title\": \"{e.Title}\"}}")) + "}";
+                $"\"{e.PassageName}\": {{\"slug\": \"{e.Slug}\", \"title\": \"{e.Title}\"}}")) + "}";
             File.WriteAllText(path, json);
             return AudioMapper.FromJsonFile(path);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void AudioMap_LegacyGenderedEntryWithoutSlug_IsSkipped()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path, """{ "Hospitalintro": { "male": "hospitalintro_m", "female": "hospitalintro_f", "title": "T" } }""");
+            var audioMapper = AudioMapper.FromJsonFile(path);
+
+            Assert.False(audioMapper.TryGetEntry("Hospitalintro", out _));
         }
         finally
         {

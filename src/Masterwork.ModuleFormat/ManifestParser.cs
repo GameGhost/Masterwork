@@ -135,6 +135,7 @@ public sealed class ManifestParser : IManifestParser
             Thumbnail = thumbnail,
             Info = info,
             Audio = audio,
+            Voices = VoicesBlock.Parse(root, ctx),
             Entry = root.GetString("entry", ctx),
             PassagesPath = root.GetString("passages", ctx) ?? "passages",
             PassagesOverridePath = root.GetString("passages_override", ctx) ?? "passages-override",
@@ -144,7 +145,7 @@ public sealed class ManifestParser : IManifestParser
 
         root.WarnUnmatchedFields(ctx, "manifest.yaml",
             "type", "format", "id", "title", "version", "description", "dependencies",
-            "languages", "thumbnail", "info", "audio", "entry", "passages", "passages_override", "style",
+            "languages", "thumbnail", "info", "audio", "voices", "entry", "passages", "passages_override", "style",
             "default_locale");
 
         _logger.LogDebug("Parsed manifest '{Id}' v{Version} ({DependencyCount} dependencies)", manifest.Id, manifest.Version, dependencies.Count);

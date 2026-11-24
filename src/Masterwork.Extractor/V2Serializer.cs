@@ -127,7 +127,7 @@ public static partial class V2Serializer
             nodes.Insert(0, new Dictionary<string, object?>
             {
                 ["type"] = "audio_track",
-                ["asset"] = $"${{narrationVoice == \"female\" ? \"audio://vo/{audioEntry.FemaleSlug}\" : \"audio://vo/{audioEntry.MaleSlug}\"}}",
+                ["asset"] = $"audio://vo/{audioEntry.Slug}",
                 ["title"] = audioEntry.Title,
                 ["autoplay"] = true,
                 ["bgm_behavior"] = "pause",

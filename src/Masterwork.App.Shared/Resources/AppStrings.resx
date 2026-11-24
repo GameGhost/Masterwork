@@ -231,7 +231,12 @@
   <data name="OptionsDialog_UiLanguageHint" xml:space="preserve"><value>Changes the app's own menus and screens only — not module content.</value></data>
   <data name="OptionsDialog_PreferredModuleLanguage" xml:space="preserve"><value>Preferred Module Language</value></data>
   <data name="OptionsDialog_NoPreference" xml:space="preserve"><value>No preference</value></data>
-  <data name="OptionsDialog_ModuleLanguageHint" xml:space="preserve"><value>Only applies if the module you're playing supports this language — otherwise it falls back to the module's own default.</value></data>
+  <data name="OptionsDialog_ModuleLanguageHint" xml:space="preserve"><value>Only applies if the module you're playing has this language — otherwise the app's language is used if the module has it, then the module's own default.</value></data>
+  <data name="OptionsDialog_VoiceLanguage" xml:space="preserve"><value>Voice Language</value></data>
+  <data name="OptionsDialog_VoiceSameAsText" xml:space="preserve"><value>Same as text</value></data>
+  <data name="OptionsDialog_VoiceNone" xml:space="preserve"><value>None</value></data>
+  <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Spoken narration only, never music or sound effects. A module without narration in this language plays none.</value></data>
+  <data name="OptionsDialog_VoiceTrack" xml:space="preserve"><value>Voice</value></data>
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Manage</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quit</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quit?</value></data>

@@ -74,7 +74,7 @@ public sealed record LoadedModuleContent(
                 styleCss = Encoding.UTF8.GetString(cssBytes);
             }
 
-            module = module with { Audio = manifest.Audio };
+            module = module with { Audio = manifest.Audio, Voices = manifest.Voices };
         }
 
         return new LoadedModuleContent(module, assets, dependencyAssets, styleCss);

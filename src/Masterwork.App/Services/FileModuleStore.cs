@@ -152,7 +152,7 @@ public sealed class FileModuleStore(IModuleLoader loader, IAssetPackStore assetP
         var thumbnailAssets = new FileModuleAssetSource(moduleDir);
         var thumbnailUrl = await ModuleThumbnailResolver.ResolveAsync(thumbnailAssets, manifest.Thumbnail?.Image);
 
-        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, thumbnailUrl, manifest.Dependencies);
+        var entryRecord = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, thumbnailUrl, manifest.Dependencies, manifest.DefaultLocale);
         var index = await ReadIndexAsync();
         var updated = index.Where(m => m.ModuleId != entryRecord.ModuleId).Append(entryRecord).ToList();
         await WriteIndexAsync(updated);

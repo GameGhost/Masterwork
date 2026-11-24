@@ -49,6 +49,19 @@ public sealed class GameSessionState
     /// <summary>The active module's stylesheet text, if it has one — see <see cref="LoadedModuleContent.StyleCss"/>.</summary>
     public string? StyleCss { get; private set; }
 
+    /// <summary>The voice tracks offered for the active module: its own and its installed voice packs'. See <see cref="VoiceSelection.Offered"/>.</summary>
+    public IReadOnlyList<AvailableVoiceTrack> Voices { get; private set; } = [];
+
+    /// <summary>The voice track narration plays from, or <see langword="null"/> for none. Not part of the session or its saves.</summary>
+    public AvailableVoiceTrack? Voice { get; private set; }
+
+    /// <summary>Sets the offered tracks and selects the one at (<paramref name="language"/>, <paramref name="trackId"/>), or none if that isn't offered.</summary>
+    public void SetVoices(IReadOnlyList<AvailableVoiceTrack> voices, string? language, string? trackId)
+    {
+        Voices = voices;
+        Voice = voices.FirstOrDefault(v => v.Track.Language == language && v.Track.Id == trackId);
+    }
+
     /// <summary>Starts tracking a newly created or restored session.</summary>
     public void Start(string moduleId, string moduleVersion, string? language, LoadedModuleContent content, GameSession session)
     {
@@ -59,6 +72,8 @@ public sealed class GameSessionState
         Assets = content.Assets;
         DependencyAssets = content.DependencyAssets;
         StyleCss = content.StyleCss;
+        Voices = [];
+        Voice = null;
         Session = session;
     }
 
@@ -72,6 +87,8 @@ public sealed class GameSessionState
         Assets = EmptyModuleAssetSource.Instance;
         DependencyAssets = [];
         StyleCss = null;
+        Voices = [];
+        Voice = null;
         Session = null;
     }
 }

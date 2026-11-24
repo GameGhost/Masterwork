@@ -64,8 +64,8 @@ public sealed record ModuleManifest
     public required string Version { get; init; }
 
     /// <summary>
-    /// <c>"module"</c> or <c>"assets"</c> — lets a caller tell which manifest type to parse a
-    /// <c>manifest.yaml</c> as (<see cref="ManifestParser"/> vs <see cref="AssetPackManifestParser"/>)
+    /// <c>"module"</c>, <c>"assets"</c> or <c>"voices"</c> — lets a caller tell which manifest type to parse a
+    /// <c>manifest.yaml</c> as (<see cref="ManifestParser"/>, <see cref="AssetPackManifestParser"/> or <see cref="VoicePackManifestParser"/>)
     /// before committing to either one. Defaults to <c>"module"</c> when the field is absent.
     /// </summary>
     public string ModuleType { get; init; } = "module";
@@ -105,6 +105,9 @@ public sealed record ModuleManifest
 
     /// <summary>Module-level default background music and sound effects, if declared.</summary>
     public ModuleAudioManifest? Audio { get; init; }
+
+    /// <summary>The module's built-in voice tracks (<c>voices:</c>), in manifest order. Empty if not declared.</summary>
+    public IReadOnlyList<VoiceTrack> Voices { get; init; } = [];
 
     /// <summary>
     /// Entry passage id, if declared. Authoritative over the <c>Begins-Here</c>

@@ -79,6 +79,17 @@ A `target` field can resolve to the fixed literal `app::gameover` instead of a p
 navigation itself doesn't happen — `GameSession.IsGameOverRequested` is set instead, and the App
 takes over from there (autosave deletion, playthrough-memory recording, return to main menu).
 
+### Narration voice is not session state
+
+An `audio_track`'s `asset` renders to a plain `audio://vo/<slug>`. The engine's render doesn't depend
+on the player's voice language or voice track at all: only the App's asset resolution does
+(`AssetResolver` against `GameSessionState.Voice`). So a snapshot, a save, a re-render after
+`StepBack`/`StepForward`, and a checkpoint's cached-render replay are all the same whatever voice is
+selected, and the choice is never stored in a save (an old save's `narrationVoice` variable is
+ignored by the App). Changing the voice in Options mid-passage doesn't touch the session: each
+rendered `audio_track` re-resolves its file in place, without autoplay, and is hidden when the new
+track has no file for it.
+
 ---
 
 ## 2. Randomness — Model B (Seeded Lazy)

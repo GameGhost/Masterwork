@@ -290,14 +290,13 @@
         _errorBoundary?.Recover();
     }
 
-    // Resets the language choice every time the selected module changes: the preferred module
-    // language (Options) if that module actually has it, else the module's own default, else
-    // whatever's there — never carries a previous module's language selection over by accident.
+    // Resets the language choice every time the selected module changes (see
+    // VoiceSelection.SelectTextLanguage) — never carries a previous module's language selection over.
     private void SelectModule(string moduleId)
     {
         _selectedId = moduleId;
         _selectedLanguage = _selected?.Installed is { } module
-            ? DefaultLanguageFor(module, _appSettings.PreferredModuleLanguage)
+            ? DefaultLanguageFor(module, _appSettings)
             : null;
     }
 
@@ -365,17 +364,8 @@
         _ => AppStrings.CatalogInstall_Installing,
     };
 
-    private static string DefaultLanguageFor(InstalledModule module, string? preferred)
-    {
-        if (preferred is not null && module.AvailableLanguages.Contains(preferred))
-        {
-            return preferred;
-        }
-
-        return module.AvailableLanguages.Contains(ModuleLocales.Default)
-            ? ModuleLocales.Default
-            : module.AvailableLanguages[0];
-    }
+    private static string DefaultLanguageFor(InstalledModule module, AppSettings settings) =>
+        VoiceSelection.SelectTextLanguage(module.AvailableLanguages, settings.PreferredModuleLanguage, settings.UiLocale, module.DefaultLocale);
 
     private void OnLanguageChanged(ChangeEventArgs e) => _selectedLanguage = e.Value?.ToString();
 

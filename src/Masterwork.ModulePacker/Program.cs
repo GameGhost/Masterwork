@@ -9,6 +9,8 @@ void PrintUsage()
     Console.Error.WriteLine("  Masterwork.ModulePacker module <module-directory> <output.mwm> [asset-pack-directory ...]");
     Console.Error.WriteLine("      The asset-pack directories are read for the logic lint only; nothing from them is packed.");
     Console.Error.WriteLine("  Masterwork.ModulePacker standalone <module-directory> <output.mwm> <asset-pack-directory> [asset-pack-directory ...]");
+    Console.Error.WriteLine("  Masterwork.ModulePacker voices <voice-pack-directory> <output> [--module <module-directory>]");
+    Console.Error.WriteLine("      Warns about narration files nothing plays; with --module, also reports each track's coverage of that module.");
     Console.Error.WriteLine("  Masterwork.ModulePacker gencert <common-name> <output.pfx> <password> [validity-years, default 1]");
     Console.Error.WriteLine("      <common-name> is a bare name (\"Masterwork Content Signing\"), not a \"CN=...\" string.");
     Console.Error.WriteLine("  Masterwork.ModulePacker sign <package-file> <pfx-file> <pfx-password> [output-file, default overwrites package-file]");
@@ -20,6 +22,14 @@ void PrintUsage()
     Console.Error.WriteLine("  Masterwork.ModulePacker verifyfile <file>");
     Console.Error.WriteLine("      Checks <file> against its <file>.sig sibling.");
     Console.Error.WriteLine(TranslationCheckCommand.Usage);
+}
+
+void PrintVoiceWarnings(string directory, IReadOnlyList<string> warnings)
+{
+    foreach (var warning in warnings)
+    {
+        Console.Error.WriteLine($"Warning: {directory}: {warning}");
+    }
 }
 
 if (args.Length < 1)
@@ -286,12 +296,65 @@ if (mode is "module" or "standalone")
 
         return 1;
     }
+
+    var manifestPath = Path.Combine(sourceDir, "manifest.yaml");
+    var builtInVoices = File.Exists(manifestPath) ? new ManifestParser().Parse(File.ReadAllText(manifestPath)).Voices : [];
+    PrintVoiceWarnings(sourceDir, VoiceCoverage.Warnings(
+        builtInVoices, VoiceCoverage.ListVoiceFiles(sourceDir), VoiceCoverage.CollectNarration(sourceDir)));
+}
+
+if (mode == "voices")
+{
+    string? moduleDir = null;
+    if (assetPackDirs is ["--module", var path])
+    {
+        moduleDir = path;
+    }
+    else if (assetPackDirs.Length > 0)
+    {
+        PrintUsage();
+        return 1;
+    }
+
+    if (moduleDir is not null && !Directory.Exists(moduleDir))
+    {
+        Console.Error.WriteLine($"Module directory not found: {moduleDir}");
+        return 1;
+    }
+
+    var packManifest = new VoicePackManifestParser().Parse(File.ReadAllText(Path.Combine(sourceDir, "manifest.yaml")));
+    var packFiles = VoiceCoverage.ListVoiceFiles(sourceDir);
+    if (moduleDir is null)
+    {
+        PrintVoiceWarnings(sourceDir, VoiceCoverage.Warnings(packManifest.Voices, packFiles, narration: null));
+        Console.WriteLine("Pass --module <module-directory> to check this pack's files and coverage against its module.");
+    }
+    else
+    {
+        var moduleManifest = new ManifestParser().Parse(File.ReadAllText(Path.Combine(moduleDir, "manifest.yaml")));
+        if (moduleManifest.Id != packManifest.For.ModuleId)
+        {
+            Console.Error.WriteLine($"Warning: this pack is for '{packManifest.For.ModuleId}', but {moduleDir} is '{moduleManifest.Id}'.");
+        }
+
+        var narration = VoiceCoverage.CollectNarration(moduleDir);
+        PrintVoiceWarnings(sourceDir, VoiceCoverage.Warnings(packManifest.Voices, packFiles, narration));
+        foreach (var coverage in VoiceCoverage.Coverage(packManifest.Voices, packFiles, narration))
+        {
+            Console.WriteLine($"Track {coverage.Track.Language}/{coverage.Track.Id}: {coverage.Summary}");
+            foreach (var uncovered in coverage.Uncovered)
+            {
+                Console.WriteLine($"  - missing: {uncovered}");
+            }
+        }
+    }
 }
 
 byte[] bytes;
 switch (mode)
 {
     case "asset":
+    case "voices":
         bytes = AssetPackPackage.WriteToBytes(sourceDir);
         break;
 

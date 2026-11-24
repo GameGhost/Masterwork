@@ -25,6 +25,8 @@ public class AppSettingsSerializationTests
         TextSizeStep = 4,
         UiLocale = "fr-CA",
         PreferredModuleLanguage = "fr-CA",
+        VoiceLanguage = VoiceSelection.None,
+        VoiceTrackPreferences = [new VoiceTrackPreference("shared.module", "en-US", "female")],
         TrustedPublisherThumbprints = ["AAAA1111", "BBBB2222"],
         CustomCatalogSources = ["https://beta.example.com/.catalog/catalog.json"],
         HiddenCatalogListings =

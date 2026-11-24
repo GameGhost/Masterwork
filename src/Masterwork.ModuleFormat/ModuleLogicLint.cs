@@ -116,64 +116,14 @@ public static partial class ModuleLogicLint
 
     private static List<LogicUse> CollectLogicUses(string moduleDirectory)
     {
-        var (passagesDir, overrideDir) = ModuleLoader.ResolvePassageDirs(moduleDirectory);
-        var overrideIds = new HashSet<string>(StringComparer.Ordinal);
-        var overrideFiles = PassageFiles(overrideDir).ToList();
-        foreach (var file in overrideFiles)
-        {
-            foreach (var doc in LoadDocuments(file))
-            {
-                if (PassageId(doc) is { } id)
-                {
-                    overrideIds.Add(id);
-                }
-            }
-        }
-
-        var baseFiles = PassageFiles(passagesDir);
-        var layoutFiles = PassageFiles(Path.Combine(moduleDirectory, "layouts"));
-
         var uses = new List<LogicUse>();
-        foreach (var (file, skipOverridden) in baseFiles.Select(f => (f, true))
-                     .Concat(overrideFiles.Select(f => (f, false)))
-                     .Concat(layoutFiles.Select(f => (f, false))))
+        foreach (var doc in ModuleSourceDocuments.Enumerate(moduleDirectory))
         {
-            var relative = Path.GetRelativePath(moduleDirectory, file).Replace('\\', '/');
-            foreach (var doc in LoadDocuments(file))
-            {
-                var id = PassageId(doc);
-                if (skipOverridden && id is not null && overrideIds.Contains(id))
-                {
-                    continue;
-                }
-
-                var where = id is null ? relative : $"{relative} ({id})";
-                Walk(doc, where, uses);
-            }
+            Walk(doc.Root, doc.Where, uses);
         }
 
         return uses;
     }
-
-    // Top-level files only, the same set ModuleLoader reads.
-    private static IEnumerable<string> PassageFiles(string? directory) =>
-        directory is not null && Directory.Exists(directory)
-            ? Directory.EnumerateFiles(directory, "*.mws.yaml").Order(StringComparer.Ordinal)
-            : [];
-
-    private static IEnumerable<YamlNode> LoadDocuments(string file)
-    {
-        var stream = new YamlStream();
-        using (var reader = new StringReader(File.ReadAllText(file)))
-        {
-            stream.Load(reader);
-        }
-
-        return stream.Documents.Select(d => d.RootNode);
-    }
-
-    private static string? PassageId(YamlNode root) =>
-        root is YamlMappingNode map && map.TryGet("passage_id") is YamlScalarNode s ? s.Value : null;
 
     private static void Walk(YamlNode node, string where, List<LogicUse> uses)
     {
@@ -359,7 +309,7 @@ public static partial class ModuleLogicLint
                 return ModuleLocales.Default;
             }
 
-            var root = LoadDocuments(manifest).FirstOrDefault() as YamlMappingNode;
+            var root = ModuleSourceDocuments.LoadDocuments(manifest).FirstOrDefault() as YamlMappingNode;
             return root?.TryGet("default_locale") is YamlScalarNode { Value: { Length: > 0 } locale } ? locale : ModuleLocales.Default;
         }
     }
@@ -375,7 +325,7 @@ public static partial class ModuleLogicLint
         {
             var allowlist = new Allowlist();
             var path = Path.Combine(moduleDirectory, AllowlistFileName);
-            if (!File.Exists(path) || LoadDocuments(path).FirstOrDefault() is not YamlMappingNode root)
+            if (!File.Exists(path) || ModuleSourceDocuments.LoadDocuments(path).FirstOrDefault() is not YamlMappingNode root)
             {
                 return allowlist;
             }

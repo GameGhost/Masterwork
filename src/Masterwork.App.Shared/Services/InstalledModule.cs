@@ -36,9 +36,13 @@ public sealed record InstalledModule(
     IReadOnlyList<string> AvailableLanguages,
     string Sha256,
     string? ThumbnailImageUrl = null,
-    IReadOnlyList<ModuleDependency> Dependencies = null!
+    IReadOnlyList<ModuleDependency> Dependencies = null!,
+    string DefaultLocale = ModuleLocales.Default
 )
 {
     /// <summary>Ensures <see cref="Dependencies"/> is never null even after JSON deserialization of an older, field-less record.</summary>
     public IReadOnlyList<ModuleDependency> Dependencies { get; init; } = Dependencies ?? [];
+
+    /// <summary>The module's own default text language (<see cref="ModuleManifest.DefaultLocale"/>); <see cref="ModuleLocales.Default"/> for an index entry written before this field existed.</summary>
+    public string DefaultLocale { get; init; } = DefaultLocale ?? ModuleLocales.Default;
 }
