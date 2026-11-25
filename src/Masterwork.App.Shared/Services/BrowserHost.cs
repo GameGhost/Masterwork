@@ -35,6 +35,7 @@ public static class BrowserHost
         services.AddScoped<IAssetPackStore, IndexedDbAssetPackStore>();
         services.AddScoped<IInstalledVoicePacks, NoInstalledVoicePacks>();
         services.AddScoped<NarrationService>();
+        services.AddScoped<KnownLanguagesService>();
         services.AddScoped<GameSessionState>();
         services.AddScoped<AppNavigationHistory>();
         services.AddScoped<ISaveStore, LocalStorageSaveStore>();

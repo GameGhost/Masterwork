@@ -64,7 +64,7 @@ public sealed class NarrationService(
 
         var settings = await settingsStore.LoadAsync();
         var previous = state.Voice;
-        var track = VoiceSelection.Select(settings, moduleId, state.Language, [.. state.Voices.Select(v => v.Track)]);
+        var track = VoiceSelection.Select(settings, moduleId, state.Language, state.Module?.DefaultLocale, [.. state.Voices.Select(v => v.Track)]);
         state.SetVoices(state.Voices, track?.Language, track?.Id);
 
         if (state.Voice?.Track != previous?.Track)

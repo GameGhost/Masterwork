@@ -34,16 +34,15 @@ public sealed record AppSettings
 
     /// <summary>
     /// The player's preferred language for module *content* — independent of <see cref="UiLocale"/>.
-    /// <see langword="null"/> means "no preference, use whatever the module declares as its own
-    /// default." Only takes effect for modules that actually have that language (Section 11's
-    /// fallback chain); a module without it just falls back silently.
+    /// <see langword="null"/> means "same as the app": <see cref="UiLocale"/> if the module has it. A
+    /// module without the chosen language uses its own default. See <see cref="VoiceSelection.SelectTextLanguage"/>.
     /// </summary>
     public string? PreferredModuleLanguage { get; init; }
 
     /// <summary>
-    /// The player's voice language for narration: <see langword="null"/> follows the text language,
-    /// <see cref="VoiceSelection.None"/> turns narration off, and any other value is a language code.
-    /// A module without a track in the chosen language plays no narration. See <see cref="VoiceSelection.SelectVoiceLanguage"/>.
+    /// The player's voice language for narration: <see langword="null"/> is best match,
+    /// <see cref="VoiceSelection.SameAsText"/> follows the text language only, <see cref="VoiceSelection.None"/>
+    /// turns narration off, and any other value is a language code. See <see cref="VoiceSelection.SelectVoiceLanguage"/>.
     /// </summary>
     public string? VoiceLanguage { get; init; }
 

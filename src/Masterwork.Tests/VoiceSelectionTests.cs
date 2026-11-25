@@ -19,13 +19,19 @@ public class VoiceSelectionTests
     }
 
     [Fact]
-    public void TextLanguage_PreferenceMissing_FallsBackToUiLanguage()
+    public void TextLanguage_PreferenceMissing_FallsBackToModuleDefaultNotUiLanguage()
     {
-        Assert.Equal("fr-CA", VoiceSelection.SelectTextLanguage(["en-US", "fr-CA"], preferred: "de-DE", uiLocale: "fr-CA", moduleDefault: "en-US"));
+        Assert.Equal("en-US", VoiceSelection.SelectTextLanguage(["en-US", "fr-CA"], preferred: "de-DE", uiLocale: "fr-CA", moduleDefault: "en-US"));
     }
 
     [Fact]
-    public void TextLanguage_NoPreferenceAndUiLanguageMissing_FallsBackToModuleDefault()
+    public void TextLanguage_SameAsApp_UsesUiLanguage()
+    {
+        Assert.Equal("fr-CA", VoiceSelection.SelectTextLanguage(["en-US", "fr-CA"], preferred: null, uiLocale: "fr-CA", moduleDefault: "en-US"));
+    }
+
+    [Fact]
+    public void TextLanguage_SameAsAppAndUiLanguageMissing_FallsBackToModuleDefault()
     {
         Assert.Equal("fr-CA", VoiceSelection.SelectTextLanguage(["en-US", "fr-CA"], preferred: null, uiLocale: "de-DE", moduleDefault: "fr-CA"));
     }
@@ -38,41 +44,68 @@ public class VoiceSelectionTests
 
     // ── Voice language ──────────────────────────────────────────────────────
 
+    private static string? Voice(string? preference, string? text, string? ui = "de-DE", string? moduleDefault = "de-DE") =>
+        VoiceSelection.SelectVoiceLanguage(preference, text, ui, moduleDefault, EnglishAndCzech);
+
     [Fact]
-    public void VoiceLanguage_NoPreference_FollowsTextLanguageWhenATrackExists()
+    public void BestMatch_PrefersTheTextLanguage()
     {
-        Assert.Equal("cs-CZ", VoiceSelection.SelectVoiceLanguage(preference: null, textLanguage: "cs-CZ", EnglishAndCzech));
+        Assert.Equal("cs-CZ", Voice(preference: null, text: "cs-CZ", ui: "en-US", moduleDefault: "en-US"));
     }
 
     [Fact]
-    public void VoiceLanguage_NoPreferenceAndNoTrackInTextLanguage_IsNone()
+    public void BestMatch_NoTrackInTextLanguage_FallsBackToUiLanguage()
     {
-        // Never falls back silently to another language: French text with only English narration is None.
-        Assert.Null(VoiceSelection.SelectVoiceLanguage(preference: null, textLanguage: "fr-CA", EnglishAndCzech));
+        Assert.Equal("cs-CZ", Voice(preference: null, text: "fr-CA", ui: "cs-CZ", moduleDefault: "en-US"));
     }
 
     [Fact]
-    public void VoiceLanguage_ExplicitPreferenceTheModuleHas_WinsOverTextLanguage()
+    public void BestMatch_NoTrackInTextOrUiLanguage_FallsBackToModuleDefault()
     {
-        Assert.Equal("en-US", VoiceSelection.SelectVoiceLanguage(preference: "en-US", textLanguage: "cs-CZ", EnglishAndCzech));
+        Assert.Equal("en-US", Voice(preference: null, text: "fr-CA", ui: "fr-CA", moduleDefault: "en-US"));
     }
 
     [Fact]
-    public void VoiceLanguage_ExplicitPreferenceTheModuleLacks_IsNone()
+    public void BestMatch_NoTrackInAnyOfThem_IsNone()
     {
-        Assert.Null(VoiceSelection.SelectVoiceLanguage(preference: "fr-CA", textLanguage: "en-US", EnglishAndCzech));
+        Assert.Null(Voice(preference: null, text: "fr-CA", ui: "fr-CA", moduleDefault: "fr-CA"));
+    }
+
+    [Fact]
+    public void SameAsText_FollowsTextLanguageWhenATrackExists()
+    {
+        Assert.Equal("cs-CZ", Voice(preference: VoiceSelection.SameAsText, text: "cs-CZ"));
+    }
+
+    [Fact]
+    public void SameAsText_NoTrackInTextLanguage_IsNone()
+    {
+        // Unlike best match, never tries another language: French text with only English narration is None.
+        Assert.Null(Voice(preference: VoiceSelection.SameAsText, text: "fr-CA", ui: "en-US", moduleDefault: "en-US"));
+    }
+
+    [Fact]
+    public void ExplicitLanguageTheModuleHas_WinsOverTextLanguage()
+    {
+        Assert.Equal("en-US", Voice(preference: "en-US", text: "cs-CZ"));
+    }
+
+    [Fact]
+    public void ExplicitLanguageTheModuleLacks_IsNone()
+    {
+        Assert.Null(Voice(preference: "fr-CA", text: "en-US", ui: "en-US", moduleDefault: "en-US"));
     }
 
     [Fact]
     public void VoiceLanguage_MatchesIgnoringCase_SpelledAsTheTracksSpellIt()
     {
-        Assert.Equal("cs-CZ", VoiceSelection.SelectVoiceLanguage(preference: null, textLanguage: "CS-cz", EnglishAndCzech));
+        Assert.Equal("cs-CZ", Voice(preference: null, text: "CS-cz"));
     }
 
     [Fact]
-    public void VoiceLanguage_ExplicitNone_IsNone()
+    public void ExplicitNone_IsNone()
     {
-        Assert.Null(VoiceSelection.SelectVoiceLanguage(preference: VoiceSelection.None, textLanguage: "en-US", EnglishAndCzech));
+        Assert.Null(Voice(preference: VoiceSelection.None, text: "en-US", ui: "en-US", moduleDefault: "en-US"));
     }
 
     // ── Track ───────────────────────────────────────────────────────────────
@@ -114,7 +147,7 @@ public class VoiceSelectionTests
             ],
         };
 
-        var track = VoiceSelection.Select(settings, "this.module", "en-US", EnglishAndCzech);
+        var track = VoiceSelection.Select(settings, "this.module", "en-US", "en-US", EnglishAndCzech);
 
         Assert.Equal(("en-US", "female"), (track?.Language, track?.Id));
     }

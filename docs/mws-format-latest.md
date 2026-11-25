@@ -1696,10 +1696,16 @@ voices:
     name: 'Female narrator'
 ```
 
-The player chooses, per device: a **voice language** in Options (app-wide; None is allowed, and the
-default follows the text language), and a **voice track** per module, from the in-game Options. An
-explicit voice language the module has no track in, or a text language with no track, means no
-narration: the app never falls back silently to another language. Neither choice is stored in saves.
+The player chooses, per device: a **voice language** in Options (app-wide), and a **voice track** per
+module, from the in-game Options. The voice language is one of:
+
+- **Best match** (the default): the text language, else the UI language, else the module's
+  `default_locale`, whichever has a track; else no narration.
+- **Same as module**: the text language if it has a track; else no narration.
+- **None**: no narration.
+- **A specific language**: that language if it has a track; else no narration.
+
+Only best match tries more than one language. Neither choice is stored in saves.
 
 ### Voice packs
 

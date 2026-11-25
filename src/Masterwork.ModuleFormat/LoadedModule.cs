@@ -41,4 +41,7 @@ public sealed record LoadedModule
 
     /// <summary>The manifest's built-in voice tracks (<c>voices:</c>), threaded through the same way as <see cref="Audio"/>. Installed voice packs add more at play time.</summary>
     public IReadOnlyList<VoiceTrack> Voices { get; init; } = [];
+
+    /// <summary>The manifest's <c>default_locale:</c>, threaded through the same way as <see cref="Audio"/>.</summary>
+    public string DefaultLocale { get; init; } = ModuleLocales.Default;
 }

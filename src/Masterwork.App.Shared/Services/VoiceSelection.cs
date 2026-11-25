@@ -7,22 +7,26 @@ public sealed record AvailableVoiceTrack(VoiceTrack Track, IModuleAssetSource So
 
 /// <summary>
 /// Picks a playthrough's text language, voice language and voice track from the player's settings
-/// and what the module offers. Text and voice language are chosen independently; narration never
-/// falls back silently to a language the player didn't ask for.
+/// and what the module offers. Text and voice language are chosen independently. Only best match
+/// tries other languages for narration; every other choice plays that language or nothing.
 /// </summary>
 public static class VoiceSelection
 {
     /// <summary>The <see cref="AppSettings.VoiceLanguage"/> value meaning "no narration".</summary>
     public const string None = "none";
 
+    /// <summary>The <see cref="AppSettings.VoiceLanguage"/> value meaning "the text language only".</summary>
+    public const string SameAsText = "text";
+
     /// <summary>
-    /// The text language for a new playthrough: <paramref name="preferred"/>, else
-    /// <paramref name="uiLocale"/>, else <paramref name="moduleDefault"/>, each only if
-    /// <paramref name="available"/> has it; else the first available language.
+    /// The text language for a new playthrough. An explicit <paramref name="preferred"/> language is
+    /// used if <paramref name="available"/> has it, else <paramref name="moduleDefault"/>. With no
+    /// preference ("same as app"), <paramref name="uiLocale"/> is used if available, else
+    /// <paramref name="moduleDefault"/>. If neither is available, the first available language.
     /// </summary>
     public static string SelectTextLanguage(IReadOnlyList<string> available, string? preferred, string? uiLocale, string moduleDefault)
     {
-        foreach (var candidate in new[] { preferred, uiLocale, moduleDefault })
+        foreach (var candidate in new[] { preferred ?? uiLocale, moduleDefault })
         {
             if (candidate is not null && available.Contains(candidate, StringComparer.OrdinalIgnoreCase))
             {
@@ -34,22 +38,38 @@ public static class VoiceSelection
     }
 
     /// <summary>
-    /// The effective voice language, or <see langword="null"/> for None. An explicit
-    /// <paramref name="preference"/> is used only if a track exists in it (else None); with no
-    /// preference, <paramref name="textLanguage"/> is used only if a track exists in it (else None).
+    /// The effective voice language, or <see langword="null"/> for None. Each choice only counts a
+    /// language some track is in:
+    /// <list type="bullet">
+    /// <item>Best match (<see langword="null"/>): <paramref name="textLanguage"/>, else <paramref name="uiLocale"/>, else <paramref name="moduleDefault"/>, else None.</item>
+    /// <item><see cref="SameAsText"/>: <paramref name="textLanguage"/>, else None.</item>
+    /// <item><see cref="None"/>: None.</item>
+    /// <item>A language code: that language, else None.</item>
+    /// </list>
     /// Matching ignores case; the result is spelled as the tracks spell it.
     /// </summary>
-    public static string? SelectVoiceLanguage(string? preference, string? textLanguage, IEnumerable<VoiceTrack> tracks)
+    public static string? SelectVoiceLanguage(
+        string? preference, string? textLanguage, string? uiLocale, string? moduleDefault, IEnumerable<VoiceTrack> tracks)
     {
-        if (preference == None)
+        string?[] candidates = preference switch
         {
-            return null;
+            null => [textLanguage, uiLocale, moduleDefault],
+            SameAsText => [textLanguage],
+            None => [],
+            _ => [preference],
+        };
+
+        var trackList = tracks as IReadOnlyCollection<VoiceTrack> ?? [.. tracks];
+        foreach (var candidate in candidates)
+        {
+            if (candidate is not null
+                && trackList.FirstOrDefault(t => string.Equals(t.Language, candidate, StringComparison.OrdinalIgnoreCase)) is { } match)
+            {
+                return match.Language;
+            }
         }
 
-        var wanted = preference ?? textLanguage;
-        return wanted is null
-            ? null
-            : tracks.FirstOrDefault(t => string.Equals(t.Language, wanted, StringComparison.OrdinalIgnoreCase))?.Language;
+        return null;
     }
 
     /// <summary>The track to play in <paramref name="voiceLanguage"/>: <paramref name="preferredTrackId"/> if that language has it, else its first track. <see langword="null"/> under None.</summary>
@@ -65,9 +85,9 @@ public static class VoiceSelection
     }
 
     /// <summary>The track to play for <paramref name="moduleId"/>, from <paramref name="settings"/>, or <see langword="null"/> for no narration.</summary>
-    public static VoiceTrack? Select(AppSettings settings, string moduleId, string? textLanguage, IReadOnlyList<VoiceTrack> tracks)
+    public static VoiceTrack? Select(AppSettings settings, string moduleId, string? textLanguage, string? moduleDefault, IReadOnlyList<VoiceTrack> tracks)
     {
-        var language = SelectVoiceLanguage(settings.VoiceLanguage, textLanguage, tracks);
+        var language = SelectVoiceLanguage(settings.VoiceLanguage, textLanguage, settings.UiLocale, moduleDefault, tracks);
         return SelectTrack(language, tracks, PreferredTrackId(settings, moduleId, language));
     }
 

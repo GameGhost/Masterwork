@@ -41,6 +41,7 @@ public static class MauiProgram
         builder.Services.AddScoped<IAssetPackStore, FileAssetPackStore>();
         builder.Services.AddScoped<IInstalledVoicePacks, NoInstalledVoicePacks>();
         builder.Services.AddScoped<NarrationService>();
+        builder.Services.AddScoped<KnownLanguagesService>();
         builder.Services.AddScoped<GameSessionState>();
         builder.Services.AddScoped<AppNavigationHistory>();
         builder.Services.AddScoped<ISaveStore, FileSaveStore>();
