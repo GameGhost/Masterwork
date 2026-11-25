@@ -27,7 +27,7 @@ public sealed record AssetPackManifest
     public string DefaultLocale { get; init; } = ModuleLocales.Default;
 
     /// <summary>
-    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.5"</c>), if
+    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.6"</c>), if
     /// present — optional, same as <see cref="ModuleManifest.Format"/>, and for the same reason.
     /// </summary>
     public string? Format { get; init; }

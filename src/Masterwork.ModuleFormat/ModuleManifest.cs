@@ -71,7 +71,7 @@ public sealed record ModuleManifest
     public string ModuleType { get; init; } = "module";
 
     /// <summary>
-    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.5"</c>), if
+    /// This manifest's own declared MWS format version (<c>format:</c>, e.g. <c>"mws/0.6"</c>), if
     /// present — optional, unlike the same field on a passage/layout-chrome file
     /// (<see cref="PassageYamlParser"/>), since every existing manifest predates this field. A value
     /// that doesn't match <see cref="MwsFormatVersion.Current"/> logs a warning, same as those files.

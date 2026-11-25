@@ -159,7 +159,7 @@ public class VoiceManifestTests
         var warnings = new ModuleWarnings();
         new VoicePackManifestParser().Parse("""
             type: 'voices'
-            format: 'mws/0.5'
+            format: 'mws/0.6'
             id: 'pack'
             title: 'Pack'
             description: 'English narration'

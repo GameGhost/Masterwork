@@ -24,7 +24,7 @@ public sealed class ModuleLogicLintTests : IDisposable
     }
 
     private static string Passage(string id, string nodes) =>
-        $"format: 'mws/0.5'\npassage_id: '{id}'\nlayout: 'hub'\nnodes:\n{nodes}";
+        $"format: 'mws/0.6'\npassage_id: '{id}'\nlayout: 'hub'\nnodes:\n{nodes}";
 
     private IReadOnlyList<LogicLintFinding> Check(params string[] packs) => ModuleLogicLint.Check(_module, packs);
 

@@ -537,6 +537,6 @@ All three official scenarios are extracted and shipped (Masterwork-Modules v0.2.
 | A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 187 | 365 | 0 |
 | Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 253 | 359 | 0 |
 
-All passage files across all four modules carry `format: 'mws/0.4'`. Warnings are predominantly conflicting-type assignments (a variable used as more than one type across the original ~30k-line source — genuine mixed-use patterns, resolved to `type: string`), not extraction errors; see each module's own `_extraction-report.md` for the exact breakdown, especially Cost of Disease's 14 unknown-node warnings, which are worth a closer look if revisiting that module's content.
+Passage files carry the format version the extractor was built with (`MwsFormatVersion.Current`, now `mws/0.6`); files extracted before v0.6 still declare `mws/0.4` until re-extracted or updated. Warnings are predominantly conflicting-type assignments (a variable used as more than one type across the original ~30k-line source — genuine mixed-use patterns, resolved to `type: string`), not extraction errors; see each module's own `_extraction-report.md` for the exact breakdown, especially Cost of Disease's 14 unknown-node warnings, which are worth a closer look if revisiting that module's content.
 
 See each module's own `_extraction-report.md` (next to its `.source/*.cs` file) for exact, current per-module figures — this table is a snapshot and will drift if quoted without checking back against that file.

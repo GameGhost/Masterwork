@@ -58,7 +58,7 @@ public static partial class V2Serializer
 
         var d = new Dictionary<string, object?>
         {
-            ["format"] = "mws/0.4",
+            ["format"] = MwsFormatVersion.Current,
             ["passage_id"] = passage.PassageId,
         };
         if (!string.IsNullOrEmpty(passage.Title) && passage.Title != passage.PassageId)

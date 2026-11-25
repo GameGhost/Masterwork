@@ -16,7 +16,7 @@ public class V2SerializerTests
     {
         var passage = new MwsPassage { PassageId = "P1" };
         var d = V2Serializer.ToDict(passage);
-        Assert.Equal("mws/0.4", d["format"]);
+        Assert.Equal("mws/0.6", d["format"]);
     }
 
     [Fact]

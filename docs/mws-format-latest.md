@@ -1,6 +1,18 @@
-# Masterwork Script Format — v0.5 Reference
+# Masterwork Script Format — v0.6 Reference
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
+
+### Changes since v0.5
+
+v0.6 changes where narration comes from. A v0.5 module still loads, but its narration no longer plays.
+
+- Narration files live in voice track folders, `assets/audio/vo/<language>/<track>/<slug>.<ext>`, declared
+  by a manifest `voices:` block (§9 *Voices*) or shipped in a voice pack (§9 *Voice packs*).
+- `audio://vo/<slug>` plays only from the player's selected voice track. A file directly under
+  `assets/audio/vo/` is never played, and the `<slug>.<culture>.<ext>` lookup is gone.
+- The narrator is chosen in the app's Options, not by the module: an `audio_track` names one plain slug
+  instead of choosing between files with an expression on a module variable.
+- Every `format:` field reads `mws/0.6`.
 
 ---
 
@@ -9,7 +21,7 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: 'mws/0.5'
+format: 'mws/0.6'
 passage_id: 'Hospital1'
 title: 'The Hospital'
 tags:
@@ -29,7 +41,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/0.5`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
+| `format` | string | yes | Always `mws/0.6`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id`. For `hub`/`narration` passages, the extractor hoists this from the source's leading bold-styled text block (see below) instead of leaving it as an ordinary body node |
 | `subtitle` | string | no | Optional subtitle shown alongside `title` in the passage header. Populated the same way as `title` — either the second line of a two-line bold heading, or the part after " - " in a single-line "Title - Subtitle" heading |
@@ -1455,7 +1467,7 @@ name means. One file per layout, in a `layouts/` folder alongside `passages/`/`p
 
 ```yaml
 # layouts/hub_early.mws.yaml
-format: 'mws/0.4'
+format: 'mws/0.6'
 layout_id: 'hub_early'
 header:
 - type: 'image'
@@ -1746,7 +1758,7 @@ A passage from *A Time of War*:
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: 'mws/0.4'
+format: 'mws/0.6'
 passage_id: 'BattleTime'
 title: 'BattleTime'
 layout: 'narration'
@@ -1807,4 +1819,4 @@ nodes:
 
 ---
 
-*MWS format v0.5 — Masterwork project.*
+*MWS format v0.6 — Masterwork project.*

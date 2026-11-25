@@ -380,7 +380,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'P1'
                 tags:
                 - 'Begins-Here'
@@ -509,7 +509,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -534,7 +534,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -559,7 +559,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -585,7 +585,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -611,7 +611,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -637,7 +637,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -662,7 +662,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -688,7 +688,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -715,7 +715,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -743,7 +743,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -770,7 +770,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -803,7 +803,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -836,7 +836,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'
@@ -864,7 +864,7 @@ public class ModuleLoaderTests
         var module = loader.LoadFromSources(
             [
                 """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 passage_id: 'Start'
                 tags:
                 - 'Begins-Here'

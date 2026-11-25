@@ -27,7 +27,7 @@ public sealed class VoiceCoverageTests : IDisposable
 
     private void Narrated(string id, params string[] slugs) =>
         Write(_module, $"passages/{id}.mws.yaml",
-            $"format: 'mws/0.5'\npassage_id: '{id}'\nlayout: 'hub'\nnodes:\n" +
+            $"format: 'mws/0.6'\npassage_id: '{id}'\nlayout: 'hub'\nnodes:\n" +
             string.Concat(slugs.Select(s => $"- type: 'audio_track'\n  asset: 'audio://vo/{s}'\n")));
 
     private static VoiceTrack Track(string language, string id) => new() { Language = language, Id = id };
