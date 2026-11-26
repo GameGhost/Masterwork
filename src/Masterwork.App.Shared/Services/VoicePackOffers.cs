@@ -57,11 +57,9 @@ public static class VoicePackOffers
                     continue;
                 }
 
-                if (SemVer.Compare(module.Version, entry.For!.MinVersion) < 0)
+                if (!VoiceSelection.SupportsModuleVersion(entry.For!, module.Version))
                 {
-                    var update = snapshot.Catalog.Modules
-                        .Where(m => m.Id == module.ModuleId && SemVer.Compare(m.Version, entry.For.MinVersion) >= 0)
-                        .MaxBy(m => m.Version, Comparer<string>.Create(SemVer.Compare));
+                    var update = NewestModuleListing(snapshot.Catalog, module.ModuleId, entry.For!.MinVersion);
                     offers.Add(new VoicePackOffer(snapshot, entry, module, VoicePackOfferState.NeedsModuleUpdate, update));
                     continue;
                 }
@@ -73,6 +71,12 @@ public static class VoicePackOffers
 
         return offers;
     }
+
+    /// <summary>The newest listing in <paramref name="catalog"/> of <paramref name="moduleId"/> at <paramref name="minVersion"/> or later, or <see langword="null"/>.</summary>
+    public static CatalogEntry? NewestModuleListing(CatalogDocument catalog, string moduleId, string minVersion) =>
+        catalog.Modules
+            .Where(m => m.Id == moduleId && SemVer.Compare(m.Version, minVersion) >= 0)
+            .MaxBy(m => m.Version, Comparer<string>.Create(SemVer.Compare));
 
     /// <summary>
     /// The pack to install along with <paramref name="module"/>: one in the player's effective voice

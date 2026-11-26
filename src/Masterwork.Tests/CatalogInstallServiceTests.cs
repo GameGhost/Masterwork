@@ -365,6 +365,20 @@ public class CatalogInstallServiceTests
     }
 
     [Fact]
+    public async Task InstallingAnOlderVersionOfAnInstalledVoicePack_IsRefusedBeforeDownloading()
+    {
+        var (service, downloader, _, _) = Build(out var voices, out _);
+        await voices.InstallAsync(VoicePackage("voices.en", "en-US"));
+        var entry = VoiceEntry("voices.en", VoicePackage("voices.en", "en-US"), "en-US") with { Version = "0.9.0" };
+
+        await Assert.ThrowsAsync<CatalogInstallException>(
+            () => service.InstallAsync(Snapshot(PackageTrustDecision.Trusted, entry), entry));
+
+        Assert.Empty(downloader.Requested);
+        Assert.Equal("1.0.0", Assert.Single(voices.Installed).Manifest.Version);
+    }
+
+    [Fact]
     public async Task InstallingAVoicePack_ThatAddsAnAlreadyInstalledTrack_IsRefused()
     {
         var (service, downloader, modules, _) = Build(out var voices, out _);

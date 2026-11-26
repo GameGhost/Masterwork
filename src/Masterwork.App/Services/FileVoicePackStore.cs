@@ -12,8 +12,11 @@ public sealed class FileVoicePackStore : IVoicePackStore
 {
     private static string VoicePacksDir => Path.Combine(FileSystem.AppDataDirectory, "voice-packs");
 
+    // A readable name plus a hash of the exact id, so two ids that sanitize alike never share a folder.
     private static string PackDir(string packId) =>
-        Path.Combine(VoicePacksDir, new string([.. packId.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '_')]));
+        Path.Combine(VoicePacksDir,
+            new string([.. packId.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '_')])
+            + "__" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(packId)))[..8].ToLowerInvariant());
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<InstalledVoicePack>> ListAsync()

@@ -171,7 +171,7 @@
   <data name="ManageModules_VoicePackRefusedTitle" xml:space="preserve"><value>Voice pack not installed</value></data>
   <data name="ManageModules_VoicePackNeedsModuleBody" xml:space="preserve"><value>'{0}' needs {1} v{2} or later, and v{3} is installed.</value></data>
   <data name="ManageModules_VoicePackNeedsModuleBodyNoUpdate" xml:space="preserve"><value>'{0}' needs {1} v{2} or later, and v{3} is installed. None of your sources has that version yet.</value></data>
-  <data name="ManageModules_VoicePackTrackConflictBody" xml:space="preserve"><value>'{0}' adds a voice that '{1}' already installed. Delete '{1}' first to use this one.</value></data>
+  <data name="ManageModules_VoicePackTrackConflictBody" xml:space="preserve"><value>'{0}' adds a voice track that '{1}' already installed. Delete '{1}' first to use this one.</value></data>
   <data name="ManageModules_VoicePackUploadError_Generic" xml:space="preserve"><value>Couldn't install that voice pack: {0}</value></data>
   <data name="ManageModules_UnsignedTitleVoicePack" xml:space="preserve"><value>Unsigned voice pack</value></data>
   <data name="ManageModules_UnrecognizedSignerBodyVoicePack" xml:space="preserve"><value>This voice pack was created by '{0}'. Install if you trust the publisher.</value></data>

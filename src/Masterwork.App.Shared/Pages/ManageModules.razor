@@ -102,7 +102,7 @@
                     <div class="mws-module-row-info">
                         <strong>@offer.Entry.Title</strong>
                         <span class="mws-module-version">v@(offer.Entry.Version)</span>
-                        <span class="mws-module-version">@VoicePackLabel(offer.Module.ModuleId, offer.Entry.Languages) · @FormatSize(offer.Entry.Size)</span>
+                        <span class="mws-module-version">@VoicePackLabel(offer.Module.ModuleId, offer.Entry.Languages) · @VoicePackService.FormatSize(offer.Entry.Size)</span>
                     </div>
                     @switch (offer.State)
                     {
@@ -323,9 +323,6 @@
             _modules.FirstOrDefault(m => m.ModuleId == moduleId)?.Title ?? moduleId,
             string.Join(", ", languages.Distinct(StringComparer.OrdinalIgnoreCase).Select(LanguageNames.Native)));
 
-    private static string FormatSize(long bytes) =>
-        string.Format(AppStrings.EffectiveCulture, AppStrings.Common_SizeMegabytes, bytes / (1024.0 * 1024.0));
-
     private InstalledVoicePack? _confirmingDeleteVoicePack;
     private VoicePackRefusalDialog? _voicePackRefusal;
     private bool _confirmingDeleteHasVoicePacks;
@@ -431,17 +428,20 @@
 
     private async Task InstallOffer(VoicePackOffer offer)
     {
-        await RunCatalogInstallAsync(offer.Entry.Title, offer.Module.ModuleId, () => VoicePacks.InstallAsync(offer, CatalogProgress()));
+        await RunCatalogInstallAsync(offer.Entry.Title, offer.Module.ModuleId, AppStrings.ManageModules_VoicePackUploadError_Generic,
+            () => VoicePacks.InstallAsync(offer, CatalogProgress()));
     }
 
     private async Task UpdateModule(ModuleUpdate update)
     {
         _voicePackRefusal = null;
-        await RunCatalogInstallAsync(update.Entry.Title, update.Entry.Id, () => VoicePacks.UpdateModuleAsync(update, CatalogProgress()));
+        await RunCatalogInstallAsync(update.Entry.Title, update.Entry.Id, AppStrings.StartNewGame_UploadError_Generic,
+            () => VoicePacks.UpdateModuleAsync(update, CatalogProgress()));
     }
 
-    // A failed download is reported on the page and nothing else changes; a refused pack gets the refusal dialog.
-    private async Task RunCatalogInstallAsync(string title, string moduleId, Func<Task> install)
+    // A failed download is reported on the page (errorFormat takes the reason as {0}) and nothing
+    // else changes; a refused pack gets the refusal dialog.
+    private async Task RunCatalogInstallAsync(string title, string moduleId, string errorFormat, Func<Task> install)
     {
         if (_busy)
         {
@@ -466,13 +466,17 @@
         catch (CatalogInstallException ex)
         {
             Logger.LogWarning(ex, "Manage: catalog install of {Title} failed", title);
-            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackUploadError_Generic, ex.Message);
+            _uploadError = string.Format(AppStrings.EffectiveCulture, errorFormat, ex.Message);
         }
-        finally
+
+        try
         {
             _modules = await ModuleStore.ListAsync();
             _assetPacks = await AssetPackStore.ListAsync();
             await ReloadVoicePacksAsync();
+        }
+        finally
+        {
             _loading = false;
             _busy = false;
         }
@@ -1038,6 +1042,10 @@
             var installed = await ModuleStore.InstallAsync(bytes, sha256, progress);
             _modules = await ModuleStore.ListAsync();
             Logger.LogInformation("Upload: installed module {ModuleId} v{Version}", installed.ModuleId, installed.Version);
+
+            // As a catalog install does; this never fails the upload.
+            await VoicePacks.InstallForModuleAsync(installed, CatalogProgress());
+            await ReloadVoicePacksAsync();
         }
         catch (Exception ex)
         {

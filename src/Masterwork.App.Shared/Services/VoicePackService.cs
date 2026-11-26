@@ -67,9 +67,7 @@ public sealed class VoicePackService(
         {
             foreach (var snapshot in (await catalog.GetCachedSubscribedAsync(primary)).Where(s => s.Decision == PackageTrustDecision.Trusted))
             {
-                if (snapshot.Catalog.Modules
-                        .Where(m => m.Id == moduleId && SemVer.Compare(m.Version, minVersion) >= 0)
-                        .MaxBy(m => m.Version, Comparer<string>.Create(SemVer.Compare)) is { } entry)
+                if (VoicePackOffers.NewestModuleListing(snapshot.Catalog, moduleId, minVersion) is { } entry)
                 {
                     return new ModuleUpdate(snapshot, entry);
                 }
@@ -102,6 +100,26 @@ public sealed class VoicePackService(
     /// <summary>Installs an uploaded pack that <see cref="CheckAsync"/> accepted.</summary>
     public Task<InstalledVoicePack> InstallUploadAsync(byte[] packageBytes, IProgress<(int Done, int Total)>? progress = null) =>
         voicePackStore.InstallAsync(packageBytes, progress);
+
+    /// <summary>
+    /// Installs the voice pack an uploaded <paramref name="module"/> needs for the player's voice
+    /// language, from the cached catalogs, as a catalog install does. Never throws.
+    /// </summary>
+    public async Task InstallForModuleAsync(InstalledModule module, IProgress<CatalogInstallProgress>? progress = null)
+    {
+        try
+        {
+            await installer.InstallVoicePackForModuleAsync(await catalog.GetCachedSubscribedAsync(primary), module, progress);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No voice pack installed with uploaded module {ModuleId}", module.ModuleId);
+        }
+    }
+
+    /// <summary>The size of a download, for display.</summary>
+    public static string FormatSize(long bytes) =>
+        string.Format(Resources.AppStrings.EffectiveCulture, Resources.AppStrings.Common_SizeMegabytes, bytes / (1024.0 * 1024.0));
 
     /// <summary>Removes one installed pack.</summary>
     public Task DeleteAsync(string packId) => voicePackStore.DeleteAsync(packId);

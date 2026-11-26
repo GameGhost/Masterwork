@@ -103,7 +103,7 @@
                             <div class="mws-options-controls">
                                 <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => DownloadVoicePacks(downloadable)">
                                     @string.Format(AppStrings.EffectiveCulture, AppStrings.OptionsDialog_VoicePackDownload,
-                                        string.Format(AppStrings.EffectiveCulture, AppStrings.Common_SizeMegabytes, downloadable.Sum(o => o.Entry.Size) / (1024.0 * 1024.0)))
+                                        VoicePackService.FormatSize(downloadable.Sum(o => o.Entry.Size)))
                                 </ChromeButton>
                             </div>
                         </div>

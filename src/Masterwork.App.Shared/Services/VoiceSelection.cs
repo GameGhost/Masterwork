@@ -142,5 +142,9 @@ public static class VoiceSelection
 
     /// <summary>Whether <paramref name="pack"/> works with a module at <paramref name="moduleVersion"/>. Only the minimum is checked.</summary>
     public static bool SupportsModuleVersion(VoicePackManifest pack, string moduleVersion) =>
-        SemVer.Compare(moduleVersion, pack.For.MinVersion) >= 0;
+        SupportsModuleVersion(pack.For, moduleVersion);
+
+    /// <summary>Whether a pack voicing <paramref name="target"/> works with a module at <paramref name="moduleVersion"/>. Only the minimum is checked.</summary>
+    public static bool SupportsModuleVersion(VoicePackTarget target, string moduleVersion) =>
+        SemVer.Compare(moduleVersion, target.MinVersion) >= 0;
 }

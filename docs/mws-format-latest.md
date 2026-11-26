@@ -1756,8 +1756,9 @@ doesn't know, so a new type never makes a catalog unreadable to older apps.
 
 Installing:
 
-- Installing a module from a catalog also installs that catalog's pack in the player's effective voice
-  language for it, unless that is None or something installed already narrates in it.
+- Installing a module also installs a catalog pack in the player's effective voice language for it
+  (from the same catalog, or for an uploaded module from the cached catalogs), unless that is None or
+  something installed already narrates in it.
 - The minimum version is enforced at install and update; a refusal names the module version needed
   and offers that module update when a source has it.
 - A pack that would add a (language, id) another installed pack for the same module already adds is

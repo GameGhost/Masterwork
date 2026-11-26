@@ -172,7 +172,7 @@
   <data name="ManageModules_VoicePackRefusedTitle" xml:space="preserve"><value>Pack de voix non installé</value></data>
   <data name="ManageModules_VoicePackNeedsModuleBody" xml:space="preserve"><value>« {0} » nécessite {1} v{2} ou plus récent, et la v{3} est installée.</value></data>
   <data name="ManageModules_VoicePackNeedsModuleBodyNoUpdate" xml:space="preserve"><value>« {0} » nécessite {1} v{2} ou plus récent, et la v{3} est installée. Aucune de vos sources n'offre encore cette version.</value></data>
-  <data name="ManageModules_VoicePackTrackConflictBody" xml:space="preserve"><value>« {0} » ajoute une voix déjà installée par « {1} ». Supprimez d'abord « {1} » pour utiliser celui-ci.</value></data>
+  <data name="ManageModules_VoicePackTrackConflictBody" xml:space="preserve"><value>« {0} » ajoute une piste de voix déjà installée par « {1} ». Supprimez d'abord « {1} » pour utiliser celui-ci.</value></data>
   <data name="ManageModules_VoicePackUploadError_Generic" xml:space="preserve"><value>Impossible d'installer ce pack de voix : {0}</value></data>
   <data name="ManageModules_UnsignedTitleVoicePack" xml:space="preserve"><value>Pack de voix non signé</value></data>
   <data name="ManageModules_UnrecognizedSignerBodyVoicePack" xml:space="preserve"><value>Ce pack de voix a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur.</value></data>

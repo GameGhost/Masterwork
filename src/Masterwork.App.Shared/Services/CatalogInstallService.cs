@@ -27,7 +27,7 @@ public class CatalogInstallException(string message, Exception? inner = null) : 
 public sealed class VoicePackRefusedException(VoicePackRefusal refusal, string packTitle)
     : CatalogInstallException(refusal.Kind == VoicePackRefusalKind.NeedsModuleVersion
         ? $"'{packTitle}' needs version {refusal.ModuleVersion} or later of its module."
-        : $"'{packTitle}' adds a voice that '{refusal.InstalledBy}' already installed.")
+        : $"'{packTitle}' adds a voice track that '{refusal.InstalledBy}' already installed.")
 {
     /// <summary>Why the install was refused.</summary>
     public VoicePackRefusal Refusal { get; } = refusal;
@@ -98,27 +98,33 @@ public sealed class CatalogInstallService(
 
         if (module is not null)
         {
-            await InstallVoicePackForAsync(snapshot, module, progress, cancellationToken);
+            await InstallVoicePackForModuleAsync([snapshot], module, progress, cancellationToken);
         }
     }
 
-    private async Task InstallVoicePackForAsync(
-        CatalogSnapshot snapshot, InstalledModule module, IProgress<CatalogInstallProgress>? progress, CancellationToken cancellationToken)
+    /// <summary>
+    /// Installs the voice pack <paramref name="module"/> needs for the player's effective voice
+    /// language (<see cref="VoicePackOffers.ForModuleInstall"/>), from the first trusted
+    /// <paramref name="snapshots"/> listing one. Never throws except on cancellation: a pack that
+    /// can't be fetched is logged, and narration uses what's installed.
+    /// </summary>
+    public async Task InstallVoicePackForModuleAsync(
+        IReadOnlyList<CatalogSnapshot> snapshots, InstalledModule module, IProgress<CatalogInstallProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var settings = await settingsStore.LoadAsync();
             var installed = (await voicePackStore.ListAsync()).Select(p => p.Manifest).ToList();
-            var offers = VoicePackOffers.From([snapshot], [module], installed);
+            var offers = VoicePackOffers.From(snapshots, [module], installed);
             if (VoicePackOffers.ForModuleInstall(settings, module, offers, installed) is not { } offer)
             {
                 return;
             }
 
             logger.LogInformation("Catalog install: installing voice pack {PackId} v{Version} with {ModuleId}", offer.Entry.Id, offer.Entry.Version, module.ModuleId);
-            await InstallVoicePackAsync(snapshot.Source, offer.Entry, progress, cancellationToken);
+            await InstallVoicePackAsync(offer.Snapshot.Source, offer.Entry, progress, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(ex, "Catalog install: no voice pack installed with {ModuleId}; narration uses what's already installed", module.ModuleId);
         }
@@ -129,10 +135,16 @@ public sealed class CatalogInstallService(
     {
         var module = (await moduleStore.ListAsync()).FirstOrDefault(m => m.ModuleId == entry.For?.ModuleId);
 
-        // The minimum version is in the catalog entry too, so a pack that can't be installed isn't downloaded first.
-        if (module is not null && entry.For is { } target && SemVer.Compare(module.Version, target.MinVersion) < 0)
+        // Both checks need only the catalog entry, so a pack that can't be installed isn't downloaded first.
+        if (module is not null && entry.For is { } target && !VoiceSelection.SupportsModuleVersion(target, module.Version))
         {
             throw new VoicePackRefusedException(new VoicePackRefusal(VoicePackRefusalKind.NeedsModuleVersion, ModuleVersion: target.MinVersion), entry.Title);
+        }
+
+        if ((await voicePackStore.ListAsync()).FirstOrDefault(p => p.Manifest.Id == entry.Id) is { } current
+            && SemVer.Compare(current.Manifest.Version, entry.Version) > 0)
+        {
+            throw new CatalogInstallException($"'{entry.Title}' v{current.Manifest.Version} is already installed, newer than v{entry.Version}.");
         }
 
         var (bytes, _) = await DownloadVerifiedAsync(source, entry, progress, cancellationToken);
