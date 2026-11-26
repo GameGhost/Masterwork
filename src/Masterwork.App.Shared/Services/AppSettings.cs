@@ -34,11 +34,20 @@ public sealed record AppSettings
 
     /// <summary>
     /// The player's preferred language for module *content* — independent of <see cref="UiLocale"/>.
-    /// <see langword="null"/> means "no preference, use whatever the module declares as its own
-    /// default." Only takes effect for modules that actually have that language (Section 11's
-    /// fallback chain); a module without it just falls back silently.
+    /// <see langword="null"/> means "same as the app": <see cref="UiLocale"/> if the module has it. A
+    /// module without the chosen language uses its own default. See <see cref="VoiceSelection.SelectTextLanguage"/>.
     /// </summary>
     public string? PreferredModuleLanguage { get; init; }
+
+    /// <summary>
+    /// The player's voice language for narration: <see langword="null"/> is best match,
+    /// <see cref="VoiceSelection.SameAsText"/> follows the text language only, <see cref="VoiceSelection.None"/>
+    /// turns narration off, and any other value is a language code. See <see cref="VoiceSelection.SelectVoiceLanguage"/>.
+    /// </summary>
+    public string? VoiceLanguage { get; init; }
+
+    /// <summary>The voice track the player picked, per module and voice language. A module and language with no entry uses its first track.</summary>
+    public IReadOnlyList<VoiceTrackPreference> VoiceTrackPreferences { get; init; } = [];
 
     /// <summary>
     /// SHA-256 thumbprints of content publishers the player chose to trust going forward, from the
@@ -86,6 +95,9 @@ public sealed record AppSettings
 /// <param name="ModuleId">The module whose listing is hidden.</param>
 public sealed record HiddenCatalogListing(string SourceKey, string ModuleId);
 
+/// <summary>The voice track picked for one module in one voice language. See <see cref="AppSettings.VoiceTrackPreferences"/>.</summary>
+public sealed record VoiceTrackPreference(string ModuleId, string Language, string TrackId);
+
 /// <summary>How a catalog source is identified in stored settings.</summary>
 public static class CatalogSourceKeys
 {
@@ -104,8 +116,5 @@ public static class AppUiCultures
 
     /// <summary>Culture code → display name, in the order shown in the Options dropdown.</summary>
     public static readonly IReadOnlyList<(string Code, string DisplayName)> Supported =
-    [
-        (Default, "English"),
-        ("fr-CA", "Français (Canada)"),
-    ];
+        [.. new[] { Default, "fr-CA" }.Select(code => (code, LanguageNames.Native(code)))];
 }

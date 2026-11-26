@@ -237,66 +237,6 @@ public class AssetResolverTests
     }
 
     [Fact]
-    public async Task BundleLocalAudio_SubpathSlug_ResolvesToDataUri()
-    {
-        // audio://[<path>/]<slug> — bgm/sfx/vo are folder-naming conventions within the one scheme,
-        // not special-cased by the resolver; a multi-segment slug just addresses a nested path, the
-        // same as image://'s own subpath-slug support.
-        var bytes = new byte[] { 4, 5, 6 };
-        var state = MakeState(bundleLocal: new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.ogg"] = bytes });
-        var resolver = new AssetResolver(state);
-
-        var url = await resolver.ResolveAsync("audio://vo/greeting");
-
-        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(bytes)}", url);
-    }
-
-    [Fact]
-    public async Task BundleLocalAudio_CultureSuffixedFileExists_PreferredOverBare()
-    {
-        var cultureBytes = new byte[] { 7, 7, 7 };
-        var bareBytes = new byte[] { 8, 8, 8 };
-        var state = MakeState(
-            bundleLocal: new Dictionary<string, byte[]>
-            {
-                ["assets/audio/vo/battletime_narration.fr-CA.mp3"] = cultureBytes,
-                ["assets/audio/vo/battletime_narration.mp3"] = bareBytes,
-            },
-            language: "fr-CA");
-        var resolver = new AssetResolver(state);
-
-        var url = await resolver.ResolveAsync("audio://vo/battletime_narration");
-
-        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(cultureBytes)}", url);
-    }
-
-    [Fact]
-    public async Task BundleLocalAudio_NoCultureSuffixedFile_FallsBackToBare()
-    {
-        var bareBytes = new byte[] { 9, 9, 9 };
-        var state = MakeState(
-            bundleLocal: new Dictionary<string, byte[]> { ["assets/audio/vo/battletime_narration.mp3"] = bareBytes },
-            language: "fr-CA");
-        var resolver = new AssetResolver(state);
-
-        var url = await resolver.ResolveAsync("audio://vo/battletime_narration");
-
-        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bareBytes)}", url);
-    }
-
-    [Fact]
-    public async Task BundleLocalAudio_NoSessionLanguage_SkipsCultureProbe_ResolvesBare()
-    {
-        var bareBytes = new byte[] { 2, 2, 2 };
-        var state = MakeState(bundleLocal: new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.mp3"] = bareBytes });
-        var resolver = new AssetResolver(state);
-
-        var url = await resolver.ResolveAsync("audio://vo/greeting");
-
-        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bareBytes)}", url);
-    }
-
-    [Fact]
     public async Task DependencyPackAudio_ResolvesWhenNotInBundleLocal()
     {
         // The real-world case this covers: bgm/sfx live in a shared asset pack (e.g.
@@ -308,28 +248,6 @@ public class AssetResolverTests
         var url = await resolver.ResolveAsync("audio://sfx/click");
 
         Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(bytes)}", url);
-    }
-
-    [Fact]
-    public async Task DependencyPackAudio_CultureSuffixedFileExists_PreferredOverBare()
-    {
-        var cultureBytes = new byte[] { 4, 4, 4 };
-        var bareBytes = new byte[] { 5, 5, 5 };
-        var state = MakeState(
-            dependencies:
-            [
-                new Dictionary<string, byte[]>
-                {
-                    ["assets/audio/sfx/click.fr-CA.ogg"] = cultureBytes,
-                    ["assets/audio/sfx/click.ogg"] = bareBytes,
-                },
-            ],
-            language: "fr-CA");
-        var resolver = new AssetResolver(state);
-
-        var url = await resolver.ResolveAsync("audio://sfx/click");
-
-        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(cultureBytes)}", url);
     }
 
     [Fact]
@@ -348,19 +266,127 @@ public class AssetResolverTests
     }
 
     [Fact]
+    public async Task Audio_CultureSuffixedFile_IsNotPreferred()
+    {
+        // The general <slug>.<culture> lookup is gone: voice language is chosen by voice track, never by text language.
+        var cultureBytes = new byte[] { 7, 7, 7 };
+        var bareBytes = new byte[] { 8, 8, 8 };
+        var state = MakeState(
+            bundleLocal: new Dictionary<string, byte[]>
+            {
+                ["assets/audio/sfx/click.fr-CA.ogg"] = cultureBytes,
+                ["assets/audio/sfx/click.ogg"] = bareBytes,
+            },
+            language: "fr-CA");
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://sfx/click");
+
+        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(bareBytes)}", url);
+    }
+
+    // ── audio://vo/ — narration from the selected voice track ───────────────
+
+    private static AvailableVoiceTrack Voice(string language, string id, IReadOnlyDictionary<string, byte[]> files) =>
+        new(new Masterwork.ModuleFormat.VoiceTrack { Language = language, Id = id }, new DictionaryModuleAssetSource(files));
+
+    [Fact]
+    public async Task Narration_ResolvesFromTheSelectedTracksFolder()
+    {
+        var female = new byte[] { 1, 1 };
+        var male = new byte[] { 2, 2 };
+        var files = new Dictionary<string, byte[]>
+        {
+            ["assets/audio/vo/en-US/female/greeting.ogg"] = female,
+            ["assets/audio/vo/en-US/male/greeting.ogg"] = male,
+        };
+        var state = MakeState(bundleLocal: files);
+        state.SetVoices([Voice("en-US", "male", files), Voice("en-US", "female", files)], "en-US", "female");
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/greeting");
+
+        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(female)}", url);
+    }
+
+    [Fact]
+    public async Task Narration_ResolvesFromAVoicePacksSource()
+    {
+        var bytes = new byte[] { 3, 3 };
+        var state = MakeState();
+        state.SetVoices([Voice("cs-CZ", "reader", new Dictionary<string, byte[]> { ["assets/audio/vo/cs-CZ/reader/greeting.mp3"] = bytes })], "cs-CZ", "reader");
+        var resolver = new AssetResolver(state);
+
+        var url = await resolver.ResolveAsync("audio://vo/greeting");
+
+        Assert.Equal($"data:audio/mpeg;base64,{Convert.ToBase64String(bytes)}", url);
+    }
+
+    [Fact]
+    public async Task Narration_MissingFromTheSelectedTrack_NeverBorrowsAnotherTrack_AndLogsOnce()
+    {
+        var files = new Dictionary<string, byte[]>
+        {
+            ["assets/audio/vo/en-US/male/greeting.ogg"] = [1],
+            ["assets/audio/vo/greeting.ogg"] = [2],
+        };
+        var state = MakeState(bundleLocal: files);
+        state.SetVoices([Voice("en-US", "male", files), Voice("en-US", "female", files)], "en-US", "female");
+        var log = new CapturingLogger<AssetResolver>();
+        var resolver = new AssetResolver(state, log);
+
+        Assert.Null(await resolver.ResolveAsync("audio://vo/greeting"));
+        Assert.Null(await resolver.ResolveAsync("audio://vo/greeting"));
+
+        var entry = Assert.Single(log.Entries, e => e.Level >= LogLevel.Information);
+        Assert.Contains("greeting", entry.Message);
+        Assert.Contains("female", entry.Message);
+    }
+
+    [Fact]
+    public async Task Narration_UnderNone_ResolvesToNothing_WithoutAWarning()
+    {
+        var files = new Dictionary<string, byte[]> { ["assets/audio/vo/en-US/male/greeting.ogg"] = [1] };
+        var state = MakeState(bundleLocal: files);
+        state.SetVoices([Voice("en-US", "male", files)], null, null);
+        var log = new CapturingLogger<AssetResolver>();
+        var resolver = new AssetResolver(state, log);
+
+        Assert.Null(await resolver.ResolveAsync("audio://vo/greeting"));
+        Assert.DoesNotContain(log.Entries, e => e.Level >= LogLevel.Information);
+    }
+
+    [Fact]
+    public async Task Narration_ChangingTheTrack_ReResolves()
+    {
+        var female = new byte[] { 1 };
+        var male = new byte[] { 2 };
+        var files = new Dictionary<string, byte[]>
+        {
+            ["assets/audio/vo/en-US/female/greeting.ogg"] = female,
+            ["assets/audio/vo/en-US/male/greeting.ogg"] = male,
+        };
+        var state = MakeState(bundleLocal: files);
+        state.SetVoices([Voice("en-US", "male", files), Voice("en-US", "female", files)], "en-US", "male");
+        var resolver = new AssetResolver(state);
+        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(male)}", await resolver.ResolveAsync("audio://vo/greeting"));
+
+        state.SetVoices(state.Voices, "en-US", "female");
+
+        Assert.Equal($"data:audio/ogg;base64,{Convert.ToBase64String(female)}", await resolver.ResolveAsync("audio://vo/greeting"));
+    }
+
+    [Fact]
     public async Task UnresolvedAudio_LogsWarningWithSlug()
     {
-        // Covers GloomyWolvesIntro's deliberately-missing female take — the caller
-        // (RenderedAudioTrackView) already degrades gracefully on the null return; this is purely so
-        // the gap is diagnosable from the log rather than silently invisible.
         var log = new CapturingLogger<AssetResolver>();
         var resolver = new AssetResolver(new GameSessionState(), log);
 
-        var url = await resolver.ResolveAsync("audio://vo/gloomywolvesintro_f");
+        var url = await resolver.ResolveAsync("audio://sfx/missing_click");
 
         Assert.Null(url);
         var warning = Assert.Single(log.Entries, e => e.Level == LogLevel.Warning);
-        Assert.Contains("gloomywolvesintro_f", warning.Message);
+        Assert.Contains("missing_click", warning.Message);
     }
 
     [Fact]
@@ -368,10 +394,10 @@ public class AssetResolverTests
     {
         var log = new CapturingLogger<AssetResolver>();
         var bytes = new byte[] { 1, 2, 3 };
-        var state = MakeState(bundleLocal: new Dictionary<string, byte[]> { ["assets/audio/vo/greeting.ogg"] = bytes });
+        var state = MakeState(bundleLocal: new Dictionary<string, byte[]> { ["assets/audio/sfx/click.ogg"] = bytes });
         var resolver = new AssetResolver(state, log);
 
-        var url = await resolver.ResolveAsync("audio://vo/greeting");
+        var url = await resolver.ResolveAsync("audio://sfx/click");
 
         Assert.NotNull(url);
         Assert.DoesNotContain(log.Entries, e => e.Level == LogLevel.Warning);

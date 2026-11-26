@@ -7,11 +7,11 @@ A companion app that plays scenario modules for a narrative board game, plus the
 ### Languages
 
 **UI language**:
-The language of the app's own screens, separate from any module's content.
+The language of the app's own screens, separate from any module's content. Labelled "App Language" in Options.
 _Avoid_: app language, locale (on its own)
 
 **Text language**:
-The language a playthrough's module text is shown in. It is fixed for the whole playthrough.
+The language a playthrough's module text is shown in. It is fixed for the whole playthrough. Chosen in Options as "Preferred Module Language" (default "Same as app"), so the voice language's "Same as module" means the text language.
 _Avoid_: content language, module language, display language
 
 **Voice language**:

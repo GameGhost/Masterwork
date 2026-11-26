@@ -6,25 +6,32 @@
 @inject IAssetResolver AssetResolver
 @inject IAudioPlayer AudioPlayer
 @inject AudioSettingsState AudioState
+@inject GameSessionState State
+@inject NarrationService Narration
 
-<div class="mws-audio-track style-@(Node.Style ?? "default")">
-    @if (Node.Title is not null)
-    {
-        <div class="mws-audio-track-title">@Node.Title</div>
-    }
-    <div class="mws-audio-track-controls">
-        <button type="button" class="mws-audio-track-play" disabled="@(_url is null || _status.IsPlaying || AudioState.SfxMuted || IsRewound)"
-                @onclick="PlayAsync" aria-label="@AppStrings.AudioTrack_Play" title="@AppStrings.AudioTrack_Play"></button>
-        <button type="button" class="mws-audio-track-pause" disabled="@(_url is null || !_status.IsPlaying || AudioState.SfxMuted || IsRewound)"
-                @onclick="PauseAsync" aria-label="@AppStrings.AudioTrack_Pause" title="@AppStrings.AudioTrack_Pause"></button>
-        <input type="range" class="mws-audio-track-scrubber" min="0" max="@Math.Max(_status.DurationSeconds, 0.01)" step="0.01"
-               value="@(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)"
-               disabled="@(_url is null || AudioState.SfxMuted || IsRewound)" @oninput="OnScrubPreview" @onchange="OnScrubCommitAsync" />
-        <span class="mws-audio-track-time">
-            <span class="mws-audio-track-current">@FormatTime(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)</span> / <span class="mws-audio-track-total">@FormatTime(_status.DurationSeconds)</span>
-        </span>
+@* An asset that doesn't resolve (a gap in the selected voice track, or no narration at all) hides
+   the whole element: no player, and nothing loaded to pause background music. *@
+@if (_url is not null)
+{
+    <div class="mws-audio-track style-@(Node.Style ?? "default")">
+        @if (Node.Title is not null)
+        {
+            <div class="mws-audio-track-title">@Node.Title</div>
+        }
+        <div class="mws-audio-track-controls">
+            <button type="button" class="mws-audio-track-play" disabled="@(_status.IsPlaying || AudioState.SfxMuted || IsRewound)"
+                    @onclick="PlayAsync" aria-label="@AppStrings.AudioTrack_Play" title="@AppStrings.AudioTrack_Play"></button>
+            <button type="button" class="mws-audio-track-pause" disabled="@(!_status.IsPlaying || AudioState.SfxMuted || IsRewound)"
+                    @onclick="PauseAsync" aria-label="@AppStrings.AudioTrack_Pause" title="@AppStrings.AudioTrack_Pause"></button>
+            <input type="range" class="mws-audio-track-scrubber" min="0" max="@Math.Max(_status.DurationSeconds, 0.01)" step="0.01"
+                   value="@(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)"
+                   disabled="@(AudioState.SfxMuted || IsRewound)" @oninput="OnScrubPreview" @onchange="OnScrubCommitAsync" />
+            <span class="mws-audio-track-time">
+                <span class="mws-audio-track-current">@FormatTime(_scrubbing ? _scrubPreviewSeconds : _status.PositionSeconds)</span> / <span class="mws-audio-track-total">@FormatTime(_status.DurationSeconds)</span>
+            </span>
+        </div>
     </div>
-</div>
+}
 
 @code {
     /// <summary>The audio_track node to render.</summary>
@@ -48,7 +55,8 @@
     private readonly string _handle = $"audio_track_{Guid.NewGuid():n}";
 
     private string? _url;
-    private string? _resolvedFor;
+    private (string Asset, AvailableVoiceTrack? Voice)? _resolvedFor;
+    private bool _autoplayPending;
     private TrackStatus _status = new(false, 0, 0);
     private Timer? _pollTimer;
     private DotNetObjectReference<RenderedAudioTrackView>? _selfRef;
@@ -61,33 +69,46 @@
     private bool _scrubbing;
     private double _scrubPreviewSeconds;
 
-    // Same guard shape as RenderedImageView.OnParametersSetAsync — skips the async resolve/reload
-    // entirely on a re-render where the asset hasn't actually changed (e.g. an unrelated sibling
-    // state change re-rendering this whole passage).
+    protected override void OnInitialized() => Narration.PauseRequested += OnPauseRequested;
+
+    // Skips the async resolve/reload on a re-render where neither the asset nor the selected voice
+    // track changed (e.g. an unrelated sibling state change re-rendering this whole passage). A
+    // changed voice track re-resolves in place, without autoplay: only the first resolution autoplays.
     protected override async Task OnParametersSetAsync()
     {
-        if (Node.Asset == _resolvedFor)
+        var key = (Node.Asset, State.Voice);
+        if (_resolvedFor == key)
         {
             return;
         }
 
-        _resolvedFor = Node.Asset;
-        _url = await AssetResolver.ResolveAsync(Node.Asset);
-        if (_url is null)
+        var firstResolution = _resolvedFor is null;
+        _resolvedFor = key;
+        var url = await AssetResolver.ResolveAsync(Node.Asset);
+        if (_resolvedFor != key)
         {
-            // Deliberate graceful-degrade contract, not just an early return: _status is left at its
-            // default (false, 0, 0), so the markup above already shows disabled play/pause/scrubber
-            // controls and a 0:00/0:00 time readout rather than crashing or rendering nothing — the
-            // title (if any) still shows. AssetResolver itself logs a warning with the missing slug;
-            // this component doesn't need its own. Exercised for real by The Cost of Disease's
-            // GloomyWolvesIntro, which has no real female VO take.
+            return; // superseded while resolving
+        }
+
+        if (url is null)
+        {
+            // Hidden: AssetResolver logs why. Anything loaded for a previous voice track is released.
+            if (_url is not null)
+            {
+                await AudioPlayer.DisposeTrackAsync(_handle);
+                _url = null;
+                _status = new(false, 0, 0);
+            }
+
             return;
         }
 
+        _url = url;
         await AudioPlayer.LoadTrackAsync(_handle, _url, Node.BgmBehavior);
         _selfRef ??= DotNetObjectReference.Create(this);
         await AudioPlayer.SetTrackEndedCallbackAsync(_handle, _selfRef, nameof(OnTrackEnded));
         await RefreshStatusAsync();
+        _autoplayPending = firstResolution && Node.Autoplay;
 
         // Polling (not an event push from audio.js) is what keeps the scrubber/time display live
         // while playing — cheap enough at this interval, and avoids a second JS interop surface just
@@ -97,9 +118,17 @@
         _pollTimer ??= new Timer(_ => _ = InvokeAsync(RefreshStatusAsync), null, 100, 100);
     }
 
+    // Autoplays after the render that follows the first successful resolution, which may come after
+    // the component's own first render when the asset source resolves asynchronously.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _url is null || !Node.Autoplay || AudioState.SfxMuted || IsRewound)
+        if (!_autoplayPending)
+        {
+            return;
+        }
+
+        _autoplayPending = false;
+        if (_url is null || AudioState.SfxMuted || IsRewound)
         {
             return;
         }
@@ -111,6 +140,8 @@
 
         await PlayAsync();
     }
+
+    private void OnPauseRequested() => _ = InvokeAsync(PauseAsync);
 
     private async Task PlayAsync()
     {
@@ -195,6 +226,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        Narration.PauseRequested -= OnPauseRequested;
         _pollTimer?.Dispose();
         if (_url is not null)
         {

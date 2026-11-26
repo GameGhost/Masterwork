@@ -82,7 +82,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader, IA
                 _thumbnailBlobUrls.Add(thumbnailUrl);
             }
 
-            result.Add(new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256, thumbnailUrl, manifest?.Dependencies ?? []));
+            result.Add(new InstalledModule(m.Id, m.Version, m.Title, m.Description ?? "", m.Languages, m.Sha256, thumbnailUrl, manifest?.Dependencies ?? [], manifest?.DefaultLocale ?? ModuleLocales.Default, InstalledModule.VoiceLanguagesOf(manifest)));
         }
 
         return result;
@@ -204,7 +204,7 @@ public sealed class IndexedDbModuleStore(IJSRuntime js, IModuleLoader loader, IA
         // always re-lists right after a successful install (to refresh the whole carousel), so
         // resolving a second blob URL here just to have it immediately superseded (and needing its own
         // tracking to avoid leaking it, on top of ListAsync's) isn't worth it.
-        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, Dependencies: manifest.Dependencies);
+        return new InstalledModule(manifest.Id, manifest.Version, manifest.Title, manifest.Description ?? "", languages, sha256, Dependencies: manifest.Dependencies, DefaultLocale: manifest.DefaultLocale, VoiceLanguages: InstalledModule.VoiceLanguagesOf(manifest));
     }
 
     /// <inheritdoc/>

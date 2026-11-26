@@ -2,16 +2,15 @@ using System.Text.Json;
 
 namespace Masterwork.Extractor;
 
-// Loads an external passage-name -> gendered VO asset mapping (--audio-map), consulted purely by
+// Loads an external passage-name -> narration slug mapping (--audio-map), consulted purely by
 // passage name at serialization time (V2Serializer.ToDict) to synthesize an audio_track node for a
-// mapped passage — unlike SpriteMapper/ProgressMapper, this has no corresponding Cradle source
-// construct to consult while walking the AST (a synthesized node isn't parsed from anything), so it
-// isn't threaded through PassageBodyVisitor at all, just SerializationContext. See the Phase 4
-// pilot's own hand-authored Hospitalintro passages-override entry, which this mechanism replaces
-// going forward.
+// mapped passage. Unlike SpriteMapper/ProgressMapper, this has no corresponding Cradle source
+// construct to consult while walking the AST, so it isn't threaded through PassageBodyVisitor at
+// all, just SerializationContext. The slug is plain (audio://vo/<slug>): which voice track plays it
+// is the player's choice at play time, never an expression in the passage.
 public class AudioMapper
 {
-    public sealed record Entry(string MaleSlug, string FemaleSlug, string Title);
+    public sealed record Entry(string Slug, string Title);
 
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
 
@@ -39,17 +38,19 @@ public class AudioMapper
                     continue;
                 }
 
-                var male = value.TryGetProperty("male", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
-                var female = value.TryGetProperty("female", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString() : null;
+                var slug = value.TryGetProperty("slug", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
                 var title = value.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
 
-                if (male is null || female is null || title is null)
+                if (slug is null || title is null)
                 {
-                    Console.Error.WriteLine($"Warning: audio map entry '{prop.Name}' is missing 'male'/'female'/'title'; skipping it");
+                    var legacy = value.TryGetProperty("male", out _) || value.TryGetProperty("female", out _)
+                        ? " (gendered 'male'/'female' entries are no longer read: give one plain 'slug' and put each reading in its own voice track)"
+                        : "";
+                    Console.Error.WriteLine($"Warning: audio map entry '{prop.Name}' is missing 'slug'/'title'; skipping it{legacy}");
                     continue;
                 }
 
-                mapper._entries[prop.Name] = new Entry(male, female, title);
+                mapper._entries[prop.Name] = new Entry(slug, title);
             }
 
             Console.WriteLine($"Audio map loaded: {mapper._entries.Count} entries from '{Path.GetFileName(jsonPath)}'");

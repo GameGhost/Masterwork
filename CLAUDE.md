@@ -27,7 +27,7 @@ src/Masterwork.slnx
 ├── src/MasterWork.App.Web.Api/                Azure Functions (.NET isolated) deployed with Web.Static as its /api — the content API redirect
 ├── src/MasterWork.Editor/                     module editor placeholder — empty `net10.0` project, platform undecided (see issue #8)
 ├── src/MasterWork.Extractor/                  CLI tool: Cradle C# → MWS v0.4 YAML (also owns extractor-internal node types, MwsNodes.cs); its `reconcile` subcommand imports official French into a module's starting fr-CA.restext
-├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, and the translation checks (`checktranslation`)
+├── src/MasterWork.ModulePacker/                CLI tool: packs a module directory into a versioned .mwm bundle; also signing, the catalog, the translation checks (`checktranslation`), and narration-file warnings plus a voice pack's per-track coverage (`voices --module`)
 ├── src/MasterWork.Translation/                tooling library: comparing a translation with its source (placeholders, prose, closers, length ratio), the checks, per-locale typography and the term base; shared by `reconcile` and `checktranslation`, never shipped in the app
 └── src/MasterWork.Tests/                      xUnit test suite
 ```
@@ -288,20 +288,21 @@ pause/resume, wire `AppLifecycleAudioBridge` to `OnResignActivation`/`OnActivate
 
 | File | Purpose |
 |---|---|
-| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.5; edit this for changes |
+| `docs/mws-format-latest.md` | **Authoritative current spec** — currently v0.6; edit this for changes |
+| `docs/mws-format-v0.5.md` | Frozen v0.5, kept because v0.6 changed how narration resolves (not additive) |
 
-No frozen prior-version files exist right now. The v0.3→v0.4 transition didn't freeze a
-`mws-format-v0.3.md` before `latest` was revised (a process gap, not a deliberate decision). The
-v0.4→v0.5 transition *did* freeze `mws-format-v0.4.md` briefly, then deleted it on purpose: v0.5 was
-purely additive (new `audio:` fields/`audio_track` node, nothing renamed or removed), and the only
+The extractor stamps `format:` from `MwsFormatVersion.Current`, so bumping that constant is all a new
+version needs on the extractor side. Older frozen versions don't exist: v0.3 wasn't frozen before
+`latest` was revised (a process gap), and `mws-format-v0.4.md` was deleted on purpose because v0.5 was
+purely additive (new `audio:` fields/`audio_track` node, nothing renamed or removed) and the only
 consumers of the format are the template and canonical modules in `Masterwork-Modules`, which get
-updated in lockstep with engine changes anyway — so there was nothing a frozen v0.4 snapshot would
-protect. Freezing remains the default for major revisions (below); skip it only when the same
-reasoning applies (purely additive, no external/frozen consumers depending on the old spec text).
+updated in lockstep with engine changes anyway. Freezing remains the default for major revisions
+(below); skip it only when the same reasoning applies (purely additive, no external/frozen consumers
+depending on the old spec text).
 
 **Versioning protocol for format docs:**
 - **Minor / QoL changes** (clarifications, new examples, field descriptions) → edit `mws-format-latest.md` inline.
-- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`, unless the additive/no-frozen-consumers exception above applies. Example: before introducing v0.6, copy `latest` as `mws-format-v0.5.md`, then revise `latest` for v0.6.
+- **Major revisions** (new node types, breaking field renames, structural changes) → first copy `mws-format-latest.md` to `mws-format-vN.md` to freeze the current version, then make the v(N+1) changes to `latest`, unless the additive/no-frozen-consumers exception above applies. Example: before introducing v0.7, copy `latest` as `mws-format-v0.6.md`, then revise `latest` for v0.7.
 
 ---
 

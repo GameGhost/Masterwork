@@ -47,7 +47,7 @@ dotnet run --project src/Masterwork.Extractor -- <input> <passages-out-dir> [opt
 | `--module-id <id>` | Module identifier string (reserved for future use in the manifest). |
 | `--sprite-map <json>` | Path to a `TheCostOfDisease_ItemObtain.json`-style file mapping sprite indices to asset slugs. Required for The Cost of Disease; not needed for the other scenarios. |
 | `--progress-map <json>` | Path to a `{ "PassageName": { "layout": "...", "progress": N, "end_of_round_body": "...", "end_of_round_body2": "..." }, ... }` JSON map. `layout` overrides `InferLayout`'s tag-based result for that passage. `progress`/`end_of_round_body` together drive what happens at a matching `PassageTracker.instance.CheckProgress(passageName, ...)` call: if the entry has end-of-round body text, the link that calls `CheckProgress` becomes a `layout: end_of_round` popup (label/target carried over from the original link, `okay` fixed to the reference app's own "End of Round" button caption, `content` the two body strings, `onclose` the `_ProgressRound` assign) instead of a bare navigation link — matching the reference app's `ViewEndOfRound.SetEndOfRound` acknowledgement popup, which the source's `CheckProgress` call site alone doesn't represent (there is no Cradle passage for it; see `Masterwork-Modules/cost-of-disease/.source/TheCostofDisease_Eng_v10.cs`'s `ReminderroundEnd` passage, explicitly commented as a prototype-only stand-in never used by final app logic). If the entry has `progress` but no end-of-round body text, only the synthetic `_ProgressRound` assign is emitted (unchanged, plain-link behavior). A `CheckProgress` call whose current-passage name has no entry at all in the map is reported as a warning. Optional — omitting `--progress-map` entirely leaves layout inference and `CheckProgress` handling unchanged. `_ProgressRound` reflects rounds *completed so far* — it's `0` throughout round 1 and only reaches the mapped round's own value once the player has clicked past it *and* dismissed the end-of-round popup, not while that round's content is being displayed. See `Masterwork-Modules/progress-map.json` and `docs/mws-format-latest.md` §7 (`end_of_round`/`end_of_generation` popup examples) and §8 (including its timing note) for how a module turns `_ProgressRound` into an actual progress-bar display via `layouts/*.mws.yaml` chrome. |
-| `--audio-map <json>` | Path to a `{ "PassageName": { "male": "slug", "female": "slug", "title": "..." }, ... }` JSON map. For a matching passage, prepends a synthesized `audio_track` node — `asset: '${narrationVoice == "female" ? "audio://vo/<female-slug>" : "audio://vo/<male-slug>"}'`, `title` from the map entry, `autoplay: true`, `bgm_behavior: 'pause'` — so real voice-over narration doesn't need a hand-authored `passages-override/` file. `title` is restext-eligible like any other node title. A passage with no map entry is unaffected (no warning — most passages have no narration). Optional — omitting `--audio-map` entirely leaves node synthesis off. See `Masterwork.Extractor.AudioMapper`. |
+| `--audio-map <json>` | Path to a `{ "PassageName": { "slug": "...", "title": "..." }, ... }` JSON map. For a matching passage, prepends a synthesized `audio_track` node — `asset: 'audio://vo/<slug>'` (a plain slug; the player's voice track picks the file), `title` from the map entry, `autoplay: true`, `bgm_behavior: 'pause'` — so real voice-over narration doesn't need a hand-authored `passages-override/` file. `title` is restext-eligible like any other node title. A passage with no map entry is unaffected (no warning — most passages have no narration). Optional — omitting `--audio-map` entirely leaves node synthesis off. See `Masterwork.Extractor.AudioMapper`. |
 | `--variables-out <dir>` | Where `_variables.yaml` is written. Defaults to `<passages-out-dir>`. |
 | `--restext-out <dir>` | Where `en-US.restext` is written. Defaults to `<passages-out-dir>`. |
 | `--common-restext <file>` | Path to a manually curated `Key=Value` restext file. When a string is promoted to a Common key (used in 2+ passages), a matching curated ID (by exact text) is used instead of an auto-generated `Common_NNN` one, so override/manually-written passages have a stable name to reference instead of one that can shift on every re-extraction. Curated IDs never matched during extraction are omitted from the output restext file and reported as warnings. Purely an extractor-time input — `ModuleLoader` never reads this file. |
@@ -293,7 +293,7 @@ Unknown sprites fall back to a slugified form of the atlas name.
 
 ## Audio Mapping (`--audio-map`, all three scenarios)
 
-Synthesizes a gendered `audio_track` narration node for passages that have real voice-over,
+Synthesizes an `audio_track` narration node for passages that have real voice-over,
 mirroring `--sprite-map`/`--progress-map`'s "external JSON classifies passages by name" shape — but
 unlike those two, it's consulted purely by passage name at serialization time
 (`V2Serializer.ToDict`), not while walking the Cradle AST, since a synthesized node has no
@@ -303,8 +303,7 @@ and the `--audio-map` row above for the exact JSON shape and emitted node.
 ```json
 {
   "Hospitalintro": {
-    "male": "hospitalintro_m",
-    "female": "hospitalintro_f",
+    "slug": "hospitalintro",
     "title": "Thriving in Adversity"
   }
 }
@@ -314,16 +313,17 @@ emits, prepended to `Hospitalintro`'s node list:
 
 ```yaml
 - type: 'audio_track'
-  asset: '${narrationVoice == "female" ? "audio://vo/hospitalintro_f" : "audio://vo/hospitalintro_m"}'
+  asset: 'audio://vo/hospitalintro'
   title: 'restext://Hospitalintro_001'   # "Thriving in Adversity"
   autoplay: true
   bgm_behavior: 'pause'
 ```
 
-The referenced `audio://vo/...` assets and the `narrationVoice` variable itself are the module's own
-responsibility (a real audio file per slug under `assets/audio/vo/`, and a declared `narrationVoice`
-variable with a sensible default) — this option only ever emits the node and expression, it doesn't
-declare the variable or supply the audio files.
+The asset is always a plain slug, never an expression: which reading plays is the player's voice
+track, chosen in the app (see `docs/mws-format-latest.md` §9 Voices). The audio files themselves are
+the module's or a voice pack's responsibility, one per track at
+`assets/audio/vo/<language>/<track>/<slug>.<ext>`. An entry in the old gendered shape
+(`male`/`female` with no `slug`) is skipped with a warning.
 
 ---
 
@@ -537,6 +537,6 @@ All three official scenarios are extracted and shipped (Masterwork-Modules v0.2.
 | A Time of War | `ATimeofWar_Eng_v8.cs` | 297 | 187 | 365 | 0 |
 | Fear of the Unknown | `FearoftheUnknown_Eng_v15.cs` | 378 | 253 | 359 | 0 |
 
-All passage files across all four modules carry `format: 'mws/0.4'`. Warnings are predominantly conflicting-type assignments (a variable used as more than one type across the original ~30k-line source — genuine mixed-use patterns, resolved to `type: string`), not extraction errors; see each module's own `_extraction-report.md` for the exact breakdown, especially Cost of Disease's 14 unknown-node warnings, which are worth a closer look if revisiting that module's content.
+Passage files carry the format version the extractor was built with (`MwsFormatVersion.Current`, now `mws/0.6`); files extracted before v0.6 still declare `mws/0.4` until re-extracted or updated. Warnings are predominantly conflicting-type assignments (a variable used as more than one type across the original ~30k-line source — genuine mixed-use patterns, resolved to `type: string`), not extraction errors; see each module's own `_extraction-report.md` for the exact breakdown, especially Cost of Disease's 14 unknown-node warnings, which are worth a closer look if revisiting that module's content.
 
 See each module's own `_extraction-report.md` (next to its `.source/*.cs` file) for exact, current per-module figures — this table is a snapshot and will drift if quoted without checking back against that file.

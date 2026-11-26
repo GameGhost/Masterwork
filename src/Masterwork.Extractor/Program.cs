@@ -845,10 +845,10 @@ partial class Program
                                       overrides InferLayout's tag-based result; progress emits a
                                       synthetic _ProgressRound assign at matching
                                       PassageTracker.instance.CheckProgress(...) call sites
-              --audio-map <json>      Path to a passage-name → {male, female, title} JSON map:
-                                      synthesizes an audio_track node with a gendered
-                                      ${narrationVoice == ...} asset expression for a mapped passage.
-                                      See AudioMapper
+              --audio-map <json>      Path to a passage-name → {slug, title} JSON map:
+                                      synthesizes an audio_track node playing the plain
+                                      audio://vo/<slug> for a mapped passage. The player's
+                                      voice track picks the file. See AudioMapper
               --include-debug         Include devpage-gated debug passages
               --dry-run               Parse and report without writing files
               --seed-analysis         Emit seed dependency report

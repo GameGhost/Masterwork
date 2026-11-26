@@ -357,7 +357,7 @@ public class ModulePackageTests
                 default: false
             """);
         File.WriteAllText(Path.Combine(dir, "layouts", "note.mws.yaml"), """
-            format: 'mws/0.5'
+            format: 'mws/0.6'
             layout_id: 'note'
             """);
         File.WriteAllBytes(Path.Combine(dir, "assets", "images", "shared.png"), [9, 9, 9]);
@@ -442,7 +442,7 @@ public class ModulePackageTests
                 nodes: []
                 """);
             File.WriteAllText(Path.Combine(moduleDir, "layouts", "note.mws.yaml"), """
-                format: 'mws/0.5'
+                format: 'mws/0.6'
                 layout_id: 'note'
                 header:
                 - type: 'text'

@@ -1,6 +1,18 @@
-# Masterwork Script Format — v0.5 Reference
+# Masterwork Script Format — v0.6 Reference
 
 MWS (Masterwork Script) is the YAML-based passage format used to represent interactive narrative content for the Masterwork engine. Each `.mws.yaml` file is a single passage.
+
+### Changes since v0.5
+
+v0.6 changes where narration comes from. A v0.5 module still loads, but its narration no longer plays.
+
+- Narration files live in voice track folders, `assets/audio/vo/<language>/<track>/<slug>.<ext>`, declared
+  by a manifest `voices:` block (§9 *Voices*) or shipped in a voice pack (§9 *Voice packs*).
+- `audio://vo/<slug>` plays only from the player's selected voice track. A file directly under
+  `assets/audio/vo/` is never played, and the `<slug>.<culture>.<ext>` lookup is gone.
+- The narrator is chosen in the app's Options, not by the module: an `audio_track` names one plain slug
+  instead of choosing between files with an expression on a module variable.
+- Every `format:` field reads `mws/0.6`.
 
 ---
 
@@ -9,7 +21,7 @@ MWS (Masterwork Script) is the YAML-based passage format used to represent inter
 Every passage file is a YAML document with a standard header followed by a `nodes:` list.
 
 ```yaml
-format: 'mws/0.5'
+format: 'mws/0.6'
 passage_id: 'Hospital1'
 title: 'The Hospital'
 tags:
@@ -29,7 +41,7 @@ nodes:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `format` | string | yes | Always `mws/0.5`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
+| `format` | string | yes | Always `mws/0.6`. Identifies which format revision produced the file — bump when re-extracting or hand-authoring against a newer version of this spec |
 | `passage_id` | string | yes | Canonical passage identifier |
 | `title` | string | no | Display title; defaults to `passage_id`. For `hub`/`narration` passages, the extractor hoists this from the source's leading bold-styled text block (see below) instead of leaving it as an ordinary body node |
 | `subtitle` | string | no | Optional subtitle shown alongside `title` in the passage header. Populated the same way as `title` — either the second line of a two-line bold heading, or the part after " - " in a single-line "Title - Subtitle" heading |
@@ -345,8 +357,10 @@ URI field — `audio.music`, `audio.on_display` (passage header), `audio.music`/
 `audio.okay`/`audio.cancel` (`popup`), `audio.click` (`link`), and `audio_track.asset`. Unlike
 `target` fields (resolved at follow/close time, since `onclick`/`onclose` may run first), audio
 fields resolve eagerly at render time, the same way `goto`/`include_passage` targets do — there's no
-equivalent "run onclick first" step for an audio value. This is what lets e.g. voice-gender selection
-be expressed inline: `music: '${narrationVoice == "female" ? "audio://vo/intro_f" : "audio://vo/intro_m"}'`.
+equivalent "run onclick first" step for an audio value. This is what lets e.g. story state pick the
+music inline: `music: '${atWar ? "audio://bgm/battle" : "audio://bgm/village"}'`. Narration is the
+exception: which reading plays is the player's voice track (§9 Voices), never an expression, so an
+`audio_track` names one plain `audio://vo/<slug>`.
 Module-manifest audio fields (§9) do **not** support expressions — a manifest is parsed once, before
 any session exists, so there's no variable scope to evaluate against.
 
@@ -1016,22 +1030,22 @@ forced to click something that's already correct before proceeding.
 
 ```yaml
 - type: 'input'
-  label: 'Choose a narrator voice'
-  var: 'narrationVoice'
+  label: 'Choose a difficulty'
+  var: 'difficulty'
   options:
-  - value: 'male'
-    label: 'restext://NarrationVoice_Male'
-  - value: 'female'
-    label: 'restext://NarrationVoice_Female'
+  - value: 'normal'
+    label: 'restext://Difficulty_Normal'
+  - value: 'hard'
+    label: 'restext://Difficulty_Hard'
 - type: 'link'
   label: 'Continue'
   target: 'Preparations'
   snapshot: true
 ```
 
-If `narrationVoice` is declared with `default: 'male'` in the module's variable manifest, this passage
-shows "Male" pre-selected and the Continue link is immediately enabled; the player can proceed as-is
-or switch to "Female" first. A `narrationVoice` with no declared default (or one that doesn't match
+If `difficulty` is declared with `default: 'normal'` in the module's variable manifest, this passage
+shows "Normal" pre-selected and the Continue link is immediately enabled; the player can proceed as-is
+or switch to "Hard" first. A `difficulty` with no declared default (or one that doesn't match
 either option) shows nothing pre-selected, and Continue stays disabled until a choice is made.
 
 ---
@@ -1335,7 +1349,7 @@ the `audio:` block described below). The first narration-capable node.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `asset` | string | yes | Asset URI, typically `audio://vo/...` (see §8), or `${expr}` (see §4) — the track this element plays and lets the player scrub |
+| `asset` | string | yes | Asset URI, typically narration as a plain `audio://vo/<slug>`, or `${expr}` (see §4) — the track this element plays and lets the player scrub |
 | `title` | string | no | Formatted display label shown alongside the playback controls (string formatting — see §3) |
 | `style` | string | no | Open, module-extensible visual style vocabulary, styled entirely by module CSS |
 | `autoplay` | bool or int | no | `true` (default) starts playback as soon as the element renders; `false` waits for the player to press play; an integer is a millisecond delay before autoplay begins |
@@ -1343,11 +1357,23 @@ the `audio:` block described below). The first narration-capable node.
 
 ```yaml
 - type: 'audio_track'
-  asset: '${narrationVoice == "female" ? "audio://vo/battletime_narration_f" : "audio://vo/battletime_narration_m"}'
+  asset: 'audio://vo/battletime_narration'
   title: 'restext://BattleTime_NarrationTitle'  # "Listen to the Call to Arms"
   autoplay: false
   bgm_behavior: 'duck'
 ```
+
+**Narration (`audio://vo/<slug>`)** resolves only against the player's selected voice track (see §9
+Voices): the file `assets/audio/vo/<language>/<track>/<slug>.<ext>` (`.mp3`, `.ogg` or `.wav`), taken
+from the module itself or from the installed voice pack that declares that track. When the selected
+track has no such file, or the player's voice language is None, the element is **hidden** — no
+player, and background music isn't paused — and the app logs the gap. It never borrows the file from
+another track or language. Other `audio://` URIs (`bgm/`, `sfx/`, …) resolve from the module's own
+`assets/audio/`, then each dependency asset pack's, with no per-language variants.
+
+A hub passage may hold several narration `audio_track` nodes. Only the first rendering of a node
+autoplays; a voice change made in Options while the passage is shown swaps the file in place without
+autoplay.
 
 ---
 
@@ -1441,7 +1467,7 @@ name means. One file per layout, in a `layouts/` folder alongside `passages/`/`p
 
 ```yaml
 # layouts/hub_early.mws.yaml
-format: 'mws/0.4'
+format: 'mws/0.6'
 layout_id: 'hub_early'
 header:
 - type: 'image'
@@ -1643,6 +1669,84 @@ audio:
       - 'audio://sfx/ui_click'
 ```
 
+### Voices
+
+A module may ship narration in its own package. The top-level `voices:` block declares its **voice
+tracks**: keyed by voice language, each language a list of tracks. A track is one reader's recordings
+in one language and may cover only some narrated passages — there is no coverage field; a missing
+file is simply a gap. `languages:` keeps its meaning (the module's text languages) and is unrelated.
+
+| Field | Type | Description |
+|---|---|---|
+| `voices.<language>` | array | The tracks in that voice language, in the order players are offered them. The first is the default |
+| `voices.<language>[].id` | string | Required. Unique within the language; a track's identity is (language, id) within its module |
+| `voices.<language>[].name` | string or localized list | The name shown in the track picker, a plain string or a localized list like `title:`. Resolved to the UI language, then the track's own language, then the first name given. Defaults to `id` |
+
+Files live at `assets/audio/vo/<language>/<track id>/<slug>.<ext>` and are played by `audio_track`
+nodes naming `audio://vo/<slug>` (§6).
+
+```yaml
+voices:
+  en-US:
+  - id: 'male'
+    name:
+    - en-US: 'Male narrator'
+    - fr-CA: 'Narrateur'
+  - id: 'female'
+    name: 'Female narrator'
+```
+
+The player chooses, per device: a **voice language** in Options (app-wide), and a **voice track** per
+module, from the in-game Options. The voice language is one of:
+
+- **Best match** (the default): the text language, else the UI language, else the module's
+  `default_locale`, whichever has a track; else no narration.
+- **Same as module**: the text language if it has a track; else no narration.
+- **None**: no narration.
+- **A specific language**: that language if it has a track; else no narration.
+
+Only best match tries more than one language. Neither choice is stored in saves.
+
+### Voice packs
+
+A voice pack is an optional package that adds voice tracks to one module after it ships, so a player
+installs narration only in their own language. The module never lists it in `dependencies:`; the pack
+names its module instead, and a module update that adds or renames narration just leaves gaps in an
+older pack. Its `manifest.yaml`:
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | string | `'voices'` |
+| `id`, `title`, `version` | string | Required. The pack's own identity, plain-text title and version |
+| `description` | string | Optional plain-text description |
+| `for.id` | string | Required. The id of the module this pack voices |
+| `for.min_version` | string | Required. The oldest module version the pack works with. A pack needing a newer module is not offered. (A ceiling at the next major version is reserved, not checked) |
+| `voices` | mapping | The tracks it adds, in the same shape as a module's `voices:` above |
+
+Its files use the same layout as a module's own, `assets/audio/vo/<language>/<track id>/<slug>.<ext>`.
+A track whose (language, id) the module or an earlier pack already offers is skipped.
+
+```yaml
+type: 'voices'
+id: 'renegade.cost_of_disease.voices.en-US'
+title: 'The Cost of Disease: English narration'
+version: '1.0.0'
+for:
+  id: 'renegade.cost_of_disease'
+  min_version: '0.7.0'
+voices:
+  en-US:
+  - id: 'male'
+    name: 'Male narrator'
+  - id: 'female'
+    name: 'Female narrator'
+```
+
+At pack time, `Masterwork.ModulePacker` warns about narration files nothing plays (outside a track
+folder, in an undeclared track's folder, or a slug no `audio_track` references), and its
+`voices <pack-dir> <output> --module <module-dir>` mode reports each track's coverage, for example
+"28 of 31 narrated passages". Coverage is never stored in a package or shown in the app.
+
 ### Town Records
 
 > **Design note (TBD):** Town Records are a persistent history of narrative events from a playthrough — "memories" the players discover that are stored per-session and persist in the module's town history across sessions. They are categorised and may be presented in a collection view. A `town_record` manifest entry defines each discoverable record (id, category, label, descriptive text); a node type (distinct from `record`) triggers writing a town record entry during play. The exact structure is deferred until the module packaging format is complete.
@@ -1660,7 +1764,7 @@ A passage from *A Time of War*:
 ```yaml
 # ATimeOfWar.cs:9247
 ---
-format: 'mws/0.4'
+format: 'mws/0.6'
 passage_id: 'BattleTime'
 title: 'BattleTime'
 layout: 'narration'
@@ -1721,4 +1825,4 @@ nodes:
 
 ---
 
-*MWS format v0.5 — Masterwork project.*
+*MWS format v0.6 — Masterwork project.*

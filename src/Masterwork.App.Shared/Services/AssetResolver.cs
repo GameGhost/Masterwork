@@ -24,8 +24,12 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
     // as long as GameSessionState.Assets is still the same dictionary instance this resolver last
     // saw; a new module load replaces that reference wholesale (see GameSessionState), which is the
     // signal to invalidate rather than serve another module's stale resolved bytes.
+    // The selected voice track is part of the same key: audio://vo/ resolves against it.
     private readonly Dictionary<string, string?> _cache = new(StringComparer.Ordinal);
     private IModuleAssetSource? _cachedForAssets;
+    private AvailableVoiceTrack? _cachedForVoice;
+
+    private const string NarrationPrefix = "vo/";
 
     private const string FallbackIcon = "_content/Masterwork.App.Shared/assets/fallback-icon.svg";
 
@@ -62,10 +66,11 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
     /// <inheritdoc/>
     public async Task<string?> ResolveAsync(string assetUri)
     {
-        if (!ReferenceEquals(_cachedForAssets, sessionState.Assets))
+        if (!ReferenceEquals(_cachedForAssets, sessionState.Assets) || !ReferenceEquals(_cachedForVoice, sessionState.Voice))
         {
             _cache.Clear();
             _cachedForAssets = sessionState.Assets;
+            _cachedForVoice = sessionState.Voice;
         }
 
         if (_cache.TryGetValue(assetUri, out var cached))
@@ -80,13 +85,14 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
 
     private async Task<string?> ResolveUncachedAsync(string assetUri)
     {
-        // audio:// gets its own dedicated path rather than joining the scheme dispatch below —
-        // unlike icon/image/font it needs a culture-suffix probe first (see TryResolveAudioAsync),
-        // and it deliberately has only one resolution tier (no dependency-pack/engine-fallback —
-        // see that method's own remarks), so it doesn't fit the shared tier1→tier2→tier3 shape.
+        // audio:// has its own path: narration (vo/) resolves only against the selected voice track,
+        // and nothing audio has an engine-fallback tier.
         if (assetUri.StartsWith(AudioScheme, StringComparison.Ordinal))
         {
-            return await TryResolveAudioAsync(assetUri[AudioScheme.Length..]);
+            var audioSlug = assetUri[AudioScheme.Length..];
+            return audioSlug.StartsWith(NarrationPrefix, StringComparison.Ordinal)
+                ? await TryResolveNarrationAsync(audioSlug[NarrationPrefix.Length..])
+                : await TryResolveAudioAsync(audioSlug);
         }
 
         string scheme;
@@ -158,57 +164,49 @@ public sealed class AssetResolver(GameSessionState sessionState, ILogger<AssetRe
         return null;
     }
 
-    // audio:// tries bundle-local, then each dependency pack in turn (bgm/sfx typically live there
-    // now, e.g. mwf-common-assets — VO stays module-local, since it's scenario-specific) — no
-    // engine-fallback tier (unlike icon://'s generic fallback icon, there's no equivalent to "a
-    // generic placeholder sound" that wouldn't be actively strange to hear); unresolved means
-    // silence, matching image://'s/font://'s own no-fallback behavior.
-    //
-    // Culture-suffixed filenames (<slug>.<culture>.<ext>) are probed first, against
-    // GameSessionState.Language — the same effective module-content locale already driving
-    // .restext resolution — falling back to the bare <slug>{ext}, understood as the module's
-    // default/authoring culture. No separate manifest field declares this: the absence of a
-    // culture suffix *is* the declaration, mirroring how en-US.restext needs no explicit "this is
-    // the default" marker beyond its own naming.
+    // audio:// (other than vo/) tries bundle-local, then each dependency pack in turn (bgm/sfx
+    // typically live in a shared pack). No engine-fallback tier: there's no generic placeholder
+    // sound that wouldn't be strange to hear, so unresolved means silence.
     private async Task<string?> TryResolveAudioAsync(string slug)
     {
-        if (await TryResolveAudioFromSourceAsync(sessionState.Assets, slug) is { } bundleLocal)
+        if (await TryResolveFromSourceAsync(sessionState.Assets, "audio", slug, AudioExtensions) is { } bundleLocal)
         {
             return bundleLocal;
         }
 
         foreach (var dependency in sessionState.DependencyAssets)
         {
-            if (await TryResolveAudioFromSourceAsync(dependency, slug) is { } dependencyUrl)
+            if (await TryResolveFromSourceAsync(dependency, "audio", slug, AudioExtensions) is { } dependencyUrl)
             {
                 return dependencyUrl;
             }
         }
 
-        // The one deliberately-missing case this covers today: The Cost of Disease's
-        // GloomyWolvesIntro has no real female VO take — its audio_track still references
-        // audio://vo/gloomywolvesintro_f so the gap is visible and diagnosable, rather than
-        // silently omitting the node. Callers (RenderedAudioTrackView) already degrade
-        // gracefully on a null resolution — disabled controls, 0:00/0:00 — this warning is
-        // purely for anyone reading the log to understand why.
         _logger.LogWarning("Could not resolve audio asset 'audio://{Slug}' — no matching file in the loaded module's or any dependency asset pack's assets/audio/", slug);
         return null;
     }
 
-    private async Task<string?> TryResolveAudioFromSourceAsync(IModuleAssetSource source, string slug)
+    // audio://vo/<slug> resolves only in the selected voice track's folder, from that track's own
+    // source (the module or a voice pack). A track without the file is a gap: the caller hides the
+    // audio_track. It never borrows another track's file.
+    private async Task<string?> TryResolveNarrationAsync(string slug)
     {
-        if (sessionState.Language is { } culture)
+        if (sessionState.Voice is not { } voice)
         {
-            foreach (var (ext, mime) in AudioExtensions)
+            _logger.LogDebug("No voice track selected; narration 'audio://vo/{Slug}' is not played", slug);
+            return null;
+        }
+
+        var track = voice.Track;
+        foreach (var (ext, mime) in AudioExtensions)
+        {
+            if (await voice.Source.GetAssetUrlAsync($"{track.AssetFolder}/{slug}{ext}", mime) is { } url)
             {
-                var url = await source.GetAssetUrlAsync($"assets/audio/{slug}.{culture}{ext}", mime);
-                if (url is not null)
-                {
-                    return url;
-                }
+                return url;
             }
         }
 
-        return await TryResolveFromSourceAsync(source, "audio", slug, AudioExtensions);
+        _logger.LogInformation("Voice track {Language}/{Track} has no narration for 'audio://vo/{Slug}'; hiding it", track.Language, track.Id, slug);
+        return null;
     }
 }

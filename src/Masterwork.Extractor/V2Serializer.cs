@@ -58,7 +58,7 @@ public static partial class V2Serializer
 
         var d = new Dictionary<string, object?>
         {
-            ["format"] = "mws/0.4",
+            ["format"] = MwsFormatVersion.Current,
             ["passage_id"] = passage.PassageId,
         };
         if (!string.IsNullOrEmpty(passage.Title) && passage.Title != passage.PassageId)
@@ -127,7 +127,7 @@ public static partial class V2Serializer
             nodes.Insert(0, new Dictionary<string, object?>
             {
                 ["type"] = "audio_track",
-                ["asset"] = $"${{narrationVoice == \"female\" ? \"audio://vo/{audioEntry.FemaleSlug}\" : \"audio://vo/{audioEntry.MaleSlug}\"}}",
+                ["asset"] = $"audio://vo/{audioEntry.Slug}",
                 ["title"] = audioEntry.Title,
                 ["autoplay"] = true,
                 ["bgm_behavior"] = "pause",

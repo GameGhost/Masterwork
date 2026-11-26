@@ -4,7 +4,8 @@
 @inject IAppSettingsStore SettingsStore
 @inject IAudioPlayer AudioPlayer
 @inject AudioSettingsState AudioState
-@inject IModuleStore ModuleStore
+@inject GameSessionState Session
+@inject KnownLanguagesService LanguageDirectory
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -45,7 +46,7 @@
                 @if (DialogContext == OptionsDialogContext.MainMenu)
                 {
                     <label class="mws-options-row">
-                        <span class="mws-options-label">@AppStrings.OptionsDialog_UiLanguage</span>
+                        <span class="mws-options-label">@AppStrings.OptionsDialog_AppLanguage</span>
                         <div class="mws-options-controls">
                             <select value="@_draft.UiLocale" @onchange="OnUiLocaleChanged">
                                 @foreach (var culture in AppUiCultures.Supported)
@@ -53,7 +54,7 @@
                                     <option value="@culture.Code">@culture.DisplayName</option>
                                 }
                             </select>
-                            <span class="mws-options-hint" title="@AppStrings.OptionsDialog_UiLanguageHint">ⓘ</span>
+                            <span class="mws-options-hint" title="@AppStrings.OptionsDialog_AppLanguageHint">ⓘ</span>
                         </div>
                     </label>
 
@@ -61,13 +62,44 @@
                         <span class="mws-options-label">@AppStrings.OptionsDialog_PreferredModuleLanguage</span>
                         <div class="mws-options-controls">
                             <select value="@(_draft.PreferredModuleLanguage ?? "")" @onchange="OnPreferredModuleLanguageChanged">
-                                <option value="">@AppStrings.OptionsDialog_NoPreference</option>
-                                @foreach (var lang in _availableModuleLanguages)
+                                <option value="">@AppStrings.OptionsDialog_SameAsApp</option>
+                                @foreach (var lang in ModuleLanguageChoices())
                                 {
-                                    <option value="@lang">@lang</option>
+                                    <option value="@lang">@LanguageNames.Native(lang)</option>
                                 }
                             </select>
                             <span class="mws-options-hint" title="@AppStrings.OptionsDialog_ModuleLanguageHint">ⓘ</span>
+                        </div>
+                    </label>
+                }
+
+                <label class="mws-options-row">
+                    <span class="mws-options-label">@AppStrings.OptionsDialog_VoiceLanguage</span>
+                    <div class="mws-options-controls">
+                        <select class="mws-voice-language" value="@(_draft.VoiceLanguage ?? "")" @onchange="OnVoiceLanguageChanged">
+                            <option value="">@AppStrings.OptionsDialog_VoiceBestMatch</option>
+                            <option value="@VoiceSelection.SameAsText">@AppStrings.OptionsDialog_VoiceSameAsModule</option>
+                            <option value="@VoiceSelection.None">@AppStrings.OptionsDialog_VoiceNone</option>
+                            @foreach (var lang in VoiceLanguageChoices())
+                            {
+                                <option value="@lang">@LanguageNames.Native(lang)</option>
+                            }
+                        </select>
+                        <span class="mws-options-hint" title="@AppStrings.OptionsDialog_VoiceLanguageHint">ⓘ</span>
+                    </div>
+                </label>
+
+                @if (DialogContext == OptionsDialogContext.InGame && DraftVoiceTracks() is { Count: > 0 } tracks)
+                {
+                    <label class="mws-options-row">
+                        <span class="mws-options-label">@AppStrings.OptionsDialog_VoiceTrack</span>
+                        <div class="mws-options-controls">
+                            <select class="mws-voice-track" value="@DraftTrackId(tracks)" disabled="@(tracks.Count <= 1)" @onchange="OnVoiceTrackChanged">
+                                @foreach (var track in tracks)
+                                {
+                                    <option value="@track.Id">@track.DisplayName(_draft.UiLocale)</option>
+                                }
+                            </select>
                         </div>
                     </label>
                 }
@@ -142,7 +174,7 @@
     private AppSettings _original = AppSettings.Default;
 
     private string _saveName = "";
-    private IReadOnlyList<string> _availableModuleLanguages = [];
+    private KnownLanguages _known = new([], []);
 
     // Guards Apply/ConfirmSaveAndQuit/AbandonGame against a double-click re-invoking them before
     // the first invocation's re-render disables the button — see RenderedLinkView's HandleClick for
@@ -165,11 +197,51 @@
 
         _draft = await SettingsStore.LoadAsync();
         _original = _draft;
+        _known = await LanguageDirectory.LoadAsync();
+    }
 
-        if (DialogContext == OptionsDialogContext.MainMenu)
+    // Every known language, plus the current choice so it stays selectable.
+    private IEnumerable<string> ModuleLanguageChoices() => WithChoice(_known.Text, _draft.PreferredModuleLanguage);
+
+    // In game, the languages this module has narration in; otherwise every known voice language. Plus the current choice.
+    private IEnumerable<string> VoiceLanguageChoices()
+    {
+        var languages = DialogContext == OptionsDialogContext.InGame
+            ? Session.Voices.Select(v => v.Track.Language)
+            : _known.Voice;
+        var chosen = _draft.VoiceLanguage is VoiceSelection.None or VoiceSelection.SameAsText ? null : _draft.VoiceLanguage;
+        return WithChoice(languages, chosen);
+    }
+
+    private static IEnumerable<string> WithChoice(IEnumerable<string> languages, string? chosen) =>
+        (chosen is null ? languages : languages.Append(chosen))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(LanguageNames.Native, StringComparer.CurrentCultureIgnoreCase);
+
+    private string? DraftVoiceLanguage() =>
+        VoiceSelection.SelectVoiceLanguage(_draft.VoiceLanguage, Session.Language, _draft.UiLocale, Session.Module?.DefaultLocale, Session.Voices.Select(v => v.Track));
+
+    private IReadOnlyList<Masterwork.ModuleFormat.VoiceTrack> DraftVoiceTracks() =>
+        DraftVoiceLanguage() is { } language
+            ? [.. Session.Voices.Select(v => v.Track).Where(t => t.Language == language)]
+            : [];
+
+    private string? DraftTrackId(IReadOnlyList<Masterwork.ModuleFormat.VoiceTrack> tracks) =>
+        Session.ModuleId is { } moduleId
+            ? VoiceSelection.SelectTrack(DraftVoiceLanguage(), tracks, VoiceSelection.PreferredTrackId(_draft, moduleId, DraftVoiceLanguage()))?.Id
+            : null;
+
+    private void OnVoiceLanguageChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        _draft = _draft with { VoiceLanguage = string.IsNullOrEmpty(value) ? null : value };
+    }
+
+    private void OnVoiceTrackChanged(ChangeEventArgs e)
+    {
+        if (Session.ModuleId is { } moduleId && DraftVoiceLanguage() is { } language && e.Value?.ToString() is { Length: > 0 } trackId)
         {
-            var modules = await ModuleStore.ListAsync();
-            _availableModuleLanguages = [.. modules.SelectMany(m => m.AvailableLanguages).Distinct().OrderBy(l => l, StringComparer.OrdinalIgnoreCase)];
+            _draft = VoiceSelection.WithTrackPreference(_draft, moduleId, language, trackId);
         }
     }
 

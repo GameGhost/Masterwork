@@ -7,6 +7,7 @@
 @inject GameSessionState State
 @inject IAudioPlayer AudioPlayer
 @inject AudioCoordinator AudioCoordinator
+@inject NarrationService Narration
 @inject IModuleStyleInjector StyleInjector
 @inject ISaveStore SaveStore
 @inject NavigationManager Nav
@@ -25,7 +26,7 @@ else
     {
         <div class="mws-play-chrome">
             <ChromeButton class="mws-pause-button" OnClick="() => _paused = true" aria-label="@AppStrings.Play_Pause" title="@AppStrings.Play_Pause"></ChromeButton>
-            <ChromeButton class="mws-options-button" OnClick="() => _showOptions = true" aria-label="@AppStrings.Play_Options" title="@AppStrings.Play_Options"></ChromeButton>
+            <ChromeButton class="mws-options-button" OnClick="OpenOptions" aria-label="@AppStrings.Play_Options" title="@AppStrings.Play_Options"></ChromeButton>
         </div>
     }
 
@@ -33,8 +34,13 @@ else
         <ChildContent>
             @* Paused is its own read-only mode, independent of the session's own IsRewound — pausing
                shows the scrubber without necessarily having stepped back at all yet (see PauseBar). *@
-            <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="@(State.Session.IsRewound || _paused)"
-                         OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
+            @* Held back until the voice track is chosen, so a first passage's narration resolves
+               (and autoplays) against the right track. *@
+            @if (_voicesReady)
+            {
+                <PassageView Result="State.Session.CurrentRender" Session="State.Session" IsRewound="@(State.Session.IsRewound || _paused)"
+                             OnStateChanged="Refresh" OnInputChanged="RefreshUiOnly" />
+            }
         </ChildContent>
         <ErrorContent Context="ex">
             @if (_showQuitFromNavError)
@@ -70,7 +76,7 @@ else
 
     @if (_showOptions)
     {
-        <OptionsDialog DialogContext="OptionsDialogContext.InGame" OnClose="() => _showOptions = false"
+        <OptionsDialog DialogContext="OptionsDialogContext.InGame" OnClose="CloseOptionsAsync"
                        OnSaveAndQuit="SaveAndQuit" OnAbandonGame="AbandonGame" DefaultSaveName="@DefaultSaveName()" />
     }
 
@@ -95,6 +101,7 @@ else
 @code {
     private bool _showOptions;
     private bool _paused;
+    private bool _voicesReady;
     private bool _showQuitFromBackNav;
     private ErrorBoundary? _errorBoundary;
     private bool _showQuitFromNavError;
@@ -135,9 +142,35 @@ else
         }
 
         context.PreventNavigation();
+        Narration.PauseAll();
         _showQuitFromBackNav = true;
         StateHasChanged();
         return ValueTask.CompletedTask;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (State.Session is not null)
+        {
+            await Narration.ActivateAsync();
+        }
+
+        _voicesReady = true;
+    }
+
+    // Opening Options pauses narration (background music keeps going); it stays paused after closing.
+    private void OpenOptions()
+    {
+        Narration.PauseAll();
+        _showOptions = true;
+    }
+
+    // A changed voice language or track re-resolves each audio_track in place, without autoplay
+    // (see RenderedAudioTrackView); the passage's engine render doesn't depend on the voice.
+    private async Task CloseOptionsAsync()
+    {
+        _showOptions = false;
+        await Narration.ReselectAsync();
     }
 
     public void Dispose() => _locationChangingRegistration?.Dispose();
