@@ -93,7 +93,7 @@
                                     <select class="mws-module-language" value="@_selectedLanguage" disabled="@(installed.AvailableLanguages.Count <= 1)" @onchange="OnLanguageChanged">
                                         @foreach (var lang in installed.AvailableLanguages)
                                         {
-                                            <option value="@lang">@lang</option>
+                                            <option value="@lang">@LanguageNames.Native(lang)</option>
                                         }
                                     </select>
                                     <ChromeButton class="mws-scenario-play-button" disabled="@_busy" OnClick="() => Play(installed)">

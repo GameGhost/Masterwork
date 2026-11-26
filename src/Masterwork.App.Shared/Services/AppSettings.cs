@@ -116,8 +116,5 @@ public static class AppUiCultures
 
     /// <summary>Culture code → display name, in the order shown in the Options dropdown.</summary>
     public static readonly IReadOnlyList<(string Code, string DisplayName)> Supported =
-    [
-        (Default, "English"),
-        ("fr-CA", "Français (Canada)"),
-    ];
+        [.. new[] { Default, "fr-CA" }.Select(code => (code, LanguageNames.Native(code)))];
 }

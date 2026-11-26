@@ -65,7 +65,7 @@
                                 <option value="">@AppStrings.OptionsDialog_SameAsApp</option>
                                 @foreach (var lang in ModuleLanguageChoices())
                                 {
-                                    <option value="@lang">@lang</option>
+                                    <option value="@lang">@LanguageNames.Native(lang)</option>
                                 }
                             </select>
                             <span class="mws-options-hint" title="@AppStrings.OptionsDialog_ModuleLanguageHint">ⓘ</span>
@@ -82,7 +82,7 @@
                             <option value="@VoiceSelection.None">@AppStrings.OptionsDialog_VoiceNone</option>
                             @foreach (var lang in VoiceLanguageChoices())
                             {
-                                <option value="@lang">@lang</option>
+                                <option value="@lang">@LanguageNames.Native(lang)</option>
                             }
                         </select>
                         <span class="mws-options-hint" title="@AppStrings.OptionsDialog_VoiceLanguageHint">ⓘ</span>
@@ -203,10 +203,12 @@
     // Every known language, plus the current choice so it stays selectable.
     private IEnumerable<string> ModuleLanguageChoices() => WithChoice(_known.Text, _draft.PreferredModuleLanguage);
 
-    // Every known voice language and, in game, those this module offers, plus the current choice.
+    // In game, the languages this module has narration in; otherwise every known voice language. Plus the current choice.
     private IEnumerable<string> VoiceLanguageChoices()
     {
-        var languages = _known.Voice.Concat(Session.Voices.Select(v => v.Track.Language));
+        var languages = DialogContext == OptionsDialogContext.InGame
+            ? Session.Voices.Select(v => v.Track.Language)
+            : _known.Voice;
         var chosen = _draft.VoiceLanguage is VoiceSelection.None or VoiceSelection.SameAsText ? null : _draft.VoiceLanguage;
         return WithChoice(languages, chosen);
     }
@@ -214,7 +216,7 @@
     private static IEnumerable<string> WithChoice(IEnumerable<string> languages, string? chosen) =>
         (chosen is null ? languages : languages.Append(chosen))
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Order(StringComparer.OrdinalIgnoreCase);
+            .OrderBy(LanguageNames.Native, StringComparer.CurrentCultureIgnoreCase);
 
     private string? DraftVoiceLanguage() =>
         VoiceSelection.SelectVoiceLanguage(_draft.VoiceLanguage, Session.Language, _draft.UiLocale, Session.Module?.DefaultLocale, Session.Voices.Select(v => v.Track));
