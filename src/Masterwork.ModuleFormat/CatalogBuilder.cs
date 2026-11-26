@@ -37,7 +37,7 @@ public static class CatalogBuilder
     /// thumbnails extracted from module packages.
     /// </summary>
     /// <param name="title">Display name of the source.</param>
-    /// <param name="packages">Packages to list, in the order they should appear.</param>
+    /// <param name="packages">Packages to list, in the order they should appear. Of several versions of one package, only the latest is listed.</param>
     /// <param name="updated">Generation timestamp; defaults to now.</param>
     /// <exception cref="ArgumentException">A package has no manifest, or its path isn't a safe relative path.</exception>
     public static Result Build(
@@ -45,8 +45,7 @@ public static class CatalogBuilder
         IEnumerable<PackageInput> packages,
         DateTimeOffset? updated = null)
     {
-        var entries = new List<CatalogEntry>();
-        var thumbnails = new List<ThumbnailOutput>();
+        var built = new List<(CatalogEntry Entry, ThumbnailOutput? Thumbnail)>();
 
         foreach (var package in packages)
         {
@@ -59,7 +58,18 @@ public static class CatalogBuilder
             var manifestYaml = ModulePackage.ReadManifestOnly(package.Bytes)
                 ?? throw new ArgumentException($"'{package.RelativePath}' has no manifest.yaml.", nameof(packages));
 
-            entries.Add(BuildEntry(package, manifestYaml, thumbnails));
+            var next = BuildEntry(package, manifestYaml);
+
+            // Only each package's latest version is listed, in the position its id first appeared.
+            var index = built.FindIndex(b => b.Entry.Type == next.Entry.Type && b.Entry.Id == next.Entry.Id);
+            if (index < 0)
+            {
+                built.Add(next);
+            }
+            else if (SemVer.Compare(next.Entry.Version, built[index].Entry.Version) > 0)
+            {
+                built[index] = next;
+            }
         }
 
         return new Result(
@@ -68,31 +78,50 @@ public static class CatalogBuilder
                 Format = CatalogFormatVersion.Current,
                 Title = title,
                 Updated = updated ?? DateTimeOffset.UtcNow,
-                Entries = entries,
+                Entries = [.. built.Select(b => b.Entry)],
             },
-            thumbnails);
+            [.. built.Select(b => b.Thumbnail).OfType<ThumbnailOutput>()]);
     }
 
-    private static CatalogEntry BuildEntry(PackageInput package, string manifestYaml, List<ThumbnailOutput> thumbnails)
+    private static (CatalogEntry Entry, ThumbnailOutput? Thumbnail) BuildEntry(PackageInput package, string manifestYaml)
     {
-        // Parsed as a module manifest for both package kinds: an asset-pack manifest has none of the
+        // Parsed as a module manifest for every package kind: an asset-pack manifest has none of the
         // module-only fields, so this reads cleanly and still yields the identity and display fields
         // a catalog entry needs. `type:` is what says which kind it actually is.
         var manifest = new ManifestParser().Parse(manifestYaml);
+        if (manifest.ModuleType == VoicePackManifestParser.PackageType)
+        {
+            var pack = new VoicePackManifestParser().Parse(manifestYaml);
+            return (new CatalogEntry
+            {
+                Type = VoicePackManifestParser.PackageType,
+                Id = pack.Id,
+                Title = pack.Title,
+                Version = pack.Version,
+                Path = package.RelativePath,
+                Sha256 = Convert.ToHexString(SHA256.HashData(package.Bytes)).ToLowerInvariant(),
+                Size = package.Bytes.LongLength,
+                Description = pack.Description,
+                Languages = [.. pack.Voices.Select(v => v.Language).Distinct(StringComparer.OrdinalIgnoreCase)],
+                For = pack.For,
+            }, null);
+        }
+
         var isAssetPack = manifest.ModuleType == "assets";
 
         // Asset packs get no thumbnail: they're never browsed or installed directly, only pulled in
         // as a module's dependency, so nothing would ever display one.
         CatalogThumbnail? thumbnail = null;
+        ThumbnailOutput? thumbnailOutput = null;
         if (!isAssetPack && ExtractThumbnail(package.Bytes, manifest.Thumbnail?.Image) is var (extension, bytes))
         {
             thumbnail = new CatalogThumbnail(
                 $"thumbnails/{manifest.Id}{extension}",
                 Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
-            thumbnails.Add(new ThumbnailOutput(thumbnail.Path, bytes));
+            thumbnailOutput = new ThumbnailOutput(thumbnail.Path, bytes);
         }
 
-        return new CatalogEntry
+        return (new CatalogEntry
         {
             Type = isAssetPack ? "assets" : "module",
             Id = manifest.Id,
@@ -112,7 +141,7 @@ public static class CatalogBuilder
             Playtime = isAssetPack ? null : manifest.Info?.Playtime,
             Thumbnail = thumbnail,
             Dependencies = isAssetPack ? [] : manifest.Dependencies,
-        };
+        }, thumbnailOutput);
     }
 
     // Pulls the one image the manifest names out of the package, without decompressing the rest of

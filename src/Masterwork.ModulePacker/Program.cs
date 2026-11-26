@@ -9,7 +9,7 @@ void PrintUsage()
     Console.Error.WriteLine("  Masterwork.ModulePacker module <module-directory> <output.mwm> [asset-pack-directory ...]");
     Console.Error.WriteLine("      The asset-pack directories are read for the logic lint only; nothing from them is packed.");
     Console.Error.WriteLine("  Masterwork.ModulePacker standalone <module-directory> <output.mwm> <asset-pack-directory> [asset-pack-directory ...]");
-    Console.Error.WriteLine("  Masterwork.ModulePacker voices <voice-pack-directory> <output> [--module <module-directory>]");
+    Console.Error.WriteLine("  Masterwork.ModulePacker voices <voice-pack-directory> <output.mwvoices> [--module <module-directory>]");
     Console.Error.WriteLine("      Warns about narration files nothing plays; with --module, also reports each track's coverage of that module.");
     Console.Error.WriteLine("  Masterwork.ModulePacker gencert <common-name> <output.pfx> <password> [validity-years, default 1]");
     Console.Error.WriteLine("      <common-name> is a bare name (\"Masterwork Content Signing\"), not a \"CN=...\" string.");
@@ -179,7 +179,8 @@ if (mode == "catalog")
     foreach (var entry in built.Catalog.Entries)
     {
         var art = entry.Thumbnail?.Path ?? "no thumbnail";
-        Console.WriteLine($"  {entry.Type,-6} {entry.Id} v{entry.Version}  {entry.Path}  ({entry.Size:N0} bytes)  [{art}]");
+        var target = entry.For is { } voiced ? $"  for {voiced.ModuleId} v{voiced.MinVersion}+" : "";
+        Console.WriteLine($"  {entry.Type,-6} {entry.Id} v{entry.Version}  {entry.Path}  ({entry.Size:N0} bytes)  [{art}]{target}");
     }
 
     if (built.Thumbnails.Count > 0)

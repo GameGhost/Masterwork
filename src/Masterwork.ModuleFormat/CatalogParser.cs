@@ -72,8 +72,12 @@ public static class CatalogParser
     /// <c>format:</c> gets): a manifest comes from content this build already has in hand, whereas a
     /// catalog comes from a remote source that may be newer than the app, and guessing at entries
     /// whose meaning has changed is worse than refusing to read them.
+    ///
+    /// An entry of a type this build doesn't know is skipped, with a line in
+    /// <paramref name="warnings"/>, so a catalog that adds a new kind of content stays readable by
+    /// older apps. So is a voice pack entry with no <c>for</c>, since nothing could install it.
     /// </summary>
-    public static CatalogDocument Parse(byte[] json)
+    public static CatalogDocument Parse(byte[] json, ICollection<string>? warnings = null)
     {
         CatalogDocument? document;
         try
@@ -96,11 +100,20 @@ public static class CatalogParser
                 $"Unsupported catalog format '{document.Format}' — this build understands '{CatalogFormatVersion.Current}'.");
         }
 
+        var known = new List<CatalogEntry>();
         foreach (var entry in document.Entries)
         {
-            if (entry.Type is not ("module" or "assets"))
+            if (entry.Type is not ("module" or "assets" or VoicePackManifestParser.PackageType))
             {
-                throw new CatalogParseException($"Catalog entry '{entry.Id}' has unknown type '{entry.Type}'.");
+                warnings?.Add($"Skipped catalog entry '{entry.Id}': unknown type '{entry.Type}'.");
+                continue;
+            }
+
+            if (entry.Type == VoicePackManifestParser.PackageType
+                && entry.For is not { ModuleId.Length: > 0, MinVersion.Length: > 0 })
+            {
+                warnings?.Add($"Skipped voice pack entry '{entry.Id}': it doesn't say which module it voices ('for').");
+                continue;
             }
 
             // A malformed hash would otherwise surface only after a full download, as an install
@@ -132,9 +145,11 @@ public static class CatalogParser
                     throw new CatalogParseException($"Catalog entry '{entry.Id}' has a malformed thumbnail hash.");
                 }
             }
+
+            known.Add(entry);
         }
 
-        return document;
+        return known.Count == document.Entries.Count ? document : document with { Entries = known };
     }
 
     /// <summary>Serializes a catalog for publishing. The bytes this returns are exactly what a detached signature must cover.</summary>

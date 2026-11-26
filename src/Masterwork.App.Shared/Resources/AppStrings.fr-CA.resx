@@ -163,6 +163,19 @@
   <data name="ManageModules_TrustAndInstall" xml:space="preserve"><value>Faire confiance et installer</value></data>
   <data name="ManageModules_SignatureBlockedTitle" xml:space="preserve"><value>Échec de la vérification de signature</value></data>
   <data name="ManageModules_SignatureBlockedBody" xml:space="preserve"><value>La signature de ce paquet ne correspond pas à son contenu : il a peut-être été modifié ou endommagé après sa signature. Impossible de l'installer. Téléchargez-le de nouveau depuis sa source d'origine.</value></data>
+  <data name="ManageModules_VoicePackLabel" xml:space="preserve"><value>Pack de voix pour {0} · {1}</value></data>
+  <data name="ManageModules_AvailableVoicePacksHeading" xml:space="preserve"><value>Packs de voix à télécharger</value></data>
+  <data name="ManageModules_VoicePackNeedsModule" xml:space="preserve"><value>Nécessite {0} v{1} ou plus récent</value></data>
+  <data name="ManageModules_VoicePackDeleteConfirmTitle" xml:space="preserve"><value>Supprimer ce pack de voix?</value></data>
+  <data name="ManageModules_VoicePackDeleteConfirmBody" xml:space="preserve"><value>Sa narration ne jouera plus tant que vous ne l'aurez pas téléchargé de nouveau.</value></data>
+  <data name="ManageModules_DeleteVoicePacksToo" xml:space="preserve"><value>Supprimer aussi ses packs de voix</value></data>
+  <data name="ManageModules_VoicePackRefusedTitle" xml:space="preserve"><value>Pack de voix non installé</value></data>
+  <data name="ManageModules_VoicePackNeedsModuleBody" xml:space="preserve"><value>« {0} » nécessite {1} v{2} ou plus récent, et la v{3} est installée.</value></data>
+  <data name="ManageModules_VoicePackNeedsModuleBodyNoUpdate" xml:space="preserve"><value>« {0} » nécessite {1} v{2} ou plus récent, et la v{3} est installée. Aucune de vos sources n'offre encore cette version.</value></data>
+  <data name="ManageModules_VoicePackTrackConflictBody" xml:space="preserve"><value>« {0} » ajoute une voix déjà installée par « {1} ». Supprimez d'abord « {1} » pour utiliser celui-ci.</value></data>
+  <data name="ManageModules_VoicePackUploadError_Generic" xml:space="preserve"><value>Impossible d'installer ce pack de voix : {0}</value></data>
+  <data name="ManageModules_UnsignedTitleVoicePack" xml:space="preserve"><value>Pack de voix non signé</value></data>
+  <data name="ManageModules_UnrecognizedSignerBodyVoicePack" xml:space="preserve"><value>Ce pack de voix a été créé par « {0} ». Installez-le si vous faites confiance à l'éditeur.</value></data>
 
   <data name="ContinueList_PageTitle" xml:space="preserve"><value>Masterwork — Continuer</value></data>
   <data name="ContinueList_Heading" xml:space="preserve"><value>Continuer</value></data>
@@ -237,6 +250,12 @@
   <data name="OptionsDialog_VoiceNone" xml:space="preserve"><value>Aucune</value></data>
   <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Narration parlée seulement, jamais la musique ni les effets sonores. Meilleure correspondance : la langue du module, sinon celle de l'application, sinon la langue par défaut du module, selon celle qui a une narration. Comme le module : la langue du module seulement. Aucune : pas de narration. Une langue précise : la narration dans cette langue seulement.</value></data>
   <data name="OptionsDialog_VoiceTrack" xml:space="preserve"><value>Voix</value></data>
+  <data name="OptionsDialog_VoicePackAvailable" xml:space="preserve"><value>La narration en {0} n'est pas encore téléchargée.</value></data>
+  <data name="OptionsDialog_VoicePackDownload" xml:space="preserve"><value>Télécharger ({0})</value></data>
+  <data name="OptionsDialog_VoicePackDownloaded" xml:space="preserve"><value>Narration téléchargée.</value></data>
+  <data name="OptionsDialog_VoicePackFailed" xml:space="preserve"><value>Impossible de télécharger la narration. Vous pouvez continuer à jouer et réessayer plus tard.</value></data>
+  <data name="OptionsDialog_VoicePackNeedsModule" xml:space="preserve"><value>La narration en {0} nécessite {1} v{2} ou plus récent. Mettez-le à jour depuis Gérer les modules.</value></data>
+  <data name="Common_SizeMegabytes" xml:space="preserve"><value>{0:0.#} Mo</value></data>
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quitter</value></data>
   <data name="OptionsDialog_QuitConfirmTitle" xml:space="preserve"><value>Quitter?</value></data>

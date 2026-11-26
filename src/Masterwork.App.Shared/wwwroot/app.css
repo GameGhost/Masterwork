@@ -688,6 +688,16 @@ body {
     color: #b32121;
 }
 
+.mws-screen-subheading {
+    margin: 1rem 0 0.5rem;
+    font-size: 1em;
+}
+
+.mws-options-status {
+    font-size: 0.85em;
+    margin: 0.25rem 0;
+}
+
 .mws-dialog-overlay {
     position: fixed;
     inset: 0;

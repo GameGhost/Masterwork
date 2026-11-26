@@ -49,7 +49,9 @@ public class CatalogInstallServiceTests
 
         public Task<InstalledModule> InstallAsync(byte[] mwmBytes, string sha256, IProgress<(int Done, int Total)>? progress = null)
         {
-            var installed = new InstalledModule("installed", "1.0.0", "Installed", "", [], sha256);
+            var manifest = new ManifestParser().Parse(ModulePackage.ReadManifestOnly(mwmBytes)!);
+            var installed = new InstalledModule(manifest.Id, manifest.Version, manifest.Title, "", ["en-US"], sha256);
+            Installed.RemoveAll(m => m.ModuleId == installed.ModuleId);
             Installed.Add(installed);
             return Task.FromResult(installed);
         }
@@ -81,6 +83,55 @@ public class CatalogInstallServiceTests
         public Task<IModuleAssetSource> GetAssetSourceAsync(string assetPackId, string version) => throw new NotSupportedException();
     }
 
+    private sealed class StubVoicePackStore : IVoicePackStore
+    {
+        public List<InstalledVoicePack> Installed { get; } = [];
+
+        public Task<IReadOnlyList<InstalledVoicePack>> ListAsync() => Task.FromResult<IReadOnlyList<InstalledVoicePack>>(Installed);
+
+        public Task<IReadOnlyList<InstalledVoicePack>> ListForModuleAsync(string moduleId) =>
+            Task.FromResult<IReadOnlyList<InstalledVoicePack>>([.. Installed.Where(p => p.Manifest.For.ModuleId == moduleId)]);
+
+        public Task<InstalledVoicePack> InstallAsync(byte[] packageBytes, IProgress<(int Done, int Total)>? progress = null)
+        {
+            var pack = new InstalledVoicePack(VoicePackStores.ReadManifest(packageBytes).Manifest, EmptyModuleAssetSource.Instance);
+            Installed.RemoveAll(p => p.Manifest.Id == pack.Manifest.Id);
+            Installed.Add(pack);
+            return Task.FromResult(pack);
+        }
+
+        public Task DeleteAsync(string packId) => throw new NotSupportedException();
+    }
+
+    private sealed class StubSettingsStore : IAppSettingsStore
+    {
+        public AppSettings Settings { get; set; } = AppSettings.Default;
+
+        public Task<AppSettings> LoadAsync() => Task.FromResult(Settings);
+
+        public Task SaveAsync(AppSettings settings) => throw new NotSupportedException();
+    }
+
+    private static byte[] VoicePackage(string id, string language, string track = "reader", string minVersion = "1.0.0", string moduleId = "test.module")
+    {
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using var stream = archive.CreateEntry("manifest.yaml").Open();
+            stream.Write(Encoding.UTF8.GetBytes(
+                $"type: 'voices'\nid: '{id}'\ntitle: '{id}'\nversion: '1.0.0'\nfor:\n  id: '{moduleId}'\n  min_version: '{minVersion}'\nvoices:\n  {language}:\n    - id: '{track}'\n"));
+        }
+
+        return buffer.ToArray();
+    }
+
+    private static CatalogEntry VoiceEntry(string id, byte[] bytes, string language, string minVersion = "1.0.0") =>
+        Entry(id, bytes, $"v1/{id}.mwassets", "voices") with
+        {
+            Languages = [language],
+            For = new VoicePackTarget { ModuleId = "test.module", MinVersion = minVersion },
+        };
+
     private static CatalogSnapshot Snapshot(PackageTrustDecision decision, params CatalogEntry[] entries) =>
         new(Source,
             new CatalogDocument { Format = CatalogFormatVersion.Current, Title = "Test", Entries = entries },
@@ -101,14 +152,20 @@ public class CatalogInstallServiceTests
             Dependencies = dependencies,
         };
 
-    private static (CatalogInstallService Service, StubDownloader Downloader, StubModuleStore Modules, StubAssetPackStore Packs) Build()
+    private static (CatalogInstallService Service, StubDownloader Downloader, StubModuleStore Modules, StubAssetPackStore Packs) Build() =>
+        Build(out _, out _);
+
+    private static (CatalogInstallService Service, StubDownloader Downloader, StubModuleStore Modules, StubAssetPackStore Packs) Build(
+        out StubVoicePackStore voices, out StubSettingsStore settings)
     {
         var downloader = new StubDownloader();
         var modules = new StubModuleStore();
         var packs = new StubAssetPackStore();
+        voices = new StubVoicePackStore();
+        settings = new StubSettingsStore();
         var js = new NullJsRuntime();
         var service = new CatalogInstallService(
-            downloader, modules, packs, js, new BrowserCrypto(js), NullLogger<CatalogInstallService>.Instance);
+            downloader, modules, packs, voices, settings, js, new BrowserCrypto(js), NullLogger<CatalogInstallService>.Instance);
 
         return (service, downloader, modules, packs);
     }
@@ -232,6 +289,96 @@ public class CatalogInstallServiceTests
         await service.InstallAsync(Snapshot(PackageTrustDecision.Trusted, entry), entry);
 
         Assert.Equal(AssetPackInstallSource.Manual, Assert.Single(packs.InstallSources));
+    }
+
+    // ── Voice packs ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InstallingAModule_AlsoInstallsThePackForTheEffectiveVoiceLanguage()
+    {
+        var (service, downloader, modules, _) = Build(out var voices, out var settings);
+        settings.Settings = AppSettings.Default with { VoiceLanguage = "fr-CA" };
+        var moduleBytes = Package("test.module");
+        var english = VoicePackage("voices.en", "en-US");
+        var french = VoicePackage("voices.fr", "fr-CA");
+        downloader.Files["https://example.com/dl/v1/test.mwm"] = moduleBytes;
+        downloader.Files["https://example.com/dl/v1/voices.en.mwassets"] = english;
+        downloader.Files["https://example.com/dl/v1/voices.fr.mwassets"] = french;
+        var moduleEntry = Entry("test.module", moduleBytes, "v1/test.mwm");
+
+        await service.InstallAsync(
+            Snapshot(PackageTrustDecision.Trusted, moduleEntry, VoiceEntry("voices.en", english, "en-US"), VoiceEntry("voices.fr", french, "fr-CA")),
+            moduleEntry);
+
+        Assert.Single(modules.Installed);
+        Assert.Equal("voices.fr", Assert.Single(voices.Installed).Manifest.Id);
+    }
+
+    [Fact]
+    public async Task InstallingAModule_UnderNone_InstallsNoVoicePack()
+    {
+        var (service, downloader, _, _) = Build(out var voices, out var settings);
+        settings.Settings = AppSettings.Default with { VoiceLanguage = VoiceSelection.None };
+        var moduleBytes = Package("test.module");
+        var english = VoicePackage("voices.en", "en-US");
+        downloader.Files["https://example.com/dl/v1/test.mwm"] = moduleBytes;
+        downloader.Files["https://example.com/dl/v1/voices.en.mwassets"] = english;
+        var moduleEntry = Entry("test.module", moduleBytes, "v1/test.mwm");
+
+        await service.InstallAsync(Snapshot(PackageTrustDecision.Trusted, moduleEntry, VoiceEntry("voices.en", english, "en-US")), moduleEntry);
+
+        Assert.Equal("https://example.com/dl/v1/test.mwm", Assert.Single(downloader.Requested));
+        Assert.Empty(voices.Installed);
+    }
+
+    [Fact]
+    public async Task AVoicePackThatFailsToDownload_DoesntFailTheModuleInstall()
+    {
+        var (service, downloader, modules, _) = Build(out var voices, out _);
+        var moduleBytes = Package("test.module");
+        downloader.Files["https://example.com/dl/v1/test.mwm"] = moduleBytes;
+        var moduleEntry = Entry("test.module", moduleBytes, "v1/test.mwm");
+
+        // Listed, but the download 404s (as being offline would).
+        await service.InstallAsync(
+            Snapshot(PackageTrustDecision.Trusted, moduleEntry, VoiceEntry("voices.en", VoicePackage("voices.en", "en-US"), "en-US")),
+            moduleEntry);
+
+        Assert.Single(modules.Installed);
+        Assert.Empty(voices.Installed);
+    }
+
+    [Fact]
+    public async Task InstallingAVoicePack_ForAModuleTooOld_IsRefusedBeforeDownloading()
+    {
+        var (service, downloader, modules, _) = Build(out var voices, out _);
+        modules.Installed.Add(new InstalledModule("test.module", "1.0.0", "Test Module", "", ["en-US"], "hash"));
+        var english = VoicePackage("voices.en", "en-US", minVersion: "1.2.0");
+        var entry = VoiceEntry("voices.en", english, "en-US", minVersion: "1.2.0");
+
+        var ex = await Assert.ThrowsAsync<VoicePackRefusedException>(
+            () => service.InstallAsync(Snapshot(PackageTrustDecision.Trusted, entry), entry));
+
+        Assert.Equal("1.2.0", ex.Refusal.ModuleVersion);
+        Assert.Empty(downloader.Requested);
+        Assert.Empty(voices.Installed);
+    }
+
+    [Fact]
+    public async Task InstallingAVoicePack_ThatAddsAnAlreadyInstalledTrack_IsRefused()
+    {
+        var (service, downloader, modules, _) = Build(out var voices, out _);
+        modules.Installed.Add(new InstalledModule("test.module", "1.0.0", "Test Module", "", ["en-US"], "hash"));
+        await voices.InstallAsync(VoicePackage("voices.first", "en-US", track: "male"));
+        var second = VoicePackage("voices.second", "en-US", track: "male");
+        downloader.Files["https://example.com/dl/v1/voices.second.mwassets"] = second;
+        var entry = VoiceEntry("voices.second", second, "en-US");
+
+        var ex = await Assert.ThrowsAsync<VoicePackRefusedException>(
+            () => service.InstallAsync(Snapshot(PackageTrustDecision.Trusted, entry), entry));
+
+        Assert.Equal(VoicePackRefusalKind.TrackAlreadyInstalled, ex.Refusal.Kind);
+        Assert.Equal("voices.first", Assert.Single(voices.Installed).Manifest.Id);
     }
 }
 

@@ -21,7 +21,17 @@ public enum CatalogInstallPhase
 public readonly record struct CatalogInstallProgress(CatalogInstallPhase Phase, string Title, int Percent);
 
 /// <summary>An install that couldn't be completed. The message is player-facing.</summary>
-public sealed class CatalogInstallException(string message, Exception? inner = null) : Exception(message, inner);
+public class CatalogInstallException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>A voice pack install refused by <see cref="VoicePackInstallRules"/>. <see cref="Refusal"/> says why, for the UI to word.</summary>
+public sealed class VoicePackRefusedException(VoicePackRefusal refusal, string packTitle)
+    : CatalogInstallException(refusal.Kind == VoicePackRefusalKind.NeedsModuleVersion
+        ? $"'{packTitle}' needs version {refusal.ModuleVersion} or later of its module."
+        : $"'{packTitle}' adds a voice that '{refusal.InstalledBy}' already installed.")
+{
+    /// <summary>Why the install was refused.</summary>
+    public VoicePackRefusal Refusal { get; } = refusal;
+}
 
 /// <summary>
 /// Installs content named by a catalog entry.
@@ -36,6 +46,8 @@ public sealed class CatalogInstallService(
     IContentDownloader downloader,
     IModuleStore moduleStore,
     IAssetPackStore assetPackStore,
+    IVoicePackStore voicePackStore,
+    IAppSettingsStore settingsStore,
     IJSRuntime js,
     BrowserCrypto crypto,
     ILogger<CatalogInstallService> logger)
@@ -45,8 +57,13 @@ public sealed class CatalogInstallService(
     /// already present. Dependencies pulled in this way are recorded as
     /// <see cref="AssetPackInstallSource.Auto"/>, so removing the last module that needed one cleans
     /// it up; an entry the player asked for directly is always <see cref="AssetPackInstallSource.Manual"/>.
+    ///
+    /// A module install also installs the same catalog's voice pack for the player's effective voice
+    /// language, if one is needed (<see cref="VoicePackOffers.ForModuleInstall"/>). That part never
+    /// fails the install: a pack that can't be fetched is logged, and narration uses what's installed.
     /// </summary>
     /// <exception cref="CatalogInstallException">The catalog isn't trusted, a dependency is unavailable, a download failed, or a hash didn't match.</exception>
+    /// <exception cref="VoicePackRefusedException">A voice pack entry was refused by <see cref="VoicePackInstallRules"/>.</exception>
     public async Task InstallAsync(
         CatalogSnapshot snapshot,
         CatalogEntry entry,
@@ -61,17 +78,86 @@ public sealed class CatalogInstallService(
             throw new CatalogInstallException("This catalog isn't from a trusted publisher, so its content can't be installed.");
         }
 
+        if (entry.Type == VoicePackManifestParser.PackageType)
+        {
+            await InstallVoicePackAsync(snapshot.Source, entry, progress, cancellationToken);
+            return;
+        }
+
         foreach (var dependency in entry.Dependencies)
         {
             await EnsureDependencyAsync(snapshot, dependency, progress, cancellationToken);
         }
 
-        await InstallEntryAsync(
+        var module = await InstallEntryAsync(
             snapshot.Source,
             entry,
             entry.Type == "assets" ? AssetPackInstallSource.Manual : null,
             progress,
             cancellationToken);
+
+        if (module is not null)
+        {
+            await InstallVoicePackForAsync(snapshot, module, progress, cancellationToken);
+        }
+    }
+
+    private async Task InstallVoicePackForAsync(
+        CatalogSnapshot snapshot, InstalledModule module, IProgress<CatalogInstallProgress>? progress, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var settings = await settingsStore.LoadAsync();
+            var installed = (await voicePackStore.ListAsync()).Select(p => p.Manifest).ToList();
+            var offers = VoicePackOffers.From([snapshot], [module], installed);
+            if (VoicePackOffers.ForModuleInstall(settings, module, offers, installed) is not { } offer)
+            {
+                return;
+            }
+
+            logger.LogInformation("Catalog install: installing voice pack {PackId} v{Version} with {ModuleId}", offer.Entry.Id, offer.Entry.Version, module.ModuleId);
+            await InstallVoicePackAsync(snapshot.Source, offer.Entry, progress, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Catalog install: no voice pack installed with {ModuleId}; narration uses what's already installed", module.ModuleId);
+        }
+    }
+
+    private async Task InstallVoicePackAsync(
+        ContentSource source, CatalogEntry entry, IProgress<CatalogInstallProgress>? progress, CancellationToken cancellationToken)
+    {
+        var module = (await moduleStore.ListAsync()).FirstOrDefault(m => m.ModuleId == entry.For?.ModuleId);
+
+        // The minimum version is in the catalog entry too, so a pack that can't be installed isn't downloaded first.
+        if (module is not null && entry.For is { } target && SemVer.Compare(module.Version, target.MinVersion) < 0)
+        {
+            throw new VoicePackRefusedException(new VoicePackRefusal(VoicePackRefusalKind.NeedsModuleVersion, ModuleVersion: target.MinVersion), entry.Title);
+        }
+
+        var (bytes, _) = await DownloadVerifiedAsync(source, entry, progress, cancellationToken);
+
+        VoicePackManifest manifest;
+        try
+        {
+            manifest = VoicePackStores.ReadManifest(bytes).Manifest;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or MwsParseException or YamlDotNet.Core.YamlException)
+        {
+            throw new CatalogInstallException($"'{entry.Title}' isn't a readable voice pack.", ex);
+        }
+
+        var installed = (await voicePackStore.ListAsync()).Select(p => p.Manifest).ToList();
+        if (VoicePackInstallRules.Check(manifest, module, installed) is { } refusal)
+        {
+            logger.LogWarning("Catalog install: voice pack {PackId} refused ({Kind})", manifest.Id, refusal.Kind);
+            throw new VoicePackRefusedException(refusal, entry.Title);
+        }
+
+        progress?.Report(new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, 0));
+        await voicePackStore.InstallAsync(bytes, new Progress<(int Done, int Total)>(p => progress?.Report(
+            new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, Percent(p.Done, p.Total)))));
+        logger.LogInformation("Catalog install: installed voice pack {PackId} v{Version}", manifest.Id, manifest.Version);
     }
 
     private async Task EnsureDependencyAsync(
@@ -106,10 +192,35 @@ public sealed class CatalogInstallService(
         await InstallEntryAsync(snapshot.Source, dependencyEntry, AssetPackInstallSource.Auto, progress, cancellationToken);
     }
 
-    private async Task InstallEntryAsync(
+    // Installs a module (returned) or an asset pack (null).
+    private async Task<InstalledModule?> InstallEntryAsync(
         ContentSource source,
         CatalogEntry entry,
         AssetPackInstallSource? assetPackSource,
+        IProgress<CatalogInstallProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var (bytes, sha256) = await DownloadVerifiedAsync(source, entry, progress, cancellationToken);
+
+        progress?.Report(new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, 0));
+        var installProgress = new Progress<(int Done, int Total)>(p => progress?.Report(
+            new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, Percent(p.Done, p.Total))));
+
+        if (assetPackSource is { } packSource)
+        {
+            await assetPackStore.InstallAsync(bytes, sha256, packSource, installProgress);
+            logger.LogInformation("Catalog install: installed asset pack {Id} v{Version} ({Source})", entry.Id, entry.Version, packSource);
+            return null;
+        }
+
+        var module = await moduleStore.InstallAsync(bytes, sha256, installProgress);
+        logger.LogInformation("Catalog install: installed module {Id} v{Version}", entry.Id, entry.Version);
+        return module;
+    }
+
+    private async Task<(byte[] Bytes, string Sha256)> DownloadVerifiedAsync(
+        ContentSource source,
+        CatalogEntry entry,
         IProgress<CatalogInstallProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -132,20 +243,7 @@ public sealed class CatalogInstallService(
                 $"'{entry.Title}' didn't match what the catalog said it should be. The download may be corrupted — try again.");
         }
 
-        progress?.Report(new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, 0));
-        var installProgress = new Progress<(int Done, int Total)>(p => progress?.Report(
-            new CatalogInstallProgress(CatalogInstallPhase.Installing, entry.Title, Percent(p.Done, p.Total))));
-
-        if (assetPackSource is { } packSource)
-        {
-            await assetPackStore.InstallAsync(bytes, sha256, packSource, installProgress);
-            logger.LogInformation("Catalog install: installed asset pack {Id} v{Version} ({Source})", entry.Id, entry.Version, packSource);
-        }
-        else
-        {
-            await moduleStore.InstallAsync(bytes, sha256, installProgress);
-            logger.LogInformation("Catalog install: installed module {Id} v{Version}", entry.Id, entry.Version);
-        }
+        return (bytes, sha256);
     }
 
     private async Task<byte[]> DownloadAsync(

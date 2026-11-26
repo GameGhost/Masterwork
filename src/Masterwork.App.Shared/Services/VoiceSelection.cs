@@ -49,7 +49,12 @@ public static class VoiceSelection
     /// Matching ignores case; the result is spelled as the tracks spell it.
     /// </summary>
     public static string? SelectVoiceLanguage(
-        string? preference, string? textLanguage, string? uiLocale, string? moduleDefault, IEnumerable<VoiceTrack> tracks)
+        string? preference, string? textLanguage, string? uiLocale, string? moduleDefault, IEnumerable<VoiceTrack> tracks) =>
+        SelectVoiceLanguage(preference, textLanguage, uiLocale, moduleDefault, tracks.Select(t => t.Language));
+
+    /// <summary>As <see cref="SelectVoiceLanguage(string?, string?, string?, string?, IEnumerable{VoiceTrack})"/>, over the languages tracks are in.</summary>
+    public static string? SelectVoiceLanguage(
+        string? preference, string? textLanguage, string? uiLocale, string? moduleDefault, IEnumerable<string> languages)
     {
         string?[] candidates = preference switch
         {
@@ -59,13 +64,13 @@ public static class VoiceSelection
             _ => [preference],
         };
 
-        var trackList = tracks as IReadOnlyCollection<VoiceTrack> ?? [.. tracks];
+        var languageList = languages as IReadOnlyCollection<string> ?? [.. languages];
         foreach (var candidate in candidates)
         {
             if (candidate is not null
-                && trackList.FirstOrDefault(t => string.Equals(t.Language, candidate, StringComparison.OrdinalIgnoreCase)) is { } match)
+                && languageList.FirstOrDefault(l => string.Equals(l, candidate, StringComparison.OrdinalIgnoreCase)) is { } match)
             {
-                return match.Language;
+                return match;
             }
         }
 

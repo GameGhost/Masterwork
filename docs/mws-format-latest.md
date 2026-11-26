@@ -1744,8 +1744,28 @@ voices:
 
 At pack time, `Masterwork.ModulePacker` warns about narration files nothing plays (outside a track
 folder, in an undeclared track's folder, or a slug no `audio_track` references), and its
-`voices <pack-dir> <output> --module <module-dir>` mode reports each track's coverage, for example
-"28 of 31 narrated passages". Coverage is never stored in a package or shown in the app.
+`voices <pack-dir> <output.mwvoices> --module <module-dir>` mode reports each track's coverage, for
+example "28 of 31 narrated passages". Coverage is never stored in a package or shown in the app.
+
+A voice pack is packaged like an asset pack (`manifest.yaml` plus `assets/`), with the extension
+`.mwvoices`, and is signed and verified like every other package. In a catalog it is an entry with
+`type: "voices"`, its voice languages in `languages`, and its target in `for`
+(`{ "module_id": ..., "min_version": ... }`). The `catalog` command fills these from the manifest and,
+given several versions of one package, lists only the latest. An app skips catalog entries of a type it
+doesn't know, so a new type never makes a catalog unreadable to older apps.
+
+Installing:
+
+- Installing a module from a catalog also installs that catalog's pack in the player's effective voice
+  language for it, unless that is None or something installed already narrates in it.
+- The minimum version is enforced at install and update; a refusal names the module version needed
+  and offers that module update when a source has it.
+- A pack that would add a (language, id) another installed pack for the same module already adds is
+  refused. Updating the same pack (same `id`) is not a conflict.
+- One version of a pack is installed at a time. An installed pack is never removed or downgraded
+  automatically; a catalog offers it only as an update to a newer version.
+- A download or install failure never blocks play: narration uses the tracks already installed, or
+  none.
 
 ### Town Records
 

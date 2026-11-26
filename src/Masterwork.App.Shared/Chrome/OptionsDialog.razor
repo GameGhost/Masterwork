@@ -6,6 +6,10 @@
 @inject AudioSettingsState AudioState
 @inject GameSessionState Session
 @inject KnownLanguagesService LanguageDirectory
+@inject VoicePackService VoicePacks
+@inject NarrationService Narration
+@using Microsoft.Extensions.Logging
+@inject ILogger<OptionsDialog> Logger
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -88,6 +92,31 @@
                         <span class="mws-options-hint" title="@AppStrings.OptionsDialog_VoiceLanguageHint">ⓘ</span>
                     </div>
                 </label>
+
+                @if (PickedVoiceLanguage() is { } picked)
+                {
+                    var (downloadable, needUpdate) = MissingNarration(picked);
+                    @if (downloadable.Count > 0)
+                    {
+                        <div class="mws-options-row mws-voice-pack-offer">
+                            <span class="mws-options-label">@string.Format(AppStrings.EffectiveCulture, AppStrings.OptionsDialog_VoicePackAvailable, LanguageNames.Native(picked))</span>
+                            <div class="mws-options-controls">
+                                <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => DownloadVoicePacks(downloadable)">
+                                    @string.Format(AppStrings.EffectiveCulture, AppStrings.OptionsDialog_VoicePackDownload,
+                                        string.Format(AppStrings.EffectiveCulture, AppStrings.Common_SizeMegabytes, downloadable.Sum(o => o.Entry.Size) / (1024.0 * 1024.0)))
+                                </ChromeButton>
+                            </div>
+                        </div>
+                    }
+                    @foreach (var offer in needUpdate)
+                    {
+                        <p class="mws-version-warning">@string.Format(AppStrings.EffectiveCulture, AppStrings.OptionsDialog_VoicePackNeedsModule, LanguageNames.Native(picked), offer.Module.Title, offer.MinModuleVersion)</p>
+                    }
+                }
+                @if (_voicePackStatus is { } status)
+                {
+                    <p class="mws-options-status">@status</p>
+                }
 
                 @if (DialogContext == OptionsDialogContext.InGame && DraftVoiceTracks() is { Count: > 0 } tracks)
                 {
@@ -198,16 +227,99 @@
         _draft = await SettingsStore.LoadAsync();
         _original = _draft;
         _known = await LanguageDirectory.LoadAsync();
+        await LoadVoicePacksAsync();
+    }
+
+    private IReadOnlyList<VoicePackOffer> _voiceOffers = [];
+    private IReadOnlyList<InstalledVoicePack> _installedVoicePacks = [];
+    private string? _voicePackStatus;
+
+    private async Task LoadVoicePacksAsync()
+    {
+        _voiceOffers = await VoicePacks.LoadOffersAsync();
+        _installedVoicePacks = await VoicePacks.ListInstalledAsync();
+    }
+
+    // The language code picked explicitly, not best match, same as module or None.
+    private string? PickedVoiceLanguage() =>
+        _draft.VoiceLanguage is null or VoiceSelection.None or VoiceSelection.SameAsText ? null : _draft.VoiceLanguage;
+
+    // Catalog packs that would narrate in the picked language where nothing installed does: in
+    // game, for this module only; otherwise for every installed module. One pack per module.
+    private (IReadOnlyList<VoicePackOffer> Downloadable, IReadOnlyList<VoicePackOffer> NeedUpdate) MissingNarration(string language)
+    {
+        var missing = _voiceOffers
+            .Where(o => o.HasLanguage(language)
+                && (DialogContext != OptionsDialogContext.InGame || o.Module.ModuleId == Session.ModuleId)
+                && !IsNarrated(o.Module, language))
+            .GroupBy(o => o.Module.ModuleId)
+            .Select(g => g.FirstOrDefault(o => o.State != VoicePackOfferState.NeedsModuleUpdate) ?? g.First())
+            .ToList();
+        return ([.. missing.Where(o => o.State != VoicePackOfferState.NeedsModuleUpdate)],
+            [.. missing.Where(o => o.State == VoicePackOfferState.NeedsModuleUpdate)]);
+    }
+
+    private bool IsNarrated(InstalledModule module, string language)
+    {
+        static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        return DialogContext == OptionsDialogContext.InGame && module.ModuleId == Session.ModuleId
+            ? Session.Voices.Any(v => Same(v.Track.Language, language))
+            : module.VoiceLanguages.Any(l => Same(l, language))
+                || _installedVoicePacks.Any(p => p.Manifest.For.ModuleId == module.ModuleId
+                    && VoiceSelection.SupportsModuleVersion(p.Manifest, module.Version)
+                    && p.Manifest.Voices.Any(v => Same(v.Language, language)));
+    }
+
+    // A failed download leaves everything as it was: narration keeps using what's installed.
+    private async Task DownloadVoicePacks(IReadOnlyList<VoicePackOffer> offers)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _voicePackStatus = null;
+        var failed = false;
+        try
+        {
+            foreach (var offer in offers)
+            {
+                try
+                {
+                    await VoicePacks.InstallAsync(offer);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Options: voice pack {PackId} not installed", offer.Entry.Id);
+                    failed = true;
+                }
+            }
+
+            await LoadVoicePacksAsync();
+            if (DialogContext == OptionsDialogContext.InGame)
+            {
+                await Narration.ActivateAsync();
+            }
+
+            _voicePackStatus = failed ? AppStrings.OptionsDialog_VoicePackFailed : AppStrings.OptionsDialog_VoicePackDownloaded;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     // Every known language, plus the current choice so it stays selectable.
     private IEnumerable<string> ModuleLanguageChoices() => WithChoice(_known.Text, _draft.PreferredModuleLanguage);
 
-    // In game, the languages this module has narration in; otherwise every known voice language. Plus the current choice.
+    // In game, the languages this module has narration in or a catalog pack for; otherwise every
+    // known voice language. Plus the current choice.
     private IEnumerable<string> VoiceLanguageChoices()
     {
         var languages = DialogContext == OptionsDialogContext.InGame
             ? Session.Voices.Select(v => v.Track.Language)
+                .Concat(_voiceOffers.Where(o => o.Module.ModuleId == Session.ModuleId).SelectMany(o => o.Entry.Languages))
             : _known.Voice;
         var chosen = _draft.VoiceLanguage is VoiceSelection.None or VoiceSelection.SameAsText ? null : _draft.VoiceLanguage;
         return WithChoice(languages, chosen);

@@ -7,6 +7,7 @@
 @using Microsoft.Extensions.Logging
 @inject IModuleStore ModuleStore
 @inject IAssetPackStore AssetPackStore
+@inject VoicePackService VoicePacks
 @inject ISaveStore SaveStore
 @inject IAppSettingsStore SettingsStore
 @inject NavigationManager Nav
@@ -42,7 +43,7 @@
         {
             <label for="mws-upload-input" class="mws-upload-button style-btn-green">@AppStrings.StartNewGame_UploadModule</label>
             <InputFile id="mws-upload-input" class="mws-visually-hidden" OnChange="OnUploadFileSelected"
-                       accept=".mwm,.mwassets,application/zip,application/x-zip-compressed,application/octet-stream" />
+                       accept=".mwm,.mwassets,.mwvoices,application/zip,application/x-zip-compressed,application/octet-stream" />
         }
         <ChromeButton class="style-btn-brown" OnClick='() => Nav.NavigateTo("/modules/sources")'>@AppStrings.CatalogSources_Manage</ChromeButton>
     </div>
@@ -68,10 +69,18 @@
                             @(pack.InstallSource == AssetPackInstallSource.Auto ? AppStrings.ManageModules_AssetPackSource_Auto : AppStrings.ManageModules_AssetPackSource_Manual)
                         </span>
                     }
+                    else if (row.VoicePack is { } voicePack)
+                    {
+                        <span class="mws-module-version">@VoicePackLabel(voicePack.Manifest.For.ModuleId, voicePack.Manifest.Voices.Select(v => v.Language))</span>
+                    }
                 </div>
                 @if (row.Module is { } module)
                 {
-                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteId = module.ModuleId">@AppStrings.Common_Delete</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => BeginDeleteModule(module)">@AppStrings.Common_Delete</ChromeButton>
+                }
+                else if (row.VoicePack is { } deletableVoicePack)
+                {
+                    <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => _confirmingDeleteVoicePack = deletableVoicePack">@AppStrings.Common_Delete</ChromeButton>
                 }
                 else if (row.Pack is { } deletablePack && !AssetPackDependencyGuard.HasDependent(_modules, deletablePack.AssetPackId, deletablePack.Version))
                 {
@@ -82,12 +91,84 @@
         }
     </div>
 
+    @* Catalog voice packs for installed modules, so narration can be added ahead of play. *@
+    @if (_voiceOffers.Count > 0)
+    {
+        <h3 class="mws-screen-subheading">@AppStrings.ManageModules_AvailableVoicePacksHeading</h3>
+        <div class="mws-manage-modules mws-voice-pack-offers">
+            @foreach (var offer in _voiceOffers)
+            {
+                <div class="mws-module-row" @key="offer.Entry.Id">
+                    <div class="mws-module-row-info">
+                        <strong>@offer.Entry.Title</strong>
+                        <span class="mws-module-version">v@(offer.Entry.Version)</span>
+                        <span class="mws-module-version">@VoicePackLabel(offer.Module.ModuleId, offer.Entry.Languages) · @FormatSize(offer.Entry.Size)</span>
+                    </div>
+                    @switch (offer.State)
+                    {
+                        case VoicePackOfferState.Available:
+                            <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => InstallOffer(offer)">@AppStrings.StartNewGame_Download</ChromeButton>
+                            break;
+                        case VoicePackOfferState.UpdateAvailable:
+                            <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => InstallOffer(offer)">@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpdateTo, offer.Entry.Version)</ChromeButton>
+                            break;
+                        default:
+                            <span class="mws-version-warning">@string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackNeedsModule, offer.Module.Title, offer.MinModuleVersion)</span>
+                            @if (offer.ModuleUpdate is { } moduleEntry)
+                            {
+                                <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => UpdateModule(new ModuleUpdate(offer.Snapshot, moduleEntry))">@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpdateTo, moduleEntry.Version)</ChromeButton>
+                            }
+                            break;
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (_confirmingDeleteVoicePack is { } voicePackToDelete)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ManageModules_VoicePackDeleteConfirmTitle</h3>
+                <p>@AppStrings.ManageModules_VoicePackDeleteConfirmBody</p>
+                <div class="mws-dialog-actions">
+                    <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_loading" OnClick="() => ConfirmDeleteVoicePack(voicePackToDelete)">@AppStrings.Common_Delete</ChromeButton>
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _confirmingDeleteVoicePack = null">@AppStrings.Common_Cancel</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_voicePackRefusal is { } refusal)
+    {
+        <div class="mws-dialog-overlay">
+            <div class="mws-dialog mws-dialog--sm">
+                <h3>@AppStrings.ManageModules_VoicePackRefusedTitle</h3>
+                <p>@refusal.Message</p>
+                <div class="mws-dialog-actions">
+                    @if (refusal.Update is { } update)
+                    {
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="() => UpdateModule(update)">@string.Format(AppStrings.EffectiveCulture, AppStrings.StartNewGame_UpdateTo, update.Entry.Version)</ChromeButton>
+                    }
+                    <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => _voicePackRefusal = null">@AppStrings.Common_Ok</ChromeButton>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (_confirmingDeleteId is not null)
     {
         <div class="mws-dialog-overlay">
             <div class="mws-dialog mws-dialog--sm">
                 <h3>@AppStrings.ManageModules_ConfirmTitle</h3>
                 <p>@AppStrings.ManageModules_ConfirmBody</p>
+                @if (_confirmingDeleteHasVoicePacks)
+                {
+                    <label class="mws-options-row">
+                        <input type="checkbox" class="mws-delete-voice-packs" checked="@_deleteVoicePacksToo" @onchange="e => _deleteVoicePacksToo = e.Value is true" />
+                        <span>@AppStrings.ManageModules_DeleteVoicePacksToo</span>
+                    </label>
+                }
                 <div class="mws-dialog-actions">
                     <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_loading" OnClick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: false)">@AppStrings.ManageModules_DeleteModuleOnly</ChromeButton>
                     <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_loading" OnClick="() => ConfirmDelete(_confirmingDeleteId, deleteSaves: true)">@AppStrings.ManageModules_DeleteWithSaves</ChromeButton>
@@ -209,23 +290,46 @@
 
     private IReadOnlyList<InstalledModule> _modules = [];
     private IReadOnlyList<InstalledAssetPack> _assetPacks = [];
+    private IReadOnlyList<InstalledVoicePack> _voicePacks = [];
+    private IReadOnlyList<VoicePackOffer> _voiceOffers = [];
 
-    /// <summary>One installed item — a module or an asset pack, exactly one of which is set.</summary>
-    private sealed record InstalledRow(string Title, string Version, InstalledModule? Module, InstalledAssetPack? Pack)
+    /// <summary>One installed item — a module, an asset pack or a voice pack, exactly one of which is set.</summary>
+    private sealed record InstalledRow(string Title, string Version, InstalledModule? Module, InstalledAssetPack? Pack, InstalledVoicePack? VoicePack = null)
     {
         // An asset pack is keyed by version too: several versions of one pack can be installed at
         // once, one per module that pins it.
-        public string Key => Module is not null ? $"module:{Module.ModuleId}" : $"pack:{Pack!.AssetPackId}@{Pack.Version}";
+        public string Key => Module is not null ? $"module:{Module.ModuleId}"
+            : VoicePack is not null ? $"voices:{VoicePack.Manifest.Id}"
+            : $"pack:{Pack!.AssetPackId}@{Pack.Version}";
+
+        public int Group => Module is not null ? 0 : VoicePack is not null ? 1 : 2;
     }
 
-    // Every module before any asset pack, each group by name: packs are support content, so they sit
-    // below the things a player actually plays rather than interleaving with them.
+    // Modules first, then voice packs, then asset packs, each group by name: packs are support
+    // content, so they sit below the things a player actually plays rather than interleaving with them.
     private IEnumerable<InstalledRow> InstalledRows() =>
         _modules.Select(m => new InstalledRow(m.Title, m.Version, m, null))
+            .Concat(_voicePacks.Select(p => new InstalledRow(p.Manifest.Title, p.Manifest.Version, null, null, p)))
             .Concat(_assetPacks.Select(p => new InstalledRow(p.Title, p.Version, null, p)))
-            .OrderBy(r => r.Pack is null ? 0 : 1)
+            .OrderBy(r => r.Group)
             .ThenBy(r => r.Title, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(r => r.Version, StringComparer.Ordinal);
+
+    /// <summary>A refused voice pack install, with the module update that would allow it, if a source has one.</summary>
+    private sealed record VoicePackRefusalDialog(string Message, ModuleUpdate? Update);
+
+    private string VoicePackLabel(string moduleId, IEnumerable<string> languages) =>
+        string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackLabel,
+            _modules.FirstOrDefault(m => m.ModuleId == moduleId)?.Title ?? moduleId,
+            string.Join(", ", languages.Distinct(StringComparer.OrdinalIgnoreCase).Select(LanguageNames.Native)));
+
+    private static string FormatSize(long bytes) =>
+        string.Format(AppStrings.EffectiveCulture, AppStrings.Common_SizeMegabytes, bytes / (1024.0 * 1024.0));
+
+    private InstalledVoicePack? _confirmingDeleteVoicePack;
+    private VoicePackRefusalDialog? _voicePackRefusal;
+    private bool _confirmingDeleteHasVoicePacks;
+    private bool _deleteVoicePacksToo = true;
     private string? _confirmingDeleteId;
     private InstalledAssetPack? _confirmingDeleteAssetPack;
     private (byte[] Bytes, string Sha256)? _pendingAssetPackInstall;
@@ -271,11 +375,125 @@
             _modules = await ModuleStore.ListAsync();
             _assetPacks = await AssetPackStore.ListAsync();
             _appSettings = await SettingsStore.LoadAsync();
+            await ReloadVoicePacksAsync();
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private async Task ReloadVoicePacksAsync()
+    {
+        _voicePacks = await VoicePacks.ListInstalledAsync();
+        _voiceOffers = await VoicePacks.LoadOffersAsync();
+    }
+
+    private void BeginDeleteModule(InstalledModule module)
+    {
+        _confirmingDeleteId = module.ModuleId;
+        _confirmingDeleteHasVoicePacks = _voicePacks.Any(p => p.Manifest.For.ModuleId == module.ModuleId);
+        _deleteVoicePacksToo = true;
+    }
+
+    private async Task ConfirmDeleteVoicePack(InstalledVoicePack pack)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _loading = true;
+        _loadingMessage = AppStrings.Common_Loading;
+        try
+        {
+            await VoicePacks.DeleteAsync(pack.Manifest.Id);
+            Logger.LogInformation("Manage: deleted voice pack {PackId}", pack.Manifest.Id);
+            _confirmingDeleteVoicePack = null;
+            await ReloadVoicePacksAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Progress<CatalogInstallProgress> CatalogProgress() => new(p =>
+    {
+        _loadingMessage = string.Format(AppStrings.EffectiveCulture, p.Phase switch
+        {
+            CatalogInstallPhase.Downloading => AppStrings.CatalogInstall_Downloading,
+            CatalogInstallPhase.Verifying => AppStrings.CatalogInstall_Verifying,
+            _ => AppStrings.CatalogInstall_Installing,
+        }, p.Title, p.Percent);
+        StateHasChanged();
+    });
+
+    private async Task InstallOffer(VoicePackOffer offer)
+    {
+        await RunCatalogInstallAsync(offer.Entry.Title, offer.Module.ModuleId, () => VoicePacks.InstallAsync(offer, CatalogProgress()));
+    }
+
+    private async Task UpdateModule(ModuleUpdate update)
+    {
+        _voicePackRefusal = null;
+        await RunCatalogInstallAsync(update.Entry.Title, update.Entry.Id, () => VoicePacks.UpdateModuleAsync(update, CatalogProgress()));
+    }
+
+    // A failed download is reported on the page and nothing else changes; a refused pack gets the refusal dialog.
+    private async Task RunCatalogInstallAsync(string title, string moduleId, Func<Task> install)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _loading = true;
+        _loadingDone = null;
+        _loadingTotal = null;
+        _loadingMessage = AppStrings.Common_Loading;
+        _uploadError = null;
+        try
+        {
+            await install();
+            Logger.LogInformation("Manage: installed {Title} from a catalog", title);
+        }
+        catch (VoicePackRefusedException ex)
+        {
+            _voicePackRefusal = await RefusalDialogAsync(title, ex.Refusal, moduleId);
+        }
+        catch (CatalogInstallException ex)
+        {
+            Logger.LogWarning(ex, "Manage: catalog install of {Title} failed", title);
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackUploadError_Generic, ex.Message);
+        }
+        finally
+        {
+            _modules = await ModuleStore.ListAsync();
+            _assetPacks = await AssetPackStore.ListAsync();
+            await ReloadVoicePacksAsync();
+            _loading = false;
+            _busy = false;
+        }
+    }
+
+    private async Task<VoicePackRefusalDialog> RefusalDialogAsync(string packTitle, VoicePackRefusal refusal, string? moduleId)
+    {
+        if (refusal.Kind == VoicePackRefusalKind.TrackAlreadyInstalled)
+        {
+            return new VoicePackRefusalDialog(
+                string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackTrackConflictBody, packTitle, refusal.InstalledBy), null);
+        }
+
+        var module = _modules.FirstOrDefault(m => m.ModuleId == moduleId);
+        var update = module is null ? null : await VoicePacks.FindModuleUpdateAsync(module.ModuleId, refusal.ModuleVersion!);
+        return new VoicePackRefusalDialog(
+            string.Format(
+                AppStrings.EffectiveCulture,
+                update is null ? AppStrings.ManageModules_VoicePackNeedsModuleBodyNoUpdate : AppStrings.ManageModules_VoicePackNeedsModuleBody,
+                packTitle, module?.Title ?? moduleId, refusal.ModuleVersion, module?.Version),
+            update);
     }
 
     // See this method's own equivalent on StartNewGame.razor for why _loading doubles as a
@@ -293,6 +511,11 @@
         {
             var deletedModule = _modules.FirstOrDefault(m => m.ModuleId == moduleId);
             await ModuleStore.DeleteAsync(moduleId);
+
+            if (_confirmingDeleteHasVoicePacks && _deleteVoicePacksToo)
+            {
+                await VoicePacks.DeleteForModuleAsync(moduleId);
+            }
 
             if (deleteSaves)
             {
@@ -329,6 +552,8 @@
 
                 _assetPacks = await AssetPackStore.ListAsync();
             }
+
+            await ReloadVoicePacksAsync();
         }
         finally
         {
@@ -456,6 +681,7 @@
 
         var manifest = new ManifestParser().Parse(manifestYaml);
         var isAssetPack = manifest.ModuleType == "assets";
+        var isVoicePack = manifest.ModuleType == VoicePackManifestParser.PackageType;
 
         _loading = true;
         _loadingMessage = AppStrings.StartNewGame_Verifying;
@@ -494,7 +720,9 @@
             case PackageTrustDecision.Unsigned:
                 _pendingTrustPrompt = new PendingTrustPrompt(
                     bytes, manifestYaml, manifest, verification, decision,
-                    Title: isAssetPack ? AppStrings.ManageModules_UnsignedTitleAssetPack : AppStrings.ManageModules_UnsignedTitleModule,
+                    Title: isVoicePack ? AppStrings.ManageModules_UnsignedTitleVoicePack
+                        : isAssetPack ? AppStrings.ManageModules_UnsignedTitleAssetPack
+                        : AppStrings.ManageModules_UnsignedTitleModule,
                     Body: string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_UnsignedBody, manifest.Title));
                 return;
 
@@ -504,7 +732,9 @@
                     Title: AppStrings.ManageModules_UnrecognizedSignerTitle,
                     Body: string.Format(
                         AppStrings.EffectiveCulture,
-                        isAssetPack ? AppStrings.ManageModules_UnrecognizedSignerBodyAssetPack : AppStrings.ManageModules_UnrecognizedSignerBodyModule,
+                        isVoicePack ? AppStrings.ManageModules_UnrecognizedSignerBodyVoicePack
+                            : isAssetPack ? AppStrings.ManageModules_UnrecognizedSignerBodyAssetPack
+                            : AppStrings.ManageModules_UnrecognizedSignerBodyModule,
                         verification.CertificateCommonName));
                 return;
         }
@@ -548,6 +778,12 @@
         if (manifest.ModuleType == "assets")
         {
             await ProcessUploadedAssetPackAsync(bytes, manifestYaml);
+            return;
+        }
+
+        if (manifest.ModuleType == VoicePackManifestParser.PackageType)
+        {
+            await ProcessUploadedVoicePackAsync(bytes, manifestYaml);
             return;
         }
 
@@ -697,6 +933,51 @@
             default:
                 await InstallAssetPackBytesAsync(bytes, sha256);
                 break;
+        }
+    }
+
+    // A voice pack is checked against the installed module and packs before anything is unpacked.
+    // An upload may replace the installed copy of the same pack with any version: it's the player's own choice.
+    private async Task ProcessUploadedVoicePackAsync(byte[] bytes, string manifestYaml)
+    {
+        VoicePackManifest pack;
+        try
+        {
+            pack = new VoicePackManifestParser().Parse(manifestYaml);
+        }
+        catch (MwsParseException ex)
+        {
+            Logger.LogWarning(ex, "Upload: unreadable voice pack manifest");
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackUploadError_Generic, ex.Message);
+            return;
+        }
+
+        if (await VoicePacks.CheckAsync(pack) is { } refusal)
+        {
+            Logger.LogInformation("Upload: voice pack {PackId} refused ({Kind})", pack.Id, refusal.Kind);
+            _voicePackRefusal = await RefusalDialogAsync(pack.Title, refusal, pack.For.ModuleId);
+            return;
+        }
+
+        _loading = true;
+        _loadingMessage = AppStrings.StartNewGame_Installing;
+        _loadingDone = null;
+        _loadingTotal = null;
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(p => ReportProgress(p, AppStrings.StartNewGame_InstallingPercent));
+            await VoicePacks.InstallUploadAsync(bytes, progress);
+            Logger.LogInformation("Upload: installed voice pack {PackId} v{Version}", pack.Id, pack.Version);
+            await ReloadVoicePacksAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Upload: voice pack install failed");
+            _uploadError = string.Format(AppStrings.EffectiveCulture, AppStrings.ManageModules_VoicePackUploadError_Generic, ex.Message);
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 

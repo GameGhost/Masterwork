@@ -33,7 +33,8 @@ public static class BrowserHost
         services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
         services.AddScoped<IModuleStore, IndexedDbModuleStore>();
         services.AddScoped<IAssetPackStore, IndexedDbAssetPackStore>();
-        services.AddScoped<IInstalledVoicePacks, NoInstalledVoicePacks>();
+        services.AddScoped<IVoicePackStore, IndexedDbVoicePackStore>();
+        services.AddScoped<IInstalledVoicePacks>(sp => sp.GetRequiredService<IVoicePackStore>());
         services.AddScoped<NarrationService>();
         services.AddScoped<KnownLanguagesService>();
         services.AddScoped<GameSessionState>();
@@ -55,6 +56,7 @@ public static class BrowserHost
         services.AddScoped<SignatureVerifier>();
         services.AddScoped<CatalogService>();
         services.AddScoped<CatalogInstallService>();
+        services.AddScoped<VoicePackService>();
         services.AddScoped<ThumbnailCache>();
         services.AddScoped<ModuleLibrary>();
         services.AddScoped<CatalogSubscriptions>();
