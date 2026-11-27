@@ -152,6 +152,34 @@ public class VoiceSelectionTests
         Assert.Equal(("en-US", "female"), (track?.Language, track?.Id));
     }
 
+    // ── A playthrough's own voice ───────────────────────────────────────────
+
+    [Fact]
+    public void PlaythroughVoice_IsUsedWhateverTheGlobalSettingSays()
+    {
+        var settings = new AppSettings { VoiceLanguage = VoiceSelection.None };
+
+        var track = VoiceSelection.Select(new SessionVoice("CS-cz"), settings, "this.module", EnglishAndCzech);
+
+        Assert.Equal(("cs-CZ", "reader"), (track?.Language, track?.Id));
+    }
+
+    [Fact]
+    public void PlaythroughVoice_ItsOwnTrackBeatsTheRememberedOne()
+    {
+        var settings = new AppSettings { VoiceTrackPreferences = [new VoiceTrackPreference("this.module", "en-US", "male")] };
+
+        Assert.Equal("female", VoiceSelection.Select(new SessionVoice("en-US", "female"), settings, "this.module", EnglishAndCzech)?.Id);
+        Assert.Equal("male", VoiceSelection.Select(new SessionVoice("en-US"), settings, "this.module", EnglishAndCzech)?.Id);
+    }
+
+    [Fact]
+    public void PlaythroughVoice_InALanguageNoTrackHas_OrNone_PlaysNothing()
+    {
+        Assert.Null(VoiceSelection.Select(new SessionVoice("fr-CA"), new AppSettings(), "this.module", EnglishAndCzech));
+        Assert.Null(VoiceSelection.Select(SessionVoice.Off, new AppSettings(), "this.module", EnglishAndCzech));
+    }
+
     [Fact]
     public void WithTrackPreference_ReplacesOnlyThatModuleAndLanguage()
     {
@@ -214,14 +242,24 @@ public class VoiceSelectionTests
     }
 
     [Fact]
-    public void Offered_TrackIdentityAlreadyOffered_KeepsTheFirst()
+    public void Offered_PackTrackWithAModuleTracksIdentity_ReplacesItInPlace()
     {
         var offered = VoiceSelection.Offered(
-            "1.0.0", [Track("en-US", "male")], new NamedSource("module"),
-            [Pack("pack.en", "1.0.0", Track("en-US", "male"), Track("en-US", "female"))]);
+            "1.0.0", [Track("en-US", "male"), Track("cs-CZ", "reader")], new NamedSource("module"),
+            [Pack("pack.en", "1.0.0", Track("EN-us", "male"), Track("en-US", "female"))]);
 
         Assert.Equal(
-            [("male", "module"), ("female", "pack.en")],
+            [("male", "pack.en"), ("reader", "module"), ("female", "pack.en")],
             offered.Select(o => (o.Track.Id, ((NamedSource)o.Source).Name)));
+    }
+
+    [Fact]
+    public void Offered_TwoPacksWithOneTrackIdentity_KeepsTheFirstPacks()
+    {
+        var offered = VoiceSelection.Offered(
+            "1.0.0", [], new NamedSource("module"),
+            [Pack("pack.a", "1.0.0", Track("en-US", "male")), Pack("pack.b", "1.0.0", Track("en-US", "male"))]);
+
+        Assert.Equal(["pack.a"], offered.Select(o => ((NamedSource)o.Source).Name));
     }
 }

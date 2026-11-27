@@ -106,6 +106,55 @@ public class CatalogBuilderTests
         Assert.Empty(entry.Dependencies);
     }
 
+    private static string VoicePackManifestYaml(string version = "1.0.0") => $"""
+        type: 'voices'
+        id: 'test.voices.en'
+        title: 'Test Narration'
+        version: '{version}'
+        for:
+          id: 'test.module'
+          min_version: '1.2.0'
+        voices:
+          en-US:
+            - id: 'male'
+            - id: 'female'
+          en-GB:
+            - id: 'reader'
+        """;
+
+    [Fact]
+    public void Build_AVoicePackEntry_ListsItsVoiceLanguagesAndTheModuleItVoices()
+    {
+        var built = CatalogBuilder.Build(
+            "Test Source",
+            [new CatalogBuilder.PackageInput("v1.0.0/test-voices-en.mwassets", Package(VoicePackManifestYaml()))]);
+
+        var entry = Assert.Single(built.Catalog.Entries);
+        Assert.Equal("voices", entry.Type);
+        Assert.Equal("test.voices.en", entry.Id);
+        Assert.Equal("Test Narration", entry.Title);
+        Assert.Equal(["en-US", "en-GB"], entry.Languages);
+        Assert.Equal(new VoicePackTarget { ModuleId = "test.module", MinVersion = "1.2.0" }, entry.For);
+        Assert.Null(entry.Players);
+        Assert.Null(entry.Thumbnail);
+        Assert.Empty(entry.Dependencies);
+    }
+
+    [Fact]
+    public void Build_ListsOnlyTheLatestVersionOfEachPackage()
+    {
+        var built = CatalogBuilder.Build("Test Source",
+        [
+            new CatalogBuilder.PackageInput("v1.2.0/test-voices-en.mwassets", Package(VoicePackManifestYaml("1.2.0"))),
+            new CatalogBuilder.PackageInput("v1.10.0/test-voices-en.mwassets", Package(VoicePackManifestYaml("1.10.0"))),
+            new CatalogBuilder.PackageInput("v1.9.0/test-voices-en.mwassets", Package(VoicePackManifestYaml("1.9.0"))),
+        ]);
+
+        var entry = Assert.Single(built.Catalog.Entries);
+        Assert.Equal("1.10.0", entry.Version);
+        Assert.Equal("v1.10.0/test-voices-en.mwassets", entry.Path);
+    }
+
     [Fact]
     public void Build_ProducesACatalogThatParsesBack()
     {
@@ -113,12 +162,14 @@ public class CatalogBuilderTests
         [
             new CatalogBuilder.PackageInput("v1.2.3/test.mwm", Package(ModuleManifestYaml)),
             new CatalogBuilder.PackageInput("v0.1.0/test.mwassets", Package(AssetPackManifestYaml)),
+            new CatalogBuilder.PackageInput("v1.0.0/test-voices-en.mwassets", Package(VoicePackManifestYaml())),
         ]);
 
         var reparsed = CatalogParser.Parse(CatalogParser.Write(built.Catalog));
 
         Assert.Equal(CatalogFormatVersion.Current, reparsed.Format);
-        Assert.Equal(2, reparsed.Entries.Count);
+        Assert.Equal(3, reparsed.Entries.Count);
+        Assert.Equal("test.module", reparsed.VoicePacks.Single().For!.ModuleId);
     }
 
     [Fact]

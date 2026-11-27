@@ -1,4 +1,4 @@
-using Masterwork.App.Shared.Services;
+using Masterwork.ModuleFormat;
 
 namespace Masterwork.Tests;
 

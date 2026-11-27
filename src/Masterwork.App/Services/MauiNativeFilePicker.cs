@@ -59,6 +59,7 @@ public sealed class MauiNativeFilePicker : INativeFilePicker
         {
             picker.FileTypeFilter.Add(".mwm");
             picker.FileTypeFilter.Add(".mwassets");
+            picker.FileTypeFilter.Add(".mwvoices");
         }
         else
         {

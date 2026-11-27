@@ -262,6 +262,9 @@ names) and written to `.catalog/thumbnails/` — entries reference them by a pat
 catalog's own directory, so they must be committed along with it. Asset packs get none: they're never
 browsed or installed directly, only pulled in as a module's dependency.
 
+Voice packs (`.mwvoices`) go on the same command line as everything else. The catalog lists one
+version of each package, so passing several versions of one pack (or module) keeps only the latest.
+
 **Pushing the catalog publishes it.** Players never read it from GitHub: each flavor's site serves its
 content from a copy deployed beside it (`https://myfatherswork.masterworkapp.com/api/content/...`).
 The push runs Masterwork-Modules' `content-published` workflow, which sends a repository dispatch

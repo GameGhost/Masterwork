@@ -1,6 +1,6 @@
 using NuGet.Versioning;
 
-namespace Masterwork.App.Shared.Services;
+namespace Masterwork.ModuleFormat;
 
 /// <summary>
 /// Module version comparison, backed by <see cref="NuGetVersion"/> (the NuGet.Versioning package)

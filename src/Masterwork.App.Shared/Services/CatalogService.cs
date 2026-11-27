@@ -51,6 +51,14 @@ public sealed class CatalogService(
     // start. Tracking it here rather than asking a caller to say so means nothing can forget to.
     private bool _refreshedThisSession;
 
+    private readonly HashSet<string> _unreachable = [];
+
+    /// <summary>
+    /// Whether <paramref name="source"/> answered the last time this session tried to fetch its
+    /// catalog, which stands in for being online. <see langword="true"/> until a fetch fails.
+    /// </summary>
+    public bool IsReachable(ContentSource source) => !_unreachable.Contains(source.CatalogUrl);
+
     /// <summary>
     /// Refreshes if the policy says it's due, otherwise returns what's cached. A failed refresh
     /// falls back to the cache rather than surfacing as an error: a catalog the player already has
@@ -106,10 +114,48 @@ public sealed class CatalogService(
         return cached is null ? null : await ToSnapshotAsync(source, cached);
     }
 
+    /// <summary>
+    /// The cached catalog of <paramref name="primary"/> and of every source the player added, in
+    /// that order, with no network access. A source with nothing cached, a catalog that fails
+    /// verification, or one that can't be read is left out.
+    /// </summary>
+    public async Task<IReadOnlyList<CatalogSnapshot>> GetCachedSubscribedAsync(ContentSource primary)
+    {
+        var settings = await settingsStore.LoadAsync();
+        var snapshots = new List<CatalogSnapshot>();
+        foreach (var source in settings.CustomCatalogSources.Select(ContentSource.ForAddedSource).Prepend(primary))
+        {
+            try
+            {
+                if (await GetCachedAsync(source) is { Decision: not PackageTrustDecision.Blocked } snapshot)
+                {
+                    snapshots.Add(snapshot);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not read the cached catalog of {Url}", source.CatalogUrl);
+            }
+        }
+
+        return snapshots;
+    }
+
     /// <summary>Fetches and verifies unconditionally, updating the cache on success.</summary>
     public async Task<CatalogSnapshot> FetchAsync(ContentSource source, CancellationToken cancellationToken = default)
     {
-        var catalogBytes = await downloader.GetAsync(source.CatalogUrl, progress: null, cancellationToken);
+        byte[] catalogBytes;
+        try
+        {
+            catalogBytes = await downloader.GetAsync(source.CatalogUrl, progress: null, cancellationToken);
+        }
+        catch (ContentDownloadException)
+        {
+            _unreachable.Add(source.CatalogUrl);
+            throw;
+        }
+
+        _unreachable.Remove(source.CatalogUrl);
 
         // A source serving no signature at all is a fact to report, not a failure to fetch — the
         // trust decision below is what decides whether it's usable.
@@ -125,7 +171,7 @@ public sealed class CatalogService(
 
         // Parsed only after the bytes are in hand, and always from the same bytes the signature
         // covers — re-serializing before verifying would break the whole point of signing bytes.
-        var catalog = CatalogParser.Parse(catalogBytes);
+        var catalog = Parse(source, catalogBytes);
         var verification = await verifier.VerifyDetachedAsync(catalogBytes, signatureBytes);
 
         await WriteCacheAsync(source, new CachedCatalog(
@@ -167,10 +213,22 @@ public sealed class CatalogService(
 
         return new CatalogSnapshot(
             source,
-            CatalogParser.Parse(catalogBytes),
+            Parse(source, catalogBytes),
             verification,
             await DecideAsync(verification),
             cached.FetchedAt);
+    }
+
+    private CatalogDocument Parse(ContentSource source, byte[] catalogBytes)
+    {
+        var warnings = new List<string>();
+        var catalog = CatalogParser.Parse(catalogBytes, warnings);
+        foreach (var warning in warnings)
+        {
+            logger.LogWarning("Catalog {Url}: {Warning}", source.CatalogUrl, warning);
+        }
+
+        return catalog;
     }
 
     private static string CacheKey(ContentSource source) => CacheKeyPrefix + Convert.ToHexString(

@@ -28,7 +28,7 @@ public sealed record CatalogThumbnail(string Path, string Hash);
 /// </summary>
 public sealed record CatalogEntry
 {
-    /// <summary><c>"module"</c> or <c>"assets"</c> — the same vocabulary <see cref="ModuleManifest.ModuleType"/> uses.</summary>
+    /// <summary><c>"module"</c>, <c>"assets"</c> or <c>"voices"</c> — the same vocabulary a package's <c>type:</c> uses.</summary>
     public required string Type { get; init; }
 
     /// <summary>The package's own <see cref="ModuleManifest.Id"/>.</summary>
@@ -61,7 +61,7 @@ public sealed record CatalogEntry
     /// <summary>Human-readable description.</summary>
     public string? Description { get; init; }
 
-    /// <summary>Content languages the package ships (<see cref="ModuleManifest.Languages"/>).</summary>
+    /// <summary>Text languages a module or asset pack ships (<see cref="ModuleManifest.Languages"/>); for a voice pack, its voice languages.</summary>
     public IReadOnlyList<string> Languages { get; init; } = [];
 
     /// <summary>Player-count range, if the package declares one. Always absent for an asset pack.</summary>
@@ -82,6 +82,9 @@ public sealed record CatalogEntry
 
     /// <summary>Asset packs this entry needs installed, by id and exact version — the same declarations the package's own manifest carries.</summary>
     public IReadOnlyList<ModuleDependency> Dependencies { get; init; } = [];
+
+    /// <summary>The module a voice pack voices (<see cref="VoicePackManifest.For"/>). Set only for a <c>voices</c> entry.</summary>
+    public VoicePackTarget? For { get; init; }
 }
 
 /// <summary>
@@ -112,6 +115,10 @@ public sealed record CatalogDocument
     /// </summary>
     [JsonIgnore]
     public IEnumerable<CatalogEntry> Modules => Entries.Where(e => e.Type == "module");
+
+    /// <summary>The voice packs: optional narration for one module each, installed with it or from module management.</summary>
+    [JsonIgnore]
+    public IEnumerable<CatalogEntry> VoicePacks => Entries.Where(e => e.Type == VoicePackManifestParser.PackageType);
 }
 
 /// <summary>Rules for <see cref="CatalogEntry.Path"/>, shared by the parser and whatever resolves a path against a base.</summary>

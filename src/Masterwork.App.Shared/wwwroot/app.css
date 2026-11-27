@@ -631,6 +631,12 @@ body {
     right: 1rem;
 }
 
+/* The voice dropdown takes the opposite corner from the text language dropdown. */
+.mws-module-language.mws-module-voice {
+    right: auto;
+    left: 1rem;
+}
+
 .mws-save-row {
     display: flex;
     align-items: center;
@@ -686,6 +692,16 @@ body {
 .mws-version-warning {
     font-size: 0.85em;
     color: #b32121;
+}
+
+.mws-screen-subheading {
+    margin: 1rem 0 0.5rem;
+    font-size: 1em;
+}
+
+.mws-options-status {
+    font-size: 0.85em;
+    margin: 0.25rem 0;
 }
 
 .mws-dialog-overlay {

@@ -1,0 +1,180 @@
+@namespace Masterwork.App.Shared.Chrome
+@using Masterwork.App.Shared.Resources
+@using Masterwork.App.Shared.Services
+@using Microsoft.Extensions.Logging
+@inject VoicePackService VoicePacks
+@inject ILogger<VoicePackPrompt> Logger
+
+@{ AppSettingsApplier.ReassertCulture(); }
+@* Asks before playing in a voice language whose pack isn't installed, or has an update. Opened by ConfirmAsync. *@
+@if (_need is { } need)
+{
+    <div class="mws-dialog-overlay">
+        <div class="mws-dialog mws-dialog--sm mws-voice-pack-prompt">
+            <h3>@Title(need)</h3>
+            <p>@Body(need)</p>
+            @if (_progress is { } progress)
+            {
+                <p class="mws-options-status">@progress</p>
+            }
+            @if (_failed)
+            {
+                <p class="mws-version-warning">@AppStrings.VoicePackPrompt_Failed</p>
+            }
+            <div class="mws-dialog-actions">
+                @switch (need.Kind)
+                {
+                    case VoicePackNeedKind.Missing:
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="Install">@AppStrings.VoicePackPrompt_Download</ChromeButton>
+                        @if (InGame)
+                        {
+                            <ChromeButton class="mws-btn-sm style-btn-brown" disabled="@_busy" OnClick="() => Finish(Outcome.Back)">@AppStrings.Common_Cancel</ChromeButton>
+                        }
+                        else
+                        {
+                            <ChromeButton class="mws-btn-sm style-btn-brown" disabled="@_busy" OnClick="() => Finish(Outcome.WithoutVoice)">@AppStrings.VoicePackPrompt_PlayWithout</ChromeButton>
+                            <ChromeButton class="mws-btn-sm style-btn-red" disabled="@_busy" OnClick="() => Finish(Outcome.Back)">@AppStrings.Common_Back</ChromeButton>
+                        }
+                        break;
+
+                    case VoicePackNeedKind.UpdateAvailable:
+                        <ChromeButton class="mws-btn-sm style-btn-green" disabled="@_busy" OnClick="Install">@AppStrings.VoicePackPrompt_Update</ChromeButton>
+                        <ChromeButton class="mws-btn-sm style-btn-brown" disabled="@_busy" OnClick="() => Finish(Outcome.WithVoice)">@AppStrings.VoicePackPrompt_NotNow</ChromeButton>
+                        break;
+
+                    default:
+                        @if (InGame)
+                        {
+                            <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => Finish(Outcome.Back)">@AppStrings.Common_Ok</ChromeButton>
+                        }
+                        else
+                        {
+                            <ChromeButton class="mws-btn-sm style-btn-brown" OnClick="() => Finish(Outcome.WithoutVoice)">@AppStrings.VoicePackPrompt_PlayWithout</ChromeButton>
+                            <ChromeButton class="mws-btn-sm style-btn-red" OnClick="() => Finish(Outcome.Back)">@AppStrings.Common_Back</ChromeButton>
+                        }
+                        break;
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum Outcome { WithVoice, WithoutVoice, Back }
+
+    /// <summary>
+    /// In game, a missing pack offers Download or Cancel. Otherwise (starting or resuming a game) it
+    /// offers Download, Play without narration, or Back.
+    /// </summary>
+    [Parameter]
+    public bool InGame { get; set; }
+
+    private VoicePackNeed? _need;
+    private string _language = "";
+    private string _moduleTitle = "";
+    private TaskCompletionSource<Outcome>? _outcome;
+    private bool _busy;
+    private bool _failed;
+    private string? _progress;
+
+    /// <summary>
+    /// Checks what playing <paramref name="moduleId"/> narrated in <paramref name="voice"/> needs and,
+    /// when it needs something, asks. Returns the voice to play with: <paramref name="voice"/> (its
+    /// pack downloaded, current, or its update declined or failed), <see cref="SessionVoice.Off"/> to
+    /// play without narration, or <see langword="null"/> to go back. Without <paramref name="moduleTitle"/>,
+    /// the module is named as the catalog lists it.
+    /// </summary>
+    public async Task<SessionVoice?> ConfirmAsync(string moduleId, string? moduleTitle, SessionVoice voice)
+    {
+        if (voice.Language is not { } language)
+        {
+            return voice;
+        }
+
+        var need = await VoicePacks.CheckVoiceAsync(moduleId, language);
+        if (need.Kind == VoicePackNeedKind.Ready)
+        {
+            return voice;
+        }
+
+        _need = need;
+        _language = LanguageNames.Native(language);
+        _moduleTitle = moduleTitle ?? need.Offer?.Module.Title ?? moduleId;
+        _failed = false;
+        _outcome = new TaskCompletionSource<Outcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        StateHasChanged();
+
+        var outcome = await _outcome.Task;
+        _need = null;
+        StateHasChanged();
+        return outcome switch
+        {
+            Outcome.WithVoice => voice,
+            Outcome.WithoutVoice => SessionVoice.Off,
+            _ => null,
+        };
+    }
+
+    private string Title(VoicePackNeed need) => need.Kind switch
+    {
+        VoicePackNeedKind.Missing => AppStrings.VoicePackPrompt_MissingTitle,
+        VoicePackNeedKind.UpdateAvailable => AppStrings.VoicePackPrompt_UpdateTitle,
+        _ => AppStrings.VoicePackPrompt_UnavailableTitle,
+    };
+
+    private string Body(VoicePackNeed need) => need switch
+    {
+        { Kind: VoicePackNeedKind.Missing, Offer: { } offer } =>
+            Format(AppStrings.VoicePackPrompt_MissingBody, _language, _moduleTitle, VoicePackService.FormatSize(offer.Entry.Size)),
+        { Kind: VoicePackNeedKind.UpdateAvailable, Offer: { } offer } =>
+            Format(AppStrings.VoicePackPrompt_UpdateBody, _language, _moduleTitle, VoicePackService.FormatSize(offer.Entry.Size)),
+        { Offer: { State: VoicePackOfferState.NeedsModuleUpdate } offer } =>
+            Format(AppStrings.VoicePackPrompt_NeedsModuleBody, _language, _moduleTitle, offer.MinModuleVersion),
+        _ => Format(AppStrings.VoicePackPrompt_UnavailableBody, _language, _moduleTitle),
+    };
+
+    private static string Format(string format, params object[] args) => string.Format(AppStrings.EffectiveCulture, format, args);
+
+    // A failed download of a missing pack stays open to try again or choose; a failed update plays
+    // with the installed pack as it is.
+    private async Task Install()
+    {
+        if (_busy || _need is not { Offer: { } offer } need)
+        {
+            return;
+        }
+
+        _busy = true;
+        _failed = false;
+        var progress = new Progress<CatalogInstallProgress>(p =>
+        {
+            _progress = p.Message;
+            StateHasChanged();
+        });
+
+        try
+        {
+            await VoicePacks.InstallAsync(offer, progress);
+            Finish(Outcome.WithVoice);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Voice pack {PackId} not installed", offer.Entry.Id);
+            if (need.Kind == VoicePackNeedKind.UpdateAvailable)
+            {
+                Finish(Outcome.WithVoice);
+            }
+            else
+            {
+                _failed = true;
+            }
+        }
+        finally
+        {
+            _busy = false;
+            _progress = null;
+        }
+    }
+
+    private void Finish(Outcome outcome) => _outcome?.TrySetResult(outcome);
+}

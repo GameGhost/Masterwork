@@ -36,7 +36,6 @@ public sealed class KnownLanguagesService(
     IModuleStore moduleStore,
     IInstalledVoicePacks voicePacks,
     CatalogService catalog,
-    IAppSettingsStore settingsStore,
     ContentSource primary,
     ILogger<KnownLanguagesService>? logger = null)
 {
@@ -45,22 +44,7 @@ public sealed class KnownLanguagesService(
     /// <summary>The languages known right now.</summary>
     public async Task<KnownLanguages> LoadAsync()
     {
-        var settings = await settingsStore.LoadAsync();
-        var entries = new List<CatalogEntry>();
-        foreach (var source in settings.CustomCatalogSources.Select(ContentSource.ForAddedSource).Prepend(primary))
-        {
-            try
-            {
-                if (await catalog.GetCachedAsync(source) is { Decision: not PackageTrustDecision.Blocked } snapshot)
-                {
-                    entries.AddRange(snapshot.Catalog.Entries);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not read the cached catalog of {Url}; its languages aren't listed", source.CatalogUrl);
-            }
-        }
+        var entries = (await catalog.GetCachedSubscribedAsync(primary)).SelectMany(s => s.Catalog.Entries);
 
         IReadOnlyList<InstalledVoicePack> packs;
         try

@@ -20,6 +20,7 @@
 @inject CatalogInstallService Installer
 @inject ThumbnailCache Thumbnails
 @inject ContentSource Source
+@inject VoicePackService VoicePacks
 
 @{ AppSettingsApplier.ReassertCulture(); }
 <PageTitle>@AppStrings.StartNewGame_PageTitle</PageTitle>
@@ -96,6 +97,17 @@
                                             <option value="@lang">@LanguageNames.Native(lang)</option>
                                         }
                                     </select>
+                                    @if (_voiceLanguages.Count > 0)
+                                    {
+                                        <select class="mws-module-language mws-module-voice" value="@(_selectedVoice ?? VoiceSelection.None)" title="@AppStrings.OptionsDialog_VoiceLanguage"
+                                                aria-label="@AppStrings.OptionsDialog_VoiceLanguage" @onchange="OnVoiceChanged">
+                                            <option value="@VoiceSelection.None">@AppStrings.OptionsDialog_VoiceNone</option>
+                                            @foreach (var lang in _voiceLanguages)
+                                            {
+                                                <option value="@lang">@LanguageNames.Native(lang)</option>
+                                            }
+                                        </select>
+                                    }
                                     <ChromeButton class="mws-scenario-play-button" disabled="@_busy" OnClick="() => Play(installed)">
                                         <span class="mws-visually-hidden">@AppStrings.StartNewGame_Play</span>
                                     </ChromeButton>
@@ -148,6 +160,7 @@
                     </div>
                 }
 
+                <VoicePackPrompt @ref="_voicePrompt" />
                 <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
             </div>
         </ChildContent>
@@ -166,6 +179,9 @@
     private string? _selectedId;
     private LibraryEntry? _selected => _entries.FirstOrDefault(e => e.Id == _selectedId);
     private string? _selectedLanguage;
+    private IReadOnlyList<string> _voiceLanguages = [];
+    private string? _selectedVoice;
+    private VoicePackPrompt? _voicePrompt;
     private InstalledModule? _conflictModule;
     private SaveEntry? _conflictSave;
     private ErrorBoundary? _errorBoundary;
@@ -274,7 +290,7 @@
         return next >= 0 && next < _entries.Count;
     }
 
-    private void StepCarousel(int direction)
+    private async Task StepCarousel(int direction)
     {
         var next = SelectedIndex() + direction;
         if (next < 0 || next >= _entries.Count)
@@ -282,7 +298,7 @@
             return;
         }
 
-        SelectModule(_entries[next].Id);
+        await SelectModule(_entries[next].Id);
     }
 
     private void Recover()
@@ -292,12 +308,44 @@
 
     // Resets the language choice every time the selected module changes (see
     // VoiceSelection.SelectTextLanguage) — never carries a previous module's language selection over.
-    private void SelectModule(string moduleId)
+    private async Task SelectModule(string moduleId)
     {
         _selectedId = moduleId;
         _selectedLanguage = _selected?.Installed is { } module
             ? DefaultLanguageFor(module, _appSettings)
             : null;
+        await LoadVoiceChoicesAsync();
+    }
+
+    // The voice languages installed or offered for the selected module, with the one the global
+    // setting picks for the chosen text language preselected.
+    private async Task LoadVoiceChoicesAsync()
+    {
+        _voiceLanguages = [];
+        _selectedVoice = null;
+        if (_selected?.Installed is not { } module)
+        {
+            return;
+        }
+
+        var languages = await VoicePacks.VoiceLanguagesAsync(module.ModuleId);
+        if (_selected?.Installed?.ModuleId != module.ModuleId)
+        {
+            return;
+        }
+
+        _voiceLanguages = [.. languages.OrderBy(LanguageNames.Native, StringComparer.CurrentCultureIgnoreCase)];
+        PreselectVoice(module);
+    }
+
+    private void PreselectVoice(InstalledModule module) =>
+        _selectedVoice = VoiceSelection.SelectVoiceLanguage(
+            _appSettings.VoiceLanguage, _selectedLanguage, _appSettings.UiLocale, module.DefaultLocale, _voiceLanguages);
+
+    private void OnVoiceChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        _selectedVoice = string.IsNullOrEmpty(value) || value == VoiceSelection.None ? null : value;
     }
 
     // An installed module's thumbnail comes out of its own bundle; one that's only published has to
@@ -332,7 +380,7 @@
 
         var progress = new Progress<CatalogInstallProgress>(p =>
         {
-            _loadingMessage = string.Format(AppStrings.EffectiveCulture, InstallPhaseFormat(p.Phase), p.Title, p.Percent);
+            _loadingMessage = p.Message;
             StateHasChanged();
         });
 
@@ -344,6 +392,7 @@
             // Reloaded rather than patched: the install may also have pulled in an asset pack, and
             // the entry's own state has to move from Available/UpdateAvailable to Installed.
             _entries = (await Library.LoadAsync(Source)).Entries;
+            await SelectModule(catalogEntry.Id);
         }
         catch (CatalogInstallException ex)
         {
@@ -357,17 +406,18 @@
         }
     }
 
-    private static string InstallPhaseFormat(CatalogInstallPhase phase) => phase switch
-    {
-        CatalogInstallPhase.Downloading => AppStrings.CatalogInstall_Downloading,
-        CatalogInstallPhase.Verifying => AppStrings.CatalogInstall_Verifying,
-        _ => AppStrings.CatalogInstall_Installing,
-    };
-
     private static string DefaultLanguageFor(InstalledModule module, AppSettings settings) =>
         VoiceSelection.SelectTextLanguage(module.AvailableLanguages, settings.PreferredModuleLanguage, settings.UiLocale, module.DefaultLocale);
 
-    private void OnLanguageChanged(ChangeEventArgs e) => _selectedLanguage = e.Value?.ToString();
+    // Best match and "same as module" follow the text language, so the voice is preselected again.
+    private void OnLanguageChanged(ChangeEventArgs e)
+    {
+        _selectedLanguage = e.Value?.ToString();
+        if (_selected?.Installed is { } module)
+        {
+            PreselectVoice(module);
+        }
+    }
 
     // Shared by the resume/asset-preparation phases, both of which report a real (done, total)
     // rather than showing an indeterminate spinner — each just plugs in its own message format.
@@ -478,6 +528,15 @@
                 return;
             }
 
+            // The playthrough keeps its own voice language, even when played without narration
+            // for now, so resuming asks again while its pack is missing. A save made before voice
+            // languages were saved has none, and narration picks one from the settings.
+            var voice = saveEntry.Voice;
+            if (voice is not null && await _voicePrompt!.ConfirmAsync(module.ModuleId, module.Title, voice) is null)
+            {
+                return;
+            }
+
             // Resuming always uses the save's own recorded language, not whatever's currently
             // picked in the dropdown — the save state is what decides, per the "preserved in the
             // save state" rule.
@@ -490,7 +549,7 @@
                 var loaded = await ModuleStore.LoadAsync(module.ModuleId, saveEntry.Language);
                 loaded = await PreloadAssetsAsync(loaded);
                 var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
-                State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session);
+                State.Start(module.ModuleId, module.Version, saveEntry.Language, loaded, session, voice);
                 await StyleInjector.ApplyAsync(loaded.StyleCss);
                 // See MainLayout.SyncThemeMusicAsync's remarks — stopped explicitly rather than
                 // waiting for its own route-change handler to catch up a tick later.
@@ -555,6 +614,11 @@
 
     private async Task StartFreshAsync(InstalledModule module, string? language)
     {
+        if (await _voicePrompt!.ConfirmAsync(module.ModuleId, module.Title, new SessionVoice(_selectedVoice)) is not { } voice)
+        {
+            return;
+        }
+
         _loading = true;
         _loadingMessage = AppStrings.Common_Loading;
         _loadingDone = null;
@@ -564,7 +628,7 @@
             var loaded = await ModuleStore.LoadAsync(module.ModuleId, language);
             loaded = await PreloadAssetsAsync(loaded);
             var session = new GameSession(loaded.Module, masterSeed: Random.Shared.NextInt64(), logger: GameSessionLogger);
-            State.Start(module.ModuleId, module.Version, language, loaded, session);
+            State.Start(module.ModuleId, module.Version, language, loaded, session, voice);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
             // See MainLayout.SyncThemeMusicAsync's remarks — stopped explicitly rather than waiting
             // for its own route-change handler to catch up a tick later.

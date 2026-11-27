@@ -147,12 +147,47 @@ public class CatalogTests
     }
 
     [Fact]
-    public void Parse_UnknownEntryType_IsRejected()
+    public void Parse_UnknownEntryType_IsSkipped_AndTheKnownEntriesStillLoad()
     {
-        var json = Json(MinimalJson(ValidEntryBody.Replace("\"module\"", "\"executable\"")));
+        var json = Json($$"""
+            {
+              "format": "{{CatalogFormatVersion.Current}}",
+              "title": "Test Source",
+              "entries": [
+                { "type": "hologram", "id": "future.thing", "title": "From a newer app", "version": "9.0.0", "path": "../anywhere", "sha256": "not-a-hash" },
+                {{{ValidEntryBody}}}
+              ]
+            }
+            """);
+        var warnings = new List<string>();
 
-        var ex = Assert.Throws<CatalogParseException>(() => CatalogParser.Parse(json));
-        Assert.Contains("executable", ex.Message);
+        var parsed = CatalogParser.Parse(json, warnings);
+
+        Assert.Equal("test.module", Assert.Single(parsed.Entries).Id);
+        Assert.Contains("hologram", Assert.Single(warnings));
+    }
+
+    [Fact]
+    public void Parse_VoicePackEntry_KeepsTheModuleItVoices()
+    {
+        var json = Json(MinimalJson(ValidEntryBody.Replace("\"module\"", "\"voices\"")
+            + """, "languages": ["en-US"], "for": { "module_id": "test.module", "min_version": "1.0.0" }"""));
+
+        var entry = Assert.Single(CatalogParser.Parse(json).Entries);
+
+        Assert.Equal("voices", entry.Type);
+        Assert.Equal(new VoicePackTarget { ModuleId = "test.module", MinVersion = "1.0.0" }, entry.For);
+        Assert.Equal(["en-US"], entry.Languages);
+    }
+
+    [Fact]
+    public void Parse_VoicePackEntryWithoutFor_IsSkipped()
+    {
+        var json = Json(MinimalJson(ValidEntryBody.Replace("\"module\"", "\"voices\"")));
+        var warnings = new List<string>();
+
+        Assert.Empty(CatalogParser.Parse(json, warnings).Entries);
+        Assert.Single(warnings);
     }
 
     [Fact]

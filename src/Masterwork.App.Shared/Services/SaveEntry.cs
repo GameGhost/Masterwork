@@ -7,6 +7,7 @@ namespace Masterwork.App.Shared.Services;
 /// while playing; named saves are created only via the in-game "Save and Quit" flow and are never
 /// touched automatically again.
 /// </summary>
+/// <param name="Voice">The playthrough's voice, or <see langword="null"/> for a save made before voices were saved.</param>
 public sealed record SaveEntry(
     string Id,
     string ModuleId,
@@ -15,5 +16,6 @@ public sealed record SaveEntry(
     string? DisplayName,
     string? LastStateLabel,
     DateTimeOffset LastPlayedUtc,
-    string? Language
+    string? Language,
+    SessionVoice? Voice = null
 );

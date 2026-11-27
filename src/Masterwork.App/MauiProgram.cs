@@ -39,7 +39,8 @@ public static class MauiProgram
         builder.Services.AddScoped<IFormattedTextExpander, FormattedTextExpander>();
         builder.Services.AddScoped<IModuleStore, FileModuleStore>();
         builder.Services.AddScoped<IAssetPackStore, FileAssetPackStore>();
-        builder.Services.AddScoped<IInstalledVoicePacks, NoInstalledVoicePacks>();
+        builder.Services.AddScoped<IVoicePackStore, FileVoicePackStore>();
+        builder.Services.AddScoped<IInstalledVoicePacks>(sp => sp.GetRequiredService<IVoicePackStore>());
         builder.Services.AddScoped<NarrationService>();
         builder.Services.AddScoped<KnownLanguagesService>();
         builder.Services.AddScoped<GameSessionState>();
@@ -63,6 +64,7 @@ public static class MauiProgram
         builder.Services.AddScoped<SignatureVerifier>();
         builder.Services.AddScoped<CatalogService>();
         builder.Services.AddScoped<CatalogInstallService>();
+        builder.Services.AddScoped<VoicePackService>();
         builder.Services.AddScoped<ThumbnailCache>();
         builder.Services.AddScoped<ModuleLibrary>();
         builder.Services.AddScoped<CatalogSubscriptions>();
