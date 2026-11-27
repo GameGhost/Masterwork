@@ -51,6 +51,14 @@ public sealed class CatalogService(
     // start. Tracking it here rather than asking a caller to say so means nothing can forget to.
     private bool _refreshedThisSession;
 
+    private readonly HashSet<string> _unreachable = [];
+
+    /// <summary>
+    /// Whether <paramref name="source"/> answered the last time this session tried to fetch its
+    /// catalog, which stands in for being online. <see langword="true"/> until a fetch fails.
+    /// </summary>
+    public bool IsReachable(ContentSource source) => !_unreachable.Contains(source.CatalogUrl);
+
     /// <summary>
     /// Refreshes if the policy says it's due, otherwise returns what's cached. A failed refresh
     /// falls back to the cache rather than surfacing as an error: a catalog the player already has
@@ -136,7 +144,18 @@ public sealed class CatalogService(
     /// <summary>Fetches and verifies unconditionally, updating the cache on success.</summary>
     public async Task<CatalogSnapshot> FetchAsync(ContentSource source, CancellationToken cancellationToken = default)
     {
-        var catalogBytes = await downloader.GetAsync(source.CatalogUrl, progress: null, cancellationToken);
+        byte[] catalogBytes;
+        try
+        {
+            catalogBytes = await downloader.GetAsync(source.CatalogUrl, progress: null, cancellationToken);
+        }
+        catch (ContentDownloadException)
+        {
+            _unreachable.Add(source.CatalogUrl);
+            throw;
+        }
+
+        _unreachable.Remove(source.CatalogUrl);
 
         // A source serving no signature at all is a fact to report, not a failure to fetch — the
         // trust decision below is what decides whether it's usable.

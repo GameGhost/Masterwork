@@ -19,5 +19,6 @@ public sealed record SaveExport(
     string? LastStateLabel,
     DateTimeOffset LastPlayedUtc,
     string? Language,
-    JsonElement Session
+    JsonElement Session,
+    SessionVoice? Voice = null
 );

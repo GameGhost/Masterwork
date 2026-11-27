@@ -214,6 +214,22 @@ public class CatalogServiceTests
     }
 
     [Fact]
+    public async Task ASourceIsUnreachable_OnlyWhileItsLastFetchFailed()
+    {
+        var (service, downloader, _) = Build();
+        downloader.Files[Source.CatalogUrl] = CatalogBytes();
+        Assert.True(service.IsReachable(Source));
+
+        downloader.Offline = true;
+        await service.RefreshIfDueAsync(Source, CatalogRefreshTrigger.ColdStart);
+        Assert.False(service.IsReachable(Source));
+
+        downloader.Offline = false;
+        await service.RefreshIfDueAsync(Source, CatalogRefreshTrigger.ColdStart);
+        Assert.True(service.IsReachable(Source));
+    }
+
+    [Fact]
     public async Task RefreshIfDue_NoCacheAndNoNetwork_ReturnsNull()
     {
         var (service, downloader, _) = Build();

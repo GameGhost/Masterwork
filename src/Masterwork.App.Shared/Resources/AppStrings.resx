@@ -249,13 +249,20 @@
   <data name="OptionsDialog_VoiceBestMatch" xml:space="preserve"><value>Best match</value></data>
   <data name="OptionsDialog_VoiceSameAsModule" xml:space="preserve"><value>Same as module</value></data>
   <data name="OptionsDialog_VoiceNone" xml:space="preserve"><value>None</value></data>
-  <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Spoken narration only, never music or sound effects. Best match: the module language, else the app language, else the module's default language, whichever has narration. Same as module: the module language only. None: no narration. A specific language: narration in that language only.</value></data>
+  <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Preselects the narration for a new game; each game keeps its own. Spoken narration only, never music or sound effects. Best match: the module language, else the app language, else the module's default language, whichever has narration. Same as module: the module language only. None: no narration. A specific language: narration in that language only.</value></data>
   <data name="OptionsDialog_VoiceTrack" xml:space="preserve"><value>Voice</value></data>
-  <data name="OptionsDialog_VoicePackAvailable" xml:space="preserve"><value>Narration in {0} isn't downloaded yet.</value></data>
-  <data name="OptionsDialog_VoicePackDownload" xml:space="preserve"><value>Download ({0})</value></data>
-  <data name="OptionsDialog_VoicePackDownloaded" xml:space="preserve"><value>Narration downloaded.</value></data>
-  <data name="OptionsDialog_VoicePackFailed" xml:space="preserve"><value>Couldn't download the narration. You can keep playing and try again later.</value></data>
-  <data name="OptionsDialog_VoicePackNeedsModule" xml:space="preserve"><value>Narration in {0} needs {1} v{2} or later. Update it from Manage Modules.</value></data>
+  <data name="VoicePackPrompt_MissingTitle" xml:space="preserve"><value>Download narration?</value></data>
+  <data name="VoicePackPrompt_MissingBody" xml:space="preserve"><value>Narration in {0} for {1} comes in a voice pack ({2}).</value></data>
+  <data name="VoicePackPrompt_UnavailableTitle" xml:space="preserve"><value>Narration not installed</value></data>
+  <data name="VoicePackPrompt_UnavailableBody" xml:space="preserve"><value>Narration in {0} for {1} isn't installed, and none of your sources has it.</value></data>
+  <data name="VoicePackPrompt_NeedsModuleBody" xml:space="preserve"><value>Narration in {0} needs {1} v{2} or later. Update it from Manage Modules.</value></data>
+  <data name="VoicePackPrompt_UpdateTitle" xml:space="preserve"><value>Update narration?</value></data>
+  <data name="VoicePackPrompt_UpdateBody" xml:space="preserve"><value>An update of the {0} voice pack for {1} is available ({2}).</value></data>
+  <data name="VoicePackPrompt_Download" xml:space="preserve"><value>Download</value></data>
+  <data name="VoicePackPrompt_Update" xml:space="preserve"><value>Update</value></data>
+  <data name="VoicePackPrompt_NotNow" xml:space="preserve"><value>Not now</value></data>
+  <data name="VoicePackPrompt_PlayWithout" xml:space="preserve"><value>Play without narration</value></data>
+  <data name="VoicePackPrompt_Failed" xml:space="preserve"><value>Couldn't download the voice pack. Check your connection and try again.</value></data>
   <data name="Common_SizeMegabytes" xml:space="preserve"><value>{0:0.#} MB</value></data>
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Manage</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quit</value></data>

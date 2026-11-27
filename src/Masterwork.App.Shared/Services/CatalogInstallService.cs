@@ -18,7 +18,16 @@ public enum CatalogInstallPhase
 }
 
 /// <summary>Progress for one install. <paramref name="Title"/> names the item, since one request can install a dependency first.</summary>
-public readonly record struct CatalogInstallProgress(CatalogInstallPhase Phase, string Title, int Percent);
+public readonly record struct CatalogInstallProgress(CatalogInstallPhase Phase, string Title, int Percent)
+{
+    /// <summary>The progress as shown to the player, such as "Downloading 'X'… 40%".</summary>
+    public string Message => string.Format(Resources.AppStrings.EffectiveCulture, Phase switch
+    {
+        CatalogInstallPhase.Downloading => Resources.AppStrings.CatalogInstall_Downloading,
+        CatalogInstallPhase.Verifying => Resources.AppStrings.CatalogInstall_Verifying,
+        _ => Resources.AppStrings.CatalogInstall_Installing,
+    }, Title, Percent);
+}
 
 /// <summary>An install that couldn't be completed. The message is player-facing.</summary>
 public class CatalogInstallException(string message, Exception? inner = null) : Exception(message, inner);

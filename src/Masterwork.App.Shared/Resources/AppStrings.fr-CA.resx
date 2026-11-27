@@ -248,13 +248,20 @@
   <data name="OptionsDialog_VoiceBestMatch" xml:space="preserve"><value>Meilleure correspondance</value></data>
   <data name="OptionsDialog_VoiceSameAsModule" xml:space="preserve"><value>Comme le module</value></data>
   <data name="OptionsDialog_VoiceNone" xml:space="preserve"><value>Aucune</value></data>
-  <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Narration parlée seulement, jamais la musique ni les effets sonores. Meilleure correspondance : la langue du module, sinon celle de l'application, sinon la langue par défaut du module, selon celle qui a une narration. Comme le module : la langue du module seulement. Aucune : pas de narration. Une langue précise : la narration dans cette langue seulement.</value></data>
+  <data name="OptionsDialog_VoiceLanguageHint" xml:space="preserve"><value>Présélectionne la narration d’une nouvelle partie; chaque partie garde la sienne. Narration parlée seulement, jamais la musique ni les effets sonores. Meilleure correspondance : la langue du module, sinon celle de l'application, sinon la langue par défaut du module, selon celle qui a une narration. Comme le module : la langue du module seulement. Aucune : pas de narration. Une langue précise : la narration dans cette langue seulement.</value></data>
   <data name="OptionsDialog_VoiceTrack" xml:space="preserve"><value>Voix</value></data>
-  <data name="OptionsDialog_VoicePackAvailable" xml:space="preserve"><value>La narration en {0} n'est pas encore téléchargée.</value></data>
-  <data name="OptionsDialog_VoicePackDownload" xml:space="preserve"><value>Télécharger ({0})</value></data>
-  <data name="OptionsDialog_VoicePackDownloaded" xml:space="preserve"><value>Narration téléchargée.</value></data>
-  <data name="OptionsDialog_VoicePackFailed" xml:space="preserve"><value>Impossible de télécharger la narration. Vous pouvez continuer à jouer et réessayer plus tard.</value></data>
-  <data name="OptionsDialog_VoicePackNeedsModule" xml:space="preserve"><value>La narration en {0} nécessite {1} v{2} ou plus récent. Mettez-le à jour depuis Gérer les modules.</value></data>
+  <data name="VoicePackPrompt_MissingTitle" xml:space="preserve"><value>Télécharger la narration?</value></data>
+  <data name="VoicePackPrompt_MissingBody" xml:space="preserve"><value>La narration en {0} de {1} se trouve dans un pack de voix ({2}).</value></data>
+  <data name="VoicePackPrompt_UnavailableTitle" xml:space="preserve"><value>Narration non installée</value></data>
+  <data name="VoicePackPrompt_UnavailableBody" xml:space="preserve"><value>La narration en {0} de {1} n'est pas installée, et aucune de vos sources ne l'offre.</value></data>
+  <data name="VoicePackPrompt_NeedsModuleBody" xml:space="preserve"><value>La narration en {0} nécessite {1} v{2} ou plus récent. Mettez-le à jour depuis Gérer les modules.</value></data>
+  <data name="VoicePackPrompt_UpdateTitle" xml:space="preserve"><value>Mettre à jour la narration?</value></data>
+  <data name="VoicePackPrompt_UpdateBody" xml:space="preserve"><value>Une mise à jour du pack de voix {0} de {1} est disponible ({2}).</value></data>
+  <data name="VoicePackPrompt_Download" xml:space="preserve"><value>Télécharger</value></data>
+  <data name="VoicePackPrompt_Update" xml:space="preserve"><value>Mettre à jour</value></data>
+  <data name="VoicePackPrompt_NotNow" xml:space="preserve"><value>Pas maintenant</value></data>
+  <data name="VoicePackPrompt_PlayWithout" xml:space="preserve"><value>Jouer sans narration</value></data>
+  <data name="VoicePackPrompt_Failed" xml:space="preserve"><value>Impossible de télécharger le pack de voix. Vérifiez votre connexion et réessayez.</value></data>
   <data name="Common_SizeMegabytes" xml:space="preserve"><value>{0:0.#} Mo</value></data>
   <data name="OptionsDialog_ManageModules" xml:space="preserve"><value>Gérer</value></data>
   <data name="OptionsDialog_Quit" xml:space="preserve"><value>Quitter</value></data>

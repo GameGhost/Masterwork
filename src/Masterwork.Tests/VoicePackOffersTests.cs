@@ -150,4 +150,64 @@ public class VoicePackOffersTests
 
         Assert.Null(ForInstall(settings, Module("1.0.0"), [], VoiceEntry("voices.en", "en-US", minVersion: "2.0.0")));
     }
+
+    // ── What playing with a voice needs ─────────────────────────────────────
+
+    private static VoicePackNeed Need(InstalledModule module, string? language, IReadOnlyList<VoicePackManifest> installed, params CatalogEntry[] entries) =>
+        VoicePackOffers.NeedFor(module, language, VoicePackOffers.From([Snapshot(PackageTrustDecision.Trusted, entries)], [module], installed), installed);
+
+    [Fact]
+    public void PlayingWithNoVoice_NeedsNothing()
+    {
+        Assert.Equal(VoicePackNeedKind.Ready, Need(Module(), null, [], VoiceEntry("voices.en", "en-US")).Kind);
+    }
+
+    [Fact]
+    public void ALanguageTheModuleItselfNarrates_NeedsNothing()
+    {
+        Assert.Equal(VoicePackNeedKind.Ready, Need(Module(builtInVoices: ["en-US"]), "en-US", [], VoiceEntry("voices.en", "en-US")).Kind);
+    }
+
+    [Fact]
+    public void ALanguageOnlyACatalogPackHas_NeedsThatPackDownloaded()
+    {
+        var need = Need(Module(), "fr-CA", [], VoiceEntry("voices.en", "en-US"), VoiceEntry("voices.fr", "fr-CA"));
+
+        Assert.Equal(VoicePackNeedKind.Missing, need.Kind);
+        Assert.Equal("voices.fr", need.Offer?.Entry.Id);
+    }
+
+    [Fact]
+    public void ALanguageNoInstallablePackHas_IsUnavailable()
+    {
+        Assert.Equal(VoicePackNeedKind.Unavailable, Need(Module(), "cs-CZ", [], VoiceEntry("voices.en", "en-US")).Kind);
+
+        var tooNew = Need(Module("1.0.0"), "en-US", [], VoiceEntry("voices.en", "en-US", minVersion: "2.0.0"));
+        Assert.Equal(VoicePackNeedKind.Unavailable, tooNew.Kind);
+        Assert.Equal(VoicePackOfferState.NeedsModuleUpdate, tooNew.Offer?.State);
+    }
+
+    [Fact]
+    public void ALanguageAnInstalledPackNarrates_OffersThatPacksUpdate_WhenThereIsOne()
+    {
+        var need = Need(Module(), "en-US", [Installed("voices.en", "1.0.0", "en-US")], VoiceEntry("voices.en", "en-US", version: "1.1.0"));
+
+        Assert.Equal(VoicePackNeedKind.UpdateAvailable, need.Kind);
+        Assert.Equal("1.1.0", need.Offer?.Entry.Version);
+
+        Assert.Equal(VoicePackNeedKind.Ready,
+            Need(Module(), "en-US", [Installed("voices.en", "1.1.0", "en-US")], VoiceEntry("voices.en", "en-US", version: "1.1.0")).Kind);
+    }
+
+    [Fact]
+    public void VoiceLanguages_AreThoseNarratedOrInstallable_NotThoseNeedingANewerModule()
+    {
+        var module = Module(builtInVoices: ["en-US"]);
+        IReadOnlyList<VoicePackManifest> installed = [Installed("voices.cs", "1.0.0", "cs-CZ")];
+        var offers = VoicePackOffers.From(
+            [Snapshot(PackageTrustDecision.Trusted, VoiceEntry("voices.fr", "fr-CA"), VoiceEntry("voices.de", "de-DE", minVersion: "2.0.0"))],
+            [module], installed);
+
+        Assert.Equal(["en-US", "cs-CZ", "fr-CA"], VoicePackOffers.VoiceLanguages(module, offers, installed));
+    }
 }

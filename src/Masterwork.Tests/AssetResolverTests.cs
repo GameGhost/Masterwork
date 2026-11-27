@@ -48,7 +48,8 @@ public class AssetResolverTests
                 Assets: new DictionaryModuleAssetSource(bundleLocal ?? new Dictionary<string, byte[]>()),
                 DependencyAssets: [.. (dependencies ?? []).Select(d => (IModuleAssetSource)new DictionaryModuleAssetSource(d))],
                 StyleCss: null),
-            session: null!);
+            session: null!,
+            voice: null);
         return state;
     }
 

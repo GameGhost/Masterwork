@@ -1696,8 +1696,10 @@ voices:
     name: 'Female narrator'
 ```
 
-The player chooses, per device: a **voice language** in Options (app-wide), and a **voice track** per
-module, from the in-game Options. The voice language is one of:
+Each playthrough keeps its own voice language (or None) and voice track, chosen on the New Game
+screen, changed from the in-game Options, and stored with its saves. The New Game choice lists
+None and every language the module is narrated in, installed or offered by a catalog voice pack. It is
+preselected by the app-wide **voice language** in Options, one of:
 
 - **Best match** (the default): the text language, else the UI language, else the module's
   `default_locale`, whichever has a track; else no narration.
@@ -1705,7 +1707,10 @@ module, from the in-game Options. The voice language is one of:
 - **None**: no narration.
 - **A specific language**: that language if it has a track; else no narration.
 
-Only best match tries more than one language. Neither choice is stored in saves.
+Only best match tries more than one language. The in-game Options list only None and the module's
+languages, and show None while nothing is narrated. The track picked in game is also remembered per
+module, to preselect next time. A save made before voice languages were stored resumes with
+the one the app-wide setting picks from what's installed.
 
 ### Voice packs
 
@@ -1724,7 +1729,8 @@ older pack. Its `manifest.yaml`:
 | `voices` | mapping | The tracks it adds, in the same shape as a module's `voices:` above |
 
 Its files use the same layout as a module's own, `assets/audio/vo/<language>/<track id>/<slug>.<ext>`.
-A track whose (language, id) the module or an earlier pack already offers is skipped.
+A pack track with the (language, id) of one of the module's own tracks replaces it. Between packs, a
+track whose (language, id) an earlier pack already offers is skipped.
 
 ```yaml
 type: 'voices'
@@ -1759,6 +1765,13 @@ Installing:
 - Installing a module also installs a catalog pack in the player's effective voice language for it
   (from the same catalog, or for an uploaded module from the cached catalogs), unless that is None or
   something installed already narrates in it.
+- Starting or resuming a game in a voice language nothing installed narrates asks first: download
+  its pack, play without narration, or go back. A resumed game played without narration keeps its
+  voice language, so the next resume asks again. In game, changing to such a language asks to download
+  it; declining leaves the voice as it was.
+- At those same points, a voice language narrated by an installed pack that has a newer catalog version
+  offers the update. Declining, or a failed download, plays with the installed pack. The offer is
+  skipped while that catalog's source couldn't be reached.
 - The minimum version is enforced at install and update; a refusal names the module version needed
   and offers that module update when a source has it.
 - A pack that would add a (language, id) another installed pack for the same module already adds is

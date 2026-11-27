@@ -96,6 +96,17 @@ public static class VoiceSelection
         return SelectTrack(language, tracks, PreferredTrackId(settings, moduleId, language));
     }
 
+    /// <summary>
+    /// The track to play for a playthrough narrated in <paramref name="voice"/>: its track, else the
+    /// one <paramref name="settings"/> remember for <paramref name="moduleId"/>, else that language's
+    /// first. <see langword="null"/> when no track is in that language, or for no narration.
+    /// </summary>
+    public static VoiceTrack? Select(SessionVoice voice, AppSettings settings, string moduleId, IReadOnlyList<VoiceTrack> tracks)
+    {
+        var language = SelectVoiceLanguage(voice.Language ?? None, null, null, null, tracks);
+        return SelectTrack(language, tracks, voice.TrackId ?? PreferredTrackId(settings, moduleId, language));
+    }
+
     /// <summary>The track id the player picked for <paramref name="moduleId"/> in <paramref name="language"/>, if any.</summary>
     public static string? PreferredTrackId(AppSettings settings, string moduleId, string? language) =>
         settings.VoiceTrackPreferences.LastOrDefault(p => p.ModuleId == moduleId && p.Language == language)?.TrackId;
@@ -113,31 +124,44 @@ public static class VoiceSelection
 
     /// <summary>
     /// The tracks offered for a module at <paramref name="moduleVersion"/>: its own tracks first, then
-    /// each installed pack's, in order. A pack needing a newer module is left out, and a track whose
-    /// (language, id) is already offered is skipped, keeping the first.
+    /// each installed pack's, in order. A pack needing a newer module is left out. A pack track with
+    /// the (language, id) of one of the module's own replaces it in place; between packs, the first
+    /// pack's track is kept.
     /// </summary>
     public static IReadOnlyList<AvailableVoiceTrack> Offered(
         string moduleVersion, IReadOnlyList<VoiceTrack> moduleTracks, IModuleAssetSource moduleAssets, IReadOnlyList<InstalledVoicePack> packs)
     {
         var offered = new List<AvailableVoiceTrack>();
-        Add(moduleTracks, moduleAssets);
+        var fromModule = new HashSet<int>();
+        foreach (var track in moduleTracks)
+        {
+            if (IndexOf(track) < 0)
+            {
+                fromModule.Add(offered.Count);
+                offered.Add(new AvailableVoiceTrack(track, moduleAssets));
+            }
+        }
+
         foreach (var pack in packs.Where(p => SupportsModuleVersion(p.Manifest, moduleVersion)))
         {
-            Add(pack.Manifest.Voices, pack.Assets);
+            foreach (var track in pack.Manifest.Voices)
+            {
+                var index = IndexOf(track);
+                if (index < 0)
+                {
+                    offered.Add(new AvailableVoiceTrack(track, pack.Assets));
+                }
+                else if (fromModule.Remove(index))
+                {
+                    offered[index] = new AvailableVoiceTrack(track, pack.Assets);
+                }
+            }
         }
 
         return offered;
 
-        void Add(IEnumerable<VoiceTrack> tracks, IModuleAssetSource source)
-        {
-            foreach (var track in tracks)
-            {
-                if (!offered.Any(o => string.Equals(o.Track.Language, track.Language, StringComparison.OrdinalIgnoreCase) && o.Track.Id == track.Id))
-                {
-                    offered.Add(new AvailableVoiceTrack(track, source));
-                }
-            }
-        }
+        int IndexOf(VoiceTrack track) => offered.FindIndex(o =>
+            string.Equals(o.Track.Language, track.Language, StringComparison.OrdinalIgnoreCase) && o.Track.Id == track.Id);
     }
 
     /// <summary>Whether <paramref name="pack"/> works with a module at <paramref name="moduleVersion"/>. Only the minimum is checked.</summary>

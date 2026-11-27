@@ -52,8 +52,14 @@ public sealed class GameSessionState
     /// <summary>The voice tracks offered for the active module: its own and its installed voice packs'. See <see cref="VoiceSelection.Offered"/>.</summary>
     public IReadOnlyList<AvailableVoiceTrack> Voices { get; private set; } = [];
 
-    /// <summary>The voice track narration plays from, or <see langword="null"/> for none. Not part of the session or its saves.</summary>
+    /// <summary>The voice track narration plays from, or <see langword="null"/> for none.</summary>
     public AvailableVoiceTrack? Voice { get; private set; }
+
+    /// <summary>
+    /// The voice this playthrough is narrated in, carried into its saves (<see cref="SaveEntry.Voice"/>).
+    /// <see langword="null"/> only for a save made before voices were saved, until narration picks one from the settings.
+    /// </summary>
+    public SessionVoice? VoiceChoice { get; private set; }
 
     /// <summary>Sets the offered tracks and selects the one at (<paramref name="language"/>, <paramref name="trackId"/>), or none if that isn't offered.</summary>
     public void SetVoices(IReadOnlyList<AvailableVoiceTrack> voices, string? language, string? trackId)
@@ -62,8 +68,11 @@ public sealed class GameSessionState
         Voice = voices.FirstOrDefault(v => v.Track.Language == language && v.Track.Id == trackId);
     }
 
-    /// <summary>Starts tracking a newly created or restored session.</summary>
-    public void Start(string moduleId, string moduleVersion, string? language, LoadedModuleContent content, GameSession session)
+    /// <summary>Sets <see cref="VoiceChoice"/>; narration follows it on its next selection.</summary>
+    public void SetVoiceChoice(SessionVoice voice) => VoiceChoice = voice;
+
+    /// <summary>Starts tracking a newly created or restored session narrated in <paramref name="voice"/>.</summary>
+    public void Start(string moduleId, string moduleVersion, string? language, LoadedModuleContent content, GameSession session, SessionVoice? voice)
     {
         ModuleId = moduleId;
         ModuleVersion = moduleVersion;
@@ -74,6 +83,7 @@ public sealed class GameSessionState
         StyleCss = content.StyleCss;
         Voices = [];
         Voice = null;
+        VoiceChoice = voice;
         Session = session;
     }
 
@@ -89,6 +99,7 @@ public sealed class GameSessionState
         StyleCss = null;
         Voices = [];
         Voice = null;
+        VoiceChoice = null;
         Session = null;
     }
 }

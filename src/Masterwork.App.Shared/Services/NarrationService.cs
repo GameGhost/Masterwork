@@ -5,8 +5,8 @@ namespace Masterwork.App.Shared.Services;
 
 /// <summary>
 /// Chooses the voice track for the active session (<see cref="GameSessionState.Voice"/>) and lets the
-/// play screen pause narration. The choice comes from <see cref="AppSettings"/> and is never part of
-/// the session or its saves.
+/// play screen pause narration. The track follows the playthrough's own voice
+/// (<see cref="GameSessionState.VoiceChoice"/>), not the global voice language setting.
 /// </summary>
 public sealed class NarrationService(
     GameSessionState state, IInstalledVoicePacks voicePacks, IAppSettingsStore settingsStore, ILogger<NarrationService>? logger = null)
@@ -54,7 +54,17 @@ public sealed class NarrationService(
         await ReselectAsync();
     }
 
-    /// <summary>Re-reads the settings and selects the matching track.</summary>
+    /// <summary>Narrates the playthrough in <paramref name="voice"/> from now on.</summary>
+    public async Task ChooseAsync(SessionVoice voice)
+    {
+        state.SetVoiceChoice(voice);
+        await ReselectAsync();
+    }
+
+    /// <summary>
+    /// Selects the track for the playthrough's voice. A playthrough with none yet (resumed from a
+    /// save made before voices were saved) takes the one the settings would pick from what's installed.
+    /// </summary>
     public async Task ReselectAsync()
     {
         if (state.ModuleId is not { } moduleId)
@@ -64,7 +74,14 @@ public sealed class NarrationService(
 
         var settings = await settingsStore.LoadAsync();
         var previous = state.Voice;
-        var track = VoiceSelection.Select(settings, moduleId, state.Language, state.Module?.DefaultLocale, [.. state.Voices.Select(v => v.Track)]);
+        IReadOnlyList<Masterwork.ModuleFormat.VoiceTrack> tracks = [.. state.Voices.Select(v => v.Track)];
+        if (state.VoiceChoice is null)
+        {
+            var fromSettings = VoiceSelection.Select(settings, moduleId, state.Language, state.Module?.DefaultLocale, tracks);
+            state.SetVoiceChoice(new SessionVoice(fromSettings?.Language));
+        }
+
+        var track = VoiceSelection.Select(state.VoiceChoice!, settings, moduleId, tracks);
         state.SetVoices(state.Voices, track?.Language, track?.Id);
 
         if (state.Voice?.Track != previous?.Track)

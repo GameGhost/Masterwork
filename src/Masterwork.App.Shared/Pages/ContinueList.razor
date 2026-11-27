@@ -144,6 +144,7 @@
         </div>
     }
 
+    <VoicePackPrompt @ref="_voicePrompt" />
     <LoadingOverlay Show="@_loading" Message="@_loadingMessage" Done="@_loadingDone" Total="@_loadingTotal" />
 </div>
 
@@ -155,6 +156,7 @@
     private SaveEntry? _pendingResume;
     private SaveEntry? _pendingDelete;
     private PendingImport? _pendingImport;
+    private VoicePackPrompt? _voicePrompt;
     private string? _resumeError;
     private string? _importError;
     private bool _loading;
@@ -250,6 +252,17 @@
         _busy = true;
         _pendingResume = null;
 
+        // The playthrough keeps its own voice language, even when played without narration for
+        // now, so resuming asks again while its pack is missing. A save made before voice languages
+        // were saved has none, and narration picks one from the settings.
+        var voice = entry.Voice;
+        var title = _modulesById.GetValueOrDefault(entry.ModuleId)?.Title ?? entry.ModuleId;
+        if (voice is not null && await _voicePrompt!.ConfirmAsync(entry.ModuleId, title, voice) is null)
+        {
+            _busy = false;
+            return;
+        }
+
         _loading = true;
         _loadingMessage = AppStrings.Common_Loading;
         _loadingDone = null;
@@ -271,7 +284,7 @@
             var loaded = await ModuleStore.LoadAsync(entry.ModuleId, entry.Language);
             loaded = await PreloadAssetsAsync(loaded);
             var session = GameSession.Restore(loaded.Module, save, logger: GameSessionLogger);
-            State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session);
+            State.Start(entry.ModuleId, entry.ModuleVersion, entry.Language, loaded, session, voice);
             await StyleInjector.ApplyAsync(loaded.StyleCss);
             // Stopped explicitly here rather than waiting for MainLayout's own route-change handler
             // to catch up a tick later — see MainLayout.SyncThemeMusicAsync's remarks.
@@ -364,7 +377,7 @@
 
             using var sessionDoc = JsonDocument.Parse(json);
             var export = new SaveExport(entry.ModuleId, entry.ModuleVersion, displayName,
-                entry.LastStateLabel, entry.LastPlayedUtc, entry.Language, sessionDoc.RootElement.Clone());
+                entry.LastStateLabel, entry.LastPlayedUtc, entry.Language, sessionDoc.RootElement.Clone(), entry.Voice);
             var exportJson = JsonSerializer.Serialize(export);
 
             var fileName = $"{SanitizeFileName(displayName)}.mwsave";
@@ -527,7 +540,8 @@
             DisplayName: export.DisplayName,
             LastStateLabel: export.LastStateLabel,
             LastPlayedUtc: export.LastPlayedUtc,
-            Language: export.Language);
+            Language: export.Language,
+            Voice: export.Voice);
 
         await SaveStore.SaveAsync(entry, export.Session.GetRawText());
         Logger.LogInformation("Save import: imported {ModuleId} v{Version} as {Id}", export.ModuleId, export.ModuleVersion, entry.Id);

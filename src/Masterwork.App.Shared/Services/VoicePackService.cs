@@ -42,7 +42,7 @@ public sealed class VoicePackService(
     {
         try
         {
-            var installed = (await ListInstalledAsync()).Select(p => p.Manifest).ToList();
+            var installed = (await voicePackStore.ListAsync()).Select(p => p.Manifest).ToList();
             return VoicePackOffers.From(await catalog.GetCachedSubscribedAsync(primary), await moduleStore.ListAsync(), installed);
         }
         catch (Exception ex)
@@ -50,6 +50,59 @@ public sealed class VoicePackService(
             _logger.LogWarning(ex, "Could not list the voice packs on offer");
             return [];
         }
+    }
+
+    /// <summary>
+    /// The languages <paramref name="moduleId"/> can be narrated in, installed or offered
+    /// (<see cref="VoicePackOffers.VoiceLanguages"/>), or none if it isn't installed or can't be read.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> VoiceLanguagesAsync(string moduleId)
+    {
+        try
+        {
+            var (module, offers, installed) = await LoadForAsync(moduleId);
+            return module is null ? [] : VoicePackOffers.VoiceLanguages(module, offers, installed);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not list the voice languages of {ModuleId}", moduleId);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// What playing <paramref name="moduleId"/> narrated in <paramref name="language"/> needs first
+    /// (<see cref="VoicePackOffers.NeedFor"/>). An update is offered only while its catalog's source
+    /// can be reached; anything that can't be read counts as needing nothing.
+    /// </summary>
+    public async Task<VoicePackNeed> CheckVoiceAsync(string moduleId, string? language)
+    {
+        try
+        {
+            var (module, offers, installed) = await LoadForAsync(moduleId);
+            if (module is null)
+            {
+                return new VoicePackNeed(VoicePackNeedKind.Ready);
+            }
+
+            var need = VoicePackOffers.NeedFor(module, language, offers, installed);
+            return need is { Kind: VoicePackNeedKind.UpdateAvailable, Offer: { } update } && !catalog.IsReachable(update.Snapshot.Source)
+                ? new VoicePackNeed(VoicePackNeedKind.Ready)
+                : need;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not check the voice packs of {ModuleId}", moduleId);
+            return new VoicePackNeed(VoicePackNeedKind.Ready);
+        }
+    }
+
+    private async Task<(InstalledModule? Module, IReadOnlyList<VoicePackOffer> Offers, IReadOnlyList<VoicePackManifest> Installed)> LoadForAsync(string moduleId)
+    {
+        var modules = await moduleStore.ListAsync();
+        var installed = (await voicePackStore.ListAsync()).Select(p => p.Manifest).ToList();
+        var offers = VoicePackOffers.From(await catalog.GetCachedSubscribedAsync(primary), modules, installed);
+        return (modules.FirstOrDefault(m => m.ModuleId == moduleId), offers, installed);
     }
 
     /// <summary>Installs or updates an offered pack.</summary>

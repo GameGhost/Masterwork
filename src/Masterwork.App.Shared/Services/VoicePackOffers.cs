@@ -88,25 +88,80 @@ public static class VoicePackOffers
     public static VoicePackOffer? ForModuleInstall(
         AppSettings settings, InstalledModule module, IReadOnlyList<VoicePackOffer> offers, IReadOnlyList<VoicePackManifest> installed)
     {
-        var installable = offers
-            .Where(o => o.Module.ModuleId == module.ModuleId && o.State != VoicePackOfferState.NeedsModuleUpdate)
-            .ToList();
-        var narrated = module.VoiceLanguages
-            .Concat(installed
-                .Where(p => p.For.ModuleId == module.ModuleId && VoiceSelection.SupportsModuleVersion(p, module.Version))
-                .SelectMany(p => p.Voices.Select(v => v.Language)))
-            .ToList();
-
         var textLanguage = VoiceSelection.SelectTextLanguage(module.AvailableLanguages, settings.PreferredModuleLanguage, settings.UiLocale, module.DefaultLocale);
         var language = VoiceSelection.SelectVoiceLanguage(
-            settings.VoiceLanguage, textLanguage, settings.UiLocale, module.DefaultLocale,
-            narrated.Concat(installable.SelectMany(o => o.Entry.Languages)));
+            settings.VoiceLanguage, textLanguage, settings.UiLocale, module.DefaultLocale, VoiceLanguages(module, offers, installed));
 
-        if (language is null || narrated.Contains(language, StringComparer.OrdinalIgnoreCase))
+        return NeedFor(module, language, offers, installed) is { Kind: VoicePackNeedKind.Missing } need ? need.Offer : null;
+    }
+
+    /// <summary>
+    /// The languages <paramref name="module"/> can be narrated in: those its own tracks and its
+    /// <paramref name="installed"/> packs narrate, then those an installable offer would add, each once.
+    /// </summary>
+    public static IReadOnlyList<string> VoiceLanguages(
+        InstalledModule module, IReadOnlyList<VoicePackOffer> offers, IReadOnlyList<VoicePackManifest> installed) =>
+        [.. NarratedLanguages(module, installed)
+            .Concat(Installable(module, offers).SelectMany(o => o.Entry.Languages))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>
+    /// What playing <paramref name="module"/> narrated in <paramref name="language"/> needs first:
+    /// nothing, the download of an offered pack, or nothing possible. When an installed pack already
+    /// narrates it, the update that pack has on offer, if any. <see langword="null"/> is no narration.
+    /// </summary>
+    public static VoicePackNeed NeedFor(
+        InstalledModule module, string? language, IReadOnlyList<VoicePackOffer> offers, IReadOnlyList<VoicePackManifest> installed)
+    {
+        if (language is null)
         {
-            return null;
+            return new VoicePackNeed(VoicePackNeedKind.Ready);
         }
 
-        return installable.FirstOrDefault(o => o.HasLanguage(language));
+        var narratingPacks = Usable(module, installed).Where(p => p.Voices.Any(v => Same(v.Language, language))).ToList();
+        if (narratingPacks.Count > 0 || module.VoiceLanguages.Any(l => Same(l, language)))
+        {
+            var update = offers.FirstOrDefault(o => o.State == VoicePackOfferState.UpdateAvailable && narratingPacks.Any(p => p.Id == o.Entry.Id));
+            return update is null ? new VoicePackNeed(VoicePackNeedKind.Ready) : new VoicePackNeed(VoicePackNeedKind.UpdateAvailable, update);
+        }
+
+        if (Installable(module, offers).FirstOrDefault(o => o.HasLanguage(language)) is { } missing)
+        {
+            return new VoicePackNeed(VoicePackNeedKind.Missing, missing);
+        }
+
+        return new VoicePackNeed(VoicePackNeedKind.Unavailable,
+            offers.FirstOrDefault(o => o.Module.ModuleId == module.ModuleId && o.HasLanguage(language)));
     }
+
+    private static IEnumerable<string> NarratedLanguages(InstalledModule module, IReadOnlyList<VoicePackManifest> installed) =>
+        module.VoiceLanguages.Concat(Usable(module, installed).SelectMany(p => p.Voices.Select(v => v.Language)));
+
+    private static IEnumerable<VoicePackManifest> Usable(InstalledModule module, IReadOnlyList<VoicePackManifest> installed) =>
+        installed.Where(p => p.For.ModuleId == module.ModuleId && VoiceSelection.SupportsModuleVersion(p, module.Version));
+
+    private static IEnumerable<VoicePackOffer> Installable(InstalledModule module, IReadOnlyList<VoicePackOffer> offers) =>
+        offers.Where(o => o.Module.ModuleId == module.ModuleId && o.State != VoicePackOfferState.NeedsModuleUpdate);
+
+    private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
+
+/// <summary>What <see cref="VoicePackOffers.NeedFor"/> found playing with a voice needs.</summary>
+public enum VoicePackNeedKind
+{
+    /// <summary>Nothing: no narration, or what's installed narrates it and has no update on offer.</summary>
+    Ready,
+
+    /// <summary>What's installed narrates it, and an update of the pack doing so is on offer.</summary>
+    UpdateAvailable,
+
+    /// <summary>Nothing installed narrates it, but an offered pack would.</summary>
+    Missing,
+
+    /// <summary>Nothing installed narrates it, and no pack that can be installed would.</summary>
+    Unavailable,
+}
+
+/// <summary>What playing with a voice needs, with the offer that would provide it.</summary>
+/// <param name="Offer">The update (<see cref="VoicePackNeedKind.UpdateAvailable"/>) or pack (<see cref="VoicePackNeedKind.Missing"/>) to install; for <see cref="VoicePackNeedKind.Unavailable"/>, a pack that needs a newer module, if one is listed.</param>
+public sealed record VoicePackNeed(VoicePackNeedKind Kind, VoicePackOffer? Offer = null);

@@ -417,12 +417,7 @@
 
     private Progress<CatalogInstallProgress> CatalogProgress() => new(p =>
     {
-        _loadingMessage = string.Format(AppStrings.EffectiveCulture, p.Phase switch
-        {
-            CatalogInstallPhase.Downloading => AppStrings.CatalogInstall_Downloading,
-            CatalogInstallPhase.Verifying => AppStrings.CatalogInstall_Verifying,
-            _ => AppStrings.CatalogInstall_Installing,
-        }, p.Title, p.Percent);
+        _loadingMessage = p.Message;
         StateHasChanged();
     });
 
