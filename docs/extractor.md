@@ -2,14 +2,14 @@
 
 `MasterWork.Extractor` is the CLI tool that converts Cradle C# scenario files into MWS v0.4 YAML passages, ready for the game engine.
 
-**Status: nearing the end of active development.** All three official scenarios (*The Cost of
-Disease*, *A Time of War*, *Fear of the Unknown*) have been extracted cleanly (0 unknown nodes in
-two of the three; see Current Extraction Results below) and shipped in public releases. Further
-extractor changes are expected only if real play of the shipped modules surfaces a genuine bug, not
-from new Cradle patterns still needing support. Once that risk is judged low, maintenance of the
-three modules' content shifts from "routinely re-extracted" to hand-editing the already-extracted
-YAML directly — the same way the fourth, fully hand-authored module (`my-fathers-work-template`)
-already works.
+**Status: extraction is frozen** ([ADR 0006](adr/0006-extraction-freeze.md)). All three official
+scenarios (*The Cost of Disease*, *A Time of War*, *Fear of the Unknown*) have been extracted
+cleanly (0 unknown nodes in two of the three; see Current Extraction Results below) and shipped in
+public releases. Their content is now maintained by hand-editing the extracted YAML in place, the
+same way the fully hand-authored `my-fathers-work-template` module works. Further extractor changes
+are expected only if real play turns up an extraction bug. A re-extraction would overwrite those
+hand edits, so it goes to a scratch folder and is diffed and merged by hand, never written straight
+into a module. `reconcile` (below) uses a fresh extraction that way.
 
 ---
 
@@ -60,6 +60,9 @@ The extractor no longer accepts hand-authored overrides — see [Module Override
 ---
 
 ## Extraction Commands for the Three Scenarios
+
+Extraction is frozen (see Status above), so point these at a scratch folder, not at a live module,
+unless you mean to overwrite its hand edits.
 
 Run from this repo's root directory. Extracted modules live in the standalone `Masterwork-Modules`
 repo — a sibling of this one, checked out alongside it. **All three scenarios are now fully
@@ -123,8 +126,9 @@ passages across all three modules, not just Cost of Disease.
 
 > **Note:** `--module-title` is required for A Time of War (auto-generation capitalises "Of") and The Cost of Disease (auto-generation produces "The Costof Disease"). Fear of the Unknown's auto-generated title is fine as-is.
 
-> **Note:** Re-running extraction only touches `passages/` — it never writes to `passages-override/`,
-> so hand-authored passages there always survive a re-extraction.
+> **Note:** Re-running extraction writes `passages/`, `_variables.yaml` and `en-US.restext` and never
+> touches `passages-override/`. Since the freeze, the first two are hand-edited too, so a re-run
+> into a live module overwrites real changes.
 
 > **Note:** the source `.cs` file's directory determines what the "# {path}:{line}" comments in each
 > passage resolve to — that's why Cost of Disease reads from its own `.source/` copy (giving
@@ -355,17 +359,18 @@ modules via `scripts/apply-template.ps1`) — same convention as `click`/`popup_
 
 ## Module Overrides (`passages-override/`)
 
-The extractor itself no longer has any override mechanism — it only ever writes to `<passages-out-dir>`, never touches hand-authored content, and every re-extraction is a clean, repeatable regeneration of that one folder. Hand-authored passages instead live directly in a module and are applied at **module load time**, not extraction time.
+The extractor itself has no override mechanism. It only ever writes to `<passages-out-dir>` and never reads hand-authored content. `passages-override/` is applied at **module load time**, not extraction time. It holds hand-authored passages with no extracted counterpart, and the replacements made while re-extraction was still routine. Since the freeze, a change to an extracted passage is made in `passages/` directly, so it shows as a plain diff against the extracted text. Folding the older replacements back into `passages/` is part of GameGhost/Masterwork#16.
 
 A module directory (all four current modules, e.g. `Masterwork-Modules/cost-of-disease/`) is laid out as:
 
 ```
 <module>/
 ├── manifest.yaml         — declares passages/passages_override folder names (defaults below)
-├── _variables.yaml       — extractor-owned; regenerated wholesale on every re-extraction
+├── _variables.yaml       — extracted once, hand-maintained since the freeze
 ├── variables/            — optional, hand-authored; add-or-override-by-key on top of _variables.yaml
-├── en-US.restext
-├── passages/              — extractor-owned; overwritten wholesale by each re-extraction
+├── en-US.restext          — extracted; left as is until the French reconcile has run
+├── en-US.overrides.restext — hand-maintained English, on top of en-US.restext
+├── passages/              — extracted once, hand-maintained since the freeze
 ├── passages-override/     — hand-maintained; never touched by extraction
 └── layouts/               — hand-maintained layout chrome (docs/mws-format-latest.md §8)
 ```
